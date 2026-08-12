@@ -39,15 +39,11 @@
       </div>
 
       <form id="listingForm" class="listing-form"
-        action="https://formsubmit.co/kumamotobarnavi@gmail.com"
+        action="https://formspree.io/f/mpparpba"
         method="POST"
         accept-charset="UTF-8">
         <input type="hidden" name="_subject" value="【KUMAMOTO BAR NAVI】店舗掲載申込み">
-        <input type="hidden" name="_template" value="table">
-        <input type="hidden" name="_captcha" value="false">
-        <input type="hidden" name="_next" value="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/thanks.html">
-        <input type="text" name="_honey" style="display:none" tabindex="-1" autocomplete="off">
-        <div class="form-section">
+<div class="form-section">
           <p class="eyebrow">SHOP INFO</p>
           <h2>店舗情報</h2>
 
@@ -168,7 +164,7 @@
 
           <label class="field">
             <span>メールアドレス <em>必須</em></span>
-            <input type="email" id="email" name="メールアドレス" required placeholder="example@email.com">
+            <input type="email" id="email" name="email" required placeholder="example@email.com">
           </label>
 
           <label class="field">
@@ -184,6 +180,7 @@
           <button type="submit" class="btn-gold submit-btn">無料掲載を申し込む →</button>
           <p class="form-footnote">※送信すると受付完了画面へ移動します。内容確認後、運営からご連絡する場合があります。</p>
         </div>
+      <p id="formStatus" style="display:none;margin-top:14px;color:#e5bd56;font-weight:700;"></p>
       </form>
     </div>
   </section>
@@ -196,6 +193,85 @@
     <small>© 2026 KUMAMOTO BAR NAVI</small>
   </div>
 </footer>
+
+
+<script>
+(function () {
+  const form = document.getElementById("listingForm");
+  if (!form) return;
+
+  const status = document.getElementById("formStatus");
+  const submitButton = form.querySelector('button[type="submit"], input[type="submit"]');
+
+  form.addEventListener("submit", async function (event) {
+    event.preventDefault();
+
+    if (!form.checkValidity()) {
+      form.reportValidity();
+      return;
+    }
+
+    const originalText = submitButton ? (submitButton.textContent || submitButton.value) : "";
+
+    if (submitButton) {
+      submitButton.disabled = true;
+      if (submitButton.tagName === "INPUT") {
+        submitButton.value = "送信中...";
+      } else {
+        submitButton.textContent = "送信中...";
+      }
+    }
+
+    if (status) {
+      status.style.display = "block";
+      status.textContent = "送信しています...";
+    }
+
+    try {
+      const response = await fetch(form.action, {
+        method: "POST",
+        body: new FormData(form),
+        headers: { "Accept": "application/json" }
+      });
+
+      if (response.ok) {
+        window.location.href = "thanks.html";
+        return;
+      }
+
+      let message = "送信できませんでした。入力内容をご確認のうえ、もう一度お試しください。";
+      try {
+        const data = await response.json();
+        if (data && data.errors && data.errors.length) {
+          message = data.errors.map(e => e.message).join(" ");
+        }
+      } catch (_) {}
+
+      if (status) {
+        status.textContent = message;
+      } else {
+        alert(message);
+      }
+    } catch (error) {
+      const message = "通信エラーが発生しました。時間をおいてもう一度お試しください。";
+      if (status) {
+        status.textContent = message;
+      } else {
+        alert(message);
+      }
+    } finally {
+      if (submitButton) {
+        submitButton.disabled = false;
+        if (submitButton.tagName === "INPUT") {
+          submitButton.value = originalText;
+        } else {
+          submitButton.textContent = originalText;
+        }
+      }
+    }
+  });
+})();
+</script>
 
 </body>
 </html>
