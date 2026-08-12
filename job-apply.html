@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="BAR LUMIÈRE 求人応募｜KUMAMOTO BAR NAVI">
+  <title>求人応募｜KUMAMOTO BAR NAVI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700;800&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="site-header">
+  <div class="container header-inner">
+    <a class="brand" href="index.html">
+      <img class="brand-logo" src="logo.png" alt="KUMAMOTO BAR NAVI ロゴ">
+      <span><b>KUMAMOTO</b><br>BAR NAVI<small>BAR & JOB INFORMATION</small></span>
+    </a>
+  </div>
+</header>
+
+<main class="form-page">
+  <section class="form-hero">
+    <div class="container narrow">
+      <a class="back-link" href="job-lumiere.html">← 求人詳細へ戻る</a>
+      <p class="eyebrow">JOB APPLICATION</p>
+      <h1>求人応募</h1>
+      <p>BAR LUMIÈREへの応募フォームです。</p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container narrow">
+      <form id="jobApplyForm" class="listing-form">
+        <div class="form-section">
+          <p class="eyebrow">YOUR INFO</p>
+          <h2>応募者情報</h2>
+
+          <label class="field">
+            <span>お名前 <em>必須</em></span>
+            <input type="text" id="name" required>
+          </label>
+
+          <div class="field-row">
+            <label class="field">
+              <span>年齢 <em>必須</em></span>
+              <input type="number" id="age" min="18" required>
+            </label>
+            <label class="field">
+              <span>電話番号 <em>必須</em></span>
+              <input type="tel" id="phone" required>
+            </label>
+          </div>
+
+          <label class="field">
+            <span>メールアドレス <em>必須</em></span>
+            <input type="email" id="email" required>
+          </label>
+
+          <label class="field">
+            <span>希望職種</span>
+            <select id="position">
+              <option>ホールスタッフ</option>
+              <option>バーテンダー</option>
+              <option>どちらでも可</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>勤務可能日・時間</span>
+            <textarea id="availability" rows="4" placeholder="例：週3日、20時以降"></textarea>
+          </label>
+
+          <label class="field">
+            <span>自己PR・質問</span>
+            <textarea id="message" rows="5"></textarea>
+          </label>
+
+          <label class="agree">
+            <input type="checkbox" required>
+            <span>入力内容に間違いがないことを確認しました。</span>
+          </label>
+
+          <button type="submit" class="btn-gold submit-btn">応募内容を送信する →</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</main>
+
+<script>
+document.getElementById('jobApplyForm').addEventListener('submit', function(e){
+  e.preventDefault();
+  if(!this.reportValidity()) return;
+
+  const body = [
+    '【KUMAMOTO BAR NAVI 求人応募】',
+    '',
+    '応募先：BAR LUMIÈRE',
+    '氏名：' + document.getElementById('name').value,
+    '年齢：' + document.getElementById('age').value,
+    '電話番号：' + document.getElementById('phone').value,
+    'メール：' + document.getElementById('email').value,
+    '希望職種：' + document.getElementById('position').value,
+    '',
+    '勤務可能日・時間：',
+    document.getElementById('availability').value,
+    '',
+    '自己PR・質問：',
+    document.getElementById('message').value
+  ].join('\n');
+
+  window.location.href =
+    'mailto:kumamotobarnavi@gmail.com?subject=' +
+    encodeURIComponent('【求人応募】BAR LUMIÈRE') +
+    '&body=' + encodeURIComponent(body);
+});
+</script>
+</body>
+</html>

@@ -383,3 +383,49 @@
     margin-bottom:5px;
   }
 }
+
+/* v8 job detail */
+.job-card-link{display:grid;color:#111}
+.job-card-link:hover{transform:translateY(-2px);transition:.2s}
+.job-more{display:inline-block;margin-top:10px;font-size:11px;font-weight:700;color:#8a6a28}
+.job-detail-page{background:#080b10}
+.job-detail-hero{
+  padding:72px 0 38px;
+  background:radial-gradient(circle at 75% 25%,rgba(232,197,104,.12),transparent 38%),#090b10;
+  border-bottom:1px solid #282317;
+}
+.narrow-job{max-width:980px}
+.job-detail-hero h1{font-size:clamp(44px,7vw,72px);margin:4px 0 10px;line-height:1}
+.job-catch{font-size:18px;color:#c1c4ca}
+.job-hero-badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.job-hero-badges span{padding:7px 11px;border:1px solid #66542b;border-radius:999px;background:#17140d;color:#e7c66f;font-size:12px}
+.job-detail-grid{display:grid;grid-template-columns:1fr 320px;gap:32px}
+.job-summary-card{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#343943;border:1px solid #343943;border-radius:16px;overflow:hidden}
+.job-summary-card>div{background:#111722;padding:18px}
+.job-summary-card span{display:block;font-size:11px;color:#8f949d}
+.job-summary-card strong{display:block;margin-top:5px}
+.job-price{color:#e7bd55;font-size:22px}
+.job-block{padding:34px 0;border-bottom:1px solid #292e36}
+.job-block h2{font-size:30px;margin:0 0 14px}
+.job-block p{color:#b9bdc5}
+.job-point-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:18px}
+.job-point-grid div{padding:17px;background:#111722;border:1px solid #2c323b;border-radius:14px}
+.job-point-grid span,.job-point-grid b,.job-point-grid small{display:block}
+.job-point-grid span{font-size:28px}
+.job-point-grid small{color:#8b9098;margin-top:3px}
+.condition-list{display:grid;gap:9px}
+.condition-list div{display:grid;grid-template-columns:120px 1fr;gap:18px;padding:15px 17px;background:#111722;border:1px solid #2b3139;border-radius:12px}
+.condition-list span{color:#90959d;font-size:12px}
+.job-apply-card{position:sticky;top:92px;padding:24px;background:#111722;border:1px solid #5d4c29;border-radius:18px}
+.job-apply-card h3{font-size:24px;margin:5px 0}
+.job-apply-card p{color:#9da1a9}
+@media(max-width:800px){
+  .job-detail-grid{grid-template-columns:1fr}
+  .job-apply-card{position:static}
+  .job-point-grid{grid-template-columns:1fr}
+}
+@media(max-width:560px){
+  .job-summary-card{grid-template-columns:1fr}
+  .condition-list div{grid-template-columns:1fr;gap:3px}
+  .job-detail-hero h1{font-size:42px}
+}
