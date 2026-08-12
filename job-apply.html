@@ -32,30 +32,33 @@
 
   <section class="section">
     <div class="container narrow">
-      <form id="jobApplyForm" class="listing-form">
+      <form action="https://formspree.io/f/mpparpba" method="POST" id="jobApplyForm" class="listing-form">
+    <input type="hidden" name="_subject" value="【KUMAMOTO BAR NAVI】求人応募">
+    <input type="hidden" name="送信種別" value="求人応募">
+
         <div class="form-section">
           <p class="eyebrow">YOUR INFO</p>
           <h2>応募者情報</h2>
 
           <label class="field">
             <span>お名前 <em>必須</em></span>
-            <input type="text" id="name" required>
+            <input type="text" id="name" name="氏名" required>
           </label>
 
           <div class="field-row">
             <label class="field">
               <span>年齢 <em>必須</em></span>
-              <input type="number" id="age" min="18" required>
+              <input type="number" id="age" name="年齢" min="18" required>
             </label>
             <label class="field">
               <span>電話番号 <em>必須</em></span>
-              <input type="tel" id="phone" required>
+              <input type="tel" id="phone" name="電話番号" required>
             </label>
           </div>
 
           <label class="field">
             <span>メールアドレス <em>必須</em></span>
-            <input type="email" id="email" required>
+            <input type="email" id="email" name="email" required>
           </label>
 
           <label class="field">
@@ -74,7 +77,7 @@
 
           <label class="field">
             <span>自己PR・質問</span>
-            <textarea id="message" rows="5"></textarea>
+            <textarea id="message" name="応募メッセージ" rows="5"></textarea>
           </label>
 
           <label class="agree">
@@ -89,33 +92,39 @@
   </section>
 </main>
 
+
+
 <script>
-document.getElementById('jobApplyForm').addEventListener('submit', function(e){
-  e.preventDefault();
-  if(!this.reportValidity()) return;
+/* KBN_JOB_FORMSPREE */
+(function(){
+  const form=document.querySelector("form");
+  if(!form) return;
+  form.action="https://formspree.io/f/mpparpba";
+  form.method="POST";
 
-  const body = [
-    '【KUMAMOTO BAR NAVI 求人応募】',
-    '',
-    '応募先：BAR LUMIÈRE',
-    '氏名：' + document.getElementById('name').value,
-    '年齢：' + document.getElementById('age').value,
-    '電話番号：' + document.getElementById('phone').value,
-    'メール：' + document.getElementById('email').value,
-    '希望職種：' + document.getElementById('position').value,
-    '',
-    '勤務可能日・時間：',
-    document.getElementById('availability').value,
-    '',
-    '自己PR・質問：',
-    document.getElementById('message').value
-  ].join('\n');
+  form.addEventListener("submit",async e=>{
+    e.preventDefault();
+    if(!form.checkValidity()){ form.reportValidity(); return; }
+    const btn=form.querySelector('button[type="submit"],input[type="submit"]');
+    const old=btn ? (btn.textContent || btn.value) : "";
+    if(btn){ btn.disabled=true; if(btn.tagName==="INPUT") btn.value="送信中..."; else btn.textContent="送信中..."; }
 
-  window.location.href =
-    'mailto:kumamotobarnavi@gmail.com?subject=' +
-    encodeURIComponent('【求人応募】BAR LUMIÈRE') +
-    '&body=' + encodeURIComponent(body);
-});
+    try{
+      const res=await fetch(form.action,{
+        method:"POST",
+        body:new FormData(form),
+        headers:{"Accept":"application/json"}
+      });
+      if(res.ok){ location.href="action-complete.html?type=job"; return; }
+      alert("送信できませんでした。もう一度お試しください。");
+    }catch(err){
+      alert("通信エラーが発生しました。");
+    }finally{
+      if(btn){ btn.disabled=false; if(btn.tagName==="INPUT") btn.value=old; else btn.textContent=old; }
+    }
+  });
+})();
 </script>
+
 </body>
 </html>

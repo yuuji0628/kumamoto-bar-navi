@@ -1,3 +1,22 @@
+
+<div class="smart-tools">
+  <button type="button" id="nearMeBtn" class="tool-btn">📍 現在地から近い順</button>
+  <button type="button" id="openNowBtn" class="tool-btn">🕒 営業中だけ表示</button>
+  <a href="areas.html" class="tool-btn map-tool-link">🗺 エリアから探す</a>
+</div>
+
+<div class="sort-tools">
+  <label class="sort-label">並び順
+    <select id="sortBars">
+      <option value="default">おすすめ順</option>
+      <option value="new">新着順</option>
+      <option value="popular">人気順</option>
+      <option value="rating">評価順</option>
+    </select>
+  </label>
+</div>
+
+<p id="smartToolStatus" class="smart-tool-status" aria-live="polite"></p>
 <!doctype html>
 <html lang="ja">
 <head>
@@ -195,6 +214,15 @@
   </div>
 </section>
 
+
+<section class="recent-section" id="recentBarsSection" hidden>
+  <div class="container">
+    <p class="eyebrow">RECENTLY VIEWED</p>
+    <h2>最近見たBAR</h2>
+    <div id="recentBars" class="recent-bars"></div>
+  </div>
+</section>
+
 </main>
 
 <footer>
@@ -247,5 +275,296 @@ document.getElementById('keyword').addEventListener('keydown', e => {
   if(e.key === 'Enter') applyDirectoryFilters();
 });
 </script>
+
+<script>
+(function(){
+  const KEY = "KBN_FAVORITES";
+  const favOnlyBtn = document.getElementById("favoriteOnly");
+  const resetBtn = document.getElementById("resetFilters");
+  let favOnly = false;
+
+  function getFavs(){
+    try { return JSON.parse(localStorage.getItem(KEY) || "[]"); }
+    catch(e){ return []; }
+  }
+  function setFavs(list){
+    localStorage.setItem(KEY, JSON.stringify(list));
+  }
+  function updateButtons(){
+    const favs = getFavs();
+    document.querySelectorAll(".favorite-btn").forEach(btn=>{
+      const name = btn.dataset.favorite;
+      const active = favs.includes(name);
+      btn.classList.toggle("active", active);
+      btn.textContent = active ? "♥" : "♡";
+      btn.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+    if (favOnlyBtn) {
+      favOnlyBtn.classList.toggle("active", favOnly);
+      favOnlyBtn.textContent = favOnly ? "♥ お気に入り表示中" : "♡ お気に入りだけ表示";
+    }
+  }
+  function applyFavoriteFilter(){
+    const favs = getFavs();
+    document.querySelectorAll("[data-bar-name]").forEach(card=>{
+      if (!favOnly) return;
+      const name = card.dataset.barName || "";
+      card.style.display = favs.includes(name) ? "" : "none";
+    });
+    if (!favOnly) {
+      document.querySelectorAll("[data-bar-name]").forEach(card=>card.style.display="");
+      // Re-run existing filter if there is a search button.
+      const searchBtn = document.querySelector('button[type="submit"], .search-btn');
+      if(searchBtn && searchBtn.dataset.kbnTriggered !== "1"){
+        // leave current page filter state intact where possible
+      }
+    }
+  }
+
+  document.addEventListener("click", e=>{
+    const btn = e.target.closest(".favorite-btn");
+    if(!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const name = btn.dataset.favorite;
+    let favs = getFavs();
+    favs = favs.includes(name) ? favs.filter(x=>x!==name) : [...favs, name];
+    setFavs(favs);
+    updateButtons();
+    if(favOnly) applyFavoriteFilter();
+  });
+
+  if(favOnlyBtn){
+    favOnlyBtn.addEventListener("click", ()=>{
+      favOnly = !favOnly;
+      applyFavoriteFilter();
+      updateButtons();
+    });
+  }
+
+  if(resetBtn){
+    resetBtn.addEventListener("click", ()=>{
+      document.querySelectorAll("select").forEach(s=>s.selectedIndex=0);
+      document.querySelectorAll('input[type="search"], input[type="text"]').forEach(i=>{
+        if(!i.closest("form") || i.name !== "_honey") i.value="";
+      });
+      favOnly = false;
+      document.querySelectorAll("[data-bar-name]").forEach(card=>card.style.display="");
+      updateButtons();
+      const count = document.querySelector("#resultCount, .result-count");
+      if(count && count.dataset.defaultText) count.textContent = count.dataset.defaultText;
+    });
+  }
+
+  updateButtons();
+})();
+</script>
+
+
+<script>
+/* KBN_GEO_FEATURES
+   実店舗追加時、店舗カードに以下を付けると機能します:
+   data-lat="32.8031"
+   data-lng="130.7079"
+   data-hours='{"1":["18:00","02:00"],"2":["18:00","02:00"],"3":["18:00","02:00"],"4":["18:00","02:00"],"5":["18:00","03:00"],"6":["18:00","03:00"],"0":["18:00","01:00"]}'
+   data-address="熊本県..."
+*/
+(function(){
+  const nearBtn = document.getElementById("nearMeBtn");
+  const openBtn = document.getElementById("openNowBtn");
+  const status = document.getElementById("smartToolStatus");
+  const listRoot = document.querySelector(".bar-grid, .bars-grid, .shop-grid, .results-grid");
+  let openOnly = false;
+
+  function cards(){
+    return [...document.querySelectorAll("[data-bar-name]")];
+  }
+
+  function setStatus(msg){
+    if(status) status.textContent = msg || "";
+  }
+
+  function haversine(lat1, lon1, lat2, lon2){
+    const R = 6371;
+    const toRad = d => d * Math.PI / 180;
+    const dLat = toRad(lat2-lat1);
+    const dLon = toRad(lon2-lon1);
+    const a = Math.sin(dLat/2)**2 +
+      Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+    return 2*R*Math.asin(Math.sqrt(a));
+  }
+
+  function parseMinutes(hhmm){
+    const [h,m] = hhmm.split(":").map(Number);
+    return h*60+m;
+  }
+
+  function isOpenNow(card){
+    const raw = card.dataset.hours;
+    if(!raw) return null;
+    let obj;
+    try{ obj = JSON.parse(raw); }catch(e){ return null; }
+
+    const now = new Date();
+    const day = String(now.getDay());
+    const range = obj[day];
+    if(!range || range.length < 2) return false;
+
+    const nowMin = now.getHours()*60 + now.getMinutes();
+    const start = parseMinutes(range[0]);
+    let end = parseMinutes(range[1]);
+
+    if(end <= start){
+      return nowMin >= start || nowMin < end;
+    }
+    return nowMin >= start && nowMin < end;
+  }
+
+  function refreshOpenBadges(){
+    cards().forEach(card=>{
+      let badge = card.querySelector(".open-status-badge");
+      const state = isOpenNow(card);
+      if(state === null){
+        if(badge) badge.remove();
+        return;
+      }
+      if(!badge){
+        badge = document.createElement("span");
+        badge.className = "open-status-badge";
+        card.appendChild(badge);
+      }
+      badge.classList.toggle("is-open", state);
+      badge.classList.toggle("is-closed", !state);
+      badge.textContent = state ? "営業中" : "営業時間外";
+    });
+  }
+
+  if(openBtn){
+    openBtn.addEventListener("click", ()=>{
+      openOnly = !openOnly;
+      let supported = 0;
+      cards().forEach(card=>{
+        const state = isOpenNow(card);
+        if(state !== null) supported++;
+        if(openOnly && state !== null){
+          card.style.display = state ? "" : "none";
+        } else if(openOnly && state === null){
+          card.style.display = "none";
+        } else {
+          card.style.display = "";
+        }
+      });
+      openBtn.classList.toggle("active", openOnly);
+      openBtn.textContent = openOnly ? "🕒 営業中を表示中" : "🕒 営業中だけ表示";
+      setStatus(supported ? "" : "営業時間データが登録された店舗から利用できます。");
+    });
+  }
+
+  if(nearBtn){
+    nearBtn.addEventListener("click", ()=>{
+      if(!navigator.geolocation){
+        setStatus("この端末では現在地機能を利用できません。");
+        return;
+      }
+      setStatus("現在地を確認しています…");
+      nearBtn.disabled = true;
+
+      navigator.geolocation.getCurrentPosition(pos=>{
+        const userLat = pos.coords.latitude;
+        const userLng = pos.coords.longitude;
+        const geoCards = cards().filter(c => c.dataset.lat && c.dataset.lng);
+
+        if(!geoCards.length){
+          setStatus("位置情報が登録された店舗から「近い順」を利用できます。");
+          nearBtn.disabled = false;
+          return;
+        }
+
+        geoCards.forEach(card=>{
+          const d = haversine(userLat,userLng,Number(card.dataset.lat),Number(card.dataset.lng));
+          card.dataset.distance = d;
+          let label = card.querySelector(".distance-label");
+          if(!label){
+            label = document.createElement("span");
+            label.className = "distance-label";
+            card.appendChild(label);
+          }
+          label.textContent = d < 1 ? `現在地から約${Math.round(d*1000)}m` : `現在地から約${d.toFixed(1)}km`;
+        });
+
+        geoCards.sort((a,b)=>Number(a.dataset.distance)-Number(b.dataset.distance));
+        const parent = geoCards[0].parentElement;
+        if(parent) geoCards.forEach(c=>parent.appendChild(c));
+
+        setStatus("現在地から近い順に並べ替えました。");
+        nearBtn.disabled = false;
+      }, err=>{
+        setStatus("現在地を取得できませんでした。位置情報の許可をご確認ください。");
+        nearBtn.disabled = false;
+      }, {enableHighAccuracy:false,timeout:10000,maximumAge:300000});
+    });
+  }
+
+  // Add map links automatically when an address exists
+  cards().forEach(card=>{
+    const address = card.dataset.address;
+    if(!address || card.querySelector(".map-link-auto")) return;
+    const link = document.createElement("a");
+    link.className = "map-link-auto";
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.href = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(address);
+    link.textContent = "地図で見る →";
+    card.appendChild(link);
+  });
+
+  refreshOpenBadges();
+})();
+</script>
+
+
+<script>
+/* KBN_SORT_RECENT */
+(function(){
+  const select = document.getElementById("sortBars");
+  const grid = document.querySelector(".bar-grid, .bars-grid, .shop-grid, .results-grid");
+  const cards = () => [...document.querySelectorAll("[data-bar-name]")];
+
+  if(select && grid){
+    select.addEventListener("change", ()=>{
+      const mode = select.value;
+      const list = cards();
+      const num = (el,key) => Number(el.dataset[key] || 0);
+      if(mode === "new"){
+        list.sort((a,b)=>(b.dataset.added || "").localeCompare(a.dataset.added || ""));
+      }else if(mode === "popular"){
+        list.sort((a,b)=>num(b,"popular")-num(a,"popular"));
+      }else if(mode === "rating"){
+        list.sort((a,b)=>num(b,"rating")-num(a,"rating"));
+      }
+      list.forEach(el=>grid.appendChild(el));
+    });
+  }
+
+  const KEY="KBN_RECENT_BARS";
+  const wrap=document.getElementById("recentBars");
+  const section=document.getElementById("recentBarsSection");
+  if(wrap && section){
+    let recent=[];
+    try{ recent=JSON.parse(localStorage.getItem(KEY)||"[]"); }catch(e){}
+    if(recent.length){
+      section.hidden=false;
+      recent.slice(0,5).forEach(item=>{
+        const a=document.createElement("a");
+        a.className="recent-bar-chip";
+        a.href=item.url || "bars.html";
+        a.textContent=item.name;
+        wrap.appendChild(a);
+      });
+    }
+  }
+})();
+</script>
+
 </body>
 </html>

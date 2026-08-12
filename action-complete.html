@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>送信完了｜KUMAMOTO BAR NAVI</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="site-header">
+  <div class="container header-inner">
+    <a class="brand" href="index.html">
+      <img class="brand-logo" src="logo.png" alt="KUMAMOTO BAR NAVI">
+      <span><b>KUMAMOTO</b><br>BAR NAVI<small>BAR & JOB INFORMATION</small></span>
+    </a>
+  </div>
+</header>
+<main class="complete-page">
+  <div class="complete-card">
+    <div class="complete-check">✓</div>
+    <p class="eyebrow">THANK YOU</p>
+    <h1 id="completeTitle">送信が完了しました</h1>
+    <p id="completeText">内容を確認後、必要に応じてご連絡いたします。</p>
+    <a class="btn-gold" href="index.html">トップページへ戻る</a>
+  </div>
+</main>
+<script>
+const type=new URLSearchParams(location.search).get("type");
+if(type==="review"){
+  document.getElementById("completeTitle").textContent="口コミを受け付けました";
+  document.getElementById("completeText").textContent="投稿ありがとうございます。内容を運営で確認後、掲載を検討します。";
+}else if(type==="job"){
+  document.getElementById("completeTitle").textContent="求人応募を受け付けました";
+  document.getElementById("completeText").textContent="応募ありがとうございます。内容確認後、必要に応じてご連絡します。";
+}
+</script>
+</body>
+</html>
