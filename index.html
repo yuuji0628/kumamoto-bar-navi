@@ -26,8 +26,51 @@
 }
 </script>
 
+
+<style>
+.top-notice-kbn{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  flex-wrap:wrap;
+  box-sizing:border-box;
+  width:100%;
+  padding:7px 14px;
+  background:#0b0d11;
+  border-bottom:1px solid rgba(224,183,86,.28);
+  color:#d8dde4;
+  font-size:12px;
+  line-height:1.45;
+  text-align:center;
+  letter-spacing:.02em;
+}
+.top-notice-kbn a{
+  color:#e9c460;
+  font-weight:800;
+  text-decoration:none;
+  white-space:nowrap;
+}
+.top-notice-kbn a:hover{
+  text-decoration:underline;
+}
+@media(max-width:520px){
+  .top-notice-kbn{
+    padding:6px 10px;
+    gap:5px;
+    font-size:11px;
+  }
+}
+</style>
+
 </head>
 <body>
+
+<div class="top-notice-kbn">
+  <span>📢 お知らせ：掲載店舗を募集中です。</span>
+  <a href="listing-form.html">掲載申込はこちら →</a>
+</div>
+
 <header class="site-header">
   <div class="container header-inner">
     <a class="brand" href="#top">
