@@ -703,3 +703,58 @@ a.directory-card:hover{
   .compare-row > *{padding:12px 7px}
   .pricing-hero h1{font-size:42px}
 }
+
+/* v12 trust / corporate pages */
+.trust-section{padding:72px 0;background:#0b0f15;border-top:1px solid #242a33}
+.trust-section h2{font-size:clamp(30px,5vw,44px);margin:4px 0 24px}
+.trust-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.trust-card{display:flex;flex-direction:column;gap:8px;padding:22px;border:1px solid #303742;border-radius:16px;background:#111722;text-decoration:none;transition:.2s}
+.trust-card:hover{transform:translateY(-2px);border-color:#9c7a36}
+.trust-card b{font-size:18px;color:#f0c75f}
+.trust-card span{font-size:13px;line-height:1.7;color:#aeb4be}
+.info-page{min-height:65vh;padding:70px 0;background:#080b10}
+.info-page .page-head{max-width:760px;margin-bottom:28px}
+.info-page h1{font-size:clamp(36px,6vw,56px);margin:4px 0 10px}
+.info-page h2{margin:34px 0 10px;font-size:22px;color:#f1ca68}
+.info-page p,.info-page li{color:#bbc0c8;line-height:1.9}
+.info-box{padding:22px;border:1px solid #303742;border-radius:16px;background:#111722;margin:18px 0}
+.faq-list{display:grid;gap:12px}
+.faq-item{padding:20px;border:1px solid #303742;border-radius:14px;background:#111722}
+.faq-item h3{margin:0 0 8px;color:#f1ca68;font-size:17px}
+.contact-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:18px}
+.simple-link-btn{display:inline-flex;padding:12px 18px;border:1px solid #9a7a38;border-radius:10px;color:#f3cb67;text-decoration:none;font-weight:700}
+@media(max-width:760px){.trust-grid{grid-template-columns:1fr}}
+
+/* v13 area pages */
+.area-section{padding:76px 0;background:#090d13;border-top:1px solid #252a31}
+.section-head-row{display:flex;justify-content:space-between;align-items:end;gap:20px;margin-bottom:24px}
+.section-head-row h2{margin:3px 0 8px;font-size:clamp(30px,5vw,44px)}
+.section-lead{margin:0;color:#aeb4be}
+.area-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+.area-card{min-height:145px;padding:22px 18px;border:1px solid #313843;border-radius:16px;background:linear-gradient(145deg,#121823,#0b0f15);text-decoration:none;display:flex;flex-direction:column;justify-content:flex-end;transition:.2s}
+.area-card:hover{transform:translateY(-3px);border-color:#a8853e}
+.area-card .area-en{font:700 10px/1 Montserrat,sans-serif;letter-spacing:.12em;color:#8f7540;margin-bottom:auto}
+.area-card b{font-size:23px;color:#f1ca68}
+.area-card small{margin-top:5px;color:#969ca6}
+.area-mini-section{padding:58px 0;background:#0b0f15;border-top:1px solid #252a31}
+.area-mini-section h2{margin:4px 0 18px}
+.area-mini-grid{display:flex;flex-wrap:wrap;gap:10px}
+.area-mini-grid a{padding:11px 16px;border:1px solid #3a404a;border-radius:999px;color:#e6c262;text-decoration:none;background:#111722;font-weight:700}
+.area-page{min-height:65vh;background:#080b10}
+.area-hero{padding:70px 0 40px;border-bottom:1px solid #2c2f35;background:radial-gradient(circle at 80% 10%,rgba(203,159,67,.12),transparent 35%),#090c11}
+.area-hero h1{font-size:clamp(40px,7vw,64px);margin:4px 0 10px}
+.area-hero p{max-width:720px;color:#b3b8c1;line-height:1.9}
+.area-content{padding:56px 0}
+.area-intro{display:grid;grid-template-columns:1.2fr .8fr;gap:20px;margin-bottom:28px}
+.area-copy,.area-cta-box{padding:22px;border:1px solid #313843;border-radius:16px;background:#111722}
+.area-copy h2,.area-cta-box h2{margin-top:0;color:#f1ca68}
+.area-copy p,.area-cta-box p{color:#b5bac3;line-height:1.9}
+.area-empty{padding:34px 22px;text-align:center;border:1px dashed #4a4f58;border-radius:16px;background:#0e131b}
+.area-empty h2{margin:0 0 8px;color:#f1ca68}
+.area-empty p{color:#aab0ba}
+.area-page-actions{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:18px}
+.area-breadcrumbs{font-size:12px;color:#8f96a0;margin-bottom:16px}
+.area-breadcrumbs a{color:#d8b557;text-decoration:none}
+@media(max-width:980px){.area-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:760px){.section-head-row{display:block}.section-head-row .outline-btn{display:inline-block;margin-top:14px}.area-intro{grid-template-columns:1fr}}
+@media(max-width:520px){.area-grid{grid-template-columns:1fr}.area-card{min-height:115px}}
