@@ -325,3 +325,61 @@
   .form-section{padding:20px 16px}
   .form-section h2{font-size:24px}
 }
+
+
+/* v7 mobile side-banner fix */
+.side-panel > a:not(.side-banner){
+  display:block;
+  padding:16px 0;
+  border-bottom:1px solid #242933;
+}
+
+.side-panel > .side-banner{
+  display:block;
+  margin-top:18px;
+  padding:20px 18px;
+  border:1px solid #c49d3e;
+  border-bottom:1px solid #c49d3e;
+  border-radius:14px;
+  background:linear-gradient(135deg,#3b260c,#0d1118);
+  min-height:0;
+}
+
+.side-panel > .side-banner strong,
+.side-panel > .side-banner small{
+  display:block;
+}
+
+.side-panel > .side-banner strong{
+  font-size:21px;
+  line-height:1.35;
+  color:#f2c85f;
+}
+
+.side-panel > .side-banner small{
+  font-size:12px;
+  line-height:1.4;
+  color:#c7b992;
+  margin-bottom:7px;
+}
+
+.side-panel > .side-banner.alt{
+  background:linear-gradient(135deg,#43231a,#0d1118);
+}
+
+@media(max-width:700px){
+  .side-panel > .side-banner{
+    margin-top:14px;
+    padding:16px 16px;
+    border-radius:13px;
+  }
+
+  .side-panel > .side-banner strong{
+    font-size:18px;
+  }
+
+  .side-panel > .side-banner small{
+    font-size:11px;
+    margin-bottom:5px;
+  }
+}
