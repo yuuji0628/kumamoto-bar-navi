@@ -39,7 +39,7 @@
     <h1><span class="hero-line1">熊本の夜を、</span><span class="hero-line2">もっと見つけやすく。</span></h1>
     <p class="hero-copy">BAR探しも、求人も、ここから。</p>
 
-    <div class="hero-search">
+    <div class="hero-search hero-search-v6">
       <select id="areaFilter">
         <option value="all">エリアを選択</option>
         <option value="熊本市">熊本市</option>
@@ -47,14 +47,31 @@
         <option value="玉名">玉名</option>
         <option value="宇城">宇城</option>
       </select>
-      <select id="typeFilter">
-        <option value="all">ジャンル・特徴</option>
-        <option value="一人飲み">一人飲み</option>
-        <option value="カラオケ">カラオケ</option>
-        <option value="ダーツ">ダーツ</option>
-        <option value="深夜営業">深夜営業</option>
+      <select id="genreFilter">
+        <option value="all">ジャンルを選択</option>
+        <option value="オーセンティック">オーセンティック</option>
+        <option value="ショットバー">ショットバー</option>
+        <option value="カジュアル">カジュアルバー</option>
+        <option value="ダーツ">ダーツバー</option>
+        <option value="カラオケ">カラオケバー</option>
+        <option value="スポーツ">スポーツバー</option>
+        <option value="ワイン">ワインバー</option>
+        <option value="ウイスキー">ウイスキーバー</option>
+        <option value="シーシャ">シーシャバー</option>
+        <option value="ラウンジ">ラウンジ</option>
       </select>
-      <input id="keyword" type="search" placeholder="キーワードで検索">
+      <select id="featureFilter">
+        <option value="all">特徴を選択</option>
+        <option value="一人飲み">一人飲み</option>
+        <option value="デート">デート向け</option>
+        <option value="深夜営業">深夜営業</option>
+        <option value="朝まで">朝まで営業</option>
+        <option value="飲み放題">飲み放題あり</option>
+        <option value="フード充実">フード充実</option>
+        <option value="喫煙可">喫煙可</option>
+        <option value="禁煙">禁煙</option>
+      </select>
+      <input id="keyword" type="search" placeholder="店名・キーワード">
       <button id="filterBtn">検索する →</button>
     </div>
 
@@ -114,27 +131,27 @@
       </div>
 
       <div class="cards" id="barCards">
-        <a class="bar-card" href="bar-lumiere.html" data-area="熊本市" data-types="一人飲み 深夜営業" data-name="BAR LUMIÈRE">
+        <a class="bar-card" href="bar-lumiere.html" data-area="熊本市" data-genre="オーセンティック ウイスキー" data-types="一人飲み デート 深夜営業 禁煙" data-name="BAR LUMIÈRE">
           <div class="card-image gradient-1"><span>🥃</span></div>
           <div class="card-body">
             <h3>BAR LUMIÈRE</h3>
-            <div class="badges"><span>熊本市中央区</span><span>一人飲み</span></div>
+            <div class="badges"><span>熊本市中央区</span><span>オーセンティック</span><span>一人飲み</span></div>
             <p>上質な空間で大人の時間を。ウイスキーとカクテルをゆっくりと。</p>
           </div>
         </a>
-        <article class="bar-card" data-area="熊本市" data-types="ダーツ カラオケ 深夜営業" data-name="Darts & Bar EDGE">
+        <article class="bar-card" data-area="熊本市" data-genre="ダーツ カジュアル カラオケ" data-types="カラオケ ダーツ 深夜営業 飲み放題 喫煙可" data-name="Darts & Bar EDGE">
           <div class="card-image gradient-2"><span>🎯</span></div>
           <div class="card-body">
             <h3>Darts & Bar EDGE</h3>
-            <div class="badges"><span>熊本市中央区</span><span>ダーツ</span><span>カラオケ</span></div>
+            <div class="badges"><span>熊本市中央区</span><span>ダーツバー</span><span>飲み放題</span></div>
             <p>ダーツとカラオケで盛り上がれる、仲間と楽しめるカジュアルBAR。</p>
           </div>
         </article>
-        <article class="bar-card" data-area="八代市" data-types="一人飲み 深夜営業" data-name="BAR SAKURA">
+        <article class="bar-card" data-area="八代市" data-genre="ショットバー ワイン" data-types="一人飲み デート 深夜営業 フード充実 禁煙" data-name="BAR SAKURA">
           <div class="card-image gradient-3"><span>🍸</span></div>
           <div class="card-body">
             <h3>BAR SAKURA</h3>
-            <div class="badges"><span>八代市</span><span>カクテル</span></div>
+            <div class="badges"><span>八代市</span><span>ショットバー</span><span>デート向け</span></div>
             <p>季節のフルーツカクテルが自慢。落ち着いた夜を楽しめる一軒。</p>
           </div>
         </article>
