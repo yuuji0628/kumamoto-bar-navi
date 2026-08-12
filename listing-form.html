@@ -38,46 +38,54 @@
         <p>店舗名・営業時間・住所・Instagram・お店の特徴などを無料で掲載できます。内容確認後、掲載ページを作成しご連絡します。写真は申込み後、メールまたはInstagram DMでお送りください。</p>
       </div>
 
-      <form id="listingForm" class="listing-form">
+      <form id="listingForm" class="listing-form"
+        action="https://formsubmit.co/kumamotobarnavi@gmail.com"
+        method="POST"
+        accept-charset="UTF-8">
+        <input type="hidden" name="_subject" value="【KUMAMOTO BAR NAVI】店舗掲載申込み">
+        <input type="hidden" name="_template" value="table">
+        <input type="hidden" name="_captcha" value="false">
+        <input type="hidden" name="_next" value="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/thanks.html">
+        <input type="text" name="_honey" style="display:none" tabindex="-1" autocomplete="off">
         <div class="form-section">
           <p class="eyebrow">SHOP INFO</p>
           <h2>店舗情報</h2>
 
           <label class="field">
             <span>店舗名 <em>必須</em></span>
-            <input type="text" id="shopName" required placeholder="例：BAR LUMIÈRE">
+            <input type="text" id="shopName" name="店舗名" required placeholder="例：BAR LUMIÈRE">
           </label>
 
           <div class="field-row">
             <label class="field">
               <span>担当者名 <em>必須</em></span>
-              <input type="text" id="ownerName" required placeholder="例：山田 太郎">
+              <input type="text" id="ownerName" name="担当者名" required placeholder="例：山田 太郎">
             </label>
             <label class="field">
               <span>電話番号</span>
-              <input type="tel" id="phone" placeholder="090-1234-5678">
+              <input type="tel" id="phone" name="電話番号" placeholder="090-1234-5678">
             </label>
           </div>
 
           <label class="field">
             <span>店舗住所 <em>必須</em></span>
-            <input type="text" id="address" required placeholder="熊本県熊本市中央区〇〇">
+            <input type="text" id="address" name="店舗住所" required placeholder="熊本県熊本市中央区〇〇">
           </label>
 
           <div class="field-row">
             <label class="field">
               <span>営業時間</span>
-              <input type="text" id="hours" placeholder="20:00〜翌3:00">
+              <input type="text" id="hours" name="営業時間" placeholder="20:00〜翌3:00">
             </label>
             <label class="field">
               <span>定休日</span>
-              <input type="text" id="holiday" placeholder="不定休">
+              <input type="text" id="holiday" name="定休日" placeholder="不定休">
             </label>
           </div>
 
           <label class="field">
             <span>Instagram</span>
-            <input type="text" id="instagram" placeholder="@example_bar または URL">
+            <input type="text" id="instagram" name="Instagram" placeholder="@example_bar または URL">
           </label>
         </div>
 
@@ -87,7 +95,7 @@
 
           <label class="field">
             <span>ジャンル <em>必須</em></span>
-            <select id="genre" required>
+            <select id="genre" name="ジャンル" required>
               <option value="">選択してください</option>
               <option>オーセンティック</option>
               <option>ショットバー</option>
@@ -105,14 +113,14 @@
 
           <fieldset class="check-group">
             <legend>特徴（複数選択可）</legend>
-            <label><input type="checkbox" name="features" value="一人飲み"> 一人飲み</label>
-            <label><input type="checkbox" name="features" value="デート向け"> デート向け</label>
-            <label><input type="checkbox" name="features" value="深夜営業"> 深夜営業</label>
-            <label><input type="checkbox" name="features" value="朝まで営業"> 朝まで営業</label>
-            <label><input type="checkbox" name="features" value="飲み放題あり"> 飲み放題あり</label>
-            <label><input type="checkbox" name="features" value="フード充実"> フード充実</label>
-            <label><input type="checkbox" name="features" value="喫煙可"> 喫煙可</label>
-            <label><input type="checkbox" name="features" value="禁煙"> 禁煙</label>
+            <label><input type="checkbox" name="特徴" value="一人飲み"> 一人飲み</label>
+            <label><input type="checkbox" name="特徴" value="デート向け"> デート向け</label>
+            <label><input type="checkbox" name="特徴" value="深夜営業"> 深夜営業</label>
+            <label><input type="checkbox" name="特徴" value="朝まで営業"> 朝まで営業</label>
+            <label><input type="checkbox" name="特徴" value="飲み放題あり"> 飲み放題あり</label>
+            <label><input type="checkbox" name="特徴" value="フード充実"> フード充実</label>
+            <label><input type="checkbox" name="特徴" value="喫煙可"> 喫煙可</label>
+            <label><input type="checkbox" name="特徴" value="禁煙"> 禁煙</label>
           </fieldset>
         </div>
 
@@ -122,23 +130,23 @@
 
           <label class="field">
             <span>店舗紹介文</span>
-            <textarea id="description" rows="6" placeholder="お店の雰囲気、おすすめポイント、人気メニューなど"></textarea>
+            <textarea id="description" name="店舗紹介文" rows="6" placeholder="お店の雰囲気、おすすめポイント、人気メニューなど"></textarea>
           </label>
 
           <div class="field-row">
             <label class="field">
               <span>平均予算</span>
-              <input type="text" id="budget" placeholder="3,000円〜5,000円">
+              <input type="text" id="budget" name="平均予算" placeholder="3,000円〜5,000円">
             </label>
             <label class="field">
               <span>席数</span>
-              <input type="text" id="seats" placeholder="18席">
+              <input type="text" id="seats" name="席数" placeholder="18席">
             </label>
           </div>
 
           <label class="field">
             <span>求人掲載</span>
-            <select id="jobListing">
+            <select id="jobListing" name="求人掲載">
               <option>希望しない</option>
               <option>希望する</option>
               <option>相談したい</option>
@@ -160,21 +168,21 @@
 
           <label class="field">
             <span>メールアドレス <em>必須</em></span>
-            <input type="email" id="email" required placeholder="example@email.com">
+            <input type="email" id="email" name="メールアドレス" required placeholder="example@email.com">
           </label>
 
           <label class="field">
             <span>備考</span>
-            <textarea id="note" rows="4" placeholder="掲載についての質問・希望など"></textarea>
+            <textarea id="note" name="備考" rows="4" placeholder="掲載についての質問・希望など"></textarea>
           </label>
 
           <label class="agree">
-            <input type="checkbox" id="agree" required>
+            <input type="checkbox" id="agree" name="入力内容確認" value="確認済み" required>
             <span>入力内容に間違いがないことを確認しました。</span>
           </label>
 
           <button type="submit" class="btn-gold submit-btn">無料掲載を申し込む →</button>
-          <p class="form-footnote">※送信後、内容確認のためご連絡する場合があります。掲載内容は確認のうえ公開します。</p>
+          <p class="form-footnote">※送信すると受付完了画面へ移動します。内容確認後、運営からご連絡する場合があります。</p>
         </div>
       </form>
     </div>
@@ -189,46 +197,5 @@
   </div>
 </footer>
 
-<script>
-document.getElementById('listingForm').addEventListener('submit', function(e){
-  e.preventDefault();
-
-  if(!this.reportValidity()) return;
-
-  const features = [...document.querySelectorAll('input[name="features"]:checked')]
-    .map(x => x.value).join('、') || 'なし';
-
-  const body = [
-    '【KUMAMOTO BAR NAVI 店舗掲載申込み】',
-    '',
-    '店舗名：' + document.getElementById('shopName').value,
-    '担当者名：' + document.getElementById('ownerName').value,
-    '電話番号：' + document.getElementById('phone').value,
-    '住所：' + document.getElementById('address').value,
-    '営業時間：' + document.getElementById('hours').value,
-    '定休日：' + document.getElementById('holiday').value,
-    'Instagram：' + document.getElementById('instagram').value,
-    'ジャンル：' + document.getElementById('genre').value,
-    '特徴：' + features,
-    '平均予算：' + document.getElementById('budget').value,
-    '席数：' + document.getElementById('seats').value,
-    '求人掲載：' + document.getElementById('jobListing').value,
-    '',
-    '店舗紹介：',
-    document.getElementById('description').value,
-    '',
-    '連絡先メール：' + document.getElementById('email').value,
-    '',
-    '備考：',
-    document.getElementById('note').value
-  ].join('\n');
-
-  const subject = encodeURIComponent('【掲載申込み】' + document.getElementById('shopName').value);
-  const mailBody = encodeURIComponent(body);
-
-  // 公開前に実際の運営メールアドレスへ変更してください。
-  window.location.href = 'mailto:kumamotobarnavi@gmail.com?subject=' + subject + '&body=' + mailBody;
-});
-</script>
 </body>
 </html>
