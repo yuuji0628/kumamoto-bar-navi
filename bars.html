@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="熊本県内のBAR一覧｜KUMAMOTO BAR NAVI">
+  <title>BAR一覧｜KUMAMOTO BAR NAVI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700;800&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="site-header">
+  <div class="container header-inner">
+    <a class="brand" href="index.html">
+      <img class="brand-logo" src="logo.png" alt="KUMAMOTO BAR NAVI ロゴ">
+      <span><b>KUMAMOTO</b><br>BAR NAVI<small>BAR & JOB INFORMATION</small></span>
+    </a>
+    <a class="header-cta" href="listing-form.html">店舗掲載申込み</a>
+  </div>
+</header>
+
+<main class="bars-page">
+  <section class="bars-hero">
+    <div class="container">
+      <a class="back-link" href="index.html">← ホームへ戻る</a>
+      <p class="eyebrow">KUMAMOTO BAR DIRECTORY</p>
+      <h1>熊本県内のBAR一覧</h1>
+      <p>エリア・ジャンル・特徴から、気になるBARを探せます。</p>
+
+      <div class="directory-search">
+        <select id="areaFilter">
+          <option value="all">すべてのエリア</option>
+          <option value="熊本市">熊本市</option>
+          <option value="八代市">八代市</option>
+          <option value="玉名">玉名</option>
+          <option value="宇城">宇城</option>
+        </select>
+
+        <select id="genreFilter">
+          <option value="all">すべてのジャンル</option>
+          <option value="オーセンティック">オーセンティック</option>
+          <option value="ショットバー">ショットバー</option>
+          <option value="カジュアル">カジュアルバー</option>
+          <option value="ダーツ">ダーツバー</option>
+          <option value="カラオケ">カラオケバー</option>
+          <option value="ワイン">ワインバー</option>
+          <option value="ウイスキー">ウイスキーバー</option>
+          <option value="シーシャ">シーシャバー</option>
+          <option value="ラウンジ">ラウンジ</option>
+        </select>
+
+        <select id="featureFilter">
+          <option value="all">すべての特徴</option>
+          <option value="一人飲み">一人飲み</option>
+          <option value="デート">デート向け</option>
+          <option value="深夜営業">深夜営業</option>
+          <option value="飲み放題">飲み放題あり</option>
+          <option value="フード充実">フード充実</option>
+          <option value="喫煙可">喫煙可</option>
+          <option value="禁煙">禁煙</option>
+        </select>
+
+        <input id="keyword" type="search" placeholder="店名・キーワード">
+        <button id="filterBtn">検索する</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <div class="directory-top">
+        <div>
+          <p class="eyebrow">BAR LIST</p>
+          <h2>掲載BAR</h2>
+        </div>
+        <span id="resultCount" class="result-count">6件</span>
+      </div>
+
+      <div class="directory-grid" id="barCards">
+        <a class="directory-card" href="bar-lumiere.html"
+           data-area="熊本市"
+           data-genre="オーセンティック ウイスキー"
+           data-types="一人飲み デート 深夜営業 禁煙"
+           data-name="BAR LUMIÈRE">
+          <div class="directory-photo dir-1">🥃</div>
+          <div class="directory-body">
+            <div class="badges"><span>熊本市中央区</span><span>オーセンティック</span></div>
+            <h3>BAR LUMIÈRE</h3>
+            <p>上質な空間でウイスキーとカクテルをゆっくり楽しめるBAR。</p>
+            <strong>詳細を見る →</strong>
+          </div>
+        </a>
+
+        <article class="directory-card"
+           data-area="熊本市"
+           data-genre="ダーツ カジュアル カラオケ"
+           data-types="ダーツ カラオケ 深夜営業 飲み放題 喫煙可"
+           data-name="Darts & Bar EDGE">
+          <div class="directory-photo dir-2">🎯</div>
+          <div class="directory-body">
+            <div class="badges"><span>熊本市中央区</span><span>ダーツバー</span></div>
+            <h3>Darts & Bar EDGE</h3>
+            <p>ダーツとカラオケで盛り上がれるカジュアルBAR。</p>
+            <strong>詳細情報準備中</strong>
+          </div>
+        </article>
+
+        <article class="directory-card"
+           data-area="八代市"
+           data-genre="ショットバー ワイン"
+           data-types="一人飲み デート 深夜営業 フード充実 禁煙"
+           data-name="BAR SAKURA">
+          <div class="directory-photo dir-3">🍸</div>
+          <div class="directory-body">
+            <div class="badges"><span>八代市</span><span>ショットバー</span></div>
+            <h3>BAR SAKURA</h3>
+            <p>季節のフルーツカクテルを楽しめる落ち着いたBAR。</p>
+            <strong>詳細情報準備中</strong>
+          </div>
+        </article>
+
+        <article class="directory-card"
+           data-area="玉名"
+           data-genre="ラウンジ"
+           data-types="深夜営業 喫煙可"
+           data-name="LOUNGE R">
+          <div class="directory-photo dir-4">🌙</div>
+          <div class="directory-body">
+            <div class="badges"><span>玉名市</span><span>ラウンジ</span></div>
+            <h3>LOUNGE R</h3>
+            <p>ゆったり過ごせる大人向けラウンジ。</p>
+            <strong>詳細情報準備中</strong>
+          </div>
+        </article>
+
+        <article class="directory-card"
+           data-area="宇城"
+           data-genre="カジュアル"
+           data-types="一人飲み 深夜営業 飲み放題"
+           data-name="BAR RISE">
+          <div class="directory-photo dir-5">🍺</div>
+          <div class="directory-body">
+            <div class="badges"><span>宇城市</span><span>カジュアルバー</span></div>
+            <h3>BAR RISE</h3>
+            <p>気軽に立ち寄れるカジュアルなBAR。</p>
+            <strong>詳細情報準備中</strong>
+          </div>
+        </article>
+
+        <article class="directory-card"
+           data-area="熊本市"
+           data-genre="シーシャ カジュアル"
+           data-types="デート 深夜営業 フード充実"
+           data-name="SHISHA BAR N">
+          <div class="directory-photo dir-6">💨</div>
+          <div class="directory-body">
+            <div class="badges"><span>熊本市中央区</span><span>シーシャ</span></div>
+            <h3>SHISHA BAR N</h3>
+            <p>シーシャとドリンクを楽しめるチル系BAR。</p>
+            <strong>詳細情報準備中</strong>
+          </div>
+        </article>
+      </div>
+
+      <p id="noResult" class="no-result" style="display:none">
+        条件に一致するBARがありません。条件を変更してお試しください。
+      </p>
+    </div>
+  </section>
+
+  <section class="bars-owner-cta">
+    <div class="container bars-owner-box">
+      <div>
+        <p class="eyebrow">FOR OWNERS</p>
+        <h2>あなたのお店も掲載しませんか？</h2>
+        <p>熊本県内のBAR・ラウンジを無料で掲載受付中です。</p>
+      </div>
+      <a class="btn-gold" href="listing-form.html">店舗掲載申込み →</a>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="container footer-inner">
+    <div class="brand footer-brand">
+      <img class="brand-logo" src="logo.png" alt="KUMAMOTO BAR NAVI ロゴ">
+      <span><b>KUMAMOTO</b><br>BAR NAVI</span>
+    </div>
+    <div class="footer-links">
+      <a href="index.html">ホーム</a>
+      <a href="bars.html">BAR一覧</a>
+      <a href="index.html#jobs">求人</a>
+      <a href="listing-form.html">店舗掲載</a>
+    </div>
+    <small>© 2026 KUMAMOTO BAR NAVI</small>
+  </div>
+</footer>
+
+<script>
+function applyDirectoryFilters(){
+  const area = document.getElementById('areaFilter').value;
+  const genre = document.getElementById('genreFilter').value;
+  const feature = document.getElementById('featureFilter').value;
+  const keyword = document.getElementById('keyword').value.trim().toLowerCase();
+
+  let count = 0;
+
+  document.querySelectorAll('.directory-card').forEach(card => {
+    const cardArea = card.dataset.area || '';
+    const cardGenre = card.dataset.genre || '';
+    const cardTypes = card.dataset.types || '';
+    const haystack = (card.dataset.name + ' ' + card.innerText + ' ' + cardGenre + ' ' + cardTypes).toLowerCase();
+
+    const matchArea = area === 'all' || cardArea === area;
+    const matchGenre = genre === 'all' || cardGenre.includes(genre);
+    const matchFeature = feature === 'all' || cardTypes.includes(feature);
+    const matchKeyword = !keyword || haystack.includes(keyword);
+
+    const show = matchArea && matchGenre && matchFeature && matchKeyword;
+    card.style.display = show ? '' : 'none';
+    if(show) count++;
+  });
+
+  document.getElementById('resultCount').textContent = count + '件';
+  document.getElementById('noResult').style.display = count === 0 ? 'block' : 'none';
+}
+
+document.getElementById('filterBtn').addEventListener('click', applyDirectoryFilters);
+document.getElementById('keyword').addEventListener('keydown', e => {
+  if(e.key === 'Enter') applyDirectoryFilters();
+});
+</script>
+</body>
+</html>
