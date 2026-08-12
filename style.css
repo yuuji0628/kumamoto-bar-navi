@@ -429,3 +429,277 @@
   .condition-list div{grid-template-columns:1fr;gap:3px}
   .job-detail-hero h1{font-size:42px}
 }
+
+/* v9 BAR directory */
+.bars-page{background:#080b10}
+.bars-hero{
+  padding:70px 0 42px;
+  background:
+    radial-gradient(circle at 20% 20%,rgba(34,78,126,.18),transparent 34%),
+    radial-gradient(circle at 80% 30%,rgba(183,122,41,.13),transparent 34%),
+    #090b10;
+  border-bottom:1px solid #252018;
+}
+.bars-hero h1{
+  font-size:clamp(42px,7vw,70px);
+  line-height:1.1;
+  margin:6px 0 12px;
+}
+.bars-hero p{color:#b8bcc4}
+.directory-search{
+  margin-top:28px;
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr 1.1fr auto;
+  gap:8px;
+  padding:10px;
+  background:#111722;
+  border:1px solid #303640;
+  border-radius:16px;
+}
+.directory-search select,
+.directory-search input{
+  min-width:0;
+  height:50px;
+  padding:0 12px;
+  border:1px solid #353c47;
+  border-radius:10px;
+  background:#090d13;
+  color:#fff;
+  font:inherit;
+}
+.directory-search button{
+  border:0;
+  border-radius:10px;
+  padding:0 20px;
+  background:linear-gradient(135deg,#f0cc68,#c89230);
+  color:#111;
+  font-weight:800;
+}
+.directory-top{
+  display:flex;
+  align-items:end;
+  justify-content:space-between;
+  margin-bottom:22px;
+}
+.directory-top h2{margin:0;font-size:36px}
+.result-count{
+  color:#e4bd59;
+  font-weight:800;
+  font-size:14px;
+}
+.directory-grid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:18px;
+}
+.directory-card{
+  overflow:hidden;
+  border:1px solid #303640;
+  border-radius:16px;
+  background:#111722;
+  color:#fff;
+}
+a.directory-card:hover{
+  transform:translateY(-3px);
+  border-color:#8a7137;
+  transition:.2s;
+}
+.directory-photo{
+  height:190px;
+  display:grid;
+  place-items:center;
+  font-size:68px;
+}
+.dir-1{background:linear-gradient(135deg,#4d2a17,#16161a)}
+.dir-2{background:linear-gradient(135deg,#261357,#101d35)}
+.dir-3{background:linear-gradient(135deg,#5f243a,#171318)}
+.dir-4{background:linear-gradient(135deg,#29203d,#11131c)}
+.dir-5{background:linear-gradient(135deg,#4c3516,#15161a)}
+.dir-6{background:linear-gradient(135deg,#183a35,#14151a)}
+.directory-body{padding:18px}
+.directory-body h3{margin:10px 0 8px}
+.directory-body p{
+  color:#aeb3bc;
+  min-height:48px;
+  font-size:13px;
+}
+.directory-body strong{
+  color:#e4bd59;
+  font-size:12px;
+}
+.no-result{
+  margin-top:20px;
+  padding:18px;
+  border:1px dashed #554b35;
+  border-radius:14px;
+  color:#a7abb2;
+  text-align:center;
+}
+.bars-owner-cta{
+  padding:64px 0;
+  background:linear-gradient(135deg,#161108,#080a0e);
+  border-top:1px solid #2d2618;
+}
+.bars-owner-box{
+  display:flex;
+  justify-content:space-between;
+  gap:28px;
+  align-items:center;
+}
+.bars-owner-box h2{margin:2px 0 8px}
+.bars-owner-box p{color:#aaaeb6}
+@media(max-width:980px){
+  .directory-search{grid-template-columns:1fr 1fr}
+  .directory-search button{min-height:50px;grid-column:1/-1}
+  .directory-grid{grid-template-columns:1fr 1fr}
+}
+@media(max-width:650px){
+  .directory-search{grid-template-columns:1fr}
+  .directory-search button{grid-column:auto}
+  .directory-grid{grid-template-columns:1fr}
+  .bars-owner-box{display:block}
+  .bars-owner-box .btn-gold{margin-top:16px}
+  .directory-top h2{font-size:30px}
+}
+
+/* v10 pricing */
+.owner-actions{display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+.owner-sub-link{font-size:12px;color:#e5bd56;font-weight:700}
+.pricing-page{background:#080b10}
+.pricing-hero{
+  padding:76px 0 42px;
+  background:
+    radial-gradient(circle at 82% 22%,rgba(218,177,81,.14),transparent 34%),
+    #090b10;
+  border-bottom:1px solid #2a2417;
+}
+.pricing-hero h1{
+  font-size:clamp(44px,7vw,72px);
+  margin:5px 0 12px;
+  line-height:1.08;
+}
+.pricing-hero p{color:#b6bac2}
+.pricing-grid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:18px;
+  align-items:stretch;
+}
+.price-card{
+  position:relative;
+  padding:28px 24px;
+  border:1px solid #303640;
+  border-radius:20px;
+  background:#111722;
+}
+.featured-plan{
+  border-color:#b8923b;
+  box-shadow:0 0 30px rgba(216,177,94,.08);
+}
+.recommend-ribbon{
+  position:absolute;
+  top:14px;
+  right:14px;
+  padding:5px 10px;
+  border-radius:999px;
+  background:#e1ba58;
+  color:#111;
+  font-size:10px;
+  font-weight:800;
+}
+.plan-label{
+  margin:0;
+  color:#e5bd56;
+  font-family:Montserrat,sans-serif;
+  font-size:11px;
+  letter-spacing:.18em;
+  font-weight:800;
+}
+.price-card h2{
+  margin:5px 0 8px;
+  font-size:30px;
+}
+.price{
+  margin:14px 0 8px;
+  font-size:38px;
+  font-weight:800;
+  color:#f4cb67;
+}
+.price span{
+  margin-left:3px;
+  font-size:12px;
+  color:#8d929a;
+  font-weight:500;
+}
+.plan-copy{
+  color:#aeb2ba;
+  min-height:48px;
+}
+.price-card ul{
+  min-height:190px;
+  padding-left:20px;
+  color:#d0d3d8;
+}
+.price-card li{margin:8px 0}
+.pricing-note{
+  margin-top:24px;
+  padding:18px 20px;
+  border:1px solid #51462d;
+  border-radius:14px;
+  background:#14120d;
+}
+.pricing-note b{color:#e5bd56}
+.pricing-note p{margin:5px 0 0;color:#a7abb2;font-size:13px}
+.pricing-compare{
+  padding:76px 0;
+}
+.pricing-compare h2{font-size:36px;margin:0 0 22px}
+.compare-table{
+  overflow:hidden;
+  border:1px solid #313741;
+  border-radius:16px;
+}
+.compare-row{
+  display:grid;
+  grid-template-columns:1.4fr repeat(3,1fr);
+  gap:1px;
+  background:#303640;
+}
+.compare-row > *{
+  padding:15px 14px;
+  background:#111722;
+  text-align:center;
+}
+.compare-row span{text-align:left;color:#c6c9cf}
+.compare-head > *{
+  background:#171d27;
+  color:#e5bd56;
+  font-weight:800;
+}
+.pricing-cta{
+  padding:68px 0;
+  background:linear-gradient(135deg,#171208,#080a0e);
+  border-top:1px solid #2b2518;
+}
+.pricing-cta-inner{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:24px;
+}
+.pricing-cta h2{margin:3px 0 6px}
+.pricing-cta p{color:#a7abb2}
+@media(max-width:850px){
+  .pricing-grid{grid-template-columns:1fr}
+  .price-card ul{min-height:0}
+  .pricing-cta-inner{display:block}
+  .pricing-cta .btn-gold{margin-top:16px}
+}
+@media(max-width:620px){
+  .compare-row{
+    grid-template-columns:1.3fr repeat(3,.8fr);
+    font-size:11px;
+  }
+  .compare-row > *{padding:12px 7px}
+  .pricing-hero h1{font-size:42px}
+}
