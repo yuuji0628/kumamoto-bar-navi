@@ -1781,3 +1781,53 @@ a.directory-card:hover{
   .shop-compact-detail-list dt{font-size:.66rem}
   .shop-compact-detail-list dd{font-size:.72rem}
 }
+
+/* v42: 店舗詳細を参考デザイン寄りに統一 */
+.shop-ref-card{display:grid;gap:14px}
+.shop-ref-head{display:grid;gap:8px}
+.shop-ref-location{margin:0;color:#b6bdc7;font-size:.84rem}
+.shop-ref-head h1{margin:0;color:#f5f6f8;font-size:clamp(30px,5vw,52px);line-height:1.04;letter-spacing:-.02em}
+.shop-ref-tags{display:flex;flex-wrap:wrap;gap:6px}
+.shop-ref-tags span{padding:5px 10px;border-radius:999px;background:#1c2b41;color:#e3e8ee;font-size:.68rem}
+.shop-ref-specs{display:grid;grid-template-columns:repeat(5,1fr);border:1px solid #343d48;border-radius:13px;overflow:hidden;background:#0d131a}
+.shop-ref-specs>div{padding:13px 10px;text-align:center;border-right:1px solid #29323c}
+.shop-ref-specs>div:last-child{border-right:0}
+.shop-ref-specs small{display:block;margin-bottom:5px;color:#9ba3ae;font-size:.64rem}
+.shop-ref-specs strong{display:block;color:#f3f4f6;font-size:.9rem;font-weight:700}
+.shop-ref-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.shop-ref-actions a,.shop-ref-actions button{min-height:44px;display:grid;place-items:center;border:1px solid #38424e;border-radius:11px;background:#101720;color:#e9edf1;text-decoration:none;font:inherit;font-size:.74rem;font-weight:700}
+.shop-ref-mainbox{padding:14px;border:1px solid #333c47;border-radius:14px;background:#0c1218}
+.shop-ref-gallery{display:grid;gap:8px}
+.shop-ref-gallery-main{width:100%}
+.shop-hero-photo,.shop-photo-placeholder{width:100%;display:block;aspect-ratio:16/7;max-height:390px;object-fit:cover;border-radius:11px;border:1px solid #3a434e}
+.shop-photo-placeholder{display:grid;place-items:center;background:linear-gradient(135deg,#101722,#17110c);color:#d9b95a;font-size:1rem;font-weight:800;letter-spacing:.16em}
+.shop-ref-description{margin:14px 0 0;padding:14px 2px 2px;border-top:1px solid #27313a;color:#c1c6ce;font-size:.82rem;line-height:1.72}
+.shop-ref-detail-list{margin:14px 0 0;border-top:1px solid #27313a}
+.shop-ref-detail-list>div{display:grid;grid-template-columns:110px 1fr 24px;gap:12px;align-items:center;padding:10px 2px;border-bottom:1px solid #27313a}
+.shop-ref-detail-list dt{color:#b8bec7;font-size:.72rem}
+.shop-ref-detail-list dd{margin:0;color:#e0e4e9;font-size:.78rem}
+.shop-ref-detail-list a{color:#8fc4ff;text-decoration:none}
+.shop-ref-detail-list span{color:#b8bec7;text-align:right}
+.shop-ref-foot{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.shop-ref-new{display:inline-flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid rgba(219,183,77,.48);border-radius:10px;color:#d5d9df;font-size:.7rem}
+.shop-ref-new b{color:#efc45a}
+.shop-ref-foot small{color:#8f97a1;font-size:.66rem}
+@media(max-width:700px){
+  .shop-ref-head h1{font-size:1.9rem}
+  .shop-ref-location{font-size:.74rem}
+  .shop-ref-tags span{padding:4px 8px;font-size:.6rem}
+  .shop-ref-specs{grid-template-columns:repeat(2,1fr)}
+  .shop-ref-specs>div{border-bottom:1px solid #29323c}
+  .shop-ref-specs>div:nth-child(2n){border-right:0}
+  .shop-ref-specs>div:last-child{grid-column:1/-1;border-bottom:0}
+  .shop-ref-actions{grid-template-columns:repeat(2,1fr)}
+  .shop-ref-actions a,.shop-ref-actions button{min-height:40px;font-size:.7rem}
+  .shop-ref-mainbox{padding:10px}
+  .shop-hero-photo,.shop-photo-placeholder{aspect-ratio:16/9;border-radius:9px}
+  .shop-ref-description{margin-top:10px;padding-top:10px;font-size:.75rem;line-height:1.62}
+  .shop-ref-detail-list{margin-top:10px}
+  .shop-ref-detail-list>div{grid-template-columns:82px 1fr 18px;gap:8px;padding:9px 1px}
+  .shop-ref-detail-list dt{font-size:.64rem}
+  .shop-ref-detail-list dd{font-size:.7rem}
+  .shop-ref-foot{align-items:flex-start;flex-direction:column}
+}

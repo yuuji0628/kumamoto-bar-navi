@@ -38,57 +38,54 @@ async function load(){
     if(!r.ok||!d.ok)throw new Error("not found");
     const s=d.shop;
     document.title=`${s.name}｜KUMAMOTO BAR NAVI`;
-    const budget=s.budget_min&&s.budget_max?`${Number(s.budget_min).toLocaleString()}〜${Number(s.budget_max).toLocaleString()}円`:"";
-    const media=s.image_url
-      ? `<img class="shop-main-image" src="${esc(s.image_url)}" alt="${esc(s.name)}" onerror="this.onerror=null;this.outerHTML='<div class=&quot;shop-default-placeholder&quot;>BAR IMAGE</div>'">`
-      : `<div class="shop-default-placeholder">BAR IMAGE</div>`;
-    const tags=[
-      s.is_featured?"おすすめ":"",
-      s.is_new?"NEW":"",
-      s.area||"",
-      s.genre||""
-    ].filter(Boolean);
+    const budget=s.budget_min&&s.budget_max?`${Number(s.budget_min).toLocaleString()}〜${Number(s.budget_max).toLocaleString()}円`
+      :s.budget_min?`${Number(s.budget_min).toLocaleString()}円〜`
+      :s.budget_max?`〜${Number(s.budget_max).toLocaleString()}円`:"—";
     const featureTags=String(s.features||"").split(",").map(x=>x.trim()).filter(Boolean).slice(0,5);
     const mapUrl=s.address?`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.address)}`:"";
+    const media=s.image_url
+      ? `<img class="shop-hero-photo" src="${esc(s.image_url)}" alt="${esc(s.name)}" onerror="this.onerror=null;this.outerHTML='<div class=&quot;shop-photo-placeholder&quot;>BAR IMAGE</div>'">`
+      : `<div class="shop-photo-placeholder">BAR IMAGE</div>`;
+
     document.getElementById("shopDetail").innerHTML=`
-      <article class="shop-compact-card">
-        <div class="shop-compact-media">${media}</div>
-
-        <div class="shop-compact-head">
-          <div class="badges shop-top-badges">
-            ${tags.map(x=>`<span>${esc(x)}</span>`).join("")}
-          </div>
+      <article class="shop-ref-card">
+        <div class="shop-ref-head">
+          <p class="shop-ref-location">${esc([s.area,s.genre].filter(Boolean).join(" / "))}</p>
           <h1>${esc(s.name)}</h1>
-          <p class="shop-compact-meta">${[s.area,s.genre].filter(Boolean).map(esc).join(" / ")}</p>
-          ${featureTags.length?`<div class="badges shop-feature-badges">${featureTags.map(x=>`<span>${esc(x)}</span>`).join("")}</div>`:""}
+          <div class="shop-ref-tags">${featureTags.map(x=>`<span>${esc(x)}</span>`).join("")}</div>
         </div>
 
-        <div class="shop-compact-specs">
-          ${s.hours?`<div><small>営業時間</small><strong>${esc(s.hours)}</strong></div>`:""}
-          ${s.holiday?`<div><small>定休日</small><strong>${esc(s.holiday)}</strong></div>`:""}
-          ${s.seats?`<div><small>席数</small><strong>${Number(s.seats)}席</strong></div>`:""}
-          ${budget?`<div><small>平均予算</small><strong>${budget}</strong></div>`:""}
+        <div class="shop-ref-specs">
+          <div><small>営業時間</small><strong>${esc(s.hours||"—")}</strong></div>
+          <div><small>定休日</small><strong>${esc(s.holiday||"—")}</strong></div>
+          <div><small>収容人数</small><strong>${s.seats?`${Number(s.seats)}席`:"—"}</strong></div>
+          <div><small>予算</small><strong>${budget}</strong></div>
+          <div><small>喫煙</small><strong>${String(s.features||"").includes("喫煙可")?"喫煙可":"—"}</strong></div>
         </div>
 
-        <div class="shop-compact-actions">
-          ${mapUrl?`<a href="${mapUrl}" target="_blank" rel="noopener">🗺️ 地図で見る</a>`:""}
+        <div class="shop-ref-actions">
+          ${mapUrl?`<a href="${mapUrl}" target="_blank" rel="noopener">地図で見る</a>`:""}
           ${s.address?`<button type="button" data-copy-address="${esc(s.address)}">住所をコピー</button>`:""}
-          ${s.instagram?`<a href="${esc(s.instagram)}" target="_blank" rel="noopener">Instagram</a>`:""}
+          <button type="button" data-favorite-shop>お気に入り</button>
           <button type="button" data-share-shop>共有する</button>
         </div>
 
-        ${s.description?`<div class="shop-compact-description">${esc(s.description)}</div>`:""}
+        <section class="shop-ref-mainbox">
+          <div class="shop-ref-gallery"><div class="shop-ref-gallery-main">${media}</div></div>
+          ${s.description?`<p class="shop-ref-description">${esc(s.description)}</p>`:""}
+          <dl class="shop-ref-detail-list">
+            ${s.address?`<div><dt>住所</dt><dd>${esc(s.address)}</dd><span></span></div>`:""}
+            ${s.phone?`<div><dt>電話番号</dt><dd><a href="tel:${esc(s.phone)}">${esc(s.phone)}</a></dd><span></span></div>`:""}
+            ${s.hours?`<div><dt>営業時間</dt><dd>${esc(s.hours)}</dd><span></span></div>`:""}
+            ${s.holiday?`<div><dt>定休日</dt><dd>${esc(s.holiday)}</dd><span></span></div>`:""}
+            ${s.instagram?`<div><dt>SNS</dt><dd><a href="${esc(s.instagram)}" target="_blank" rel="noopener">Instagram</a></dd><span>↗</span></div>`:""}
+          </dl>
+        </section>
 
-        <dl class="shop-compact-detail-list">
-          ${s.address?`<div><dt>住所</dt><dd>${esc(s.address)}</dd></div>`:""}
-          ${s.phone?`<div><dt>電話番号</dt><dd>${esc(s.phone)}</dd></div>`:""}
-          ${s.hours?`<div><dt>営業時間</dt><dd>${esc(s.hours)}</dd></div>`:""}
-          ${s.holiday?`<div><dt>定休日</dt><dd>${esc(s.holiday)}</dd></div>`:""}
-          ${budget?`<div><dt>平均予算</dt><dd>${budget}</dd></div>`:""}
-          ${s.seats?`<div><dt>席数</dt><dd>${Number(s.seats)}席</dd></div>`:""}
-        </dl>
-
-        ${s.is_new?`<div class="shop-compact-new"><b>NEW</b><span>掲載店舗</span></div>`:""}
+        <div class="shop-ref-foot">
+          ${s.is_new?`<span class="shop-ref-new"><b>NEW</b> 実掲載店舗</span>`:""}
+          <small>※情報は変更される場合があります。ご来店前にご確認ください。</small>
+        </div>
       </article>
     `;
 
@@ -106,6 +103,19 @@ async function load(){
           if(navigator.share) await navigator.share({title:s.name,url:location.href});
           else {await navigator.clipboard.writeText(location.href);shareBtn.textContent="URLをコピーしました";}
         }catch{}
+      });
+    }
+    const favBtn=document.querySelector("[data-favorite-shop]");
+    if(favBtn){
+      const key="kbn_fav_"+String(s.id||s.slug||s.name);
+      const apply=()=>favBtn.textContent=localStorage.getItem(key)==="1"?"お気に入り済み":"お気に入り";
+      apply();
+      favBtn.addEventListener("click",()=>{
+        localStorage.setItem(key,localStorage.getItem(key)==="1"?"0":"1");
+        apply();
+      });
+    }
+  }catch{}
       });
     }
   }catch{
