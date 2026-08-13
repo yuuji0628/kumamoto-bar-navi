@@ -1573,3 +1573,211 @@ a.directory-card:hover{
     border-radius: 12px;
   }
 }
+
+
+/* v41: 店舗詳細を完全コンパクト化 */
+.shop-compact-page{
+  background:#080d13;
+  min-height:70vh;
+}
+.shop-compact-section{
+  padding:22px 0 54px;
+}
+.shop-compact-container{
+  max-width:980px;
+}
+.compact-back{
+  display:inline-block;
+  margin:2px 0 16px;
+  font-size:.82rem;
+}
+.shop-compact-card{
+  display:grid;
+  gap:14px;
+}
+.shop-compact-media{
+  width:100%;
+}
+.shop-compact-media .shop-main-image,
+.shop-compact-media .shop-default-placeholder{
+  width:100%;
+  aspect-ratio:16/7;
+  max-height:360px;
+  border-radius:14px;
+  object-fit:cover;
+  border:1px solid #38424e;
+}
+.shop-compact-head{
+  display:grid;
+  gap:8px;
+}
+.shop-compact-head h1{
+  margin:0;
+  font-size:clamp(28px,4.7vw,46px);
+  line-height:1.08;
+  letter-spacing:-.02em;
+}
+.shop-compact-meta{
+  margin:0;
+  color:#aab1bb;
+  font-size:.9rem;
+}
+.shop-top-badges,
+.shop-feature-badges{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+.shop-top-badges span,
+.shop-feature-badges span{
+  padding:4px 9px;
+  border-radius:999px;
+  background:#1b2a40;
+  color:#dce4ef;
+  font-size:.68rem;
+}
+.shop-feature-badges span{
+  background:#182438;
+}
+.shop-compact-specs{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  border:1px solid #323b46;
+  border-radius:13px;
+  overflow:hidden;
+  background:#0c1219;
+}
+.shop-compact-specs>div{
+  padding:12px 10px;
+  text-align:center;
+  border-right:1px solid #28313b;
+}
+.shop-compact-specs>div:last-child{border-right:0}
+.shop-compact-specs small{
+  display:block;
+  margin-bottom:5px;
+  color:#969eaa;
+  font-size:.64rem;
+}
+.shop-compact-specs strong{
+  color:#f1f3f6;
+  font-size:.88rem;
+  font-weight:700;
+}
+.shop-compact-actions{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:8px;
+}
+.shop-compact-actions a,
+.shop-compact-actions button{
+  display:grid;
+  place-items:center;
+  min-height:42px;
+  padding:9px 10px;
+  border:1px solid #39434f;
+  border-radius:11px;
+  background:#101720;
+  color:#e8ebef;
+  text-decoration:none;
+  font-size:.74rem;
+  font-weight:700;
+}
+.shop-compact-description{
+  padding:13px 14px;
+  border:1px solid #303945;
+  border-radius:12px;
+  background:#0c1219;
+  color:#b8c0ca;
+  font-size:.82rem;
+  line-height:1.7;
+}
+.shop-compact-detail-list{
+  margin:0;
+  border:1px solid #303945;
+  border-radius:12px;
+  overflow:hidden;
+  background:#0c1219;
+}
+.shop-compact-detail-list>div{
+  display:grid;
+  grid-template-columns:110px 1fr;
+  gap:12px;
+  padding:10px 13px;
+  border-bottom:1px solid #28313b;
+}
+.shop-compact-detail-list>div:last-child{border-bottom:0}
+.shop-compact-detail-list dt{
+  color:#d8b95e;
+  font-size:.72rem;
+  font-weight:800;
+}
+.shop-compact-detail-list dd{
+  margin:0;
+  color:#d9dde3;
+  font-size:.78rem;
+}
+.shop-compact-new{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  width:max-content;
+  padding:7px 10px;
+  border:1px solid rgba(216,185,94,.46);
+  border-radius:10px;
+}
+.shop-compact-new b{
+  color:#efc45a;
+  font-size:.72rem;
+}
+.shop-compact-new span{
+  color:#aeb5bf;
+  font-size:.7rem;
+}
+
+@media(max-width:640px){
+  .shop-compact-section{padding:14px 0 40px}
+  .shop-compact-media .shop-main-image,
+  .shop-compact-media .shop-default-placeholder{
+    aspect-ratio:16/8.5;
+    max-height:none;
+    border-radius:12px;
+  }
+  .shop-compact-head h1{
+    font-size:1.78rem;
+  }
+  .shop-compact-meta{
+    font-size:.78rem;
+  }
+  .shop-compact-specs{
+    grid-template-columns:repeat(2,1fr);
+  }
+  .shop-compact-specs>div{
+    border-bottom:1px solid #28313b;
+  }
+  .shop-compact-specs>div:nth-child(2n){
+    border-right:0;
+  }
+  .shop-compact-specs>div:nth-last-child(-n+2){
+    border-bottom:0;
+  }
+  .shop-compact-actions{
+    grid-template-columns:repeat(2,1fr);
+  }
+  .shop-compact-actions a,
+  .shop-compact-actions button{
+    min-height:40px;
+    font-size:.7rem;
+  }
+  .shop-compact-description{
+    font-size:.76rem;
+    padding:11px 12px;
+  }
+  .shop-compact-detail-list>div{
+    grid-template-columns:82px 1fr;
+    gap:8px;
+    padding:9px 11px;
+  }
+  .shop-compact-detail-list dt{font-size:.66rem}
+  .shop-compact-detail-list dd{font-size:.72rem}
+}
