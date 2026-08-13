@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>D1接続確認｜KUMAMOTO BAR NAVI</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="admin-body">
+<main class="admin-page">
+  <div class="container">
+    <section class="admin-block">
+      <p class="eyebrow">DATABASE CHECK</p>
+      <h1>D1接続確認</h1>
+      <p id="statusText">データベースを確認しています…</p>
+      <pre id="resultBox" style="white-space:pre-wrap;word-break:break-word;"></pre>
+      <a class="simple-link-btn" href="admin.html">管理画面へ戻る</a>
+    </section>
+  </div>
+</main>
+<script>
+(async()=>{
+  const text=document.getElementById("statusText");
+  const box=document.getElementById("resultBox");
+  try{
+    const res=await fetch("/api/shops");
+    const data=await res.json();
+    if(res.ok && data.ok){
+      text.textContent=`接続OK：${data.shops.length}店舗`;
+      box.textContent=JSON.stringify(data.shops,null,2);
+    }else{
+      text.textContent="接続できませんでした";
+      box.textContent=JSON.stringify(data,null,2);
+    }
+  }catch(e){
+    text.textContent="通信エラー";
+    box.textContent=String(e);
+  }
+})();
+</script>
+</body>
+</html>
