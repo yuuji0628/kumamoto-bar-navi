@@ -2,12 +2,9 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="熊本県内のBAR一覧｜KUMAMOTO BAR NAVI">
   <title>BAR一覧｜KUMAMOTO BAR NAVI</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700;800&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -22,602 +19,102 @@
 </header>
 
 <main class="bars-page">
-  <section class="bars-hero">
-    <div class="container">
-      <a class="back-link" href="index.html">← ホームへ戻る</a>
-      <p class="eyebrow">KUMAMOTO BAR DIRECTORY</p>
-      <h1>熊本県内のBAR一覧</h1>
-      <p>エリア・ジャンル・特徴から、気になるBARを探せます。</p>
-
-      <div class="directory-search">
-        <select id="areaFilter">
-          <option value="all">すべてのエリア</option>
-          <option value="熊本市">熊本市</option>
-          <option value="八代市">八代</option>
-          <option value="人吉・球磨">人吉・球磨</option>
-          <option value="天草">天草</option>
-          <option value="阿蘇">阿蘇</option>
-          <option value="玉名">玉名</option>
-          <option value="宇城">宇城</option>
-          <option value="その他">その他</option>
-        </select>
-
-        <select id="genreFilter">
-          <option value="all">すべてのジャンル</option>
-          <option value="オーセンティック">オーセンティック</option>
-          <option value="ショットバー">ショットバー</option>
-          <option value="カジュアル">カジュアルバー</option>
-          <option value="ダーツ">ダーツバー</option>
-          <option value="カラオケ">カラオケバー</option>
-          <option value="ワイン">ワインバー</option>
-          <option value="ウイスキー">ウイスキーバー</option>
-          <option value="シーシャ">シーシャバー</option>
-          <option value="ラウンジ">ラウンジ</option>
-        </select>
-
-        <select id="featureFilter">
-          <option value="all">すべての特徴</option>
-          <option value="一人飲み">一人飲み</option>
-          <option value="デート">デート向け</option>
-          <option value="深夜営業">深夜営業</option>
-          <option value="飲み放題">飲み放題あり</option>
-          <option value="フード充実">フード充実</option>
-          <option value="喫煙可">喫煙可</option>
-          <option value="禁煙">禁煙</option>
-        </select>
-
-        <input id="keyword" type="search" placeholder="店名・キーワード">
-        <button id="filterBtn">検索する</button>
-      </div>
-
-      <div class="bar-tools">
-        <button type="button" id="favoriteOnly" class="tool-btn">♡ お気に入りだけ表示</button>
-        <button type="button" id="resetFilters" class="tool-btn">条件をリセット</button>
-      </div>
-      <div class="smart-tools">
-        <button type="button" id="nearMeBtn" class="tool-btn">📍 現在地から近い順</button>
-        <button type="button" id="openNowBtn" class="tool-btn">🕒 営業中だけ表示</button>
-        <a href="areas.html" class="tool-btn map-tool-link">🗺 エリアから探す</a>
-      </div>
-      <div class="sort-tools">
-        <label class="sort-label">並び順
-          <select id="sortBars">
-            <option value="default">おすすめ順</option>
-            <option value="new">新着順</option>
-            <option value="popular">人気順</option>
-            <option value="rating">評価順</option>
-          </select>
-        </label>
-      </div>
-      <p id="smartToolStatus" class="smart-tool-status" aria-live="polite"></p>
-    </div>
-  </section>
-
-  <section class="section">
-    <div class="container">
-      <div class="directory-top">
-        <div>
-          <p class="eyebrow">BAR LIST</p>
-          <h2>掲載BAR</h2>
-        </div>
-        <span id="resultCount" class="result-count">7件</span>
-      </div>
-
-      <div class="directory-grid" id="barCards">
-
-        <a class="directory-card" href="bar-ark.html"
-           data-area="熊本市"
-           data-genre="ダーツ"
-           data-types="一人飲み デート 深夜営業 飲み放題 喫煙可"
-           data-name="darts&bar ark"
-           data-address="熊本市中央区安政町6-3 TM11ビル9F"
-           data-added="2026-08-13"
-           data-popular="0"
-           data-rating="0">
-          <button type="button" class="favorite-btn" data-favorite="darts&bar ark" aria-label="darts&bar arkをお気に入り保存">♡</button>
-          <div class="directory-photo dir-2">🎯</div>
-          <div class="directory-body">
-            <div class="badges"><span>熊本市中央区安政町</span><span>ダーツバー</span><span>NEW</span></div>
-            <h3>darts&amp;bar ark（アーク）</h3>
-            <p>初心者から経験者まで楽しめる、アットホームなダーツバー。おひとり様も歓迎。</p>
-            <strong>詳細を見る →</strong>
-          </div>
-        </a>
-
-        <a class="directory-card" href="bar-lumiere.html"
-           data-area="熊本市"
-           data-genre="オーセンティック ウイスキー"
-           data-types="一人飲み デート 深夜営業 禁煙"
-           data-name="BAR LUMIÈRE">
-          <div class="directory-photo dir-1">🥃</div>
-          <div class="directory-body">
-            <div class="badges"><span>熊本市中央区</span><span>オーセンティック</span></div>
-            <h3>BAR LUMIÈRE</h3>
-            <p>上質な空間でウイスキーとカクテルをゆっくり楽しめるBAR。</p>
-            <strong>詳細を見る →</strong>
-          </div>
-        </a>
-
-        <article class="directory-card"
-           data-area="熊本市"
-           data-genre="ダーツ カジュアル カラオケ"
-           data-types="ダーツ カラオケ 深夜営業 飲み放題 喫煙可"
-           data-name="Darts & Bar EDGE">
-          <div class="directory-photo dir-2">🎯</div>
-          <div class="directory-body">
-            <div class="badges"><span>熊本市中央区</span><span>ダーツバー</span></div>
-            <h3>Darts & Bar EDGE</h3>
-            <p>ダーツとカラオケで盛り上がれるカジュアルBAR。</p>
-            <strong>詳細情報準備中</strong>
-          </div>
-        </article>
-
-        <article class="directory-card"
-           data-area="八代市"
-           data-genre="ショットバー ワイン"
-           data-types="一人飲み デート 深夜営業 フード充実 禁煙"
-           data-name="BAR SAKURA">
-          <div class="directory-photo dir-3">🍸</div>
-          <div class="directory-body">
-            <div class="badges"><span>八代市</span><span>ショットバー</span></div>
-            <h3>BAR SAKURA</h3>
-            <p>季節のフルーツカクテルを楽しめる落ち着いたBAR。</p>
-            <strong>詳細情報準備中</strong>
-          </div>
-        </article>
-
-        <article class="directory-card"
-           data-area="玉名"
-           data-genre="ラウンジ"
-           data-types="深夜営業 喫煙可"
-           data-name="LOUNGE R">
-          <div class="directory-photo dir-4">🌙</div>
-          <div class="directory-body">
-            <div class="badges"><span>玉名市</span><span>ラウンジ</span></div>
-            <h3>LOUNGE R</h3>
-            <p>ゆったり過ごせる大人向けラウンジ。</p>
-            <strong>詳細情報準備中</strong>
-          </div>
-        </article>
-
-        <article class="directory-card"
-           data-area="宇城"
-           data-genre="カジュアル"
-           data-types="一人飲み 深夜営業 飲み放題"
-           data-name="BAR RISE">
-          <div class="directory-photo dir-5">🍺</div>
-          <div class="directory-body">
-            <div class="badges"><span>宇城市</span><span>カジュアルバー</span></div>
-            <h3>BAR RISE</h3>
-            <p>気軽に立ち寄れるカジュアルなBAR。</p>
-            <strong>詳細情報準備中</strong>
-          </div>
-        </article>
-
-        <article class="directory-card"
-           data-area="熊本市"
-           data-genre="シーシャ カジュアル"
-           data-types="デート 深夜営業 フード充実"
-           data-name="SHISHA BAR N">
-          <div class="directory-photo dir-6">💨</div>
-          <div class="directory-body">
-            <div class="badges"><span>熊本市中央区</span><span>シーシャ</span></div>
-            <h3>SHISHA BAR N</h3>
-            <p>シーシャとドリンクを楽しめるチル系BAR。</p>
-            <strong>詳細情報準備中</strong>
-          </div>
-        </article>
-      </div>
-
-      <p id="noResult" class="no-result" style="display:none">
-        条件に一致するBARがありません。条件を変更してお試しください。
-      </p>
-    </div>
-  </section>
-
-  <section class="bars-owner-cta">
-    <div class="container bars-owner-box">
-      <div>
-        <p class="eyebrow">FOR OWNERS</p>
-        <h2>あなたのお店も掲載しませんか？</h2>
-        <p>熊本県内のBAR・ラウンジを無料で掲載受付中です。</p>
-      </div>
-      <a class="btn-gold" href="listing-form.html">店舗掲載申込み →</a>
-    </div>
-  </section>
-
-<section class="area-mini-section">
+<section class="bars-hero">
   <div class="container">
-    <p class="eyebrow">AREA GUIDE</p>
-    <h2>エリア別に見る</h2>
-    <div class="area-mini-grid">
-      <a href="area-kumamoto.html">熊本市</a>
-      <a href="area-yatsushiro.html">八代</a>
-      <a href="area-hitoyoshi.html">人吉・球磨</a>
-      <a href="area-amakusa.html">天草</a>
-      <a href="area-aso.html">阿蘇</a>
+    <a class="back-link" href="index.html">← ホームへ戻る</a>
+    <p class="eyebrow">KUMAMOTO BAR DIRECTORY</p>
+    <h1>熊本県内のBAR一覧</h1>
+    <p>実際に掲載中の店舗を、エリア・ジャンル・キーワードから探せます。</p>
+
+    <div class="directory-search">
+      <select id="areaFilter"><option value="">すべてのエリア</option></select>
+      <select id="genreFilter"><option value="">すべてのジャンル</option></select>
+      <input id="keyword" type="search" placeholder="店名・住所・特徴">
+      <button id="filterBtn" type="button">検索する</button>
     </div>
   </div>
 </section>
 
-
-<section class="recent-section" id="recentBarsSection" hidden>
+<section class="section">
   <div class="container">
-    <p class="eyebrow">RECENTLY VIEWED</p>
-    <h2>最近見たBAR</h2>
-    <div id="recentBars" class="recent-bars"></div>
+    <div class="directory-top">
+      <div><p class="eyebrow">BAR LIST</p><h2>掲載BAR</h2></div>
+      <span id="resultCount" class="result-count">読込中</span>
+    </div>
+    <div class="directory-grid" id="barCards"></div>
+    <p id="noResult" class="no-result" style="display:none">条件に一致するBARがありません。</p>
+    <p id="loadError" class="no-result" style="display:none">店舗情報を読み込めませんでした。</p>
   </div>
 </section>
 
+<section class="bars-owner-cta">
+  <div class="container bars-owner-box">
+    <div><p class="eyebrow">FOR OWNERS</p><h2>あなたのお店も掲載しませんか？</h2><p>熊本県内のBAR・ラウンジを無料で掲載受付中です。</p></div>
+    <a class="btn-gold" href="listing-form.html">店舗掲載申込み →</a>
+  </div>
+</section>
 </main>
 
-<footer>
-  <div class="container footer-inner">
-    <div class="brand footer-brand">
-      <img class="brand-logo" src="logo.png" alt="KUMAMOTO BAR NAVI ロゴ">
-      <span><b>KUMAMOTO</b><br>BAR NAVI</span>
-    </div>
-    <div class="footer-links">
-      <a href="index.html">ホーム</a>
-      <a href="bars.html">BAR一覧</a>
-      <a href="index.html#jobs">求人</a>
-      <a href="listing-form.html">店舗掲載</a>
-    </div>
-    <small>© 2026 KUMAMOTO BAR NAVI</small>
-  </div>
-</footer>
-
 <script>
-function applyDirectoryFilters(){
-  const area = document.getElementById('areaFilter').value;
-  const genre = document.getElementById('genreFilter').value;
-  const feature = document.getElementById('featureFilter').value;
-  const keyword = document.getElementById('keyword').value.trim().toLowerCase();
+let allShops=[];
+const $=id=>document.getElementById(id);
+const esc=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 
-  let count = 0;
-
-  document.querySelectorAll('.directory-card').forEach(card => {
-    const cardArea = card.dataset.area || '';
-    const cardGenre = card.dataset.genre || '';
-    const cardTypes = card.dataset.types || '';
-    const haystack = (card.dataset.name + ' ' + card.innerText + ' ' + cardGenre + ' ' + cardTypes).toLowerCase();
-
-    const matchArea = area === 'all' || cardArea === area;
-    const matchGenre = genre === 'all' || cardGenre.includes(genre);
-    const matchFeature = feature === 'all' || cardTypes.includes(feature);
-    const matchKeyword = !keyword || haystack.includes(keyword);
-
-    const show = matchArea && matchGenre && matchFeature && matchKeyword;
-    card.style.display = show ? '' : 'none';
-    if(show) count++;
-  });
-
-  document.getElementById('resultCount').textContent = count + '件';
-  document.getElementById('noResult').style.display = count === 0 ? 'block' : 'none';
+function fillFilters(){
+  const areas=[...new Set(allShops.map(s=>s.area).filter(Boolean))].sort();
+  const genres=[...new Set(allShops.map(s=>s.genre).filter(Boolean))].sort();
+  $("areaFilter").innerHTML='<option value="">すべてのエリア</option>'+areas.map(x=>`<option>${esc(x)}</option>`).join("");
+  $("genreFilter").innerHTML='<option value="">すべてのジャンル</option>'+genres.map(x=>`<option>${esc(x)}</option>`).join("");
 }
-
-document.getElementById('filterBtn').addEventListener('click', applyDirectoryFilters);
-document.getElementById('keyword').addEventListener('keydown', e => {
-  if(e.key === 'Enter') applyDirectoryFilters();
-});
+function money(s){
+  if(s.budget_min&&s.budget_max)return `${Number(s.budget_min).toLocaleString()}〜${Number(s.budget_max).toLocaleString()}円`;
+  if(s.budget_min)return `${Number(s.budget_min).toLocaleString()}円〜`;
+  return "";
+}
+function render(list){
+  $("resultCount").textContent=`${list.length}件`;
+  $("noResult").style.display=list.length?"none":"block";
+  $("barCards").innerHTML=list.map((s,i)=>`
+    <a class="directory-card" href="shop.html?slug=${encodeURIComponent(s.slug)}">
+      <div class="directory-photo dir-${(i%6)+1}">${s.genre&&s.genre.includes("ダーツ")?"🎯":"🍸"}</div>
+      <div class="directory-body">
+        <div class="badges">
+          ${s.area?`<span>${esc(s.area)}</span>`:""}
+          ${s.genre?`<span>${esc(s.genre)}</span>`:""}
+        </div>
+        <h3>${esc(s.name)}</h3>
+        <p>${esc((s.description||"").slice(0,92))}${(s.description||"").length>92?"…":""}</p>
+        ${money(s)?`<small class="directory-budget">平均予算 ${money(s)}</small>`:""}
+        <strong>詳細を見る →</strong>
+      </div>
+    </a>
+  `).join("");
+}
+function filter(){
+  const area=$("areaFilter").value;
+  const genre=$("genreFilter").value;
+  const q=$("keyword").value.trim().toLowerCase();
+  render(allShops.filter(s=>{
+    const text=[s.name,s.address,s.features,s.description,s.genre,s.area].join(" ").toLowerCase();
+    return (!area||s.area===area)&&(!genre||s.genre===genre)&&(!q||text.includes(q));
+  }));
+}
+async function load(){
+  try{
+    const r=await fetch("/api/shops");
+    const d=await r.json();
+    if(!r.ok||!d.ok)throw new Error();
+    allShops=d.shops||[];
+    fillFilters(); render(allShops);
+  }catch{
+    $("resultCount").textContent="0件";
+    $("loadError").style.display="block";
+  }
+}
+$("filterBtn").addEventListener("click",filter);
+["areaFilter","genreFilter"].forEach(id=>$(id).addEventListener("change",filter));
+$("keyword").addEventListener("input",filter);
+load();
 </script>
-
-<script>
-(function(){
-  const KEY = "KBN_FAVORITES";
-  const favOnlyBtn = document.getElementById("favoriteOnly");
-  const resetBtn = document.getElementById("resetFilters");
-  let favOnly = false;
-
-  function getFavs(){
-    try { return JSON.parse(localStorage.getItem(KEY) || "[]"); }
-    catch(e){ return []; }
-  }
-  function setFavs(list){
-    localStorage.setItem(KEY, JSON.stringify(list));
-  }
-  function updateButtons(){
-    const favs = getFavs();
-    document.querySelectorAll(".favorite-btn").forEach(btn=>{
-      const name = btn.dataset.favorite;
-      const active = favs.includes(name);
-      btn.classList.toggle("active", active);
-      btn.textContent = active ? "♥" : "♡";
-      btn.setAttribute("aria-pressed", active ? "true" : "false");
-    });
-    if (favOnlyBtn) {
-      favOnlyBtn.classList.toggle("active", favOnly);
-      favOnlyBtn.textContent = favOnly ? "♥ お気に入り表示中" : "♡ お気に入りだけ表示";
-    }
-  }
-  function applyFavoriteFilter(){
-    const favs = getFavs();
-    document.querySelectorAll("[data-bar-name]").forEach(card=>{
-      if (!favOnly) return;
-      const name = card.dataset.barName || "";
-      card.style.display = favs.includes(name) ? "" : "none";
-    });
-    if (!favOnly) {
-      document.querySelectorAll("[data-bar-name]").forEach(card=>card.style.display="");
-      // Re-run existing filter if there is a search button.
-      const searchBtn = document.querySelector('button[type="submit"], .search-btn');
-      if(searchBtn && searchBtn.dataset.kbnTriggered !== "1"){
-        // leave current page filter state intact where possible
-      }
-    }
-  }
-
-  document.addEventListener("click", e=>{
-    const btn = e.target.closest(".favorite-btn");
-    if(!btn) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const name = btn.dataset.favorite;
-    let favs = getFavs();
-    favs = favs.includes(name) ? favs.filter(x=>x!==name) : [...favs, name];
-    setFavs(favs);
-    updateButtons();
-    if(favOnly) applyFavoriteFilter();
-  });
-
-  if(favOnlyBtn){
-    favOnlyBtn.addEventListener("click", ()=>{
-      favOnly = !favOnly;
-      applyFavoriteFilter();
-      updateButtons();
-    });
-  }
-
-  if(resetBtn){
-    resetBtn.addEventListener("click", ()=>{
-      document.querySelectorAll("select").forEach(s=>s.selectedIndex=0);
-      document.querySelectorAll('input[type="search"], input[type="text"]').forEach(i=>{
-        if(!i.closest("form") || i.name !== "_honey") i.value="";
-      });
-      favOnly = false;
-      document.querySelectorAll("[data-bar-name]").forEach(card=>card.style.display="");
-      updateButtons();
-      const count = document.querySelector("#resultCount, .result-count");
-      if(count && count.dataset.defaultText) count.textContent = count.dataset.defaultText;
-    });
-  }
-
-  updateButtons();
-})();
-</script>
-
-
-<script>
-/* KBN_GEO_FEATURES
-   実店舗追加時、店舗カードに以下を付けると機能します:
-   data-lat="32.8031"
-   data-lng="130.7079"
-   data-hours='{"1":["18:00","02:00"],"2":["18:00","02:00"],"3":["18:00","02:00"],"4":["18:00","02:00"],"5":["18:00","03:00"],"6":["18:00","03:00"],"0":["18:00","01:00"]}'
-   data-address="熊本県..."
-*/
-(function(){
-  const nearBtn = document.getElementById("nearMeBtn");
-  const openBtn = document.getElementById("openNowBtn");
-  const status = document.getElementById("smartToolStatus");
-  const listRoot = document.querySelector(".bar-grid, .bars-grid, .shop-grid, .results-grid");
-  let openOnly = false;
-
-  function cards(){
-    return [...document.querySelectorAll("[data-bar-name]")];
-  }
-
-  function setStatus(msg){
-    if(status) status.textContent = msg || "";
-  }
-
-  function haversine(lat1, lon1, lat2, lon2){
-    const R = 6371;
-    const toRad = d => d * Math.PI / 180;
-    const dLat = toRad(lat2-lat1);
-    const dLon = toRad(lon2-lon1);
-    const a = Math.sin(dLat/2)**2 +
-      Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
-    return 2*R*Math.asin(Math.sqrt(a));
-  }
-
-  function parseMinutes(hhmm){
-    const [h,m] = hhmm.split(":").map(Number);
-    return h*60+m;
-  }
-
-  function isOpenNow(card){
-    const raw = card.dataset.hours;
-    if(!raw) return null;
-    let obj;
-    try{ obj = JSON.parse(raw); }catch(e){ return null; }
-
-    const now = new Date();
-    const day = String(now.getDay());
-    const range = obj[day];
-    if(!range || range.length < 2) return false;
-
-    const nowMin = now.getHours()*60 + now.getMinutes();
-    const start = parseMinutes(range[0]);
-    let end = parseMinutes(range[1]);
-
-    if(end <= start){
-      return nowMin >= start || nowMin < end;
-    }
-    return nowMin >= start && nowMin < end;
-  }
-
-  function refreshOpenBadges(){
-    cards().forEach(card=>{
-      let badge = card.querySelector(".open-status-badge");
-      const state = isOpenNow(card);
-      if(state === null){
-        if(badge) badge.remove();
-        return;
-      }
-      if(!badge){
-        badge = document.createElement("span");
-        badge.className = "open-status-badge";
-        card.appendChild(badge);
-      }
-      badge.classList.toggle("is-open", state);
-      badge.classList.toggle("is-closed", !state);
-      badge.textContent = state ? "営業中" : "営業時間外";
-    });
-  }
-
-  if(openBtn){
-    openBtn.addEventListener("click", ()=>{
-      openOnly = !openOnly;
-      let supported = 0;
-      cards().forEach(card=>{
-        const state = isOpenNow(card);
-        if(state !== null) supported++;
-        if(openOnly && state !== null){
-          card.style.display = state ? "" : "none";
-        } else if(openOnly && state === null){
-          card.style.display = "none";
-        } else {
-          card.style.display = "";
-        }
-      });
-      openBtn.classList.toggle("active", openOnly);
-      openBtn.textContent = openOnly ? "🕒 営業中を表示中" : "🕒 営業中だけ表示";
-      setStatus(supported ? "" : "営業時間データが登録された店舗から利用できます。");
-    });
-  }
-
-  if(nearBtn){
-    nearBtn.addEventListener("click", ()=>{
-      if(!navigator.geolocation){
-        setStatus("この端末では現在地機能を利用できません。");
-        return;
-      }
-      setStatus("現在地を確認しています…");
-      nearBtn.disabled = true;
-
-      navigator.geolocation.getCurrentPosition(pos=>{
-        const userLat = pos.coords.latitude;
-        const userLng = pos.coords.longitude;
-        const geoCards = cards().filter(c => c.dataset.lat && c.dataset.lng);
-
-        if(!geoCards.length){
-          setStatus("位置情報が登録された店舗から「近い順」を利用できます。");
-          nearBtn.disabled = false;
-          return;
-        }
-
-        geoCards.forEach(card=>{
-          const d = haversine(userLat,userLng,Number(card.dataset.lat),Number(card.dataset.lng));
-          card.dataset.distance = d;
-          let label = card.querySelector(".distance-label");
-          if(!label){
-            label = document.createElement("span");
-            label.className = "distance-label";
-            card.appendChild(label);
-          }
-          label.textContent = d < 1 ? `現在地から約${Math.round(d*1000)}m` : `現在地から約${d.toFixed(1)}km`;
-        });
-
-        geoCards.sort((a,b)=>Number(a.dataset.distance)-Number(b.dataset.distance));
-        const parent = geoCards[0].parentElement;
-        if(parent) geoCards.forEach(c=>parent.appendChild(c));
-
-        setStatus("現在地から近い順に並べ替えました。");
-        nearBtn.disabled = false;
-      }, err=>{
-        setStatus("現在地を取得できませんでした。位置情報の許可をご確認ください。");
-        nearBtn.disabled = false;
-      }, {enableHighAccuracy:false,timeout:10000,maximumAge:300000});
-    });
-  }
-
-  // Add map links automatically when an address exists
-  cards().forEach(card=>{
-    const address = card.dataset.address;
-    if(!address || card.querySelector(".map-link-auto")) return;
-    const link = document.createElement("a");
-    link.className = "map-link-auto";
-    link.target = "_blank";
-    link.rel = "noopener";
-    link.href = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(address);
-    link.textContent = "地図で見る →";
-    card.appendChild(link);
-  });
-
-  refreshOpenBadges();
-})();
-</script>
-
-
-<script>
-/* KBN_SORT_RECENT */
-(function(){
-  const select = document.getElementById("sortBars");
-  const grid = document.querySelector(".bar-grid, .bars-grid, .shop-grid, .results-grid");
-  const cards = () => [...document.querySelectorAll("[data-bar-name]")];
-
-  if(select && grid){
-    select.addEventListener("change", ()=>{
-      const mode = select.value;
-      const list = cards();
-      const num = (el,key) => Number(el.dataset[key] || 0);
-      if(mode === "new"){
-        list.sort((a,b)=>(b.dataset.added || "").localeCompare(a.dataset.added || ""));
-      }else if(mode === "popular"){
-        list.sort((a,b)=>num(b,"popular")-num(a,"popular"));
-      }else if(mode === "rating"){
-        list.sort((a,b)=>num(b,"rating")-num(a,"rating"));
-      }
-      list.forEach(el=>grid.appendChild(el));
-    });
-  }
-
-  const KEY="KBN_RECENT_BARS";
-  const wrap=document.getElementById("recentBars");
-  const section=document.getElementById("recentBarsSection");
-  if(wrap && section){
-    let recent=[];
-    try{ recent=JSON.parse(localStorage.getItem(KEY)||"[]"); }catch(e){}
-    if(recent.length){
-      section.hidden=false;
-      recent.slice(0,5).forEach(item=>{
-        const a=document.createElement("a");
-        a.className="recent-bar-chip";
-        a.href=item.url || "bars.html";
-        a.textContent=item.name;
-        wrap.appendChild(a);
-      });
-    }
-  }
-})();
-</script>
-
-
-<script>
-/* KBN_ARK_FAVORITE_FIX */
-(function(){
-  const KEY="KBN_FAVORITES";
-  function getFavs(){try{return JSON.parse(localStorage.getItem(KEY)||"[]")}catch(e){return[]}}
-  function update(){
-    const favs=getFavs();
-    document.querySelectorAll(".favorite-btn").forEach(btn=>{
-      const active=favs.includes(btn.dataset.favorite);
-      btn.classList.toggle("active",active);
-      btn.textContent=active?"♥":"♡";
-    });
-  }
-  document.addEventListener("click",e=>{
-    const btn=e.target.closest(".favorite-btn");
-    if(!btn)return;
-    e.preventDefault();e.stopPropagation();
-    let favs=getFavs(), name=btn.dataset.favorite;
-    favs=favs.includes(name)?favs.filter(x=>x!==name):[...favs,name];
-    localStorage.setItem(KEY,JSON.stringify(favs));
-    update();
-  });
-  update();
-})();
-</script>
-
 </body>
 </html>

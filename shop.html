@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="熊本のBAR店舗情報｜KUMAMOTO BAR NAVI">
+  <title>店舗詳細｜KUMAMOTO BAR NAVI</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="site-header">
+  <div class="container header-inner">
+    <a class="brand" href="index.html">
+      <img class="brand-logo" src="logo.png" alt="KUMAMOTO BAR NAVI ロゴ">
+      <span><b>KUMAMOTO</b><br>BAR NAVI<small>BAR & JOB INFORMATION</small></span>
+    </a>
+    <a class="header-cta" href="bars.html">BAR一覧</a>
+  </div>
+</header>
+
+<main class="utility-page">
+<section class="utility-hero">
+  <div class="container">
+    <a class="back-link" href="bars.html">← BAR一覧へ戻る</a>
+    <p class="eyebrow">SHOP DETAIL</p>
+    <h1 id="shopName">店舗情報を読み込んでいます</h1>
+    <p id="shopMeta"></p>
+  </div>
+</section>
+<section class="section">
+  <div class="container">
+    <div id="shopDetail" class="shop-db-detail">
+      <p>読み込み中...</p>
+    </div>
+  </div>
+</section>
+</main>
+
+<script>
+const esc=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+const slug=new URLSearchParams(location.search).get("slug");
+
+async function load(){
+  if(!slug){document.getElementById("shopDetail").innerHTML="<p>店舗が指定されていません。</p>";return;}
+  try{
+    const r=await fetch(`/api/shops/${encodeURIComponent(slug)}`);
+    const d=await r.json();
+    if(!r.ok||!d.ok)throw new Error("not found");
+    const s=d.shop;
+    document.title=`${s.name}｜KUMAMOTO BAR NAVI`;
+    document.getElementById("shopName").textContent=s.name;
+    document.getElementById("shopMeta").textContent=[s.area,s.genre].filter(Boolean).join(" / ");
+    const budget=s.budget_min&&s.budget_max?`${Number(s.budget_min).toLocaleString()}〜${Number(s.budget_max).toLocaleString()}円`:"";
+    document.getElementById("shopDetail").innerHTML=`
+      <div class="shop-db-card">
+        <div class="shop-db-summary">
+          <div class="shop-db-icon">${s.genre&&s.genre.includes("ダーツ")?"🎯":"🍸"}</div>
+          <div>
+            <div class="badges">${s.area?`<span>${esc(s.area)}</span>`:""}${s.genre?`<span>${esc(s.genre)}</span>`:""}</div>
+            <h2>${esc(s.name)}</h2>
+            <p>${esc(s.description||"")}</p>
+          </div>
+        </div>
+        <dl class="shop-db-specs">
+          ${s.address?`<div><dt>住所</dt><dd>${esc(s.address)}</dd></div>`:""}
+          ${s.hours?`<div><dt>営業時間</dt><dd>${esc(s.hours)}</dd></div>`:""}
+          ${s.holiday?`<div><dt>定休日</dt><dd>${esc(s.holiday)}</dd></div>`:""}
+          ${budget?`<div><dt>平均予算</dt><dd>${budget}</dd></div>`:""}
+          ${s.seats?`<div><dt>席数</dt><dd>${Number(s.seats)}席</dd></div>`:""}
+          ${s.features?`<div><dt>特徴</dt><dd>${esc(s.features)}</dd></div>`:""}
+        </dl>
+        <div class="shop-db-actions">
+          ${s.instagram?`<a class="btn-gold" href="${esc(s.instagram)}" target="_blank" rel="noopener">Instagramを見る →</a>`:""}
+        </div>
+      </div>
+    `;
+  }catch{
+    document.getElementById("shopName").textContent="店舗情報が見つかりません";
+    document.getElementById("shopDetail").innerHTML='<p>この店舗は現在非公開、または削除されています。</p>';
+  }
+}
+load();
+</script>
+</body>
+</html>
