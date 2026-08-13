@@ -1419,3 +1419,157 @@ a.directory-card:hover{
   .slim-area-search{grid-template-columns:1fr}
   .slim-area-search button{height:44px}
 }
+
+
+/* v40: 店舗詳細ページをコンパクト化 */
+.shop-page,
+.shop-detail-page {
+  padding-top: 20px;
+}
+
+.shop-db-card {
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+.shop-db-summary {
+  display: block;
+}
+
+.shop-db-summary h2,
+.shop-db-card h1 {
+  font-size: clamp(30px, 5vw, 50px);
+  line-height: 1.12;
+  margin: 8px 0 12px;
+}
+
+.shop-db-summary p,
+.shop-db-card .shop-lead {
+  font-size: .92rem;
+  line-height: 1.65;
+}
+
+.shop-main-image,
+.shop-default-placeholder {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 14px;
+  border: 1px solid #3a424d;
+  object-fit: cover;
+  background: linear-gradient(135deg,#111722,#18120d);
+}
+
+.shop-default-placeholder {
+  display: grid;
+  place-items: center;
+  color: #d8b95e;
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: .16em;
+}
+
+.shop-db-specs {
+  display: grid;
+  grid-template-columns: repeat(5,1fr);
+  gap: 0;
+  margin: 16px 0;
+  border: 1px solid #323a45;
+  border-radius: 13px;
+  overflow: hidden;
+  background: #0c1219;
+}
+
+.shop-db-specs > div {
+  display: block;
+  padding: 12px 10px;
+  text-align: center;
+  border: 0;
+  border-right: 1px solid #2b323c;
+}
+
+.shop-db-specs > div:last-child {
+  border-right: 0;
+}
+
+.shop-db-specs dt {
+  font-size: .68rem;
+  color: #9ea6b0;
+  margin-bottom: 4px;
+}
+
+.shop-db-specs dd {
+  font-size: .9rem;
+  color: #f2f4f6;
+}
+
+.shop-db-actions,
+.shop-action-grid {
+  display: grid;
+  grid-template-columns: repeat(4,1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.shop-db-actions a,
+.shop-db-actions button,
+.shop-action-grid a,
+.shop-action-grid button {
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 1px solid #39424d;
+  border-radius: 11px;
+  background: #101720;
+  color: #e8ebef;
+  font-size: .82rem;
+  font-weight: 700;
+}
+
+.shop-db-specs + * {
+  margin-top: 12px;
+}
+
+.shop-tag-row,
+.badges {
+  gap: 6px;
+}
+
+.shop-tag-row span,
+.badges span {
+  font-size: .68rem;
+  padding: 4px 8px;
+}
+
+@media(max-width:700px){
+  .shop-db-summary h2,
+  .shop-db-card h1 {
+    font-size: 2rem;
+  }
+
+  .shop-db-specs {
+    grid-template-columns: repeat(2,1fr);
+  }
+
+  .shop-db-specs > div {
+    border-right: 1px solid #2b323c;
+    border-bottom: 1px solid #2b323c;
+  }
+
+  .shop-db-actions,
+  .shop-action-grid {
+    grid-template-columns: repeat(2,1fr);
+  }
+
+  .shop-db-actions a,
+  .shop-db-actions button,
+  .shop-action-grid a,
+  .shop-action-grid button {
+    min-height: 42px;
+    font-size: .76rem;
+  }
+
+  .shop-main-image,
+  .shop-default-placeholder {
+    aspect-ratio: 16 / 10;
+    border-radius: 12px;
+  }
+}

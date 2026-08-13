@@ -49,8 +49,8 @@ async function load(){
     document.getElementById("shopMeta").textContent=[s.area,s.genre].filter(Boolean).join(" / ");
     const budget=s.budget_min&&s.budget_max?`${Number(s.budget_min).toLocaleString()}〜${Number(s.budget_max).toLocaleString()}円`:"";
     const media=s.image_url
-      ? `<img class="shop-main-image" src="${esc(s.image_url)}" alt="${esc(s.name)}" onerror="this.onerror=null;this.src='default-bar.svg'">`
-      : `<img class="shop-main-image default-shop-image" src="default-bar.svg" alt="${esc(s.name)} 画像準備中">`;
+      ? `<img class="shop-main-image" src="${esc(s.image_url)}" alt="${esc(s.name)}" onerror="this.onerror=null;this.outerHTML='<div class="shop-default-placeholder">BAR IMAGE</div>'">`
+      : `<div class="shop-default-placeholder">BAR IMAGE</div>`;
     document.getElementById("shopDetail").innerHTML=`
       <div class="shop-db-card">
         <div class="shop-db-summary">
