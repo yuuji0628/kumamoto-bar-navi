@@ -24,7 +24,7 @@
     <a class="back-link" href="index.html">← ホームへ戻る</a>
     <p class="eyebrow">KUMAMOTO BAR DIRECTORY</p>
     <h1>熊本県内のBAR一覧</h1>
-    <p>実際に掲載中の店舗を、エリア・ジャンル・キーワードから探せます。</p>
+    <p>掲載中の店舗を、エリア・ジャンル・キーワードから探せます。</p>
 
     <div class="directory-search">
       <select id="areaFilter"><option value="">すべてのエリア</option></select>
@@ -46,13 +46,6 @@
     <p id="loadError" class="no-result" style="display:none">店舗情報を読み込めませんでした。</p>
   </div>
 </section>
-
-<section class="bars-owner-cta">
-  <div class="container bars-owner-box">
-    <div><p class="eyebrow">FOR OWNERS</p><h2>あなたのお店も掲載しませんか？</h2><p>熊本県内のBAR・ラウンジを無料で掲載受付中です。</p></div>
-    <a class="btn-gold" href="listing-form.html">店舗掲載申込み →</a>
-  </div>
-</section>
 </main>
 
 <script>
@@ -71,14 +64,22 @@ function money(s){
   if(s.budget_min)return `${Number(s.budget_min).toLocaleString()}円〜`;
   return "";
 }
+function cardMedia(s,i){
+  if(s.image_url){
+    return `<div class="directory-photo has-image"><img src="${esc(s.image_url)}" alt="${esc(s.name)}" loading="lazy"></div>`;
+  }
+  return `<div class="directory-photo dir-${(i%6)+1}">${s.genre&&s.genre.includes("ダーツ")?"🎯":"🍸"}</div>`;
+}
 function render(list){
   $("resultCount").textContent=`${list.length}件`;
   $("noResult").style.display=list.length?"none":"block";
   $("barCards").innerHTML=list.map((s,i)=>`
     <a class="directory-card" href="shop.html?slug=${encodeURIComponent(s.slug)}">
-      <div class="directory-photo dir-${(i%6)+1}">${s.genre&&s.genre.includes("ダーツ")?"🎯":"🍸"}</div>
+      ${cardMedia(s,i)}
       <div class="directory-body">
         <div class="badges">
+          ${s.is_featured?`<span>おすすめ</span>`:""}
+          ${s.is_new?`<span>NEW</span>`:""}
           ${s.area?`<span>${esc(s.area)}</span>`:""}
           ${s.genre?`<span>${esc(s.genre)}</span>`:""}
         </div>

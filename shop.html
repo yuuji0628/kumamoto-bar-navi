@@ -29,9 +29,7 @@
 </section>
 <section class="section">
   <div class="container">
-    <div id="shopDetail" class="shop-db-detail">
-      <p>読み込み中...</p>
-    </div>
+    <div id="shopDetail" class="shop-db-detail"><p>読み込み中...</p></div>
   </div>
 </section>
 </main>
@@ -39,7 +37,6 @@
 <script>
 const esc=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 const slug=new URLSearchParams(location.search).get("slug");
-
 async function load(){
   if(!slug){document.getElementById("shopDetail").innerHTML="<p>店舗が指定されていません。</p>";return;}
   try{
@@ -51,12 +48,20 @@ async function load(){
     document.getElementById("shopName").textContent=s.name;
     document.getElementById("shopMeta").textContent=[s.area,s.genre].filter(Boolean).join(" / ");
     const budget=s.budget_min&&s.budget_max?`${Number(s.budget_min).toLocaleString()}〜${Number(s.budget_max).toLocaleString()}円`:"";
+    const media=s.image_url
+      ? `<img class="shop-main-image" src="${esc(s.image_url)}" alt="${esc(s.name)}">`
+      : `<div class="shop-db-icon">${s.genre&&s.genre.includes("ダーツ")?"🎯":"🍸"}</div>`;
     document.getElementById("shopDetail").innerHTML=`
       <div class="shop-db-card">
         <div class="shop-db-summary">
-          <div class="shop-db-icon">${s.genre&&s.genre.includes("ダーツ")?"🎯":"🍸"}</div>
+          <div>${media}</div>
           <div>
-            <div class="badges">${s.area?`<span>${esc(s.area)}</span>`:""}${s.genre?`<span>${esc(s.genre)}</span>`:""}</div>
+            <div class="badges">
+              ${s.is_featured?`<span>おすすめ</span>`:""}
+              ${s.is_new?`<span>NEW</span>`:""}
+              ${s.area?`<span>${esc(s.area)}</span>`:""}
+              ${s.genre?`<span>${esc(s.genre)}</span>`:""}
+            </div>
             <h2>${esc(s.name)}</h2>
             <p>${esc(s.description||"")}</p>
           </div>
