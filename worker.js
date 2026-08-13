@@ -2,12 +2,16 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // Public read-only API
+    // D1接続後に使う公開読み取りAPI
     if (url.pathname === "/api/shops" && request.method === "GET") {
-      const area = url.searchParams.get("area");
-      const genre = url.searchParams.get("genre");
+      if (!env.DB) {
+        return Response.json(
+          { ok: false, error: "D1_NOT_BOUND" },
+          { status: 503 }
+        );
+      }
 
-      let sql = `
+      const result = await env.DB.prepare(`
         SELECT
           id, slug, name, name_kana, area, address, hours, holiday,
           instagram, genre, features, description,
@@ -15,34 +19,28 @@ export default {
           is_recruiting, created_at, updated_at
         FROM shops
         WHERE is_published = 1
-      `;
-      const values = [];
-
-      if (area) {
-        sql += " AND area = ?";
-        values.push(area);
-      }
-      if (genre) {
-        sql += " AND genre = ?";
-        values.push(genre);
-      }
-
-      sql += " ORDER BY created_at DESC";
-
-      const stmt = env.DB.prepare(sql);
-      const result = values.length
-        ? await stmt.bind(...values).all()
-        : await stmt.all();
+        ORDER BY created_at DESC
+      `).all();
 
       return Response.json({
         ok: true,
-        shops: result.results ?? []
+        shops: result.results || []
       });
     }
 
     if (url.pathname.startsWith("/api/shops/") && request.method === "GET") {
-      const slug = decodeURIComponent(url.pathname.replace("/api/shops/", ""));
-      const result = await env.DB.prepare(`
+      if (!env.DB) {
+        return Response.json(
+          { ok: false, error: "D1_NOT_BOUND" },
+          { status: 503 }
+        );
+      }
+
+      const slug = decodeURIComponent(
+        url.pathname.replace("/api/shops/", "")
+      );
+
+      const shop = await env.DB.prepare(`
         SELECT
           id, slug, name, name_kana, area, address, hours, holiday,
           instagram, genre, features, description,
@@ -53,24 +51,25 @@ export default {
         LIMIT 1
       `).bind(slug).first();
 
-      if (!result) {
-        return Response.json({ ok: false, error: "not_found" }, { status: 404 });
+      if (!shop) {
+        return Response.json(
+          { ok: false, error: "NOT_FOUND" },
+          { status: 404 }
+        );
       }
 
-      return Response.json({ ok: true, shop: result });
+      return Response.json({ ok: true, shop });
     }
 
-    // IMPORTANT:
-    // Admin write APIs are intentionally NOT enabled yet.
-    // They will be added after /api/admin/* is protected by Cloudflare Access.
+    // 管理APIはまだ無効
     if (url.pathname.startsWith("/api/admin/")) {
       return Response.json(
-        { ok: false, error: "admin_api_not_enabled_yet" },
+        { ok: false, error: "ADMIN_API_DISABLED" },
         { status: 403 }
       );
     }
 
-    // Serve static assets through Workers Assets binding
+    // 既存サイトはそのまま表示
     return env.ASSETS.fetch(request);
   }
 };
