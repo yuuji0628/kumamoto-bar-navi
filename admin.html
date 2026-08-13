@@ -1,240 +1,70 @@
-<!doctype html>
-<html lang="ja">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="robots" content="noindex,nofollow">
-  <title>運営管理画面｜KUMAMOTO BAR NAVI</title>
-  <link rel="stylesheet" href="style.css">
-</head>
-<body class="admin-body">
-<header class="admin-header">
-  <div class="container admin-header-inner">
-    <div><p class="eyebrow">KBN ADMIN</p><b>KUMAMOTO BAR NAVI 運営管理</b></div>
-    <a class="simple-link-btn" href="index.html">サイトを見る</a>
-  </div>
-</header>
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>KBN運営管理</title><link rel="stylesheet" href="style.css"></head>
+<body class="admin-body"><main class="admin-page"><div class="container">
+<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN v23</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><div class="admin-security-badge">🔒 Cloudflare Access</div></section>
+<nav class="admin-tabs"><button data-tab="shops" class="active">店舗</button><button data-tab="jobs">求人</button><button data-tab="subs">申込み</button></nav>
 
-<main class="admin-page">
-<div class="container">
-  <section class="admin-welcome">
-    <div>
-      <p class="eyebrow">D1 DASHBOARD</p>
-      <h1>店舗管理</h1>
-      <p>D1データベースの掲載店舗を追加・編集・公開管理できます。</p>
-    </div>
-    <div class="admin-security-badge">🔒 Cloudflare Access 保護中</div>
-  </section>
-
-  <section class="admin-stats">
-    <div class="stat-card"><span>登録店舗</span><b id="statAll">-</b><small>合計</small></div>
-    <div class="stat-card"><span>公開中</span><b id="statLive">-</b><small>サイト掲載</small></div>
-    <div class="stat-card"><span>非公開</span><b id="statHidden">-</b><small>管理のみ</small></div>
-    <div class="stat-card"><span>求人あり</span><b id="statJobs">-</b><small>店舗</small></div>
-  </section>
-
-  <section class="admin-block">
-    <div class="admin-block-head">
-      <div><p class="eyebrow">SHOP EDITOR</p><h2 id="formTitle">新しい店舗を追加</h2></div>
-      <button class="admin-secondary-btn" id="resetBtn" type="button">新規入力に戻す</button>
-    </div>
-
-    <form id="shopForm" class="admin-shop-form">
-      <input type="hidden" id="shopId">
-
-      <div class="admin-form-grid">
-        <label><span>店舗名 *</span><input id="name" required></label>
-        <label><span>読み方</span><input id="name_kana"></label>
-        <label><span>URL用slug</span><input id="slug" placeholder="例：bar-ark"></label>
-        <label><span>エリア *</span>
-          <select id="area" required>
-            <option value="">選択してください</option>
-            <option>熊本市</option><option>八代市</option><option>人吉・球磨</option>
-            <option>天草</option><option>阿蘇</option><option>玉名</option>
-            <option>宇城</option><option>その他</option>
-          </select>
-        </label>
-        <label class="span-2"><span>住所</span><input id="address"></label>
-        <label><span>営業時間</span><input id="hours" placeholder="21:00〜LAST"></label>
-        <label><span>定休日</span><input id="holiday"></label>
-        <label><span>ジャンル</span><input id="genre" placeholder="ダーツバー"></label>
-        <label><span>席数</span><input id="seats" inputmode="numeric" type="number"></label>
-        <label><span>平均予算 最低</span><input id="budget_min" inputmode="numeric" type="number"></label>
-        <label><span>平均予算 最高</span><input id="budget_max" inputmode="numeric" type="number"></label>
-        <label><span>電話番号</span><input id="phone" inputmode="tel"></label>
-        <label><span>Instagram</span><input id="instagram" type="url"></label>
-        <label class="span-2"><span>特徴</span><input id="features" placeholder="一人飲み, デート向け, 深夜営業"></label>
-        <label class="span-2"><span>店舗紹介文</span><textarea id="description" rows="6"></textarea></label>
-      </div>
-
-      <div class="admin-check-row">
-        <label><input type="checkbox" id="is_published" checked> 公開する</label>
-        <label><input type="checkbox" id="is_recruiting"> 求人あり</label>
-      </div>
-
-      <div class="admin-form-actions">
-        <button class="btn-gold" id="saveBtn" type="submit">店舗を保存する</button>
-        <span id="formStatus" class="admin-form-status" aria-live="polite"></span>
-      </div>
-    </form>
-  </section>
-
-  <section class="admin-block">
-    <div class="admin-block-head">
-      <div><p class="eyebrow">SHOPS</p><h2>登録店舗一覧</h2></div>
-      <button class="admin-secondary-btn" id="reloadBtn" type="button">再読み込み</button>
-    </div>
-    <div id="shopList" class="admin-shop-list">
-      <p>読み込み中...</p>
-    </div>
-  </section>
-
-  <section class="admin-block admin-warning">
-    <h2>安全な削除について</h2>
-    <p>「非公開」にするとD1のデータは残したまま、BAR一覧から非表示になります。必要になれば「編集」から再公開できます。</p>
-  </section>
+<section id="tab-shops" class="admin-block">
+<div class="admin-block-head"><div><p class="eyebrow">SHOPS</p><h2>店舗管理</h2></div><button id="reloadShops" class="admin-secondary-btn">再読み込み</button></div>
+<form id="shopForm" class="admin-shop-form">
+<input type="hidden" id="shopId">
+<div class="admin-form-grid">
+<label><span>店舗名 *</span><input id="name" required></label>
+<label><span>読み方</span><input id="name_kana"></label>
+<label><span>slug</span><input id="slug"></label>
+<label><span>エリア *</span><input id="area" required placeholder="熊本市"></label>
+<label class="span-2"><span>住所</span><input id="address"></label>
+<label><span>営業時間</span><input id="hours"></label><label><span>定休日</span><input id="holiday"></label>
+<label><span>ジャンル</span><input id="genre"></label><label><span>席数</span><input id="seats" type="number"></label>
+<label><span>予算下限</span><input id="budget_min" type="number"></label><label><span>予算上限</span><input id="budget_max" type="number"></label>
+<label class="span-2"><span>Instagram</span><input id="instagram"></label>
+<label class="span-2"><span>特徴</span><input id="features"></label>
+<label class="span-2"><span>紹介文</span><textarea id="description" rows="5"></textarea></label>
+<label><span>並び順</span><input id="sort_order" type="number" value="100"></label>
+<label><span>画像URL</span><input id="image_url"></label>
+<label class="span-2"><span>店舗画像（R2）</span><input id="imageFile" type="file" accept="image/*"><button type="button" id="uploadImage" class="admin-secondary-btn">画像をアップロード</button><small id="uploadStatus"></small></label>
 </div>
-</main>
+<div class="admin-check-row"><label><input id="is_published" type="checkbox" checked>公開</label><label><input id="is_featured" type="checkbox">おすすめ</label><label><input id="is_new" type="checkbox" checked>NEW</label><label><input id="is_recruiting" type="checkbox">求人あり</label></div>
+<div class="admin-form-actions"><button class="btn-gold">保存</button><button type="button" id="resetShop" class="admin-secondary-btn">新規入力</button></div>
+</form>
+<div id="shopList" class="admin-shop-list"></div>
+</section>
 
+<section id="tab-jobs" class="admin-block" hidden>
+<div class="admin-block-head"><div><p class="eyebrow">JOBS</p><h2>求人管理</h2></div></div>
+<form id="jobForm" class="admin-shop-form">
+<input type="hidden" id="jobId">
+<div class="admin-form-grid">
+<label><span>店舗</span><select id="jobShop"></select></label>
+<label><span>求人タイトル *</span><input id="jobTitle" required></label>
+<label><span>雇用形態</span><input id="jobType"></label><label><span>給与</span><input id="jobSalary"></label>
+<label><span>勤務時間</span><input id="jobHours"></label><label><span>並び順</span><input id="jobOrder" type="number" value="100"></label>
+<label class="span-2"><span>仕事内容</span><textarea id="jobDescription" rows="5"></textarea></label>
+<label class="span-2"><span>応募先</span><input id="jobContact"></label>
+</div><div class="admin-check-row"><label><input id="jobPublished" type="checkbox" checked>公開</label></div>
+<div class="admin-form-actions"><button class="btn-gold">保存</button></div>
+</form><div id="jobList" class="admin-shop-list"></div>
+</section>
+
+<section id="tab-subs" class="admin-block" hidden>
+<div class="admin-block-head"><div><p class="eyebrow">SUBMISSIONS</p><h2>掲載申込み</h2></div><button id="reloadSubs" class="admin-secondary-btn">再読み込み</button></div>
+<div id="subList" class="admin-shop-list"></div>
+</section>
+</div></main>
 <script>
-const $ = id => document.getElementById(id);
-let shops = [];
-
-function v(id){ return $(id).value.trim(); }
-function n(id){ return $(id).value === "" ? null : Number($(id).value); }
-
-function formData(){
-  return {
-    name:v("name"), name_kana:v("name_kana"), slug:v("slug"),
-    area:v("area"), address:v("address"), hours:v("hours"),
-    holiday:v("holiday"), genre:v("genre"), seats:n("seats"),
-    budget_min:n("budget_min"), budget_max:n("budget_max"),
-    phone:v("phone"), instagram:v("instagram"),
-    features:v("features"), description:v("description"),
-    is_published:$("is_published").checked,
-    is_recruiting:$("is_recruiting").checked
-  };
-}
-
-function resetForm(){
-  $("shopForm").reset();
-  $("shopId").value="";
-  $("is_published").checked=true;
-  $("formTitle").textContent="新しい店舗を追加";
-  $("saveBtn").textContent="店舗を保存する";
-  $("formStatus").textContent="";
-  window.scrollTo({top:0,behavior:"smooth"});
-}
-
-function editShop(id){
-  const s=shops.find(x=>Number(x.id)===Number(id));
-  if(!s)return;
-  $("shopId").value=s.id;
-  ["name","name_kana","slug","area","address","hours","holiday","genre","phone","instagram","features","description"].forEach(k=>{
-    $(k).value=s[k] ?? "";
-  });
-  ["seats","budget_min","budget_max"].forEach(k=>$(k).value=s[k] ?? "");
-  $("is_published").checked=Boolean(Number(s.is_published));
-  $("is_recruiting").checked=Boolean(Number(s.is_recruiting));
-  $("formTitle").textContent=`編集：${s.name}`;
-  $("saveBtn").textContent="変更を保存する";
-  window.scrollTo({top:0,behavior:"smooth"});
-}
-
-async function setPublished(id, published){
-  const s=shops.find(x=>Number(x.id)===Number(id));
-  if(!s)return;
-  if(!published && !confirm(`${s.name} をBAR一覧から非公開にしますか？`))return;
-  const res=await fetch(`/api/admin/shops/${id}`,{
-    method:"PUT",headers:{"Content-Type":"application/json"},
-    credentials:"same-origin",
-    body:JSON.stringify({...s,is_published:published})
-  });
-  const data=await res.json();
-  if(!res.ok){alert(`変更できませんでした：${data.error||res.status}`);return;}
-  await loadShops();
-}
-
-function render(){
-  $("statAll").textContent=shops.length;
-  $("statLive").textContent=shops.filter(s=>Number(s.is_published)).length;
-  $("statHidden").textContent=shops.filter(s=>!Number(s.is_published)).length;
-  $("statJobs").textContent=shops.filter(s=>Number(s.is_recruiting)).length;
-
-  if(!shops.length){
-    $("shopList").innerHTML="<p>登録店舗はありません。</p>"; return;
-  }
-  $("shopList").innerHTML=shops.map(s=>`
-    <article class="admin-shop-item ${Number(s.is_published) ? "" : "is-hidden"}">
-      <div class="admin-shop-main">
-        <div class="admin-shop-title-row">
-          <h3>${esc(s.name)}</h3>
-          <span class="admin-publish-badge">${Number(s.is_published) ? "公開中" : "非公開"}</span>
-        </div>
-        <p>${esc(s.area||"")} / ${esc(s.genre||"ジャンル未設定")}</p>
-        <small>${esc(s.address||"住所未設定")}</small>
-      </div>
-      <div class="admin-item-actions">
-        ${Number(s.is_published) ? `<a href="shop.html?slug=${encodeURIComponent(s.slug)}" target="_blank">表示</a>` : ""}
-        <button type="button" onclick="editShop(${Number(s.id)})">編集</button>
-        <button type="button" onclick="setPublished(${Number(s.id)},${Number(s.is_published)?0:1})">
-          ${Number(s.is_published) ? "非公開" : "再公開"}
-        </button>
-      </div>
-    </article>
-  `).join("");
-}
-
-function esc(x){
-  return String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
-}
-
-async function loadShops(){
-  $("shopList").innerHTML="<p>読み込み中...</p>";
-  try{
-    const res=await fetch("/api/admin/shops",{credentials:"same-origin"});
-    const data=await res.json();
-    if(!res.ok)throw new Error(data.error||res.status);
-    shops=data.shops||[];
-    render();
-  }catch(e){
-    $("shopList").innerHTML=`<p class="admin-error">読み込めませんでした：${esc(e.message)}</p>`;
-  }
-}
-
-$("shopForm").addEventListener("submit",async e=>{
-  e.preventDefault();
-  if(!$("shopForm").checkValidity()){ $("shopForm").reportValidity(); return; }
-
-  const id=$("shopId").value;
-  const method=id?"PUT":"POST";
-  const endpoint=id?`/api/admin/shops/${id}`:"/api/admin/shops";
-  $("saveBtn").disabled=true;
-  $("formStatus").textContent="保存中...";
-
-  try{
-    const res=await fetch(endpoint,{
-      method,credentials:"same-origin",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify(formData())
-    });
-    const data=await res.json();
-    if(!res.ok)throw new Error(data.error||res.status);
-    $("formStatus").textContent="保存しました";
-    await loadShops();
-    setTimeout(resetForm,600);
-  }catch(e){
-    $("formStatus").textContent=`保存できませんでした：${e.message}`;
-  }finally{
-    $("saveBtn").disabled=false;
-  }
-});
-
-$("resetBtn").addEventListener("click",resetForm);
-$("reloadBtn").addEventListener("click",loadShops);
-window.editShop=editShop;
-window.setPublished=setPublished;
-loadShops();
-</script>
-</body>
-</html>
+const $=id=>document.getElementById(id);let shops=[],jobs=[],subs=[];
+document.querySelectorAll(".admin-tabs button").forEach(b=>b.onclick=()=>{document.querySelectorAll(".admin-tabs button").forEach(x=>x.classList.remove("active"));b.classList.add("active");["shops","jobs","subs"].forEach(x=>$("tab-"+x).hidden=x!==b.dataset.tab)});
+const esc=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+async function api(u,o={}){const r=await fetch(u,{credentials:"same-origin",...o});const d=await r.json();if(!r.ok)throw new Error(d.error||r.status);return d}
+async function loadShops(){const d=await api("/api/admin/shops");shops=d.shops||[];$("jobShop").innerHTML='<option value="">店舗なし</option>'+shops.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("");$("shopList").innerHTML=shops.map(s=>`<article class="admin-shop-item"><div><h3>${esc(s.name)} ${s.is_featured?'⭐':''} ${s.is_new?'NEW':''}</h3><p>${esc(s.area)} / ${esc(s.genre||'')}</p><small>順:${s.sort_order} / ${s.is_published?'公開':'非公開'}</small></div><button onclick="editShop(${s.id})">編集</button></article>`).join("")}
+window.editShop=id=>{const s=shops.find(x=>x.id==id);["name","name_kana","slug","area","address","hours","holiday","genre","instagram","features","description","image_url","sort_order","seats","budget_min","budget_max"].forEach(k=>$(k).value=s[k]??"");["is_published","is_featured","is_new","is_recruiting"].forEach(k=>$(k).checked=!!Number(s[k]));$("shopId").value=id;scrollTo(0,0)}
+$("shopForm").onsubmit=async e=>{e.preventDefault();const id=$("shopId").value;const data={};["name","name_kana","slug","area","address","hours","holiday","genre","instagram","features","description","image_url"].forEach(k=>data[k]=$(k).value);["sort_order","seats","budget_min","budget_max"].forEach(k=>data[k]=$(k).value);["is_published","is_featured","is_new","is_recruiting"].forEach(k=>data[k]=$(k).checked);await api(id?`/api/admin/shops/${id}`:"/api/admin/shops",{method:id?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});await loadShops();alert("保存しました")}
+$("resetShop").onclick=()=>{$("shopForm").reset();$("shopId").value="";$("sort_order").value=100}
+$("uploadImage").onclick=async()=>{const f=$("imageFile").files[0];if(!f)return alert("画像を選択してください");const fd=new FormData();fd.append("file",f);$("uploadStatus").textContent="アップロード中...";try{const d=await api("/api/admin/upload",{method:"POST",body:fd});$("image_url").value=d.url;$("uploadStatus").textContent="完了"}catch(e){$("uploadStatus").textContent=e.message}}
+async function loadJobs(){const d=await api("/api/admin/jobs");jobs=d.jobs||[];$("jobList").innerHTML=jobs.map(j=>`<article class="admin-shop-item"><div><h3>${esc(j.title)}</h3><p>${esc(j.shop_name||'店舗未指定')} / ${esc(j.salary||'')}</p></div></article>`).join("")}
+$("jobForm").onsubmit=async e=>{e.preventDefault();const data={shop_id:$("jobShop").value,title:$("jobTitle").value,employment_type:$("jobType").value,salary:$("jobSalary").value,hours:$("jobHours").value,description:$("jobDescription").value,contact:$("jobContact").value,is_published:$("jobPublished").checked,sort_order:$("jobOrder").value};await api("/api/admin/jobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});await loadJobs();alert("求人を保存しました")}
+async function loadSubs(){const d=await api("/api/admin/submissions");subs=d.submissions||[];$("subList").innerHTML=subs.map(s=>`<article class="admin-shop-item"><div><h3>${esc(s.shop_name)}</h3><p>${esc(s.contact_name||'')} / ${esc(s.status)}</p><small>${esc(s.address||'')}</small></div><div class="admin-item-actions">${s.status==='pending'?`<button onclick="approve(${s.id})">承認して店舗化</button><button onclick="rejectSub(${s.id})">却下</button>`:''}</div></article>`).join("")}
+window.approve=async id=>{await api(`/api/admin/submissions/${id}/approve`,{method:"POST"});await Promise.all([loadSubs(),loadShops()])}
+window.rejectSub=async id=>{await api(`/api/admin/submissions/${id}/reject`,{method:"POST"});await loadSubs()}
+$("reloadShops").onclick=loadShops;$("reloadSubs").onclick=loadSubs;
+Promise.all([loadShops(),loadJobs(),loadSubs()]);
+</script></body></html>

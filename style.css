@@ -1014,3 +1014,8 @@ a.directory-card:hover{
   .shop-db-icon{max-width:180px}
   .shop-db-specs>div{grid-template-columns:1fr;gap:5px}
 }
+
+.admin-tabs{display:flex;gap:8px;margin:18px 0;position:sticky;top:0;z-index:5;background:#080c12;padding:8px 0}
+.admin-tabs button{padding:10px 16px;border:1px solid #39414d;background:#0e151f;color:#cbd0d7;border-radius:999px;font-weight:800}
+.admin-tabs button.active{background:#efc45a;color:#111}
+.admin-shop-form input[type=file]{padding:10px}
