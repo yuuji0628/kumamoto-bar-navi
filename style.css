@@ -1937,3 +1937,113 @@ a.directory-card:hover{
     margin-top:6px;
   }
 }
+
+
+/* v45: 熊本県内のBARオーナー様へ をコンパクト化 */
+.compact-owner-cta{
+  padding:34px 0;
+  border-top:1px solid rgba(216,185,94,.18);
+  border-bottom:1px solid rgba(216,185,94,.18);
+  background:#090e14;
+}
+
+.compact-owner-card{
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:20px;
+  align-items:center;
+  padding:18px 20px;
+  border:1px solid #39434f;
+  border-radius:14px;
+  background:#101720;
+}
+
+.compact-owner-copy{
+  min-width:0;
+}
+
+.compact-owner-copy .eyebrow{
+  margin:0 0 5px;
+  font-size:.68rem;
+}
+
+.compact-owner-copy h2{
+  margin:0 0 6px;
+  color:#f3f5f7;
+  font-size:clamp(1.25rem,3vw,1.8rem);
+  line-height:1.2;
+}
+
+.compact-owner-copy p:last-child{
+  margin:0;
+  color:#abb3bd;
+  font-size:.8rem;
+  line-height:1.55;
+}
+
+.compact-owner-actions{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+
+.compact-owner-primary,
+.compact-owner-secondary{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:40px;
+  padding:8px 12px;
+  border-radius:10px;
+  text-decoration:none;
+  font-size:.72rem;
+  font-weight:800;
+  white-space:nowrap;
+}
+
+.compact-owner-primary{
+  border:1px solid #d4ad4f;
+  background:linear-gradient(135deg,#efca66,#c89230);
+  color:#111;
+}
+
+.compact-owner-secondary{
+  border:1px solid #414b58;
+  background:#0d141c;
+  color:#e3e7ec;
+}
+
+@media(max-width:700px){
+  .compact-owner-cta{
+    padding:26px 0;
+  }
+
+  .compact-owner-card{
+    grid-template-columns:1fr;
+    gap:12px;
+    padding:14px;
+    border-radius:12px;
+  }
+
+  .compact-owner-copy h2{
+    font-size:1.15rem;
+  }
+
+  .compact-owner-copy p:last-child{
+    font-size:.74rem;
+  }
+
+  .compact-owner-actions{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:7px;
+  }
+
+  .compact-owner-primary,
+  .compact-owner-secondary{
+    min-height:38px;
+    font-size:.7rem;
+  }
+}
