@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="index,follow">
+  <meta name="description" content="営業時間や定休日、紹介文などの変更はこちらから申請できます。">
+  <title>店舗情報変更申請｜KUMAMOTO BAR NAVI</title>
+  <link rel="stylesheet" href="style.css">
+  
+</head>
+<body>
+<header class="site-header">
+  <div class="container header-inner">
+    <a class="brand" href="index.html">
+      <img class="brand-logo" src="logo.png" alt="KUMAMOTO BAR NAVI ロゴ">
+      <span><b>KUMAMOTO</b><br>BAR NAVI<small>BAR & JOB INFORMATION</small></span>
+    </a>
+    <a class="header-cta" href="listing-form.html">無料掲載申込み</a>
+  </div>
+</header>
+<main class="utility-page">
+  
+<section class="utility-hero">
+  <div class="container">
+    <a class="back-link" href="shop-support.html">← 掲載店舗様向けメニュー</a>
+    <p class="eyebrow">UPDATE</p>
+    <h1>店舗情報変更申請</h1>
+    <p>営業時間や定休日、紹介文などの変更はこちらから申請できます。</p>
+  </div>
+</section>
+<section class="section">
+  <div class="container">
+    <form id="utilityForm" class="utility-form" action="https://formspree.io/f/mpparpba" method="POST">
+      <input type="hidden" name="_subject" value="【KUMAMOTO BAR NAVI】店舗情報変更申請">
+      <input type="hidden" name="申請種別" value="店舗情報変更申請">
+      
+<div class="form-grid">
+  <label><span>店舗名 *</span><input type="text" name="店舗名" required></label>
+  <label><span>担当者名 *</span><input type="text" name="担当者名" required></label>
+  <label><span>連絡用メール *</span><input type="email" name="email" required></label>
+  <label><span>Instagram</span><input type="url" name="Instagram"></label>
+</div>
+<label><span>変更したい項目 *</span>
+  <select name="変更項目" required>
+    <option value="">選択してください</option>
+    <option>営業時間</option><option>定休日</option><option>住所</option>
+    <option>平均予算</option><option>席数</option><option>店舗紹介文</option>
+    <option>ジャンル・特徴</option><option>Instagram</option><option>その他</option>
+  </select>
+</label>
+<label><span>現在の内容</span><textarea name="現在の内容" rows="4"></textarea></label>
+<label><span>変更後の内容 *</span><textarea name="変更後の内容" rows="6" required></textarea></label>
+<label><span>補足</span><textarea name="補足" rows="4"></textarea></label>
+
+      <label class="confirm-check"><input type="checkbox" required> <span>入力内容を確認しました</span></label>
+      <button class="btn-gold full-btn" type="submit">申請を送信する →</button>
+      <p class="form-help">※送信内容を確認後、必要に応じて運営からご連絡します。</p>
+      <p id="formStatus" class="form-status" aria-live="polite"></p>
+    </form>
+  </div>
+</section>
+<script>
+(function(){
+  const form=document.getElementById("utilityForm");
+  const status=document.getElementById("formStatus");
+  if(!form)return;
+  form.addEventListener("submit",async e=>{
+    e.preventDefault();
+    if(!form.checkValidity()){form.reportValidity();return;}
+    const btn=form.querySelector('button[type="submit"]');
+    const old=btn.textContent;
+    btn.disabled=true;btn.textContent="送信中...";
+    if(status)status.textContent="";
+    try{
+      const res=await fetch(form.action,{
+        method:"POST",
+        body:new FormData(form),
+        headers:{"Accept":"application/json"}
+      });
+      if(res.ok){
+        location.href="action-complete.html?type=update";
+        return;
+      }
+      if(status)status.textContent="送信できませんでした。もう一度お試しください。";
+    }catch(err){
+      if(status)status.textContent="通信エラーが発生しました。";
+    }finally{
+      btn.disabled=false;btn.textContent=old;
+    }
+  });
+})();
+</script>
+
+</main>
+<footer>
+  <div class="container footer-inner">
+    <div class="footer-links">
+      <a href="index.html">ホーム</a>
+      <a href="bars.html">BAR一覧</a>
+      <a href="events.html">イベント</a>
+      <a href="coupons.html">クーポン</a>
+      <a href="shop-support.html">掲載店舗様へ</a>
+      <a href="contact.html">お問い合わせ</a>
+    </div>
+    <small>© 2026 KUMAMOTO BAR NAVI</small>
+  </div>
+</footer>
+</body>
+</html>

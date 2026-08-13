@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="index,follow">
+  <meta name="description" content="店舗イベントをKUMAMOTO BAR NAVIで紹介するための申請フォームです。">
+  <title>イベント掲載申請｜KUMAMOTO BAR NAVI</title>
+  <link rel="stylesheet" href="style.css">
+  
+</head>
+<body>
+<header class="site-header">
+  <div class="container header-inner">
+    <a class="brand" href="index.html">
+      <img class="brand-logo" src="logo.png" alt="KUMAMOTO BAR NAVI ロゴ">
+      <span><b>KUMAMOTO</b><br>BAR NAVI<small>BAR & JOB INFORMATION</small></span>
+    </a>
+    <a class="header-cta" href="listing-form.html">無料掲載申込み</a>
+  </div>
+</header>
+<main class="utility-page">
+  
+<section class="utility-hero">
+  <div class="container">
+    <a class="back-link" href="shop-support.html">← 掲載店舗様向けメニュー</a>
+    <p class="eyebrow">EVENT</p>
+    <h1>イベント掲載申請</h1>
+    <p>店舗イベントをKUMAMOTO BAR NAVIで紹介するための申請フォームです。</p>
+  </div>
+</section>
+<section class="section">
+  <div class="container">
+    <form id="utilityForm" class="utility-form" action="https://formspree.io/f/mpparpba" method="POST">
+      <input type="hidden" name="_subject" value="【KUMAMOTO BAR NAVI】イベント掲載申請">
+      <input type="hidden" name="申請種別" value="イベント掲載申請">
+      
+<div class="form-grid">
+  <label><span>店舗名 *</span><input type="text" name="店舗名" required></label>
+  <label><span>担当者名 *</span><input type="text" name="担当者名" required></label>
+  <label><span>連絡用メール *</span><input type="email" name="email" required></label>
+  <label><span>イベント名 *</span><input type="text" name="イベント名" required></label>
+  <label><span>開催日 *</span><input type="date" name="開催日" required></label>
+  <label><span>開始時間</span><input type="time" name="開始時間"></label>
+  <label><span>終了時間</span><input type="time" name="終了時間"></label>
+  <label><span>料金・参加費</span><input type="text" name="料金・参加費" placeholder="例：2,000円 / 入場無料"></label>
+</div>
+<label><span>イベント内容 *</span><textarea name="イベント内容" rows="6" required placeholder="大会、周年イベント、レディースデイなど"></textarea></label>
+<label><span>申込方法・注意事項</span><textarea name="申込方法・注意事項" rows="4"></textarea></label>
+<label><span>Instagram告知URL</span><input type="url" name="告知URL"></label>
+<div class="photo-guide-box"><b>📸 告知画像がある場合</b><p>送信後、Instagram DMで店舗名と一緒に画像をお送りください。</p></div>
+
+      <label class="confirm-check"><input type="checkbox" required> <span>入力内容を確認しました</span></label>
+      <button class="btn-gold full-btn" type="submit">申請を送信する →</button>
+      <p class="form-help">※送信内容を確認後、必要に応じて運営からご連絡します。</p>
+      <p id="formStatus" class="form-status" aria-live="polite"></p>
+    </form>
+  </div>
+</section>
+<script>
+(function(){
+  const form=document.getElementById("utilityForm");
+  const status=document.getElementById("formStatus");
+  if(!form)return;
+  form.addEventListener("submit",async e=>{
+    e.preventDefault();
+    if(!form.checkValidity()){form.reportValidity();return;}
+    const btn=form.querySelector('button[type="submit"]');
+    const old=btn.textContent;
+    btn.disabled=true;btn.textContent="送信中...";
+    if(status)status.textContent="";
+    try{
+      const res=await fetch(form.action,{
+        method:"POST",
+        body:new FormData(form),
+        headers:{"Accept":"application/json"}
+      });
+      if(res.ok){
+        location.href="action-complete.html?type=event";
+        return;
+      }
+      if(status)status.textContent="送信できませんでした。もう一度お試しください。";
+    }catch(err){
+      if(status)status.textContent="通信エラーが発生しました。";
+    }finally{
+      btn.disabled=false;btn.textContent=old;
+    }
+  });
+})();
+</script>
+
+</main>
+<footer>
+  <div class="container footer-inner">
+    <div class="footer-links">
+      <a href="index.html">ホーム</a>
+      <a href="bars.html">BAR一覧</a>
+      <a href="events.html">イベント</a>
+      <a href="coupons.html">クーポン</a>
+      <a href="shop-support.html">掲載店舗様へ</a>
+      <a href="contact.html">お問い合わせ</a>
+    </div>
+    <small>© 2026 KUMAMOTO BAR NAVI</small>
+  </div>
+</footer>
+</body>
+</html>

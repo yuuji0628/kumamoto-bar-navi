@@ -29,6 +29,15 @@ const type=new URLSearchParams(location.search).get("type");
 if(type==="review"){
   document.getElementById("completeTitle").textContent="口コミを受け付けました";
   document.getElementById("completeText").textContent="投稿ありがとうございます。内容を運営で確認後、掲載を検討します。";
+}else if(type==="update"){
+  document.getElementById("completeTitle").textContent="店舗情報変更申請を受け付けました";
+  document.getElementById("completeText").textContent="内容を確認後、掲載情報を更新します。必要に応じて運営よりご連絡します。";
+}else if(type==="event"){
+  document.getElementById("completeTitle").textContent="イベント掲載申請を受け付けました";
+  document.getElementById("completeText").textContent="内容を確認後、イベント情報への掲載を進めます。";
+}else if(type==="coupon"){
+  document.getElementById("completeTitle").textContent="クーポン掲載申請を受け付けました";
+  document.getElementById("completeText").textContent="利用条件などを確認後、クーポンページへの掲載を進めます。";
 }else if(type==="job"){
   document.getElementById("completeTitle").textContent="求人応募を受け付けました";
   document.getElementById("completeText").textContent="応募ありがとうございます。内容確認後、必要に応じてご連絡します。";

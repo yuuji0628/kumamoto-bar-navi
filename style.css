@@ -830,3 +830,35 @@ a.directory-card:hover{
   .rating-summary{align-items:flex-start;margin-top:12px}
   .sort-tools{justify-content:flex-start}
 }
+
+/* v18 owner tools */
+.owner-tools-section{padding:72px 0;background:#0a0e14;border-top:1px solid #272d36}
+.owner-tool-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.owner-tool-grid-large{grid-template-columns:repeat(2,1fr)}
+.owner-tool-card{display:flex;flex-direction:column;gap:7px;padding:22px;border:1px solid #313843;border-radius:16px;background:#111722;text-decoration:none;min-height:130px;transition:.2s}
+.owner-tool-card:hover{transform:translateY(-2px);border-color:#a7843c}
+.owner-tool-card span{font-size:28px}
+.owner-tool-card b{color:#efc965;font-size:18px}
+.owner-tool-card small{color:#9da4ae;line-height:1.6}
+.utility-page{background:#080b10;min-height:70vh}
+.utility-hero{padding:70px 0 38px;background:radial-gradient(circle at 82% 10%,rgba(217,176,78,.12),transparent 35%),#090c11;border-bottom:1px solid #282d35}
+.utility-hero h1{font-size:clamp(38px,7vw,60px);margin:5px 0 10px}
+.utility-hero p{max-width:760px;color:#b5bac3;line-height:1.8}
+.utility-form{max-width:820px;padding:24px;border:1px solid #323a45;border-radius:18px;background:#111722}
+.utility-form label{display:block;margin-bottom:16px}
+.utility-form label>span{display:block;margin-bottom:7px;color:#dce0e5;font-size:13px;font-weight:700}
+.utility-form input,.utility-form select,.utility-form textarea{box-sizing:border-box;width:100%;padding:12px 13px;border:1px solid #3a424d;border-radius:10px;background:#0b1017;color:#fff;font:inherit}
+.form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:0 14px}
+.confirm-check{display:flex!important;align-items:center;gap:9px}
+.confirm-check input{width:auto!important}
+.confirm-check span{margin:0!important}
+.form-help{font-size:11px;color:#8f96a0}
+.photo-guide-box,.utility-note{padding:18px;border:1px solid #51462d;border-radius:14px;background:#15120c;margin:16px 0}
+.photo-guide-box b,.utility-note b{color:#efc966}
+.photo-guide-box p,.utility-note p{margin:6px 0;color:#aeb4bd;line-height:1.7}
+.public-empty-card{padding:42px 24px;text-align:center;border:1px dashed #4a505a;border-radius:18px;background:#10151d}
+.public-empty-card>span{font-size:42px}
+.public-empty-card h2{color:#efc966;margin:10px 0}
+.public-empty-card p{color:#aeb4bd;line-height:1.8}
+@media(max-width:900px){.owner-tool-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:650px){.owner-tool-grid,.owner-tool-grid-large,.form-grid{grid-template-columns:1fr}}

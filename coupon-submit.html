@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="index,follow">
+  <meta name="description" content="来店のきっかけになる特典やキャンペーンを申請できます。">
+  <title>クーポン掲載申請｜KUMAMOTO BAR NAVI</title>
+  <link rel="stylesheet" href="style.css">
+  
+</head>
+<body>
+<header class="site-header">
+  <div class="container header-inner">
+    <a class="brand" href="index.html">
+      <img class="brand-logo" src="logo.png" alt="KUMAMOTO BAR NAVI ロゴ">
+      <span><b>KUMAMOTO</b><br>BAR NAVI<small>BAR & JOB INFORMATION</small></span>
+    </a>
+    <a class="header-cta" href="listing-form.html">無料掲載申込み</a>
+  </div>
+</header>
+<main class="utility-page">
+  
+<section class="utility-hero">
+  <div class="container">
+    <a class="back-link" href="shop-support.html">← 掲載店舗様向けメニュー</a>
+    <p class="eyebrow">COUPON</p>
+    <h1>クーポン掲載申請</h1>
+    <p>来店のきっかけになる特典やキャンペーンを申請できます。</p>
+  </div>
+</section>
+<section class="section">
+  <div class="container">
+    <form id="utilityForm" class="utility-form" action="https://formspree.io/f/mpparpba" method="POST">
+      <input type="hidden" name="_subject" value="【KUMAMOTO BAR NAVI】クーポン掲載申請">
+      <input type="hidden" name="申請種別" value="クーポン掲載申請">
+      
+<div class="form-grid">
+  <label><span>店舗名 *</span><input type="text" name="店舗名" required></label>
+  <label><span>担当者名 *</span><input type="text" name="担当者名" required></label>
+  <label><span>連絡用メール *</span><input type="email" name="email" required></label>
+  <label><span>クーポン名 *</span><input type="text" name="クーポン名" required placeholder="例：KBNを見たで1ドリンクサービス"></label>
+  <label><span>開始日</span><input type="date" name="開始日"></label>
+  <label><span>終了日</span><input type="date" name="終了日"></label>
+</div>
+<label><span>特典内容 *</span><textarea name="特典内容" rows="5" required></textarea></label>
+<label><span>利用条件 *</span><textarea name="利用条件" rows="4" required placeholder="例：1グループ1回まで / 他券併用不可"></textarea></label>
+<label><span>スタッフへの提示方法</span>
+  <select name="提示方法">
+    <option>サイト画面を提示</option>
+    <option>Instagram投稿を提示</option>
+    <option>合言葉を伝える</option>
+    <option>その他</option>
+  </select>
+</label>
+<label><span>補足</span><textarea name="補足" rows="4"></textarea></label>
+
+      <label class="confirm-check"><input type="checkbox" required> <span>入力内容を確認しました</span></label>
+      <button class="btn-gold full-btn" type="submit">申請を送信する →</button>
+      <p class="form-help">※送信内容を確認後、必要に応じて運営からご連絡します。</p>
+      <p id="formStatus" class="form-status" aria-live="polite"></p>
+    </form>
+  </div>
+</section>
+<script>
+(function(){
+  const form=document.getElementById("utilityForm");
+  const status=document.getElementById("formStatus");
+  if(!form)return;
+  form.addEventListener("submit",async e=>{
+    e.preventDefault();
+    if(!form.checkValidity()){form.reportValidity();return;}
+    const btn=form.querySelector('button[type="submit"]');
+    const old=btn.textContent;
+    btn.disabled=true;btn.textContent="送信中...";
+    if(status)status.textContent="";
+    try{
+      const res=await fetch(form.action,{
+        method:"POST",
+        body:new FormData(form),
+        headers:{"Accept":"application/json"}
+      });
+      if(res.ok){
+        location.href="action-complete.html?type=coupon";
+        return;
+      }
+      if(status)status.textContent="送信できませんでした。もう一度お試しください。";
+    }catch(err){
+      if(status)status.textContent="通信エラーが発生しました。";
+    }finally{
+      btn.disabled=false;btn.textContent=old;
+    }
+  });
+})();
+</script>
+
+</main>
+<footer>
+  <div class="container footer-inner">
+    <div class="footer-links">
+      <a href="index.html">ホーム</a>
+      <a href="bars.html">BAR一覧</a>
+      <a href="events.html">イベント</a>
+      <a href="coupons.html">クーポン</a>
+      <a href="shop-support.html">掲載店舗様へ</a>
+      <a href="contact.html">お問い合わせ</a>
+    </div>
+    <small>© 2026 KUMAMOTO BAR NAVI</small>
+  </div>
+</footer>
+</body>
+</html>
