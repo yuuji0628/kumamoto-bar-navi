@@ -1,3 +1,10 @@
+
+function json(data, init = {}) {
+  const headers = new Headers(init.headers || {});
+  headers.set("content-type", "application/json; charset=utf-8");
+  return new Response(JSON.stringify(data), { ...init, headers });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -5,7 +12,7 @@ export default {
     // D1接続後に使う公開読み取りAPI
     if (url.pathname === "/api/shops" && request.method === "GET") {
       if (!env.DB) {
-        return Response.json(
+        return json(
           { ok: false, error: "D1_NOT_BOUND" },
           { status: 503 }
         );
@@ -22,7 +29,7 @@ export default {
         ORDER BY created_at DESC
       `).all();
 
-      return Response.json({
+      return json({
         ok: true,
         shops: result.results || []
       });
@@ -30,7 +37,7 @@ export default {
 
     if (url.pathname.startsWith("/api/shops/") && request.method === "GET") {
       if (!env.DB) {
-        return Response.json(
+        return json(
           { ok: false, error: "D1_NOT_BOUND" },
           { status: 503 }
         );
@@ -52,18 +59,18 @@ export default {
       `).bind(slug).first();
 
       if (!shop) {
-        return Response.json(
+        return json(
           { ok: false, error: "NOT_FOUND" },
           { status: 404 }
         );
       }
 
-      return Response.json({ ok: true, shop });
+      return json({ ok: true, shop });
     }
 
     // 管理APIはまだ無効
     if (url.pathname.startsWith("/api/admin/")) {
-      return Response.json(
+      return json(
         { ok: false, error: "ADMIN_API_DISABLED" },
         { status: 403 }
       );
