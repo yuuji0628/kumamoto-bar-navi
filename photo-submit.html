@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,follow">
+  <meta name="description" content="KUMAMOTO BAR NAVI掲載店舗向け写真送信フォーム">
+  <title>店舗写真を送る｜KUMAMOTO BAR NAVI</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="site-header">
+  <div class="container header-inner">
+    <a class="brand" href="index.html">
+      <img class="brand-logo" src="logo.png" alt="KUMAMOTO BAR NAVI ロゴ">
+      <span><b>KUMAMOTO</b><br>BAR NAVI<small>BAR & JOB INFORMATION</small></span>
+    </a>
+    <a class="header-cta" href="shop-support.html">掲載店舗様へ</a>
+  </div>
+</header>
+<main class="utility-page">
+  <section class="utility-hero">
+    <div class="container">
+      <a class="back-link" href="shop-support.html">← 掲載店舗様向けメニュー</a>
+      <p class="eyebrow">PHOTO UPLOAD</p>
+      <h1>店舗写真を送る</h1>
+      <p>掲載ページに使用する店内・外観・ドリンク・設備などの写真を送信できます。</p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <form id="photoForm" class="utility-form" action="https://formspree.io/f/mpparpba" method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="_subject" value="【KUMAMOTO BAR NAVI】店舗写真送信">
+        <input type="hidden" name="申請種別" value="店舗写真送信">
+
+        <div class="form-grid">
+          <label>
+            <span>店舗名 *</span>
+            <input type="text" name="店舗名" required>
+          </label>
+          <label>
+            <span>担当者名 *</span>
+            <input type="text" name="担当者名" required>
+          </label>
+          <label>
+            <span>連絡用メール *</span>
+            <input type="email" name="email" required>
+          </label>
+          <label>
+            <span>Instagram</span>
+            <input type="url" name="Instagram">
+          </label>
+        </div>
+
+        <div class="photo-upload-box">
+          <b>📸 写真を選択</b>
+          <p>店内・外観・カウンター・ダーツ台・ドリンク・スタッフ写真など、掲載可能なものを選択してください。</p>
+          <input id="photoFiles" class="photo-file-input" type="file" name="写真" accept="image/jpeg,image/png,image/webp" multiple>
+          <div id="photoPreview" class="photo-preview"></div>
+          <p class="photo-file-note">JPG / PNG / WEBP 推奨。送信前に掲載許可のある写真かご確認ください。</p>
+        </div>
+
+        <label>
+          <span>写真についての補足</span>
+          <textarea name="写真補足" rows="4" placeholder="例：1枚目をメイン画像に使用してください"></textarea>
+        </label>
+
+        <label class="confirm-check">
+          <input type="checkbox" name="掲載許可" value="許可済み" required>
+          <span>選択した写真をKUMAMOTO BAR NAVIの店舗ページ・紹介投稿等に使用することを許可します。</span>
+        </label>
+
+        <button class="btn-gold full-btn" type="submit">写真を送信する →</button>
+        <p id="photoStatus" class="form-status" aria-live="polite"></p>
+      </form>
+
+      <div class="utility-note photo-fallback-note">
+        <b>うまく送信できない場合</b>
+        <p>ファイル添付が利用できない場合は、InstagramのDMで「店舗名」と一緒に写真をお送りください。</p>
+        <a class="simple-link-btn" href="https://www.instagram.com/kumamoto_bar_navi/" target="_blank" rel="noopener">Instagramを開く →</a>
+      </div>
+    </div>
+  </section>
+</main>
+<footer>
+  <div class="container footer-inner">
+    <div class="footer-links">
+      <a href="index.html">ホーム</a>
+      <a href="bars.html">BAR一覧</a>
+      <a href="shop-support.html">掲載店舗様へ</a>
+      <a href="contact.html">お問い合わせ</a>
+    </div>
+    <small>© 2026 KUMAMOTO BAR NAVI</small>
+  </div>
+</footer>
+
+<script>
+(function(){
+  const input=document.getElementById("photoFiles");
+  const preview=document.getElementById("photoPreview");
+  const form=document.getElementById("photoForm");
+  const status=document.getElementById("photoStatus");
+
+  if(input && preview){
+    input.addEventListener("change",()=>{
+      preview.innerHTML="";
+      [...input.files].slice(0,10).forEach(file=>{
+        if(!file.type.startsWith("image/"))return;
+        const box=document.createElement("div");
+        box.className="photo-preview-item";
+        const img=document.createElement("img");
+        img.alt=file.name;
+        img.src=URL.createObjectURL(file);
+        box.appendChild(img);
+        preview.appendChild(box);
+      });
+    });
+  }
+
+  if(form){
+    form.addEventListener("submit",async e=>{
+      e.preventDefault();
+      if(!form.checkValidity()){form.reportValidity();return;}
+
+      const btn=form.querySelector('button[type="submit"]');
+      const old=btn.textContent;
+      btn.disabled=true;
+      btn.textContent="送信中...";
+      if(status)status.textContent="";
+
+      try{
+        const res=await fetch(form.action,{
+          method:"POST",
+          body:new FormData(form),
+          headers:{"Accept":"application/json"}
+        });
+        if(res.ok){
+          location.href="action-complete.html?type=photo";
+          return;
+        }
+        if(status)status.textContent="写真を送信できませんでした。Instagram DMからの送信をお試しください。";
+      }catch(err){
+        if(status)status.textContent="通信エラーが発生しました。Instagram DMからの送信も可能です。";
+      }finally{
+        btn.disabled=false;
+        btn.textContent=old;
+      }
+    });
+  }
+})();
+</script>
+</body>
+</html>
