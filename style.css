@@ -1120,3 +1120,119 @@ a.directory-card:hover{
     box-shadow: 0 10px 22px rgba(0,0,0,.24);
   }
 }
+
+
+/* v29: ホーム4カードのサイズを少し小さく */
+.quick-card,
+.search-card,
+.home-link-card,
+.category-card,
+.search-grid > a,
+.quick-grid > a,
+.home-search-grid > a,
+.find-grid > a {
+  padding: 22px 24px !important;
+  min-height: 160px;
+  border-radius: 24px;
+}
+
+.quick-card h3,
+.search-card h3,
+.home-link-card h3,
+.category-card h3,
+.search-grid > a h3,
+.quick-grid > a h3,
+.home-search-grid > a h3,
+.find-grid > a h3 {
+  font-size: clamp(1.05rem, 3vw, 1.8rem);
+  margin: 10px 0 6px;
+}
+
+.quick-card p,
+.search-card p,
+.home-link-card p,
+.category-card p,
+.search-grid > a p,
+.quick-grid > a p,
+.home-search-grid > a p,
+.find-grid > a p {
+  font-size: .92rem;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.quick-card .icon,
+.search-card .icon,
+.home-link-card .icon,
+.category-card .icon,
+.quick-card > span:first-child,
+.search-card > span:first-child,
+.home-link-card > span:first-child,
+.category-card > span:first-child,
+.search-grid > a > span:first-child,
+.quick-grid > a > span:first-child,
+.home-search-grid > a > span:first-child,
+.find-grid > a > span:first-child {
+  font-size: 26px;
+}
+
+.search-grid,
+.quick-grid,
+.home-search-grid,
+.find-grid {
+  gap: 16px;
+}
+
+@media (max-width: 640px) {
+  .quick-card,
+  .search-card,
+  .home-link-card,
+  .category-card,
+  .search-grid > a,
+  .quick-grid > a,
+  .home-search-grid > a,
+  .find-grid > a {
+    padding: 18px 18px !important;
+    min-height: 132px;
+    border-radius: 20px;
+  }
+
+  .quick-card h3,
+  .search-card h3,
+  .home-link-card h3,
+  .category-card h3,
+  .search-grid > a h3,
+  .quick-grid > a h3,
+  .home-search-grid > a h3,
+  .find-grid > a h3 {
+    font-size: 1rem;
+    margin: 8px 0 4px;
+  }
+
+  .quick-card p,
+  .search-card p,
+  .home-link-card p,
+  .category-card p,
+  .search-grid > a p,
+  .quick-grid > a p,
+  .home-search-grid > a p,
+  .find-grid > a p {
+    font-size: .84rem;
+    line-height: 1.45;
+  }
+
+  .quick-card .icon,
+  .search-card .icon,
+  .home-link-card .icon,
+  .category-card .icon,
+  .quick-card > span:first-child,
+  .search-card > span:first-child,
+  .home-link-card > span:first-child,
+  .category-card > span:first-child,
+  .search-grid > a > span:first-child,
+  .quick-grid > a > span:first-child,
+  .home-search-grid > a > span:first-child,
+  .find-grid > a > span:first-child {
+    font-size: 22px;
+  }
+}
