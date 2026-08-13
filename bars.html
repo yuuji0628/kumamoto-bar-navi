@@ -66,9 +66,9 @@ function money(s){
 }
 function cardMedia(s,i){
   if(s.image_url){
-    return `<div class="directory-photo has-image"><img src="${esc(s.image_url)}" alt="${esc(s.name)}" loading="lazy"></div>`;
+    return `<div class="directory-photo has-image"><img src="${esc(s.image_url)}" alt="${esc(s.name)}" loading="lazy" onerror="this.onerror=null;this.src=\'default-bar.svg\'"></div>`;
   }
-  return `<div class="directory-photo dir-${(i%6)+1}">${s.genre&&s.genre.includes("ダーツ")?"🎯":"🍸"}</div>`;
+  return `<div class="directory-photo has-image default-image"><img src="default-bar.svg" alt="${esc(s.name)} 画像準備中" loading="lazy"></div>`;
 }
 function render(list){
   $("resultCount").textContent=`${list.length}件`;
