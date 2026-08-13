@@ -10,6 +10,60 @@ const b=v=>v===true||v===1||v==="1"||v==="true"?1:0;
 const slugify=v=>String(v||"").normalize("NFKC").toLowerCase().replace(/&/g,"-and-").replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"").slice(0,70)||`shop-${Date.now()}`;
 const hasAccess=req=>Boolean(req.headers.get("Cf-Access-Authenticated-User-Email")||req.headers.get("Cf-Access-Jwt-Assertion"));
 
+
+function escHtml(v){
+  return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+async function notifyNewSubmission(env, x){
+  if(!env.RESEND_API_KEY) return {ok:false,error:"RESEND_API_KEY_NOT_BOUND"};
+
+  const rows = [
+    ["店舗名", x.shop_name],
+    ["担当者名", x.contact_name],
+    ["メール", x.email],
+    ["電話番号", x.phone],
+    ["住所", x.address],
+    ["営業時間", x.hours],
+    ["定休日", x.holiday],
+    ["Instagram", x.instagram],
+    ["ジャンル", x.genre],
+    ["特徴", x.features],
+    ["紹介文", x.description],
+    ["予算", [x.budget_min,x.budget_max].filter(v=>v!==null&&v!==undefined&&v!=="").join("〜")],
+    ["席数", x.seats],
+    ["求人掲載希望", b(x.wants_job) ? "あり" : "なし"],
+    ["備考", x.note]
+  ];
+
+  const htmlRows = rows.map(([k,v]) =>
+    `<tr><th style="text-align:left;vertical-align:top;padding:10px;border-bottom:1px solid #ddd;width:120px">${escHtml(k)}</th><td style="padding:10px;border-bottom:1px solid #ddd;white-space:pre-wrap">${escHtml(v||"—")}</td></tr>`
+  ).join("");
+
+  const res = await fetch("https://api.resend.com/emails",{
+    method:"POST",
+    headers:{
+      "Authorization":`Bearer ${env.RESEND_API_KEY}`,
+      "Content-Type":"application/json"
+    },
+    body:JSON.stringify({
+      from:"KUMAMOTO BAR NAVI <onboarding@resend.dev>",
+      to:["kumamotobarnavi@gmail.com"],
+      subject:`【KBN】新しい掲載申込み：${t(x.shop_name,80)||"店舗名未入力"}`,
+      html:`<!doctype html><html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#111">
+        <h2>新しい掲載申込みが届きました</h2>
+        <p>KUMAMOTO BAR NAVI の掲載フォームから新しい申込みがありました。</p>
+        <table style="border-collapse:collapse;width:100%;max-width:700px">${htmlRows}</table>
+        <p style="margin-top:24px">管理画面の「申込み」タブから確認してください。</p>
+      </body></html>`
+    })
+  });
+
+  const body = await res.text();
+  if(!res.ok) return {ok:false,error:"RESEND_ERROR",status:res.status,detail:body.slice(0,500)};
+  return {ok:true};
+}
+
 function shopPayload(x){
   return {
     slug: slugify(x.slug||x.name),
@@ -68,7 +122,16 @@ export default {
         t(x.genre,120),t(x.features,1000),t(x.description,5000),ni(x.budget_min),
         ni(x.budget_max),ni(x.seats),b(x.wants_job),t(x.note,3000)
       ).run();
-      return json({ok:true},{status:201});
+
+      let notification={ok:false,error:"NOT_ATTEMPTED"};
+      try{
+        notification=await notifyNewSubmission(env,x);
+      }catch(e){
+        notification={ok:false,error:"NOTIFICATION_EXCEPTION"};
+      }
+
+      // メール通知に失敗しても、掲載申込み自体は正常に保存済みとして返す
+      return json({ok:true,notification_sent:!!notification.ok},{status:201});
     }
 
     if(url.pathname.startsWith("/media/") && request.method==="GET"){
