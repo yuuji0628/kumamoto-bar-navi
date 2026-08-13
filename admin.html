@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>運営管理画面｜KUMAMOTO BAR NAVI</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="admin-body">
+<header class="admin-header">
+  <div class="container admin-header-inner">
+    <div>
+      <p class="eyebrow">KBN ADMIN</p>
+      <b>KUMAMOTO BAR NAVI 運営管理</b>
+    </div>
+    <a class="simple-link-btn" href="index.html">サイトを見る</a>
+  </div>
+</header>
+
+<main class="admin-page">
+  <div class="container">
+    <section class="admin-welcome">
+      <div>
+        <p class="eyebrow">DASHBOARD</p>
+        <h1>運営ダッシュボード</h1>
+        <p>掲載店舗・申請・イベント・クーポンの運営導線をまとめています。</p>
+      </div>
+      <div class="admin-security-badge">🔒 Cloudflare Access保護推奨</div>
+    </section>
+
+    <section class="admin-stats">
+      <div class="stat-card"><span>掲載店舗</span><b>1</b><small>実店舗</small></div>
+      <div class="stat-card"><span>熊本市</span><b>1</b><small>掲載店舗</small></div>
+      <div class="stat-card"><span>イベント</span><b>0</b><small>公開中</small></div>
+      <div class="stat-card"><span>クーポン</span><b>0</b><small>公開中</small></div>
+    </section>
+
+    <section class="admin-block">
+      <div class="admin-block-head">
+        <div><p class="eyebrow">SHOPS</p><h2>掲載店舗</h2></div>
+        <a class="btn-gold" href="listing-form.html">掲載申込みフォーム</a>
+      </div>
+
+      <div class="admin-table">
+        <div class="admin-row admin-row-head">
+          <span>店舗名</span><span>エリア</span><span>ジャンル</span><span>操作</span>
+        </div>
+        <div class="admin-row">
+          <span><b>darts&amp;bar ark（アーク）</b></span>
+          <span>熊本市中央区</span>
+          <span>ダーツバー</span>
+          <span class="admin-actions">
+            <a href="bar-ark.html">表示</a>
+            <a href="shop-update.html">変更申請</a>
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <section class="admin-block">
+      <p class="eyebrow">QUICK ACTIONS</p>
+      <h2>運営メニュー</h2>
+      <div class="admin-action-grid">
+        <a href="shop-update.html">✏️ 店舗情報変更</a>
+        <a href="photo-submit.html">📸 写真受付</a>
+        <a href="event-submit.html">🎉 イベント受付</a>
+        <a href="coupon-submit.html">🎟️ クーポン受付</a>
+        <a href="events.html">📅 イベント一覧</a>
+        <a href="coupons.html">🏷️ クーポン一覧</a>
+      </div>
+    </section>
+
+    <section class="admin-block admin-warning">
+      <h2>🔐 管理画面のセキュリティ</h2>
+      <p>このページ自体にはパスワードを埋め込んでいません。安全に使うため、Cloudflare Accessで <code>/admin.html</code> を運営者だけが開けるように設定してください。</p>
+    </section>
+  </div>
+</main>
+</body>
+</html>
