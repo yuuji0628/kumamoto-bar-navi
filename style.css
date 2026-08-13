@@ -1265,3 +1265,119 @@ a.directory-card:hover{
     line-height: 1.55;
   }
 }
+
+
+/* v38: 運営について・お問い合わせをFAQと同じコンパクト感に統一 */
+.info-stack {
+  display: grid;
+  gap: 8px;
+}
+
+.info-detail-card,
+.contact-card,
+.info-box {
+  padding: 12px 14px;
+  border-radius: 11px;
+  border: 1px solid rgba(201,168,92,.24);
+  background: rgba(255,255,255,.022);
+}
+
+.info-detail-card h2,
+.contact-card h2,
+.info-box h2 {
+  margin: 0 0 6px;
+  color: #efc65c;
+  font-size: .94rem;
+  line-height: 1.4;
+}
+
+.info-detail-card p,
+.contact-card p,
+.info-box p {
+  margin: 0;
+  color: #b8bec7;
+  font-size: .86rem;
+  line-height: 1.65;
+}
+
+.info-detail-card .btn-gold,
+.info-box .btn-gold {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 8px 12px;
+  font-size: .8rem;
+  border-radius: 9px;
+}
+
+.contact-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.contact-card {
+  min-height: 0;
+  text-decoration: none;
+}
+
+.contact-card strong {
+  display: block;
+  margin-top: 8px;
+  color: #efc65c;
+  font-size: .8rem;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.contact-icon {
+  display: inline-block;
+  margin-bottom: 6px;
+  font-size: 20px;
+}
+
+.page-head {
+  margin: 18px 0 20px;
+}
+
+.page-head h1 {
+  font-size: clamp(30px, 7vw, 48px);
+  margin: 6px 0 8px;
+}
+
+.page-head > p:last-child {
+  font-size: .88rem;
+  line-height: 1.6;
+}
+
+@media(max-width:640px){
+  .info-detail-card,
+  .contact-card,
+  .info-box {
+    padding: 10px 12px;
+    border-radius: 10px;
+  }
+
+  .info-detail-card h2,
+  .contact-card h2,
+  .info-box h2 {
+    font-size: .9rem;
+    margin-bottom: 5px;
+  }
+
+  .info-detail-card p,
+  .contact-card p,
+  .info-box p {
+    font-size: .82rem;
+    line-height: 1.55;
+  }
+
+  .contact-card strong {
+    font-size: .78rem;
+    margin-top: 6px;
+  }
+
+  .contact-icon {
+    font-size: 18px;
+    margin-bottom: 5px;
+  }
+}
