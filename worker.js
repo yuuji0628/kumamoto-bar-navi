@@ -122,6 +122,42 @@ export default {
         return json({ok:true});
       }
 
+      if(sm && request.method==="DELETE"){
+        const id=Number(sm[1]);
+        const ex=await env.DB.prepare("SELECT id,name,image_url,image_key FROM shops WHERE id=?").bind(id).first();
+        if(!ex)return json({ok:false,error:"NOT_FOUND"},{status:404});
+
+        let imageKey=ex.image_key||null;
+        if(!imageKey && ex.image_url && String(ex.image_url).startsWith("/media/")){
+          try{ imageKey=decodeURIComponent(String(ex.image_url).replace("/media/","")); }catch{}
+        }
+
+        // 関連求人を先に削除してから店舗を完全削除
+        await env.DB.batch([
+          env.DB.prepare("DELETE FROM jobs WHERE shop_id=?").bind(id),
+          env.DB.prepare("DELETE FROM shops WHERE id=?").bind(id)
+        ]);
+
+        let imageDeleted=false;
+        let imageDeleteWarning=null;
+        if(imageKey && env.IMAGES){
+          try{
+            await env.IMAGES.delete(imageKey);
+            imageDeleted=true;
+          }catch(e){
+            imageDeleteWarning="R2_IMAGE_DELETE_FAILED";
+          }
+        }
+
+        return json({
+          ok:true,
+          deleted_id:id,
+          deleted_name:ex.name,
+          image_deleted:imageDeleted,
+          warning:imageDeleteWarning
+        });
+      }
+
       if(url.pathname==="/api/admin/upload" && request.method==="POST"){
         if(!env.IMAGES)return json({ok:false,error:"R2_NOT_BOUND"},{status:503});
         const fd=await request.formData(); const file=fd.get("file");

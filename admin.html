@@ -1,6 +1,6 @@
 <!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>KBN運営管理</title><link rel="stylesheet" href="style.css"></head>
 <body class="admin-body"><main class="admin-page"><div class="container">
-<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN v23</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><div class="admin-security-badge">🔒 Cloudflare Access</div></section>
+<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN v24</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><div class="admin-security-badge">🔒 Cloudflare Access</div></section>
 <nav class="admin-tabs"><button data-tab="shops" class="active">店舗</button><button data-tab="jobs">求人</button><button data-tab="subs">申込み</button></nav>
 
 <section id="tab-shops" class="admin-block">
@@ -55,8 +55,26 @@ const $=id=>document.getElementById(id);let shops=[],jobs=[],subs=[];
 document.querySelectorAll(".admin-tabs button").forEach(b=>b.onclick=()=>{document.querySelectorAll(".admin-tabs button").forEach(x=>x.classList.remove("active"));b.classList.add("active");["shops","jobs","subs"].forEach(x=>$("tab-"+x).hidden=x!==b.dataset.tab)});
 const esc=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 async function api(u,o={}){const r=await fetch(u,{credentials:"same-origin",...o});const d=await r.json();if(!r.ok)throw new Error(d.error||r.status);return d}
-async function loadShops(){const d=await api("/api/admin/shops");shops=d.shops||[];$("jobShop").innerHTML='<option value="">店舗なし</option>'+shops.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("");$("shopList").innerHTML=shops.map(s=>`<article class="admin-shop-item"><div><h3>${esc(s.name)} ${s.is_featured?'⭐':''} ${s.is_new?'NEW':''}</h3><p>${esc(s.area)} / ${esc(s.genre||'')}</p><small>順:${s.sort_order} / ${s.is_published?'公開':'非公開'}</small></div><button onclick="editShop(${s.id})">編集</button></article>`).join("")}
+async function loadShops(){const d=await api("/api/admin/shops");shops=d.shops||[];$("jobShop").innerHTML='<option value="">店舗なし</option>'+shops.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("");$("shopList").innerHTML=shops.map(s=>`<article class="admin-shop-item"><div><h3>${esc(s.name)} ${s.is_featured?'⭐':''} ${s.is_new?'NEW':''}</h3><p>${esc(s.area)} / ${esc(s.genre||'')}</p><small>順:${s.sort_order} / ${s.is_published?'公開':'非公開'}</small></div><div class="admin-item-actions"><button onclick="editShop(${s.id})">編集</button><button onclick="deleteShop(${s.id})" style="border-color:#7a3030;color:#ffb3b3">完全削除</button></div></article>`).join("")}
 window.editShop=id=>{const s=shops.find(x=>x.id==id);["name","name_kana","slug","area","address","hours","holiday","genre","instagram","features","description","image_url","sort_order","seats","budget_min","budget_max"].forEach(k=>$(k).value=s[k]??"");["is_published","is_featured","is_new","is_recruiting"].forEach(k=>$(k).checked=!!Number(s[k]));$("shopId").value=id;scrollTo(0,0)}
+window.deleteShop=async id=>{
+  const s=shops.find(x=>x.id==id);
+  if(!s)return;
+  const ok=confirm(`「${s.name}」を完全削除しますか？\n\nこの操作は元に戻せません。\n店舗データ・関連求人・R2店舗画像も削除されます。`);
+  if(!ok)return;
+  try{
+    const d=await api(`/api/admin/shops/${id}`,{method:"DELETE"});
+    if($("shopId").value==String(id)){$("shopForm").reset();$("shopId").value="";$("sort_order").value=100}
+    await Promise.all([loadShops(),loadJobs()]);
+    if(d.warning==="R2_IMAGE_DELETE_FAILED"){
+      alert("店舗データは削除しましたが、R2画像だけ削除できませんでした。");
+    }else{
+      alert("完全削除しました");
+    }
+  }catch(e){
+    alert("削除できませんでした: "+e.message);
+  }
+}
 $("shopForm").onsubmit=async e=>{e.preventDefault();const id=$("shopId").value;const data={};["name","name_kana","slug","area","address","hours","holiday","genre","instagram","features","description","image_url"].forEach(k=>data[k]=$(k).value);["sort_order","seats","budget_min","budget_max"].forEach(k=>data[k]=$(k).value);["is_published","is_featured","is_new","is_recruiting"].forEach(k=>data[k]=$(k).checked);await api(id?`/api/admin/shops/${id}`:"/api/admin/shops",{method:id?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});await loadShops();alert("保存しました")}
 $("resetShop").onclick=()=>{$("shopForm").reset();$("shopId").value="";$("sort_order").value=100}
 $("uploadImage").onclick=async()=>{const f=$("imageFile").files[0];if(!f)return alert("画像を選択してください");const fd=new FormData();fd.append("file",f);$("uploadStatus").textContent="アップロード中...";try{const d=await api("/api/admin/upload",{method:"POST",body:fd});$("image_url").value=d.url;$("uploadStatus").textContent="完了"}catch(e){$("uploadStatus").textContent=e.message}}
