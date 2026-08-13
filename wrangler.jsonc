@@ -8,5 +8,12 @@
     "run_worker_first": [
       "/api/*"
     ]
-  }
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "kumamoto-bar-navi-db",
+      "database_id": "5f6aeb29-8868-4595-9b57-ac4fe9f2e108"
+    }
+  ]
 }
