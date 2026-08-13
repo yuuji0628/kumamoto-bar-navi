@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>掲載店舗様専用｜KUMAMOTO BAR NAVI</title>
+<link rel="stylesheet" href="style.css">
+<style>
+.owner-page{min-height:100vh;background:#070b10;color:#e8ebef;padding:24px 0 70px}
+.owner-shell{max-width:820px;margin:auto;padding:0 16px}
+.owner-head{padding:22px;border:1px solid #3a3426;border-radius:18px;background:#0d131b;margin-bottom:14px}
+.owner-head h1{margin:6px 0 8px;font-size:28px}.owner-head p{margin:0;color:#aeb4bd;line-height:1.7}
+.owner-badge{display:inline-block;padding:4px 10px;border:1px solid #6e5b2f;border-radius:999px;color:#efc966;font-size:11px;font-weight:800}
+.owner-menu{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:14px 0}
+.owner-menu button{padding:15px 10px;border:1px solid #3d4652;border-radius:12px;background:#101822;color:#f0f2f5;font-weight:800}
+.owner-menu button.active{background:#efc45a;color:#111;border-color:#efc45a}
+.owner-panel{padding:18px;border:1px solid #323a45;border-radius:16px;background:#0b1118}
+.owner-form{display:grid;gap:12px}.owner-form label{display:grid;gap:6px;font-size:12px;color:#c6cbd2}
+.owner-form input,.owner-form textarea{width:100%;box-sizing:border-box;padding:12px;border:1px solid #3b4552;border-radius:10px;background:#0f1721;color:#fff}
+.owner-form textarea{min-height:100px;resize:vertical}
+.owner-submit{padding:13px 16px;border:0;border-radius:10px;background:#efc45a;color:#111;font-weight:900}
+.owner-note{font-size:12px;color:#929aa4;line-height:1.6}.owner-status{margin-top:10px;color:#efc966;font-size:13px}
+.owner-current{display:grid;gap:7px;color:#cdd2d8;font-size:13px;line-height:1.6}
+.owner-history{margin-top:14px;padding-top:14px;border-top:1px solid #2e3640}
+.owner-history div{padding:8px 0;border-bottom:1px solid #232a32;font-size:12px;color:#abb2bb}
+@media(max-width:600px){.owner-menu{grid-template-columns:1fr 1fr}.owner-head h1{font-size:23px}}
+</style>
+</head>
+<body>
+<main class="owner-page"><div class="owner-shell">
+<section class="owner-head">
+<span class="owner-badge">掲載店舗様専用</span>
+<h1 id="ownerTitle">認証しています...</h1>
+<p>このページは店舗様ごとの専用URLです。URLを第三者へ共有しないでください。申請内容は運営確認後に反映します。</p>
+</section>
+
+<div id="authError" class="owner-panel" hidden>
+<h2>専用URLを確認できませんでした</h2>
+<p>URLが無効化・再発行されている可能性があります。KUMAMOTO BAR NAVI運営へお問い合わせください。</p>
+</div>
+
+<div id="ownerApp" hidden>
+<nav class="owner-menu">
+<button data-tab="current" class="active">現在の掲載情報</button>
+<button data-tab="profile">店舗情報変更</button>
+<button data-tab="photo">写真変更</button>
+<button data-tab="job">求人申請</button>
+<button data-tab="event">イベント申請</button>
+<button data-tab="coupon">クーポン申請</button>
+</nav>
+
+<section id="p-current" class="owner-panel">
+<h2>現在の掲載情報</h2>
+<div id="currentInfo" class="owner-current"></div>
+<div class="owner-history"><h3>申請履歴</h3><div id="history"></div></div>
+</section>
+
+<section id="p-profile" class="owner-panel" hidden>
+<h2>店舗情報変更申請</h2>
+<form class="owner-form" data-kind="profile">
+<label>店舗名<input name="name"></label>
+<label>住所<input name="address"></label>
+<label>営業時間<input name="hours"></label>
+<label>定休日<input name="holiday"></label>
+<label>Instagram<input name="instagram"></label>
+<label>ジャンル<input name="genre"></label>
+<label>特徴<input name="features"></label>
+<label>紹介文<textarea name="description"></textarea></label>
+<label>予算下限<input name="budget_min" type="number"></label>
+<label>予算上限<input name="budget_max" type="number"></label>
+<label>席数<input name="seats" type="number"></label>
+<label>電話番号<input name="phone"></label>
+<button class="owner-submit">変更を申請する</button>
+</form><p class="owner-status"></p>
+</section>
+
+<section id="p-photo" class="owner-panel" hidden>
+<h2>店舗写真変更申請</h2>
+<form id="photoForm" class="owner-form">
+<label>写真（JPG / PNG / WebP、5MBまで）<input id="photoFile" type="file" accept="image/jpeg,image/png,image/webp"></label>
+<label>備考<textarea id="photoNote" placeholder="例：この写真をメイン画像に変更希望"></textarea></label>
+<button class="owner-submit">写真を送信する</button>
+</form><p class="owner-status"></p>
+</section>
+
+<section id="p-job" class="owner-panel" hidden>
+<h2>求人申請</h2>
+<form class="owner-form" data-kind="job">
+<label>求人タイトル<input name="title"></label>
+<label>雇用形態<input name="employment_type"></label>
+<label>給与<input name="salary"></label>
+<label>勤務時間<input name="hours"></label>
+<label>仕事内容<textarea name="description"></textarea></label>
+<label>応募先<input name="contact"></label>
+<button class="owner-submit">求人を申請する</button>
+</form><p class="owner-status"></p>
+</section>
+
+<section id="p-event" class="owner-panel" hidden>
+<h2>イベント申請</h2>
+<form class="owner-form" data-kind="event">
+<label>イベント名<input name="title"></label>
+<label>開催日時<input name="datetime"></label>
+<label>内容<textarea name="description"></textarea></label>
+<label>参加条件・料金など<textarea name="conditions"></textarea></label>
+<button class="owner-submit">イベントを申請する</button>
+</form><p class="owner-status"></p>
+</section>
+
+<section id="p-coupon" class="owner-panel" hidden>
+<h2>クーポン申請</h2>
+<form class="owner-form" data-kind="coupon">
+<label>クーポン名<input name="title"></label>
+<label>特典内容<textarea name="benefit"></textarea></label>
+<label>利用条件<textarea name="conditions"></textarea></label>
+<label>有効期限<input name="expires_at"></label>
+<button class="owner-submit">クーポンを申請する</button>
+</form><p class="owner-status"></p>
+</section>
+</div>
+</div></main>
+
+<script>
+let token=new URLSearchParams(location.search).get("token")||sessionStorage.getItem("kbn_owner_token")||"";
+if(token){sessionStorage.setItem("kbn_owner_token",token);history.replaceState({},"",location.pathname)}
+let shop=null;
+const esc=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+async function api(url,opt={}){
+  const h=new Headers(opt.headers||{});h.set("X-Owner-Token",token);
+  const r=await fetch(url,{...opt,headers:h});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(d.error||r.status);
+  return d;
+}
+function showTab(t){
+  document.querySelectorAll(".owner-menu button").forEach(b=>b.classList.toggle("active",b.dataset.tab===t));
+  ["current","profile","photo","job","event","coupon"].forEach(x=>document.getElementById("p-"+x).hidden=x!==t);
+}
+document.querySelectorAll(".owner-menu button").forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
+function fillProfile(){
+  const f=document.querySelector('form[data-kind="profile"]');
+  ["name","address","hours","holiday","instagram","genre","features","description","budget_min","budget_max","seats","phone"].forEach(k=>{if(f.elements[k])f.elements[k].value=shop[k]??""});
+}
+function renderCurrent(){
+  document.getElementById("currentInfo").innerHTML=[
+    ["店舗名",shop.name],["エリア",shop.area],["住所",shop.address],["営業時間",shop.hours],
+    ["定休日",shop.holiday],["Instagram",shop.instagram],["ジャンル",shop.genre],
+    ["特徴",shop.features],["紹介文",shop.description]
+  ].map(([k,v])=>`<div><b>${esc(k)}</b>：${esc(v||"—")}</div>`).join("");
+}
+async function loadHistory(){
+  const d=await api("/api/owner/requests");
+  const labels={profile:"店舗情報変更",photo:"写真変更",job:"求人",event:"イベント",coupon:"クーポン"};
+  document.getElementById("history").innerHTML=(d.requests||[]).length?(d.requests||[]).map(r=>`<div>${esc(r.created_at||"")}　${esc(labels[r.request_type]||r.request_type)}　［${esc(r.status)}］</div>`).join(""):"申請履歴はありません。";
+}
+document.querySelectorAll('form[data-kind]').forEach(f=>f.onsubmit=async e=>{
+  e.preventDefault();const kind=f.dataset.kind;const st=f.parentElement.querySelector(".owner-status");st.textContent="送信中...";
+  const payload={};new FormData(f).forEach((v,k)=>payload[k]=v);
+  try{await api("/api/owner/requests",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({request_type:kind,payload})});st.textContent="申請を受け付けました。";await loadHistory()}catch(err){st.textContent="送信できませんでした。"}
+});
+document.getElementById("photoForm").onsubmit=async e=>{
+  e.preventDefault();const f=document.getElementById("photoFile").files[0];const st=e.currentTarget.parentElement.querySelector(".owner-status");
+  if(!f){st.textContent="写真を選択してください。";return}st.textContent="アップロード中...";
+  try{
+    const fd=new FormData();fd.append("file",f);
+    const up=await api("/api/owner/upload",{method:"POST",body:fd});
+    await api("/api/owner/requests",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({request_type:"photo",payload:{image_url:up.url,note:document.getElementById("photoNote").value}})});
+    st.textContent="写真変更申請を受け付けました。";e.currentTarget.reset();await loadHistory();
+  }catch(err){st.textContent="送信できませんでした。画像形式・サイズをご確認ください。"}
+};
+(async()=>{
+  try{
+    const d=await api("/api/owner/me");shop=d.shop;
+    document.getElementById("ownerTitle").textContent=shop.name+" 様 専用ページ";
+    document.getElementById("ownerApp").hidden=false;renderCurrent();fillProfile();await loadHistory();
+  }catch{
+    document.getElementById("ownerTitle").textContent="専用ページ";
+    document.getElementById("authError").hidden=false;
+  }
+})();
+</script>
+</body></html>

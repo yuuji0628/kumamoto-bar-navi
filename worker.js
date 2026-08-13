@@ -64,6 +64,23 @@ async function notifyNewSubmission(env, x){
   return {ok:true};
 }
 
+
+async function sha256hex(value){
+  const buf=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(String(value)));
+  return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+function ownerToken(){
+  const a=new Uint8Array(32);
+  crypto.getRandomValues(a);
+  return btoa(String.fromCharCode(...a)).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+}
+async function ownerShop(request,env){
+  const token=request.headers.get("X-Owner-Token")||"";
+  if(token.length<20)return null;
+  const hash=await sha256hex(token);
+  return await env.DB.prepare("SELECT * FROM shops WHERE owner_token_hash=? LIMIT 1").bind(hash).first();
+}
+
 function shopPayload(x){
   return {
     slug: slugify(x.slug||x.name),
@@ -164,6 +181,60 @@ export default {
       return json({ok:true,notification_sent:!!notification.ok},{status:201});
     }
 
+
+    if(url.pathname==="/api/owner/me" && request.method==="GET"){
+      const shop=await ownerShop(request,env);
+      if(!shop)return json({ok:false,error:"OWNER_TOKEN_INVALID"},{status:401});
+      return json({ok:true,shop:{
+        id:shop.id,name:shop.name,name_kana:shop.name_kana,area:shop.area,address:shop.address,
+        hours:shop.hours,holiday:shop.holiday,instagram:shop.instagram,genre:shop.genre,
+        features:shop.features,description:shop.description,budget_min:shop.budget_min,
+        budget_max:shop.budget_max,seats:shop.seats,phone:shop.phone,image_url:shop.image_url,
+        is_recruiting:shop.is_recruiting,is_published:shop.is_published
+      }});
+    }
+
+    if(url.pathname==="/api/owner/requests" && request.method==="GET"){
+      const shop=await ownerShop(request,env);
+      if(!shop)return json({ok:false,error:"OWNER_TOKEN_INVALID"},{status:401});
+      const r=await env.DB.prepare(`
+        SELECT id,request_type,status,created_at,reviewed_at
+        FROM owner_requests WHERE shop_id=? ORDER BY id DESC LIMIT 30
+      `).bind(shop.id).all();
+      return json({ok:true,requests:r.results||[]});
+    }
+
+    if(url.pathname==="/api/owner/requests" && request.method==="POST"){
+      const shop=await ownerShop(request,env);
+      if(!shop)return json({ok:false,error:"OWNER_TOKEN_INVALID"},{status:401});
+      let x;try{x=await request.json()}catch{return json({ok:false,error:"INVALID_JSON"},{status:400})}
+      const allowed=new Set(["profile","photo","job","event","coupon"]);
+      const requestType=t(x.request_type,40);
+      if(!allowed.has(requestType))return json({ok:false,error:"INVALID_REQUEST_TYPE"},{status:400});
+      const payload=JSON.stringify(x.payload||{}).slice(0,20000);
+      const r=await env.DB.prepare(`
+        INSERT INTO owner_requests (shop_id,request_type,payload,status)
+        VALUES (?,?,?,'pending')
+      `).bind(shop.id,requestType,payload).run();
+      return json({ok:true,id:r.meta?.last_row_id},{status:201});
+    }
+
+    if(url.pathname==="/api/owner/upload" && request.method==="POST"){
+      const shop=await ownerShop(request,env);
+      if(!shop)return json({ok:false,error:"OWNER_TOKEN_INVALID"},{status:401});
+      if(!env.IMAGES)return json({ok:false,error:"R2_NOT_BOUND"},{status:503});
+      const fd=await request.formData();
+      const file=fd.get("file");
+      if(!file||typeof file==="string")return json({ok:false,error:"FILE_REQUIRED"},{status:400});
+      if(file.size>5*1024*1024)return json({ok:false,error:"FILE_TOO_LARGE"},{status:413});
+      const allowedTypes=new Set(["image/jpeg","image/png","image/webp"]);
+      if(!allowedTypes.has(file.type))return json({ok:false,error:"IMAGE_TYPE_NOT_ALLOWED"},{status:415});
+      const ext=file.type==="image/png"?"png":file.type==="image/webp"?"webp":"jpg";
+      const key=`owner-requests/${shop.id}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+      await env.IMAGES.put(key,await file.arrayBuffer(),{httpMetadata:{contentType:file.type}});
+      return json({ok:true,key,url:`/media/${encodeURIComponent(key)}`});
+    }
+
     if(url.pathname.startsWith("/media/") && request.method==="GET"){
       if(!env.IMAGES) return new Response("R2 not configured",{status:404});
       const key=decodeURIComponent(url.pathname.replace("/media/",""));
@@ -251,6 +322,49 @@ export default {
           image_deleted:imageDeleted,
           warning:imageDeleteWarning
         });
+      }
+
+
+      const ot=url.pathname.match(/^\/api\/admin\/shops\/(\d+)\/owner-token$/);
+      if(ot && request.method==="POST"){
+        const id=Number(ot[1]);
+        const shop=await env.DB.prepare("SELECT id,name FROM shops WHERE id=?").bind(id).first();
+        if(!shop)return json({ok:false,error:"NOT_FOUND"},{status:404});
+        const token=ownerToken();
+        const hash=await sha256hex(token);
+        await env.DB.prepare(`
+          UPDATE shops SET owner_token_hash=?,owner_token_created_at=CURRENT_TIMESTAMP WHERE id=?
+        `).bind(hash,id).run();
+        return json({ok:true,url:`${url.origin}/owner.html?token=${encodeURIComponent(token)}`});
+      }
+      if(ot && request.method==="DELETE"){
+        const id=Number(ot[1]);
+        await env.DB.prepare(`
+          UPDATE shops SET owner_token_hash=NULL,owner_token_created_at=NULL WHERE id=?
+        `).bind(id).run();
+        return json({ok:true});
+      }
+
+      if(url.pathname==="/api/admin/owner-requests" && request.method==="GET"){
+        const r=await env.DB.prepare(`
+          SELECT owner_requests.*,shops.name AS shop_name
+          FROM owner_requests
+          JOIN shops ON shops.id=owner_requests.shop_id
+          ORDER BY CASE owner_requests.status WHEN 'pending' THEN 0 ELSE 1 END,
+                   owner_requests.id DESC
+        `).all();
+        return json({ok:true,requests:r.results||[]});
+      }
+      const orm=url.pathname.match(/^\/api\/admin\/owner-requests\/(\d+)$/);
+      if(orm && request.method==="PUT"){
+        const id=Number(orm[1]);
+        let x;try{x=await request.json()}catch{return json({ok:false,error:"INVALID_JSON"},{status:400})}
+        const status=t(x.status,30);
+        if(!["reviewed","rejected"].includes(status))return json({ok:false,error:"INVALID_STATUS"},{status:400});
+        await env.DB.prepare(`
+          UPDATE owner_requests SET status=?,reviewed_at=CURRENT_TIMESTAMP WHERE id=?
+        `).bind(status,id).run();
+        return json({ok:true});
       }
 
       if(url.pathname==="/api/admin/upload" && request.method==="POST"){
