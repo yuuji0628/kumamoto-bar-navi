@@ -98,6 +98,23 @@ export default {
       return s?json({ok:true,shop:s}):json({ok:false,error:"NOT_FOUND"},{status:404});
     }
 
+
+    if(url.pathname==="/api/news" && request.method==="GET"){
+      const {results}=await env.DB.prepare(`
+        SELECT name, slug, published_at, created_at, is_new
+        FROM shops
+        WHERE is_published=1 AND is_new=1
+        ORDER BY COALESCE(published_at,created_at) DESC
+        LIMIT 8
+      `).all();
+      return json({ok:true,news:(results||[]).map(s=>({
+        type:"shop",
+        name:s.name,
+        slug:s.slug,
+        date:s.published_at||s.created_at
+      }))});
+    }
+
     if(url.pathname==="/api/jobs" && request.method==="GET"){
       const r=await env.DB.prepare(`
         SELECT jobs.*, shops.name AS shop_name, shops.slug AS shop_slug
@@ -157,12 +174,12 @@ export default {
           INSERT INTO shops (
             slug,name,name_kana,area,address,hours,holiday,instagram,genre,features,description,
             budget_min,budget_max,seats,phone,is_recruiting,is_published,image_url,image_key,
-            is_featured,is_new,sort_order
-          ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            is_featured,is_new,sort_order,published_at
+          ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CASE WHEN ?=1 THEN CURRENT_TIMESTAMP ELSE NULL END)
         `).bind(
           s.slug,s.name,s.name_kana,s.area,s.address,s.hours,s.holiday,s.instagram,s.genre,s.features,s.description,
           s.budget_min,s.budget_max,s.seats,s.phone,s.is_recruiting,s.is_published,s.image_url,s.image_key,
-          s.is_featured,s.is_new,s.sort_order
+          s.is_featured,s.is_new,s.sort_order,s.is_published
         ).run();
         return json({ok:true,id:r.meta?.last_row_id},{status:201});
       }
@@ -176,11 +193,13 @@ export default {
         await env.DB.prepare(`
           UPDATE shops SET slug=?,name=?,name_kana=?,area=?,address=?,hours=?,holiday=?,instagram=?,genre=?,features=?,
           description=?,budget_min=?,budget_max=?,seats=?,phone=?,is_recruiting=?,is_published=?,image_url=?,image_key=?,
-          is_featured=?,is_new=?,sort_order=?,updated_at=CURRENT_TIMESTAMP WHERE id=?
+          is_featured=?,is_new=?,sort_order=?,
+          published_at=CASE WHEN ?=1 AND published_at IS NULL THEN CURRENT_TIMESTAMP ELSE published_at END,
+          updated_at=CURRENT_TIMESTAMP WHERE id=?
         `).bind(
           s.slug,s.name,s.name_kana,s.area,s.address,s.hours,s.holiday,s.instagram,s.genre,s.features,
           s.description,s.budget_min,s.budget_max,s.seats,s.phone,s.is_recruiting,s.is_published,s.image_url,s.image_key,
-          s.is_featured,s.is_new,s.sort_order,id
+          s.is_featured,s.is_new,s.sort_order,s.is_published,id
         ).run();
         return json({ok:true});
       }
@@ -274,8 +293,8 @@ export default {
           is_published:true,is_new:true
         });
         const r=await env.DB.prepare(`
-          INSERT INTO shops (slug,name,area,address,hours,holiday,instagram,genre,features,description,budget_min,budget_max,seats,is_recruiting,is_published,is_new)
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)
+          INSERT INTO shops (slug,name,area,address,hours,holiday,instagram,genre,features,description,budget_min,budget_max,seats,is_recruiting,is_published,is_new,published_at)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,CURRENT_TIMESTAMP)
         `).bind(s.slug,s.name,s.area,s.address,s.hours,s.holiday,s.instagram,s.genre,s.features,s.description,s.budget_min,s.budget_max,s.seats,s.is_recruiting,1).run();
         await env.DB.prepare("UPDATE submissions SET status='approved',reviewed_at=CURRENT_TIMESTAMP WHERE id=?").bind(id).run();
         return json({ok:true,shop_id:r.meta?.last_row_id});
