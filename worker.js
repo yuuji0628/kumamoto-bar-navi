@@ -82,6 +82,19 @@ function shopPayload(x){
 export default {
   async fetch(request, env) {
     const url=new URL(request.url);
+
+    const blockedPublicPages=new Set([
+      "/owner-portal.html",
+      "/shop-support.html",
+      "/shop-update.html",
+      "/photo-submit.html",
+      "/event-submit.html",
+      "/coupon-submit.html"
+    ]);
+    if(blockedPublicPages.has(url.pathname)){
+      return new Response("Not Found",{status:404,headers:{"Content-Type":"text/plain; charset=utf-8","Cache-Control":"no-store"}});
+    }
+
     if(!env.DB && url.pathname.startsWith("/api/")) return json({ok:false,error:"D1_NOT_BOUND"},{status:503});
 
     if(url.pathname==="/api/shops" && request.method==="GET"){

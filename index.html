@@ -68,6 +68,8 @@
 
 <div class="top-notice-kbn">
   <span>📢 お知らせ：掲載店舗を募集中です。</span>
+<div id="kbnAutoNews" class="kbn-auto-news"><p class="kbn-news-empty">新着情報を読み込んでいます...</p></div>
+
   <a href="listing-form.html">掲載申込はこちら →</a>
 </div>
 
@@ -138,14 +140,7 @@
       <input id="keyword" type="search" placeholder="店名・キーワード">
       <button id="filterBtn">検索する →</button>
     </div>
-
-    <div class="quick-links">
-      <a href="#search"><span>📍</span><b>エリアから探す</b><small>熊本市・八代市・玉名・宇城</small></a>
-      <a href="#search"><span>🍸</span><b>ジャンルから探す</b><small>オーセンティック・カジュアル</small></a>
-      <a href="#search"><span>🎵</span><b>特徴から探す</b><small>カラオケ・ダーツ・深夜営業</small></a>
-      <a href="#jobs"><span>💼</span><b>求人から探す</b><small>ホール・バーテンダー・店長候補</small></a>
-    </div>
-  </div>
+</div>
 </section>
 <section class="top-news" id="news">
   <div class="container">
@@ -344,24 +339,6 @@
 </section>
 
 
-<section class="owner-tools-section">
-  <div class="container">
-    <div class="section-head-row">
-      <div>
-        <p class="eyebrow">FOR LISTED SHOPS</p>
-        <h2>掲載店舗様向けメニュー</h2>
-        <p class="section-lead">掲載後の情報変更・イベント・クーポン申請をサイトから簡単に行えます。</p>
-      </div>
-      <a class="outline-btn" href="shop-support.html">店舗向けメニューを見る</a>
-    </div>
-    <div class="owner-tool-grid">
-      <a class="owner-tool-card" href="shop-update.html"><span>✏️</span><b>店舗情報を変更</b><small>営業時間・住所・紹介文など</small></a>
-      <a class="owner-tool-card" href="event-submit.html"><span>🎉</span><b>イベントを掲載</b><small>大会・周年・レディースデイなど</small></a>
-      <a class="owner-tool-card" href="coupon-submit.html"><span>🎟️</span><b>クーポンを掲載</b><small>来店特典やキャンペーン</small></a>
-      <a class="owner-tool-card" href="events.html"><span>📅</span><b>イベントを見る</b><small>掲載中イベント一覧</small></a>
-    </div>
-  </div>
-</section>
 
 <section class="trust-section">
   <div class="container">
@@ -376,16 +353,6 @@
 </section>
 
 
-<section class="portal-teaser">
-  <div class="container portal-teaser-inner">
-    <div>
-      <p class="eyebrow">OWNER PORTAL</p>
-      <h2>掲載店舗様専用メニュー</h2>
-      <p>店舗情報変更・写真追加・イベント・クーポン申請をまとめて管理できます。</p>
-    </div>
-    <a class="btn-gold" href="owner-portal.html">店舗ポータルを開く →</a>
-  </div>
-</section>
 
 </main>
 
@@ -397,5 +364,38 @@
   </div>
 </footer>
 <script src="script.js"></script>
+
+<script>
+(async()=>{
+  const box=document.getElementById("kbnAutoNews");
+  if(!box)return;
+  try{
+    const r=await fetch("/api/news");
+    const d=await r.json();
+    if(!r.ok||!d.ok)throw new Error();
+    const items=d.news||[];
+    if(!items.length){
+      box.innerHTML='<p class="kbn-news-empty">現在、新着のお知らせはありません。</p>';
+      return;
+    }
+    const fmt=(v)=>{
+      if(!v)return "";
+      const dt=new Date(String(v).replace(" ","T")+"Z");
+      if(Number.isNaN(dt.getTime()))return "";
+      return `${dt.getMonth()+1}/${dt.getDate()}`;
+    };
+    const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+    box.innerHTML=items.map(x=>`
+      <a class="kbn-news-item" href="shop.html?slug=${encodeURIComponent(x.slug)}">
+        <time>${fmt(x.date)}</time>
+        <span><b>NEW</b>${esc(x.name)}を掲載しました！</span>
+      </a>
+    `).join("");
+  }catch{
+    box.innerHTML='<p class="kbn-news-empty">お知らせを読み込めませんでした。</p>';
+  }
+})();
+</script>
+
 </body>
 </html>
