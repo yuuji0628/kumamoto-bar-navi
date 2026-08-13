@@ -153,19 +153,17 @@
 
     <div id="kbnAutoNews" class="kbn-auto-news"><p class="kbn-news-empty">新着情報を読み込んでいます...</p></div>
 
-    <div class="top-news-list">
-      <a class="top-news-item" href="#jobs">
-        <time>2026.08.12</time>
-        <span class="news-label">JOB</span>
-        <strong>BAR求人情報も掲載受付中</strong>
-        <span class="news-arrow">→</span>
+    <div class="top-news-list compact-news-list">
+      <a class="compact-news-item" href="jobs.html">
+        <time>INFO</time>
+        <span><b>JOB</b>BAR求人情報も掲載受付中</span>
+        <span class="compact-news-arrow">→</span>
       </a>
 
-      <a class="top-news-item" href="#owner">
-        <time>2026.08.12</time>
-        <span class="news-label">INFO</span>
-        <strong>熊本県内のBARを無料掲載受付中</strong>
-        <span class="news-arrow">→</span>
+      <a class="compact-news-item" href="listing-form.html">
+        <time>INFO</time>
+        <span><b>INFO</b>熊本県内のBARを無料掲載受付中</span>
+        <span class="compact-news-arrow">→</span>
       </a>
     </div>
   </div>
@@ -380,9 +378,10 @@
     };
     const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
     box.innerHTML=items.map(x=>`
-      <a class="kbn-news-item" href="shop.html?slug=${encodeURIComponent(x.slug)}">
+      <a class="compact-news-item" href="shop.html?slug=${encodeURIComponent(x.slug)}">
         <time>${fmt(x.date)}</time>
         <span><b>NEW</b>${esc(x.name)}を掲載しました！</span>
+        <span class="compact-news-arrow">→</span>
       </a>
     `).join("");
   }catch{
