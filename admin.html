@@ -138,7 +138,7 @@ async function loadAnalytics(){
     <article class="admin-shop-item analytics-item">
       <div>
         <h3>${esc(r.name)}</h3>
-        <p>30日：閲覧 ${Number(r.views_30d||0).toLocaleString()} / クリック ${Number(r.clicks_30d||0).toLocaleString()}</p>
+        <p>30日：閲覧 ${Number(r.views_30d||0).toLocaleString()} / 反応 ${Number(r.clicks_30d||0).toLocaleString()}</p>
         <small>
           累計閲覧 ${Number(r.views||0).toLocaleString()} ・
           Instagram ${Number(r.instagram_clicks||0).toLocaleString()} ・
@@ -147,8 +147,13 @@ async function loadAnalytics(){
         </small>
       </div>
       <div class="analytics-rate">
-        <b>${Number(r.views||0)>0?(((Number(r.instagram_clicks||0)+Number(r.map_clicks||0)+Number(r.phone_clicks||0)+Number(r.website_clicks||0))/Number(r.views||0))*100).toFixed(1):"0.0"}%</b>
-        <small>クリック率</small>
+        <b>${(
+          Number(r.instagram_clicks||0)+
+          Number(r.map_clicks||0)+
+          Number(r.phone_clicks||0)+
+          Number(r.website_clicks||0)
+        ).toLocaleString()}</b>
+        <small>反応数</small>
       </div>
     </article>`).join(""):'<p>まだアクセスデータはありません。</p>';
 }
