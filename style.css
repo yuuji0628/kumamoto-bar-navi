@@ -2155,3 +2155,48 @@ a.directory-card:hover{
   .compact-column-card p{font-size:.68rem}
   .column-page{padding-top:18px}
 }
+
+
+/* v48 analytics */
+.analytics-summary{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:8px;
+  margin:12px 0 16px;
+}
+.analytics-summary>div{
+  padding:12px;
+  border:1px solid #38424d;
+  border-radius:11px;
+  background:#101720;
+  text-align:center;
+}
+.analytics-summary small{
+  display:block;
+  color:#9fa7b1;
+  font-size:.68rem;
+  margin-bottom:4px;
+}
+.analytics-summary strong{
+  color:#efc45a;
+  font-size:1.25rem;
+}
+.analytics-item{
+  align-items:center;
+}
+.analytics-rate{
+  min-width:80px;
+  text-align:center;
+}
+.analytics-rate b{
+  display:block;
+  color:#efc45a;
+  font-size:1.1rem;
+}
+.analytics-rate small{
+  color:#9fa7b1;
+  font-size:.62rem;
+}
+@media(max-width:640px){
+  .analytics-summary{grid-template-columns:repeat(2,1fr)}
+}

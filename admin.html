@@ -1,7 +1,7 @@
 <!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>KBN運営管理</title><link rel="stylesheet" href="style.css"></head>
 <body class="admin-body"><main class="admin-page"><div class="container">
 <section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN v32</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><div class="admin-security-badge">🔒 Cloudflare Access</div></section>
-<nav class="admin-tabs"><button data-tab="shops" class="active">店舗</button><button data-tab="jobs">求人</button><button data-tab="subs">申込み</button><button data-tab="ownerreq">店舗申請</button></nav>
+<nav class="admin-tabs"><button data-tab="shops" class="active">店舗</button><button data-tab="jobs">求人</button><button data-tab="subs">申込み</button><button data-tab="ownerreq">店舗申請</button><button data-tab="analytics">アクセス</button></nav>
 
 <section id="tab-shops" class="admin-block">
 <div class="admin-block-head"><div><p class="eyebrow">SHOPS</p><h2>店舗管理</h2></div><button id="reloadShops" class="admin-secondary-btn">再読み込み</button></div>
@@ -56,10 +56,18 @@
 <div id="ownerReqList" class="admin-shop-list"></div>
 </section>
 
+
+<section id="tab-analytics" class="admin-block" hidden>
+<div class="admin-block-head"><div><p class="eyebrow">ANALYTICS</p><h2>店舗アクセス集計</h2></div><button id="reloadAnalytics" class="admin-secondary-btn">再読み込み</button></div>
+<p style="color:#aeb4bd">店舗ページの閲覧数と、地図・Instagram・電話などのクリック数を確認できます。</p>
+<div id="analyticsSummary" class="analytics-summary"></div>
+<div id="analyticsList" class="admin-shop-list"></div>
+</section>
+
 </div></main>
 <script>
 const $=id=>document.getElementById(id);let shops=[],jobs=[],subs=[];
-document.querySelectorAll(".admin-tabs button").forEach(b=>b.onclick=()=>{document.querySelectorAll(".admin-tabs button").forEach(x=>x.classList.remove("active"));b.classList.add("active");["shops","jobs","subs","ownerreq"].forEach(x=>$("tab-"+x).hidden=x!==b.dataset.tab)});
+document.querySelectorAll(".admin-tabs button").forEach(b=>b.onclick=()=>{document.querySelectorAll(".admin-tabs button").forEach(x=>x.classList.remove("active"));b.classList.add("active");["shops","jobs","subs","ownerreq","analytics"].forEach(x=>$("tab-"+x).hidden=x!==b.dataset.tab)});
 const esc=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 async function api(u,o={}){const r=await fetch(u,{credentials:"same-origin",...o});const d=await r.json();if(!r.ok)throw new Error(d.error||r.status);return d}
 async function loadShops(){const d=await api("/api/admin/shops");shops=d.shops||[];$("jobShop").innerHTML='<option value="">店舗なし</option>'+shops.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("");$("shopList").innerHTML=shops.map(s=>`<article class="admin-shop-item"><div><h3>${esc(s.name)} ${s.is_featured?'⭐':''} ${s.is_new?'NEW':''}</h3><p>${esc(s.area)} / ${esc(s.genre||'')}</p><small>順:${s.sort_order} / ${s.is_published?'公開':'非公開'} / 専用URL:${s.owner_token_hash?'発行済み':'未発行'}</small></div><div class="admin-item-actions"><button onclick="editShop(${s.id})">編集</button><button onclick="issueOwnerLink(${s.id})">専用URL発行</button>${s.owner_token_hash?`<button onclick="revokeOwnerLink(${s.id})">URL無効化</button>`:''}<button onclick="deleteShop(${s.id})" style="border-color:#7a3030;color:#ffb3b3">完全削除</button></div></article>`).join("")}
@@ -110,6 +118,41 @@ async function loadSubs(){const d=await api("/api/admin/submissions");subs=d.sub
 window.approve=async id=>{await api(`/api/admin/submissions/${id}/approve`,{method:"POST"});await Promise.all([loadSubs(),loadShops()])}
 window.rejectSub=async id=>{await api(`/api/admin/submissions/${id}/reject`,{method:"POST"});await loadSubs()}
 
+
+async function loadAnalytics(){
+  const d=await api("/api/admin/analytics");
+  const rows=d.analytics||[];
+  const totals=rows.reduce((a,r)=>{
+    a.views+=Number(r.views||0);
+    a.clicks+=Number(r.instagram_clicks||0)+Number(r.map_clicks||0)+Number(r.phone_clicks||0)+Number(r.website_clicks||0);
+    a.views30+=Number(r.views_30d||0);
+    a.clicks30+=Number(r.clicks_30d||0);
+    return a;
+  },{views:0,clicks:0,views30:0,clicks30:0});
+  $("analyticsSummary").innerHTML=`
+    <div><small>総閲覧数</small><strong>${totals.views.toLocaleString()}</strong></div>
+    <div><small>総クリック</small><strong>${totals.clicks.toLocaleString()}</strong></div>
+    <div><small>30日閲覧</small><strong>${totals.views30.toLocaleString()}</strong></div>
+    <div><small>30日クリック</small><strong>${totals.clicks30.toLocaleString()}</strong></div>`;
+  $("analyticsList").innerHTML=rows.length?rows.map(r=>`
+    <article class="admin-shop-item analytics-item">
+      <div>
+        <h3>${esc(r.name)}</h3>
+        <p>30日：閲覧 ${Number(r.views_30d||0).toLocaleString()} / クリック ${Number(r.clicks_30d||0).toLocaleString()}</p>
+        <small>
+          累計閲覧 ${Number(r.views||0).toLocaleString()} ・
+          Instagram ${Number(r.instagram_clicks||0).toLocaleString()} ・
+          地図 ${Number(r.map_clicks||0).toLocaleString()} ・
+          電話 ${Number(r.phone_clicks||0).toLocaleString()}
+        </small>
+      </div>
+      <div class="analytics-rate">
+        <b>${Number(r.views||0)>0?(((Number(r.instagram_clicks||0)+Number(r.map_clicks||0)+Number(r.phone_clicks||0)+Number(r.website_clicks||0))/Number(r.views||0))*100).toFixed(1):"0.0"}%</b>
+        <small>クリック率</small>
+      </div>
+    </article>`).join(""):'<p>まだアクセスデータはありません。</p>';
+}
+
 const reqLabel={profile:"店舗情報変更",photo:"写真変更",job:"求人",event:"イベント",coupon:"クーポン"};
 async function loadOwnerReq(){
   const d=await api("/api/admin/owner-requests");
@@ -125,6 +168,6 @@ window.finishOwnerReq=async(id,status)=>{
   await loadOwnerReq();
 }
 
-$("reloadShops").onclick=loadShops;$("reloadSubs").onclick=loadSubs;$("reloadOwnerReq").onclick=loadOwnerReq;
-Promise.all([loadShops(),loadJobs(),loadSubs(),loadOwnerReq()]);
+$("reloadShops").onclick=loadShops;$("reloadSubs").onclick=loadSubs;$("reloadOwnerReq").onclick=loadOwnerReq;$("reloadAnalytics").onclick=loadAnalytics;
+Promise.all([loadShops(),loadJobs(),loadSubs(),loadOwnerReq(),loadAnalytics()]);
 </script></body></html>

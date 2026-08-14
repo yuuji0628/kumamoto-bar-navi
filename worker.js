@@ -122,6 +122,27 @@ export default {
       return json({ok:true,shops:r.results||[]});
     }
 
+
+    // 店舗ページの閲覧・導線クリックを集計
+    const analyticsMatch=url.pathname.match(/^\/api\/analytics\/([^/]+)$/);
+    if(analyticsMatch && request.method==="POST"){
+      const slug=decodeURIComponent(analyticsMatch[1]);
+      let x={}; try{x=await request.json()}catch{}
+      const action=String(x.action||"");
+      const allowed=new Set(["view","instagram","map","phone","website"]);
+      if(!allowed.has(action)) return json({ok:false,error:"INVALID_ACTION"},{status:400});
+
+      const s=await env.DB.prepare("SELECT id FROM shops WHERE slug=? AND is_published=1 LIMIT 1").bind(slug).first();
+      if(!s) return json({ok:false,error:"NOT_FOUND"},{status:404});
+
+      await env.DB.prepare(`
+        INSERT INTO shop_analytics (shop_id,action,created_at)
+        VALUES (?,?,CURRENT_TIMESTAMP)
+      `).bind(s.id,action).run();
+
+      return json({ok:true},{status:201});
+    }
+
     if(url.pathname.startsWith("/api/shops/") && request.method==="GET"){
       const slug=decodeURIComponent(url.pathname.replace("/api/shops/",""));
       const s=await env.DB.prepare("SELECT * FROM shops WHERE slug=? AND is_published=1 LIMIT 1").bind(slug).first();
@@ -247,6 +268,26 @@ export default {
     if(url.pathname.startsWith("/api/admin/")){
       if(!hasAccess(request)) return json({ok:false,error:"ACCESS_REQUIRED"},{status:401});
 
+
+      if(url.pathname==="/api/admin/analytics" && request.method==="GET"){
+        const r=await env.DB.prepare(`
+          SELECT
+            s.id,s.name,s.slug,
+            SUM(CASE WHEN a.action='view' THEN 1 ELSE 0 END) AS views,
+            SUM(CASE WHEN a.action='instagram' THEN 1 ELSE 0 END) AS instagram_clicks,
+            SUM(CASE WHEN a.action='map' THEN 1 ELSE 0 END) AS map_clicks,
+            SUM(CASE WHEN a.action='phone' THEN 1 ELSE 0 END) AS phone_clicks,
+            SUM(CASE WHEN a.action='website' THEN 1 ELSE 0 END) AS website_clicks,
+            SUM(CASE WHEN a.action='view' AND a.created_at>=datetime('now','-30 days') THEN 1 ELSE 0 END) AS views_30d,
+            SUM(CASE WHEN a.action!='view' AND a.created_at>=datetime('now','-30 days') THEN 1 ELSE 0 END) AS clicks_30d
+          FROM shops s
+          LEFT JOIN shop_analytics a ON a.shop_id=s.id
+          GROUP BY s.id,s.name,s.slug
+          ORDER BY views_30d DESC, views DESC, s.id DESC
+        `).all();
+        return json({ok:true,analytics:r.results||[]});
+      }
+
       if(url.pathname==="/api/admin/shops" && request.method==="GET"){
         const r=await env.DB.prepare("SELECT * FROM shops ORDER BY sort_order ASC,id DESC").all();
         return json({ok:true,shops:r.results||[]});
@@ -300,6 +341,7 @@ export default {
 
         // 関連求人を先に削除してから店舗を完全削除
         await env.DB.batch([
+          env.DB.prepare("DELETE FROM shop_analytics WHERE shop_id=?").bind(id),
           env.DB.prepare("DELETE FROM jobs WHERE shop_id=?").bind(id),
           env.DB.prepare("DELETE FROM shops WHERE id=?").bind(id)
         ]);

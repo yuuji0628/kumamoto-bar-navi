@@ -30,6 +30,19 @@
 <script>
 const esc=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 const slug=new URLSearchParams(location.search).get("slug");
+
+async function track(action){
+  if(!slug)return;
+  try{
+    await fetch(`/api/analytics/${encodeURIComponent(slug)}`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({action}),
+      keepalive:true
+    });
+  }catch{}
+}
+
 async function load(){
   if(!slug){document.getElementById("shopDetail").innerHTML="<p>店舗が指定されていません。</p>";return;}
   try{
@@ -64,7 +77,7 @@ async function load(){
         </div>
 
         <div class="shop-ref-actions">
-          ${mapUrl?`<a href="${mapUrl}" target="_blank" rel="noopener">地図で見る</a>`:""}
+          ${mapUrl?`<a href="${mapUrl}" target="_blank" rel="noopener" data-track="map">地図で見る</a>`:""}
           ${s.address?`<button type="button" data-copy-address="${esc(s.address)}">住所をコピー</button>`:""}
           <button type="button" data-favorite-shop>お気に入り</button>
           <button type="button" data-share-shop>共有する</button>
@@ -75,10 +88,10 @@ async function load(){
           ${s.description?`<p class="shop-ref-description">${esc(s.description)}</p>`:""}
           <dl class="shop-ref-detail-list">
             ${s.address?`<div><dt>住所</dt><dd>${esc(s.address)}</dd><span></span></div>`:""}
-            ${s.phone?`<div><dt>電話番号</dt><dd><a href="tel:${esc(s.phone)}">${esc(s.phone)}</a></dd><span></span></div>`:""}
+            ${s.phone?`<div><dt>電話番号</dt><dd><a href="tel:${esc(s.phone)}" data-track="phone">${esc(s.phone)}</a></dd><span></span></div>`:""}
             ${s.hours?`<div><dt>営業時間</dt><dd>${esc(s.hours)}</dd><span></span></div>`:""}
             ${s.holiday?`<div><dt>定休日</dt><dd>${esc(s.holiday)}</dd><span></span></div>`:""}
-            ${s.instagram?`<div><dt>SNS</dt><dd><a href="${esc(s.instagram)}" target="_blank" rel="noopener">Instagram</a></dd><span>↗</span></div>`:""}
+            ${s.instagram?`<div><dt>SNS</dt><dd><a href="${esc(s.instagram)}" target="_blank" rel="noopener" data-track="instagram">Instagram</a></dd><span>↗</span></div>`:""}
           </dl>
         </section>
 
@@ -88,6 +101,11 @@ async function load(){
         </div>
       </article>
     `;
+
+    track("view");
+    document.querySelectorAll("[data-track]").forEach(el=>{
+      el.addEventListener("click",()=>track(el.dataset.track));
+    });
 
     const copyBtn=document.querySelector("[data-copy-address]");
     if(copyBtn){
