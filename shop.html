@@ -31,6 +31,18 @@
 const esc=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 const slug=new URLSearchParams(location.search).get("slug");
 
+function normalizeInstagramUrl(value){
+  let v=String(value||"").trim();
+  if(!v)return "";
+  if(/^https?:\/\//i.test(v))return v;
+  if(/^www\./i.test(v))return "https://"+v;
+  if(/^instagram\.com\//i.test(v))return "https://"+v;
+  if(/^@/.test(v))v=v.slice(1);
+  v=v.replace(/^\/+|\/+$/g,"");
+  return "https://www.instagram.com/"+encodeURIComponent(v)+"/";
+}
+
+
 async function track(action){
   if(!slug)return;
   try{
@@ -91,7 +103,7 @@ async function load(){
             ${s.phone?`<div><dt>電話番号</dt><dd><a href="tel:${esc(s.phone)}" data-track="phone">${esc(s.phone)}</a></dd><span></span></div>`:""}
             ${s.hours?`<div><dt>営業時間</dt><dd>${esc(s.hours)}</dd><span></span></div>`:""}
             ${s.holiday?`<div><dt>定休日</dt><dd>${esc(s.holiday)}</dd><span></span></div>`:""}
-            ${s.instagram?`<div><dt>SNS</dt><dd><a href="${esc(s.instagram)}" target="_blank" rel="noopener" data-track="instagram">Instagram</a></dd><span>↗</span></div>`:""}
+            ${s.instagram?`<div><dt>SNS</dt><dd><a href="${esc(normalizeInstagramUrl(s.instagram))}" target="_blank" rel="noopener noreferrer" data-track="instagram">Instagram</a></dd><span>↗</span></div>`:""}
           </dl>
         </section>
 
