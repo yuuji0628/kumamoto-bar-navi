@@ -58,7 +58,7 @@
 
 
 <section id="tab-analytics" class="admin-block" hidden>
-<div class="admin-block-head"><div><p class="eyebrow">ANALYTICS</p><h2>店舗アクセス集計</h2></div><button id="reloadAnalytics" class="admin-secondary-btn">再読み込み</button></div>
+<div class="admin-block-head"><div><p class="eyebrow">ANALYTICS</p><h2>店舗アクセス集計</h2></div><button id="reloadAnalytics" class="admin-secondary-btn" type="button" onclick="loadAnalytics()">再読み込み</button></div>
 <p style="color:#aeb4bd">店舗ページの閲覧数と、地図・Instagram・電話などのクリック数を確認できます。</p>
 <div id="analyticsSummary" class="analytics-summary"></div>
 <div id="analyticsList" class="admin-shop-list"></div>
@@ -120,42 +120,42 @@ window.rejectSub=async id=>{await api(`/api/admin/submissions/${id}/reject`,{met
 
 
 async function loadAnalytics(){
-  const d=await api("/api/admin/analytics");
-  const rows=d.analytics||[];
-  const totals=rows.reduce((a,r)=>{
-    a.views+=Number(r.views||0);
-    a.clicks+=Number(r.instagram_clicks||0)+Number(r.map_clicks||0)+Number(r.phone_clicks||0)+Number(r.website_clicks||0);
-    a.views30+=Number(r.views_30d||0);
-    a.clicks30+=Number(r.clicks_30d||0);
-    return a;
-  },{views:0,clicks:0,views30:0,clicks30:0});
-  $("analyticsSummary").innerHTML=`
-    <div><small>総閲覧数</small><strong>${totals.views.toLocaleString()}</strong></div>
-    <div><small>総クリック</small><strong>${totals.clicks.toLocaleString()}</strong></div>
-    <div><small>30日閲覧</small><strong>${totals.views30.toLocaleString()}</strong></div>
-    <div><small>30日クリック</small><strong>${totals.clicks30.toLocaleString()}</strong></div>`;
-  $("analyticsList").innerHTML=rows.length?rows.map(r=>`
-    <article class="admin-shop-item analytics-item">
-      <div>
-        <h3>${esc(r.name)}</h3>
-        <p>30日：閲覧 ${Number(r.views_30d||0).toLocaleString()} / 反応 ${Number(r.clicks_30d||0).toLocaleString()}</p>
-        <small>
-          累計閲覧 ${Number(r.views||0).toLocaleString()} ・
-          Instagram ${Number(r.instagram_clicks||0).toLocaleString()} ・
-          地図 ${Number(r.map_clicks||0).toLocaleString()} ・
-          電話 ${Number(r.phone_clicks||0).toLocaleString()}
-        </small>
-      </div>
-      <div class="analytics-rate">
-        <b>${(
-          Number(r.instagram_clicks||0)+
-          Number(r.map_clicks||0)+
-          Number(r.phone_clicks||0)+
-          Number(r.website_clicks||0)
-        ).toLocaleString()}</b>
-        <small>反応数</small>
-      </div>
-    </article>`).join(""):'<p>まだアクセスデータはありません。</p>';
+  const summary=$("analyticsSummary");
+  const list=$("analyticsList");
+  if(summary) summary.innerHTML='<div style="grid-column:1/-1"><small>読み込み中</small><strong>…</strong></div>';
+  if(list) list.innerHTML='<p>アクセスデータを読み込んでいます...</p>';
+  try{
+    const d=await api("/api/admin/analytics");
+    const rows=d.analytics||[];
+    const totals=rows.reduce((a,r)=>{
+      a.views+=Number(r.views||0);
+      a.clicks+=Number(r.instagram_clicks||0)+Number(r.map_clicks||0)+Number(r.phone_clicks||0)+Number(r.website_clicks||0);
+      a.views30+=Number(r.views_30d||0);
+      a.clicks30+=Number(r.clicks_30d||0);
+      return a;
+    },{views:0,clicks:0,views30:0,clicks30:0});
+    summary.innerHTML=`
+      <div><small>総閲覧数</small><strong>${totals.views.toLocaleString()}</strong></div>
+      <div><small>総反応数</small><strong>${totals.clicks.toLocaleString()}</strong></div>
+      <div><small>30日閲覧</small><strong>${totals.views30.toLocaleString()}</strong></div>
+      <div><small>30日反応</small><strong>${totals.clicks30.toLocaleString()}</strong></div>`;
+    list.innerHTML=rows.length?rows.map(r=>`
+      <article class="admin-shop-item analytics-item">
+        <div>
+          <h3>${esc(r.name)}</h3>
+          <p>30日：閲覧 ${Number(r.views_30d||0).toLocaleString()} / 反応 ${Number(r.clicks_30d||0).toLocaleString()}</p>
+          <small>累計閲覧 ${Number(r.views||0).toLocaleString()} ・ Instagram ${Number(r.instagram_clicks||0).toLocaleString()} ・ 地図 ${Number(r.map_clicks||0).toLocaleString()} ・ 電話 ${Number(r.phone_clicks||0).toLocaleString()}</small>
+        </div>
+        <div class="analytics-rate">
+          <b>${(Number(r.instagram_clicks||0)+Number(r.map_clicks||0)+Number(r.phone_clicks||0)+Number(r.website_clicks||0)).toLocaleString()}</b>
+          <small>反応数</small>
+        </div>
+      </article>`).join(""):'<p>まだアクセスデータはありません。</p>';
+  }catch(e){
+    console.error(e);
+    if(summary) summary.innerHTML='<div style="grid-column:1/-1"><small>読み込みエラー</small><strong>!</strong></div>';
+    if(list) list.innerHTML='<div class="analytics-error-box"><b>アクセス集計を読み込めませんでした。</b><p>WorkerまたはD1との接続を確認してください。</p></div>';
+  }
 }
 
 const reqLabel={profile:"店舗情報変更",photo:"写真変更",job:"求人",event:"イベント",coupon:"クーポン"};

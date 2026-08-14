@@ -2200,3 +2200,12 @@ a.directory-card:hover{
 @media(max-width:640px){
   .analytics-summary{grid-template-columns:repeat(2,1fr)}
 }
+
+.analytics-error-box{
+  padding:14px;
+  border:1px solid #6e4b20;
+  border-radius:11px;
+  background:#17110b;
+  color:#e8e0d5;
+}
+.analytics-error-box p{margin:6px 0 0;color:#b8aa98;font-size:.8rem;line-height:1.6}
