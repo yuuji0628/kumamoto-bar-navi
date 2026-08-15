@@ -96,9 +96,101 @@ function shopPayload(x){
   };
 }
 
+
+const LOGIN_HTML="<!doctype html>\n<html lang=\"ja\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\">\n<title>KBN ADMIN LOGIN</title>\n<style>\n:root{color-scheme:dark}\n*{box-sizing:border-box}\nbody{margin:0;min-height:100vh;display:grid;place-items:center;background:#080d13;color:#f4f6f8;font-family:-apple-system,BlinkMacSystemFont,\"Hiragino Sans\",\"Yu Gothic\",sans-serif;padding:22px}\n.card{width:min(440px,100%);padding:28px;border:1px solid #36404c;border-radius:20px;background:#101720;box-shadow:0 20px 70px rgba(0,0,0,.35)}\n.eyebrow{color:#e8be55;letter-spacing:.18em;font-weight:800;font-size:.78rem}\nh1{font-size:2rem;margin:.35rem 0 .7rem}\np{color:#aeb5bf;line-height:1.7}\nlabel{display:block;margin:18px 0 7px;color:#d9dde2;font-weight:700}\ninput{width:100%;min-height:52px;padding:0 14px;border-radius:12px;border:1px solid #3b4653;background:#0a1017;color:#fff;font-size:1rem}\nbutton{width:100%;min-height:54px;margin-top:20px;border:0;border-radius:12px;background:#efc45a;color:#111;font-weight:900;font-size:1rem}\n#error{color:#ff9a9a;min-height:1.4em;margin-top:12px}\n.note{font-size:.78rem;margin-top:16px}\n</style>\n</head>\n<body>\n<form class=\"card\" id=\"loginForm\">\n  <div class=\"eyebrow\">KBN ADMIN</div>\n  <h1>運営管理ログイン</h1>\n  <p>管理者用のメールアドレスとパスワードを入力してください。</p>\n  <label for=\"email\">メールアドレス</label>\n  <input id=\"email\" type=\"email\" autocomplete=\"username\" required>\n  <label for=\"password\">パスワード</label>\n  <input id=\"password\" type=\"password\" autocomplete=\"current-password\" required>\n  <button type=\"submit\">ログイン</button>\n  <div id=\"error\"></div>\n  <p class=\"note\">この端末では30日間ログイン状態を保持します。</p>\n</form>\n<script>\nconst f=document.getElementById(\"loginForm\"),e=document.getElementById(\"error\");\nf.addEventListener(\"submit\",async ev=>{\n  ev.preventDefault();e.textContent=\"ログイン中...\";\n  try{\n    const r=await fetch(\"/api/admin/login\",{method:\"POST\",credentials:\"include\",headers:{\"Content-Type\":\"application/json\"},body:JSON.stringify({email:document.getElementById(\"email\").value.trim(),password:document.getElementById(\"password\").value})});\n    const d=await r.json();\n    if(!r.ok||!d.ok)throw new Error(d.error||\"LOGIN_FAILED\");\n    location.href=\"/admin.html\";\n  }catch(err){\n    e.textContent=err.message===\"INVALID_CREDENTIALS\"?\"メールアドレスまたはパスワードが違います。\":\"ログインできませんでした。\";\n  }\n});\n</script>\n</body></html>";
+const ADMIN_COOKIE="kbn_admin_session";
+const ADMIN_SESSION_DAYS=30;
+
+async function authHmac(secret,message){
+  const enc=new TextEncoder();
+  const key=await crypto.subtle.importKey("raw",enc.encode(secret),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
+  const sig=await crypto.subtle.sign("HMAC",key,enc.encode(message));
+  return [...new Uint8Array(sig)].map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+function authCookie(request,name){
+  const raw=request.headers.get("Cookie")||"";
+  for(const part of raw.split(";")){
+    const [k,...rest]=part.trim().split("=");
+    if(k===name)return decodeURIComponent(rest.join("="));
+  }
+  return "";
+}
+function authEqual(a,b){
+  a=String(a??"");b=String(b??"");
+  if(a.length!==b.length)return false;
+  let x=0;for(let i=0;i<a.length;i++)x|=a.charCodeAt(i)^b.charCodeAt(i);
+  return x===0;
+}
+async function makeAdminSession(env){
+  const exp=Date.now()+ADMIN_SESSION_DAYS*86400000;
+  const payload=`admin.${exp}`;
+  const sig=await authHmac(env.ADMIN_SESSION_SECRET,payload);
+  return `${payload}.${sig}`;
+}
+async function validAdminSession(request,env){
+  try{
+    if(!env.ADMIN_SESSION_SECRET)return false;
+    const token=authCookie(request,ADMIN_COOKIE);
+    const p=token.split(".");
+    if(p.length!==3||p[0]!=="admin")return false;
+    const exp=Number(p[1]);if(!Number.isFinite(exp)||exp<Date.now())return false;
+    const expected=await authHmac(env.ADMIN_SESSION_SECRET,`admin.${exp}`);
+    return authEqual(p[2],expected);
+  }catch{return false}
+}
+function setAdminCookie(token){
+  return `${ADMIN_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${ADMIN_SESSION_DAYS*86400}`;
+}
+function clearAdminCookie(){
+  return `${ADMIN_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
+}
+
 export default {
   async fetch(request, env) {
     const url=new URL(request.url);
+
+    if(url.pathname==="/admin-login"){
+      if(await validAdminSession(request,env)){
+        return Response.redirect(new URL("/admin.html",request.url).toString(),302);
+      }
+      return new Response(LOGIN_HTML,{headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}});
+    }
+
+    if(url.pathname==="/api/admin/login" && request.method==="POST"){
+      if(!env.ADMIN_EMAIL||!env.ADMIN_PASSWORD||!env.ADMIN_SESSION_SECRET){
+        return json({ok:false,error:"ADMIN_AUTH_NOT_CONFIGURED"},{status:500});
+      }
+      let body={};try{body=await request.json()}catch{}
+      const email=String(body.email||"").trim().toLowerCase();
+      const password=String(body.password||"");
+      if(!authEqual(email,String(env.ADMIN_EMAIL).trim().toLowerCase())||!authEqual(password,String(env.ADMIN_PASSWORD))){
+        return json({ok:false,error:"INVALID_CREDENTIALS"},{status:401});
+      }
+      const token=await makeAdminSession(env);
+      return new Response(JSON.stringify({ok:true}),{
+        status:200,
+        headers:{
+          "content-type":"application/json; charset=utf-8",
+          "cache-control":"no-store",
+          "set-cookie":setAdminCookie(token)
+        }
+      });
+    }
+
+    if(url.pathname==="/api/admin/logout" && request.method==="POST"){
+      return new Response(JSON.stringify({ok:true}),{
+        headers:{
+          "content-type":"application/json; charset=utf-8",
+          "cache-control":"no-store",
+          "set-cookie":clearAdminCookie()
+        }
+      });
+    }
+
+    if(url.pathname==="/admin.html" && !(await validAdminSession(request,env))){
+      return Response.redirect(new URL("/admin-login",request.url).toString(),302);
+    }
+
 
     const blockedPublicPages=new Set([
       "/owner-portal.html",
@@ -344,7 +436,7 @@ export default {
     }
 
     if(url.pathname.startsWith("/api/admin/")){
-      if(!hasAccess(request)) return json({ok:false,error:"ACCESS_REQUIRED"},{status:401});
+      if(!(await validAdminSession(request,env))) return json({ok:false,error:"ADMIN_AUTH_REQUIRED"},{status:401});
 
 
 

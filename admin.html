@@ -119,35 +119,20 @@
 
 
 <style>
-.admin-tab-badge{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  min-width:20px;
-  height:20px;
-  padding:0 6px;
-  margin-left:5px;
-  border-radius:999px;
-  background:#d83a3a;
-  color:#fff;
-  font-size:.68rem;
-  font-weight:900;
-  line-height:1;
-  box-shadow:0 0 0 2px rgba(216,58,58,.14);
-}
-.admin-tab-badge[hidden]{
-  display:none !important;
-}
-.admin-tabs button.active .admin-tab-badge{
-  background:#b91f1f;
-  color:#fff;
-}
+.admin-login-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:14px 0 18px;padding:10px 12px;border:1px solid #3a4550;border-radius:12px;background:#0d141c;color:#b9c0c9;font-size:.78rem}
+.admin-login-bar button{border:1px solid #4b5662;border-radius:9px;background:#111922;color:#e6e9ed;padding:8px 11px;font-weight:700}
 </style>
 
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
-<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN v32</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><div class="admin-security-badge">🔒 Cloudflare Access</div></section>
-<nav class="admin-tabs"><button data-tab="shops" class="active">店舗</button><button data-tab="jobs">求人</button><button data-tab="subs">申込み <span id="subsBadge" class="admin-tab-badge" hidden>0</span></button><button data-tab="ownerreq">店舗申請 <span id="ownerReqBadge" class="admin-tab-badge" hidden>0</span></button><button data-tab="analytics">アクセス</button></nav>
+<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN v32</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><div class="admin-security-badge">🔐 管理者ログイン</div></section>
+
+<div class="admin-login-bar">
+  <span>🔐 管理者ログイン中</span>
+  <button type="button" id="adminLogoutBtn">ログアウト</button>
+</div>
+
+<nav class="admin-tabs"><button data-tab="shops" class="active">店舗</button><button data-tab="jobs">求人</button><button data-tab="subs">申込み</button><button data-tab="ownerreq">店舗申請</button><button data-tab="analytics">アクセス</button></nav>
 
 <section id="tab-shops" class="admin-block">
 <div class="admin-block-head"><div><p class="eyebrow">SHOPS</p><h2>店舗管理</h2></div><button id="reloadShops" class="admin-secondary-btn" type="button" onclick="loadShops()">再読み込み</button></div>
@@ -193,10 +178,7 @@
 
 <section id="tab-subs" class="admin-block" hidden>
 <div class="admin-block-head"><div><p class="eyebrow">SUBMISSIONS</p><h2>掲載申込み</h2></div><button id="reloadSubs" class="admin-secondary-btn" type="button" onclick="loadSubs()">再読み込み</button></div>
-<div class="access-auth-row">
-  <a class="admin-secondary-btn" href="/api/admin/submissions" target="_self">Cloudflare Access認証</a>
-  <small>表示されない場合は一度ここを開いて認証してください。</small>
-</div>
+
 <div id="subList" class="admin-shop-list"><p>申込みを読み込んでいます...</p></div>
 </section>
 
@@ -216,10 +198,7 @@
 <section id="tab-analytics" class="admin-block" hidden>
 <div class="admin-block-head"><div><p class="eyebrow">ANALYTICS</p><h2>店舗アクセス集計</h2></div><button id="reloadAnalytics" class="admin-secondary-btn" type="button" onclick="loadAnalytics()">再読み込み</button></div>
 <p style="color:#aeb4bd">店舗ページの閲覧数と、地図・Instagram・電話などのクリック数を確認できます。</p>
-<div class="access-auth-row">
-  <a id="accessAuthBtn" class="admin-secondary-btn" href="/api/admin/analytics" target="_self">Cloudflare Access認証</a>
-  <small>プライベートタブでエラー時は、ここを一度開いてから戻ってください。</small>
-</div>
+
 <div id="analyticsSummary" class="analytics-summary"></div>
 <div id="analyticsList" class="admin-shop-list"></div>
 
@@ -294,28 +273,16 @@ document.querySelectorAll(".admin-tabs button").forEach(b=>b.onclick=async()=>{
 });
 const esc=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 async function api(path,opt={}){
-  const options={...opt};
-  options.credentials="include";
-  options.headers={...(opt.headers||{})};
-
+  const options={...opt,credentials:"include",headers:{...(opt.headers||{})}};
   const r=await fetch(path,options);
-
-  // Cloudflare Accessのログイン画面へリダイレクトされた場合、
-  // JSONとして扱わず認証切れとして明示する。
   const ct=r.headers.get("content-type")||"";
-  if(r.redirected && /cloudflareaccess\.com/i.test(r.url)){
-    throw new Error("ACCESS_AUTH_REQUIRED");
+  if(r.status===401){
+    location.href="/admin-login";
+    throw new Error("ADMIN_AUTH_REQUIRED");
   }
-  if(!ct.includes("application/json")){
-    const text=await r.text();
-    if(/Cloudflare Access|cloudflareaccess\.com|Log in to/i.test(text)){
-      throw new Error("ACCESS_AUTH_REQUIRED");
-    }
-    throw new Error("NON_JSON_RESPONSE");
-  }
-
+  if(!ct.includes("application/json"))throw new Error("NON_JSON_RESPONSE");
   const d=await r.json();
-  if(!r.ok||d.ok===false)throw new Error(d.error||("HTTP_"+r.status));
+  if(!r.ok||d.ok===false)throw new Error(d.message||d.error||("HTTP_"+r.status));
   return d;
 }
 async function loadShops(){const d=await api("/api/admin/shops");shops=d.shops||[];$("jobShop").innerHTML='<option value="">店舗なし</option>'+shops.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("");$("shopList").innerHTML=shops.map(s=>`<article class="admin-shop-item"><div><h3>${esc(s.name)} ${s.is_featured?'⭐':''} ${s.is_new?'NEW':''}</h3><p>${esc(s.area)} / ${esc(s.genre||'')}</p><small>順:${s.sort_order} / ${s.is_published?'公開':'非公開'} / 専用URL:${s.owner_token_hash?'発行済み':'未発行'}</small></div><div class="admin-item-actions"><button onclick="editShop(${s.id})">編集</button><button onclick="issueOwnerLink(${s.id})">専用URL発行</button>${s.owner_token_hash?`<button onclick="revokeOwnerLink(${s.id})">URL無効化</button>`:''}<button onclick="deleteShop(${s.id})" style="border-color:#7a3030;color:#ffb3b3">完全削除</button></div></article>`).join("")}
@@ -351,8 +318,8 @@ window.deleteShop=async id=>{
     await loadShops();
   }catch(e){
     console.error("delete shop failed",e);
-    if(e?.message==="ACCESS_AUTH_REQUIRED"){
-      alert("Cloudflare Accessの認証が必要です。認証後にもう一度お試しください。");
+    if(e?.message==="ADMIN_AUTH_REQUIRED"){
+      alert("管理画面へ再ログインしてください。認証後にもう一度お試しください。");
     }else{
       alert("削除できませんでした: "+(e?.message||"UNKNOWN_ERROR"));
     }
@@ -367,12 +334,11 @@ window.rejectSub=async id=>{
   try{
     await api(`/api/admin/submissions/${id}/reject`,{method:"POST"});
     await loadSubs();
-    await refreshAdminBadges();
     alert("却下しました");
   }catch(e){
     console.error("reject failed",e);
-    if(e?.message==="ACCESS_AUTH_REQUIRED"){
-      alert("Cloudflare Accessの認証が必要です。認証後にもう一度お試しください。");
+    if(e?.message==="ADMIN_AUTH_REQUIRED"){
+      alert("管理画面へ再ログインしてください。認証後にもう一度お試しください。");
     }else{
       alert("却下できませんでした: "+(e?.message||"UNKNOWN_ERROR"));
     }
@@ -470,39 +436,9 @@ async function loadAnalytics(){
   }catch(e){
     console.error(e);
     if(summary) summary.innerHTML='<div style="grid-column:1/-1"><small>読み込みエラー</small><strong>!</strong></div>';
-    if(list) list.innerHTML=e?.message==="ACCESS_AUTH_REQUIRED"
-      ? '<div class="analytics-error-box"><b>Cloudflare Accessの認証が必要です。</b><p>同じタブで一度認証してから「再読み込み」を押してください。</p></div>'
+    if(list) list.innerHTML=e?.message==="ADMIN_AUTH_REQUIRED"
+      ? '<div class="analytics-error-box"><b>管理画面へ再ログインしてください。</b><p>同じタブで一度認証してから「再読み込み」を押してください。</p></div>'
       : '<div class="analytics-error-box"><b>アクセス集計を読み込めませんでした。</b><p>WorkerまたはD1との接続を確認してください。</p></div>';
-  }
-}
-
-
-function setAdminBadge(id,count){
-  const el=$(id);
-  if(!el)return;
-  const n=Number(count||0);
-  el.textContent=n>99?"99+":String(n);
-  el.hidden=n<=0;
-}
-
-async function refreshAdminBadges(){
-  try{
-    const [subsRes,ownerRes]=await Promise.allSettled([
-      api("/api/admin/submissions"),
-      api("/api/admin/owner-requests")
-    ]);
-
-    if(subsRes.status==="fulfilled"){
-      const pending=(subsRes.value.submissions||[]).filter(x=>x.status==="pending").length;
-      setAdminBadge("subsBadge",pending);
-    }
-
-    if(ownerRes.status==="fulfilled"){
-      const pending=(ownerRes.value.requests||[]).filter(x=>x.status==="pending").length;
-      setAdminBadge("ownerReqBadge",pending);
-    }
-  }catch(e){
-    console.error("badge refresh failed",e);
   }
 }
 
@@ -519,7 +455,6 @@ function ownerReqMediaUrl(v){
 async function loadOwnerReq(){
   const d=await api("/api/admin/owner-requests");
   const list=d.requests||[];
-  setAdminBadge("ownerReqBadge",list.filter(x=>x.status==="pending").length);
 
   $("ownerReqList").innerHTML=list.length?list.map(r=>{
     let p={};try{p=JSON.parse(r.payload||"{}")}catch{}
@@ -581,7 +516,6 @@ window.applyOwnerPhoto=async(id,mode="main")=>{
 
     alert(mode==="gallery"?"ギャラリーに追加して、反映済みにしました":"メイン画像に反映して、反映済みにしました");
     await Promise.allSettled([loadOwnerReq(),loadShops()]);
-    await refreshAdminBadges();
   }catch(e){
     console.error(e);
     alert("画像を反映できませんでした: "+(e?.message||"UNKNOWN_ERROR"));
@@ -596,7 +530,6 @@ window.finishOwnerReq=async(id,status)=>{
       body:JSON.stringify({status})
     });
     await loadOwnerReq();
-    await refreshAdminBadges();
   }catch(e){
     console.error(e);
     alert("申請ステータスを更新できませんでした: "+(e?.message||"UNKNOWN_ERROR"));
@@ -605,17 +538,21 @@ window.finishOwnerReq=async(id,status)=>{
 
 $("reloadShops").onclick=loadShops;$("reloadSubs").onclick=loadSubs;$("reloadOwnerReq").onclick=loadOwnerReq;$("reloadAnalytics").onclick=loadAnalytics;$("dailyDaysFilter")?.addEventListener("change",loadDailyAnalytics);$("dailyShopFilter")?.addEventListener("change",loadDailyAnalytics);
 Promise.allSettled([loadShops(),loadJobs(),loadSubs(),loadOwnerReq(),loadAnalytics()]);
-refreshAdminBadges();
 
 document.addEventListener("visibilitychange",()=>{
   if(document.visibilityState==="visible"){
-    refreshAdminBadges().catch(()=>{});
     setTimeout(()=>{
       if(document.querySelector('[data-tab="analytics"]')?.classList.contains("active")){
         loadAnalytics().catch(()=>{});
       }
     },300);
   }
+});
+
+
+$("adminLogoutBtn")?.addEventListener("click",async()=>{
+  try{await fetch("/api/admin/logout",{method:"POST",credentials:"include"});}
+  finally{location.href="/admin-login";}
 });
 
 </script></body></html>
