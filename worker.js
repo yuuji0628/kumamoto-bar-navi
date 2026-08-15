@@ -65,6 +65,118 @@ async function notifyNewSubmission(env, x){
 }
 
 
+async function notifyOwnerRequest(env, shop, requestType, payload, autoApplied=false){
+  if(!env.RESEND_API_KEY) return {ok:false,error:"RESEND_API_KEY_NOT_BOUND"};
+
+  const typeLabel={
+    profile:"店舗情報変更",
+    photo:"写真変更",
+    job:"求人申請",
+    event:"イベント申請",
+    coupon:"クーポン申請"
+  }[requestType]||requestType;
+
+  const fieldLabel={
+    name:"店舗名",
+    name_kana:"読み方",
+    area:"エリア",
+    address:"住所",
+    hours:"営業時間",
+    holiday:"定休日",
+    instagram:"Instagram",
+    genre:"ジャンル",
+    features:"特徴",
+    description:"紹介文",
+    budget_min:"予算下限",
+    budget_max:"予算上限",
+    seats:"席数",
+    phone:"電話番号",
+    image_url:"画像",
+    title:"タイトル",
+    employment_type:"雇用形態",
+    salary:"給与",
+    contact:"連絡先",
+    note:"備考"
+  };
+
+  const rows=Object.entries(payload||{}).map(([k,v])=>{
+    let value=v;
+    if(Array.isArray(v)) value=v.join("、");
+    if(v && typeof v==="object" && !Array.isArray(v)){
+      try{value=JSON.stringify(v,null,2)}catch{value=String(v)}
+    }
+    return [fieldLabel[k]||k,value];
+  });
+
+  const htmlRows=rows.length
+    ? rows.map(([k,v])=>
+        `<tr>
+          <th style="text-align:left;vertical-align:top;padding:10px;border-bottom:1px solid #ddd;width:130px">${escHtml(k)}</th>
+          <td style="padding:10px;border-bottom:1px solid #ddd;white-space:pre-wrap;word-break:break-word">${escHtml(v??"—")}</td>
+        </tr>`
+      ).join("")
+    : `<tr><td style="padding:10px">申請内容なし</td></tr>`;
+
+  const statusText=autoApplied
+    ? "店舗情報へ自動反映済み"
+    : "管理画面で確認待ち";
+
+  const res=await fetch("https://api.resend.com/emails",{
+    method:"POST",
+    headers:{
+      "Authorization":`Bearer ${env.RESEND_API_KEY}`,
+      "Content-Type":"application/json"
+    },
+    body:JSON.stringify({
+      from:"KUMAMOTO BAR NAVI <onboarding@resend.dev>",
+      to:["kumamotobarnavi@gmail.com"],
+      subject:`【KBN】${typeLabel}：${t(shop?.name,80)||"店舗名未設定"}`,
+      html:`<!doctype html>
+      <html>
+      <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#111;line-height:1.6">
+        <h2>店舗から変更申請が届きました</h2>
+
+        <p>
+          <strong>店舗：</strong>${escHtml(shop?.name||"—")}<br>
+          <strong>申請種別：</strong>${escHtml(typeLabel)}<br>
+          <strong>状態：</strong>${escHtml(statusText)}
+        </p>
+
+        <table style="border-collapse:collapse;width:100%;max-width:760px">
+          ${htmlRows}
+        </table>
+
+        <p style="margin-top:24px">
+          ${autoApplied
+            ? "店舗情報変更は自動反映されています。内容をご確認ください。"
+            : "管理画面の「店舗申請」タブから確認・反映してください。"}
+        </p>
+
+        <p>
+          <a href="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/admin-login"
+             style="display:inline-block;padding:12px 18px;background:#111;color:#fff;text-decoration:none;border-radius:8px">
+             管理画面を開く
+          </a>
+        </p>
+      </body>
+      </html>`
+    })
+  });
+
+  const body=await res.text();
+  if(!res.ok){
+    return {
+      ok:false,
+      error:"RESEND_ERROR",
+      status:res.status,
+      detail:body.slice(0,500)
+    };
+  }
+
+  return {ok:true};
+}
+
+
 async function sha256hex(value){
   const buf=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(String(value)));
   return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");
@@ -97,7 +209,7 @@ function shopPayload(x){
 }
 
 
-const LOGIN_HTML="<!doctype html>\n<html lang=\"ja\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\">\n<title>KBN ADMIN LOGIN</title>\n<style>\n:root{color-scheme:dark}\n*{box-sizing:border-box}\nbody{margin:0;min-height:100vh;display:grid;place-items:center;background:#080d13;color:#f4f6f8;font-family:-apple-system,BlinkMacSystemFont,\"Hiragino Sans\",\"Yu Gothic\",sans-serif;padding:22px}\n.card{width:min(440px,100%);padding:28px;border:1px solid #36404c;border-radius:20px;background:#101720;box-shadow:0 20px 70px rgba(0,0,0,.35)}\n.eyebrow{color:#e8be55;letter-spacing:.18em;font-weight:800;font-size:.78rem}\nh1{font-size:2rem;margin:.35rem 0 .7rem}\np{color:#aeb5bf;line-height:1.7}\nlabel{display:block;margin:18px 0 7px;color:#d9dde2;font-weight:700}\ninput{width:100%;min-height:52px;padding:0 14px;border-radius:12px;border:1px solid #3b4653;background:#0a1017;color:#fff;font-size:1rem}\nbutton{width:100%;min-height:54px;margin-top:20px;border:0;border-radius:12px;background:#efc45a;color:#111;font-weight:900;font-size:1rem}\n#error{color:#ff9a9a;min-height:1.4em;margin-top:12px}\n.note{font-size:.78rem;margin-top:16px}\n</style>\n</head>\n<body>\n<form class=\"card\" id=\"loginForm\">\n  <div class=\"eyebrow\">KBN ADMIN v84</div>\n  <h1>運営管理ログイン</h1>\n  <p>管理者用のメールアドレスとパスワードを入力してください。</p>\n  <label for=\"email\">メールアドレス</label>\n  <input id=\"email\" type=\"email\" autocomplete=\"username\" required>\n  <label for=\"password\">パスワード</label>\n  <input id=\"password\" type=\"password\" autocomplete=\"current-password\" required>\n  <button type=\"submit\">ログイン</button>\n  <div id=\"error\"></div>\n  <p class=\"note\">この端末では30日間ログイン状態を保持します。</p>\n</form>\n\n<script>\nconst form=document.getElementById(\"loginForm\");\nconst error=document.getElementById(\"error\");\n\nform.addEventListener(\"submit\",async ev=>{\n  ev.preventDefault();\n  error.textContent=\"ログイン中...\";\n\n  const email=document.getElementById(\"email\").value.trim();\n  const password=document.getElementById(\"password\").value;\n\n  try{\n    const r=await fetch(\"/api/admin/login\",{\n      method:\"POST\",\n      credentials:\"include\",\n      cache:\"no-store\",\n      headers:{\"Content-Type\":\"application/json\"},\n      body:JSON.stringify({email,password})\n    });\n\n    const ct=r.headers.get(\"content-type\")||\"\";\n    if(!ct.includes(\"application/json\")){\n      const text=await r.text();\n      throw new Error(\"NON_JSON_RESPONSE: \"+text.slice(0,80));\n    }\n\n    const d=await r.json();\n\n    if(!r.ok || !d.ok){\n      if(d.error===\"INVALID_CREDENTIALS\"){\n        throw new Error(\"INVALID_CREDENTIALS\");\n      }\n      if(d.error===\"ADMIN_AUTH_NOT_CONFIGURED\"){\n        throw new Error(\"設定不足: \"+(d.missing||[]).join(\", \"));\n      }\n      throw new Error(d.message||d.error||(\"HTTP_\"+r.status));\n    }\n\n    if(!d.token){\n      throw new Error(\"TOKEN_NOT_RETURNED\");\n    }\n\n    localStorage.setItem(\"kbn_admin_token\",d.token);\n    localStorage.setItem(\"kbn_admin_logged_in_at\",String(Date.now()));\n\n    location.replace(\"/admin.html?v=84\");\n  }catch(err){\n    console.error(err);\n\n    if(err.message===\"INVALID_CREDENTIALS\"){\n      error.textContent=\"メールアドレスまたはパスワードが違います。\";\n    }else{\n      error.textContent=\"ログインできませんでした: \"+err.message;\n    }\n  }\n});\n</script>\n\n</body></html>";
+const LOGIN_HTML="<!doctype html>\n<html lang=\"ja\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\">\n<title>KBN ADMIN LOGIN</title>\n<style>\n:root{color-scheme:dark}\n*{box-sizing:border-box}\nbody{margin:0;min-height:100vh;display:grid;place-items:center;background:#080d13;color:#f4f6f8;font-family:-apple-system,BlinkMacSystemFont,\"Hiragino Sans\",\"Yu Gothic\",sans-serif;padding:22px}\n.card{width:min(440px,100%);padding:28px;border:1px solid #36404c;border-radius:20px;background:#101720;box-shadow:0 20px 70px rgba(0,0,0,.35)}\n.eyebrow{color:#e8be55;letter-spacing:.18em;font-weight:800;font-size:.78rem}\nh1{font-size:2rem;margin:.35rem 0 .7rem}\np{color:#aeb5bf;line-height:1.7}\nlabel{display:block;margin:18px 0 7px;color:#d9dde2;font-weight:700}\ninput{width:100%;min-height:52px;padding:0 14px;border-radius:12px;border:1px solid #3b4653;background:#0a1017;color:#fff;font-size:1rem}\nbutton{width:100%;min-height:54px;margin-top:20px;border:0;border-radius:12px;background:#efc45a;color:#111;font-weight:900;font-size:1rem}\n#error{color:#ff9a9a;min-height:1.4em;margin-top:12px}\n.note{font-size:.78rem;margin-top:16px}\n</style>\n</head>\n<body>\n<form class=\"card\" id=\"loginForm\">\n  <div class=\"eyebrow\">KBN ADMIN v85</div>\n  <h1>運営管理ログイン</h1>\n  <p>管理者用のメールアドレスとパスワードを入力してください。</p>\n  <label for=\"email\">メールアドレス</label>\n  <input id=\"email\" type=\"email\" autocomplete=\"username\" required>\n  <label for=\"password\">パスワード</label>\n  <input id=\"password\" type=\"password\" autocomplete=\"current-password\" required>\n  <button type=\"submit\">ログイン</button>\n  <div id=\"error\"></div>\n  <p class=\"note\">この端末では30日間ログイン状態を保持します。</p>\n</form>\n\n<script>\nconst form=document.getElementById(\"loginForm\");\nconst error=document.getElementById(\"error\");\n\nform.addEventListener(\"submit\",async ev=>{\n  ev.preventDefault();\n  error.textContent=\"ログイン中...\";\n\n  const email=document.getElementById(\"email\").value.trim();\n  const password=document.getElementById(\"password\").value;\n\n  try{\n    const r=await fetch(\"/api/admin/login\",{\n      method:\"POST\",\n      credentials:\"include\",\n      cache:\"no-store\",\n      headers:{\"Content-Type\":\"application/json\"},\n      body:JSON.stringify({email,password})\n    });\n\n    const ct=r.headers.get(\"content-type\")||\"\";\n    if(!ct.includes(\"application/json\")){\n      const text=await r.text();\n      throw new Error(\"NON_JSON_RESPONSE: \"+text.slice(0,80));\n    }\n\n    const d=await r.json();\n\n    if(!r.ok || !d.ok){\n      if(d.error===\"INVALID_CREDENTIALS\"){\n        throw new Error(\"INVALID_CREDENTIALS\");\n      }\n      if(d.error===\"ADMIN_AUTH_NOT_CONFIGURED\"){\n        throw new Error(\"設定不足: \"+(d.missing||[]).join(\", \"));\n      }\n      throw new Error(d.message||d.error||(\"HTTP_\"+r.status));\n    }\n\n    if(!d.token){\n      throw new Error(\"TOKEN_NOT_RETURNED\");\n    }\n\n    localStorage.setItem(\"kbn_admin_token\",d.token);\n    localStorage.setItem(\"kbn_admin_logged_in_at\",String(Date.now()));\n\n    location.replace(\"/admin.html?v=85\");\n  }catch(err){\n    console.error(err);\n\n    if(err.message===\"INVALID_CREDENTIALS\"){\n      error.textContent=\"メールアドレスまたはパスワードが違います。\";\n    }else{\n      error.textContent=\"ログインできませんでした: \"+err.message;\n    }\n  }\n});\n</script>\n\n</body></html>";
 const ADMIN_COOKIE="kbn_admin_session";
 const ADMIN_SESSION_DAYS=30;
 
@@ -169,7 +281,7 @@ function clearAdminCookie(){
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url=new URL(request.url);
 
     if(url.pathname==="/admin-login"){
@@ -415,6 +527,14 @@ export default {
           VALUES (?,?,?,'reviewed',CURRENT_TIMESTAMP)
         `).bind(shop.id,requestType,payload).run();
 
+        // メール通知は申請処理を止めないようバックグラウンド送信
+        if(ctx?.waitUntil){
+          ctx.waitUntil(
+            notifyOwnerRequest(env,current,requestType,p,true)
+              .catch(e=>console.error("owner profile notification failed",e))
+          );
+        }
+
         return json({
           ok:true,
           id:r.meta?.last_row_id,
@@ -428,6 +548,14 @@ export default {
         INSERT INTO owner_requests (shop_id,request_type,payload,status)
         VALUES (?,?,?,'pending')
       `).bind(shop.id,requestType,payload).run();
+
+      // 写真・求人・イベント・クーポン申請もメール通知
+      if(ctx?.waitUntil){
+        ctx.waitUntil(
+          notifyOwnerRequest(env,shop,requestType,x.payload||{},false)
+            .catch(e=>console.error("owner request notification failed",e))
+        );
+      }
 
       return json({
         ok:true,
