@@ -151,7 +151,7 @@ export default {
 
     if(url.pathname==="/admin-login"){
       if(await validAdminSession(request,env)){
-        return Response.redirect(new URL("/admin.html",request.url).toString(),302);
+        return Response.redirect(new URL("/admin.html?v=74",request.url).toString(),302);
       }
       return new Response(LOGIN_HTML,{headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}});
     }
@@ -791,6 +791,20 @@ export default {
       return json({ok:false,error:"ADMIN_ROUTE_NOT_FOUND"},{status:404});
     }
 
-    return env.ASSETS.fetch(request);
+    const assetResponse=await env.ASSETS.fetch(request);
+
+    if(url.pathname==="/admin.html"){
+      const h=new Headers(assetResponse.headers);
+      h.set("Cache-Control","no-store, no-cache, must-revalidate, max-age=0");
+      h.set("Pragma","no-cache");
+      h.set("Expires","0");
+      return new Response(assetResponse.body,{
+        status:assetResponse.status,
+        statusText:assetResponse.statusText,
+        headers:h
+      });
+    }
+
+    return assetResponse;
   }
 };
