@@ -2366,3 +2366,68 @@ a.directory-card:hover{
     min-height:96px !important;
   }
 }
+
+
+/* v63 店舗詳細ページ画像位置修正 */
+.shop-gallery{
+  display:grid !important;
+  grid-template-columns:1fr !important;
+  gap:10px !important;
+  margin:14px 0 18px !important;
+}
+
+.shop-gallery img,
+.shop-gallery img:first-child{
+  width:100% !important;
+  height:auto !important;
+  aspect-ratio:16 / 9 !important;
+  object-fit:contain !important;
+  object-position:center center !important;
+  display:block !important;
+  background:#0b1016 !important;
+  border:1px solid #3a4550 !important;
+  border-radius:12px !important;
+  box-sizing:border-box !important;
+  grid-column:auto !important;
+  grid-row:auto !important;
+}
+
+.shop-detail-card img,
+.shop-detail-main img,
+.shop-photo img,
+.shop-image img{
+  width:100% !important;
+  max-width:100% !important;
+  height:auto !important;
+  aspect-ratio:16 / 9 !important;
+  object-fit:contain !important;
+  object-position:center center !important;
+  display:block !important;
+  margin:0 auto !important;
+  background:#0b1016 !important;
+  border-radius:12px !important;
+  box-sizing:border-box !important;
+}
+
+.shop-detail-card,
+.shop-detail-main,
+.shop-photo,
+.shop-image{
+  overflow:hidden !important;
+}
+
+@media(max-width:640px){
+  .shop-gallery{
+    grid-template-columns:1fr !important;
+  }
+  .shop-gallery img,
+  .shop-gallery img:first-child,
+  .shop-detail-card img,
+  .shop-detail-main img,
+  .shop-photo img,
+  .shop-image img{
+    aspect-ratio:16 / 9 !important;
+    object-fit:contain !important;
+    object-position:center center !important;
+  }
+}
