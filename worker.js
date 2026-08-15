@@ -323,6 +323,28 @@ export default {
         return json({ok:true,analytics:r.results||[]});
       }
 
+
+      const shopImagesRoute=url.pathname.match(/^\/api\/admin\/shops\/(\d+)\/images$/);
+      if(shopImagesRoute && request.method==="GET"){
+        const shopId=Number(shopImagesRoute[1]);
+        const r=await env.DB.prepare("SELECT id,image_url,sort_order,created_at FROM shop_images WHERE shop_id=? ORDER BY sort_order ASC,id ASC").bind(shopId).all();
+        return json({ok:true,images:r.results||[]});
+      }
+      if(shopImagesRoute && request.method==="POST"){
+        const shopId=Number(shopImagesRoute[1]);
+        let x={};try{x=await request.json()}catch{}
+        const imageUrl=t(x.image_url,1000);
+        if(!imageUrl)return json({ok:false,error:"IMAGE_URL_REQUIRED"},{status:400});
+        const sort=ni(x.sort_order)??100;
+        const r=await env.DB.prepare("INSERT INTO shop_images (shop_id,image_url,sort_order,created_at) VALUES (?,?,?,CURRENT_TIMESTAMP)").bind(shopId,imageUrl,sort).run();
+        return json({ok:true,id:r.meta?.last_row_id},{status:201});
+      }
+      const shopImageDelete=url.pathname.match(/^\/api\/admin\/shop-images\/(\d+)$/);
+      if(shopImageDelete && request.method==="DELETE"){
+        await env.DB.prepare("DELETE FROM shop_images WHERE id=?").bind(Number(shopImageDelete[1])).run();
+        return json({ok:true});
+      }
+
       if(url.pathname==="/api/admin/shops" && request.method==="GET"){
         const r=await env.DB.prepare("SELECT * FROM shops ORDER BY sort_order ASC,id DESC").all();
         return json({ok:true,shops:r.results||[]});
@@ -376,6 +398,7 @@ export default {
 
         // 関連求人を先に削除してから店舗を完全削除
         await env.DB.batch([
+          env.DB.prepare("DELETE FROM shop_images WHERE shop_id=?").bind(id),
           env.DB.prepare("DELETE FROM shop_analytics WHERE shop_id=?").bind(id),
           env.DB.prepare("DELETE FROM jobs WHERE shop_id=?").bind(id),
           env.DB.prepare("DELETE FROM shops WHERE id=?").bind(id)
@@ -451,21 +474,29 @@ export default {
         const imageUrl=t(payload.image_url||payload.url||"",1000);
         if(!imageUrl)return json({ok:false,error:"IMAGE_URL_NOT_FOUND"},{status:400});
 
-        await env.DB.batch([
-          env.DB.prepare(`
-            UPDATE shops
-            SET image_url=?,updated_at=CURRENT_TIMESTAMP
-            WHERE id=?
-          `).bind(imageUrl,req.target_shop_id),
-          env.DB.prepare(`
-            UPDATE owner_requests
-            SET status='reviewed',reviewed_at=CURRENT_TIMESTAMP
-            WHERE id=?
-          `).bind(id)
-        ]);
+        let body={};
+        try{body=await request.json()}catch{}
+        const mode=body.mode==="gallery"?"gallery":"main";
 
-        return json({ok:true,image_url:imageUrl,shop_id:req.target_shop_id});
+        if(mode==="gallery"){
+          const maxRow=await env.DB.prepare("SELECT COALESCE(MAX(sort_order),0) AS m FROM shop_images WHERE shop_id=?").bind(req.target_shop_id).first();
+          const nextSort=Number(maxRow?.m||0)+10;
+          await env.DB.batch([
+            env.DB.prepare("INSERT INTO shop_images (shop_id,image_url,sort_order,created_at) VALUES (?,?,?,CURRENT_TIMESTAMP)")
+              .bind(req.target_shop_id,imageUrl,nextSort),
+            env.DB.prepare("UPDATE owner_requests SET status='reviewed',reviewed_at=CURRENT_TIMESTAMP WHERE id=?").bind(id)
+          ]);
+        }else{
+          await env.DB.batch([
+            env.DB.prepare("UPDATE shops SET image_url=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(imageUrl,req.target_shop_id),
+            env.DB.prepare("UPDATE owner_requests SET status='reviewed',reviewed_at=CURRENT_TIMESTAMP WHERE id=?").bind(id)
+          ]);
+        }
+
+        return json({ok:true,image_url:imageUrl,shop_id:req.target_shop_id,mode});
       }
+
+
 
       const orm=url.pathname.match(/^\/api\/admin\/owner-requests\/(\d+)$/);
       if(orm && request.method==="PUT"){

@@ -6,6 +6,29 @@
   <meta name="description" content="熊本のBAR店舗情報｜KUMAMOTO BAR NAVI">
   <title>店舗詳細｜KUMAMOTO BAR NAVI</title>
   <link rel="stylesheet" href="style.css">
+
+<style>
+.shop-gallery{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:8px;
+  margin:14px 0 18px;
+}
+.shop-gallery img{
+  width:100%;
+  aspect-ratio:1/1;
+  object-fit:cover;
+  border-radius:10px;
+  border:1px solid #3a4550;
+  background:#0c1117;
+}
+.shop-gallery img:first-child{grid-column:span 2;grid-row:span 2}
+@media(max-width:640px){
+  .shop-gallery{grid-template-columns:repeat(2,1fr)}
+  .shop-gallery img:first-child{grid-column:span 2;grid-row:auto;aspect-ratio:16/10}
+}
+</style>
+
 </head>
 <body>
 <header class="site-header">
@@ -25,6 +48,7 @@
       <div id="shopDetail" class="shop-db-detail"><p>読み込み中...</p></div>
     </div>
   </section>
+${uniqueGallery.length?`<div class="shop-gallery">${uniqueGallery.map((u,i)=>`<img src="${esc(u)}" alt="${esc(s.name)} ${i+1}" loading="lazy" onerror="this.style.display='none'">`).join("")}</div>`:""}
 </main>
 
 <script>
@@ -62,6 +86,8 @@ async function load(){
     const d=await r.json();
     if(!r.ok||!d.ok)throw new Error("not found");
     const s=d.shop;
+    const galleryImages=[s.image_url,...(d.images||[]).map(x=>x.image_url)].filter(Boolean);
+    const uniqueGallery=[...new Set(galleryImages)];
     document.title=`${s.name}｜KUMAMOTO BAR NAVI`;
     const budget=s.budget_min&&s.budget_max?`${Number(s.budget_min).toLocaleString()}〜${Number(s.budget_max).toLocaleString()}円`
       :s.budget_min?`${Number(s.budget_min).toLocaleString()}円〜`

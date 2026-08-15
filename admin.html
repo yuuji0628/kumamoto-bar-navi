@@ -511,7 +511,8 @@ async function loadOwnerReq(){
 
     const actions=r.status==="pending"
       ? (r.request_type==="photo"&&imageUrl
-          ? `<button class="owner-apply-photo" onclick="applyOwnerPhoto(${r.id})">この画像を反映</button>
+          ? `<button class="owner-apply-photo" onclick="applyOwnerPhoto(${r.id},'main')">メイン画像に反映</button>
+             <button onclick="applyOwnerPhoto(${r.id},'gallery')">ギャラリーに追加</button>
              <button onclick="finishOwnerReq(${r.id},'reviewed')">対応済み</button>
              <button onclick="finishOwnerReq(${r.id},'rejected')">却下</button>`
           : `<button onclick="finishOwnerReq(${r.id},'reviewed')">対応済み</button>
@@ -530,11 +531,16 @@ async function loadOwnerReq(){
   }).join(""):'<p>申請はありません。</p>';
 }
 
-window.applyOwnerPhoto=async id=>{
-  if(!confirm("この申請画像を店舗画像として反映しますか？"))return;
+window.applyOwnerPhoto=async(id,mode="main")=>{
+  const label=mode==="gallery"?"ギャラリーに追加":"メイン画像として反映";
+  if(!confirm(`この申請画像を${label}しますか？`))return;
   try{
-    const d=await api(`/api/admin/owner-requests/${id}/apply-photo`,{method:"POST"});
-    alert("店舗画像を変更しました");
+    await api(`/api/admin/owner-requests/${id}/apply-photo`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({mode})
+    });
+    alert(mode==="gallery"?"ギャラリーに追加しました":"メイン画像を変更しました");
     await Promise.allSettled([loadOwnerReq(),loadShops()]);
   }catch(e){
     console.error(e);
@@ -757,7 +763,15 @@ window.copyInstaCaption=async()=>{
 };
 
 window.openInstagram=()=>{
-  location.href="https://www.instagram.com/";
+  const web="https://www.instagram.com/";
+  const app="instagram://app";
+  let hidden=false;
+  const onVis=()=>{if(document.hidden)hidden=true};
+  document.addEventListener("visibilitychange",onVis,{once:true});
+  location.href=app;
+  setTimeout(()=>{
+    if(!hidden)location.href=web;
+  },900);
 };
 
 $("reloadShops").onclick=loadShops;$("reloadSubs").onclick=loadSubs;$("reloadOwnerReq").onclick=loadOwnerReq;$("reloadAnalytics").onclick=loadAnalytics;$("dailyDaysFilter")?.addEventListener("change",loadDailyAnalytics);$("dailyShopFilter")?.addEventListener("change",loadDailyAnalytics);
