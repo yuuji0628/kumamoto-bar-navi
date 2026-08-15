@@ -292,95 +292,21 @@ window.revokeOwnerLink=async id=>{
   }catch(e){alert("無効化できませんでした: "+e.message)}
 }
 window.deleteShop=async id=>{
-  const s=shops.find(x=>x.id==id);
-  if(!s)return;
-  const ok=confirm(`「${s.name}」を完全削除しますか？\n\nこの操作は元に戻せません。\n店舗データ・関連求人・R2店舗画像も削除されます。`);
-  if(!ok)return;
+  const s=shops.find(x=>Number(x.id)===Number(id));
+  const name=s?.name||`店舗ID ${id}`;
+  if(!confirm(`「${name}」を完全削除しますか？\n\nこの操作は元に戻せません。`))return;
+
   try{
     const d=await api(`/api/admin/shops/${id}`,{method:"DELETE"});
-    if($("shopId").value==String(id)){$("shopForm").reset();$("shopId").value="";$("sort_order").value=100}
-    await Promise.all([loadShops(),loadJobs()]);
-    if(d.warning==="R2_IMAGE_DELETE_FAILED"){
-      alert("店舗データは削除しましたが、R2画像だけ削除できませんでした。");
-    }else{
-      alert("完全削除しました");
-    }
+    if(d?.ok===false)throw new Error(d?.error||"DELETE_FAILED");
+    alert("削除しました");
+    await loadShops();
   }catch(e){
-    alert("削除できませんでした: "+e.message);
-  }
-}
-$("shopForm").onsubmit=async e=>{e.preventDefault();const id=$("shopId").value;const data={};["name","name_kana","slug","area","address","hours","holiday","genre","instagram","features","description","image_url"].forEach(k=>data[k]=$(k).value);["sort_order","seats","budget_min","budget_max"].forEach(k=>data[k]=$(k).value);["is_published","is_featured","is_new","is_recruiting"].forEach(k=>data[k]=$(k).checked);await api(id?`/api/admin/shops/${id}`:"/api/admin/shops",{method:id?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});await loadShops();alert("保存しました")}
-$("resetShop").onclick=()=>{$("shopForm").reset();$("shopId").value="";$("sort_order").value=100}
-$("uploadImage").onclick=async()=>{const f=$("imageFile").files[0];if(!f)return alert("画像を選択してください");const fd=new FormData();fd.append("file",f);$("uploadStatus").textContent="アップロード中...";try{const d=await api("/api/admin/upload",{method:"POST",body:fd});$("image_url").value=d.url;$("uploadStatus").textContent="完了"}catch(e){$("uploadStatus").textContent=e.message}}
-async function loadJobs(){const d=await api("/api/admin/jobs");jobs=d.jobs||[];$("jobList").innerHTML=jobs.map(j=>`<article class="admin-shop-item"><div><h3>${esc(j.title)}</h3><p>${esc(j.shop_name||'店舗未指定')} / ${esc(j.salary||'')}</p></div></article>`).join("")}
-$("jobForm").onsubmit=async e=>{e.preventDefault();const data={shop_id:$("jobShop").value,title:$("jobTitle").value,employment_type:$("jobType").value,salary:$("jobSalary").value,hours:$("jobHours").value,description:$("jobDescription").value,contact:$("jobContact").value,is_published:$("jobPublished").checked,sort_order:$("jobOrder").value};await api("/api/admin/jobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});await loadJobs();alert("求人を保存しました")}
-async function loadSubs(){
-  const list=$("subList");
-  if(!list)return;
-  list.innerHTML="<p>申込みを読み込んでいます...</p>";
-  try{
-    const d=await api("/api/admin/submissions");
-    subs=d.submissions||[];
-    list.innerHTML=subs.length?subs.map(s=>`
-      <article class="admin-shop-item">
-        <div>
-          <h3>${esc(s.shop_name)}</h3>
-          <p>${esc(s.contact_name||"担当者未入力")} / ${esc(s.status||"pending")}</p>
-          <small>${esc(s.address||"住所未入力")}</small>
-          <div style="margin-top:8px;color:#bfc6cf;font-size:12px;line-height:1.7">
-            ${s.hours?`営業時間：${esc(s.hours)}<br>`:""}
-            ${s.holiday?`定休日：${esc(s.holiday)}<br>`:""}
-            ${s.genre?`ジャンル：${esc(s.genre)}<br>`:""}
-            ${s.instagram?`Instagram：${esc(s.instagram)}<br>`:""}
-            ${s.description?`紹介：${esc(s.description)}`:""}
-          </div>
-        </div>
-        <div class="admin-item-actions">
-          ${s.status==="pending"?`<button onclick="approve(${s.id})">承認して店舗化</button><button onclick="rejectSub(${s.id})">却下</button>`:""}
-        </div>
-      </article>`).join(""):"<p>現在、掲載申込みはありません。</p>";
-  }catch(e){
-    console.error(e);
-    list.innerHTML=e?.message==="ACCESS_AUTH_REQUIRED"
-      ? '<div class="analytics-error-box"><b>Cloudflare Accessの認証が必要です。</b><p>上の認証ボタンを一度開いてから戻ってください。</p></div>'
-      : `<div class="analytics-error-box"><b>掲載申込みを読み込めませんでした。</b><p>${esc(e?.message||"UNKNOWN_ERROR")}</p></div>`;
-  }
-}
-
-
-window.approve=async id=>{
-  const s=subs.find(x=>Number(x.id)===Number(id));
-  const name=s?.shop_name||`申込みID ${id}`;
-  if(!confirm(`「${name}」を承認して店舗化しますか？`))return;
-
-  try{
-    const result=await api(`/api/admin/submissions/${id}/approve`,{method:"POST"});
-    await Promise.allSettled([loadSubs(),loadShops()]);
-
-    const makePost=confirm("店舗化しました。\n\n続けてInstagram投稿を作成しますか？");
-    if(makePost){
-      const shopId=Number(result?.shop_id);
-      if(shopId){
-        let shop=shops.find(x=>Number(x.id)===shopId);
-        if(!shop){
-          await loadShops();
-          shop=shops.find(x=>Number(x.id)===shopId);
-        }
-        if(shop){
-          await createInstaPost(shopId);
-        }else{
-          alert("店舗化は完了しましたが、投稿メーカー用の店舗情報を取得できませんでした。店舗タブから「Instagram投稿を作成」を押してください。");
-        }
-      }else{
-        alert("店舗化は完了しました。店舗タブから「Instagram投稿を作成」を押してください。");
-      }
-    }
-  }catch(e){
-    console.error("approve failed",e);
+    console.error("delete shop failed",e);
     if(e?.message==="ACCESS_AUTH_REQUIRED"){
       alert("Cloudflare Accessの認証が必要です。認証後にもう一度お試しください。");
     }else{
-      alert("店舗化できませんでした: "+(e?.message||"UNKNOWN_ERROR"));
+      alert("削除できませんでした: "+(e?.message||"UNKNOWN_ERROR"));
     }
   }
 };
