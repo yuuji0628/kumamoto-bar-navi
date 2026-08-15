@@ -428,6 +428,7 @@ async function loadAnalytics(){
 }
 
 const reqLabel={profile:"店舗情報変更",photo:"写真変更",job:"求人",event:"イベント",coupon:"クーポン"};
+const reqStatusLabel={pending:"確認待ち",reviewed:"自動反映済み",rejected:"却下"};
 
 function ownerReqMediaUrl(v){
   const s=String(v||"").trim();
@@ -466,7 +467,7 @@ async function loadOwnerReq(){
     return `<article class="admin-shop-item owner-request-item">
       <div class="admin-shop-main">
         <h3>${esc(r.shop_name)} / ${esc(reqLabel[r.request_type]||r.request_type)}</h3>
-        <p>${esc(r.status)} / ${esc(r.created_at||"")}</p>
+        <p>${esc(reqStatusLabel?.[r.status]||r.status)} / ${esc(r.created_at||"")}</p>
         ${photoPreview}
         <div class="owner-request-details">${details||(!photoPreview?"内容なし":"")}</div>
       </div>

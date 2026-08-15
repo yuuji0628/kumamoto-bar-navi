@@ -228,16 +228,94 @@ export default {
     if(url.pathname==="/api/owner/requests" && request.method==="POST"){
       const shop=await ownerShop(request,env);
       if(!shop)return json({ok:false,error:"OWNER_TOKEN_INVALID"},{status:401});
-      let x;try{x=await request.json()}catch{return json({ok:false,error:"INVALID_JSON"},{status:400})}
-      const allowed=new Set(["profile","photo","job","event","coupon"]);
-      const requestType=t(x.request_type,40);
-      if(!allowed.has(requestType))return json({ok:false,error:"INVALID_REQUEST_TYPE"},{status:400});
-      const payload=JSON.stringify(x.payload||{}).slice(0,20000);
+
+      let x;
+      try{x=await request.json()}catch{
+        return json({ok:false,error:"INVALID_JSON"},{status:400});
+      }
+
+      const requestType=t(x.request_type,30);
+      const payload=JSON.stringify(x.payload||{});
+
+      if(!["profile","photo","job","event","coupon"].includes(requestType)){
+        return json({ok:false,error:"INVALID_REQUEST_TYPE"},{status:400});
+      }
+
+      // 店舗情報変更は即時反映
+      if(requestType==="profile"){
+        const p=x.payload||{};
+
+        const current=await env.DB.prepare("SELECT * FROM shops WHERE id=?").bind(shop.id).first();
+        if(!current)return json({ok:false,error:"SHOP_NOT_FOUND"},{status:404});
+
+        const merged={
+          ...current,
+          name: p.name ?? current.name,
+          name_kana: p.name_kana ?? current.name_kana,
+          area: p.area ?? current.area,
+          address: p.address ?? current.address,
+          hours: p.hours ?? current.hours,
+          holiday: p.holiday ?? current.holiday,
+          instagram: p.instagram ?? current.instagram,
+          genre: p.genre ?? current.genre,
+          features: p.features ?? current.features,
+          description: p.description ?? current.description,
+          budget_min: p.budget_min ?? current.budget_min,
+          budget_max: p.budget_max ?? current.budget_max,
+          seats: p.seats ?? current.seats,
+          phone: p.phone ?? current.phone
+        };
+
+        await env.DB.prepare(`
+          UPDATE shops SET
+            name=?,name_kana=?,area=?,address=?,hours=?,holiday=?,
+            instagram=?,genre=?,features=?,description=?,
+            budget_min=?,budget_max=?,seats=?,phone=?,
+            updated_at=CURRENT_TIMESTAMP
+          WHERE id=?
+        `).bind(
+          t(merged.name,180),
+          t(merged.name_kana,180),
+          t(merged.area,120),
+          t(merged.address,500),
+          t(merged.hours,180),
+          t(merged.holiday,180),
+          t(merged.instagram,500),
+          t(merged.genre,500),
+          t(merged.features,1000),
+          t(merged.description,5000),
+          ni(merged.budget_min),
+          ni(merged.budget_max),
+          ni(merged.seats),
+          t(merged.phone,120),
+          shop.id
+        ).run();
+
+        const r=await env.DB.prepare(`
+          INSERT INTO owner_requests (shop_id,request_type,payload,status,reviewed_at)
+          VALUES (?,?,?,'reviewed',CURRENT_TIMESTAMP)
+        `).bind(shop.id,requestType,payload).run();
+
+        return json({
+          ok:true,
+          id:r.meta?.last_row_id,
+          auto_applied:true,
+          status:"reviewed"
+        },{status:201});
+      }
+
+      // 写真・求人・イベント・クーポンは従来通り承認待ち
       const r=await env.DB.prepare(`
         INSERT INTO owner_requests (shop_id,request_type,payload,status)
         VALUES (?,?,?,'pending')
       `).bind(shop.id,requestType,payload).run();
-      return json({ok:true,id:r.meta?.last_row_id},{status:201});
+
+      return json({
+        ok:true,
+        id:r.meta?.last_row_id,
+        auto_applied:false,
+        status:"pending"
+      },{status:201});
     }
 
     if(url.pathname==="/api/owner/upload" && request.method==="POST"){
