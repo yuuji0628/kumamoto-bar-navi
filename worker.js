@@ -269,6 +269,41 @@ export default {
       if(!hasAccess(request)) return json({ok:false,error:"ACCESS_REQUIRED"},{status:401});
 
 
+
+      if(url.pathname==="/api/admin/analytics/daily" && request.method==="GET"){
+        const shopIdRaw=url.searchParams.get("shop_id");
+        const shopId=shopIdRaw?Number(shopIdRaw):null;
+        const daysRaw=Number(url.searchParams.get("days")||30);
+        const days=Math.max(1,Math.min(90,Number.isFinite(daysRaw)?daysRaw:30));
+
+        let sql=`
+          SELECT
+            date(datetime(a.created_at,'+9 hours')) AS day,
+            SUM(CASE WHEN a.action='view' THEN 1 ELSE 0 END) AS views,
+            SUM(CASE WHEN a.action!='view' THEN 1 ELSE 0 END) AS reactions,
+            SUM(CASE WHEN a.action='instagram' THEN 1 ELSE 0 END) AS instagram_clicks,
+            SUM(CASE WHEN a.action='map' THEN 1 ELSE 0 END) AS map_clicks,
+            SUM(CASE WHEN a.action='phone' THEN 1 ELSE 0 END) AS phone_clicks,
+            SUM(CASE WHEN a.action='website' THEN 1 ELSE 0 END) AS website_clicks
+          FROM shop_analytics a
+          WHERE datetime(a.created_at,'+9 hours') >= datetime('now','+9 hours',?)
+        `;
+        const binds=[`-${days-1} days`];
+
+        if(shopId){
+          sql+=" AND a.shop_id=?";
+          binds.push(shopId);
+        }
+
+        sql+=`
+          GROUP BY day
+          ORDER BY day DESC
+        `;
+
+        const r=await env.DB.prepare(sql).bind(...binds).all();
+        return json({ok:true,days,daily:r.results||[]});
+      }
+
       if(url.pathname==="/api/admin/analytics" && request.method==="GET"){
         const r=await env.DB.prepare(`
           SELECT

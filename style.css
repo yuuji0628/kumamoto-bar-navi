@@ -2209,3 +2209,114 @@ a.directory-card:hover{
   color:#e8e0d5;
 }
 .analytics-error-box p{margin:6px 0 0;color:#b8aa98;font-size:.8rem;line-height:1.6}
+
+
+/* v52 daily analytics */
+.analytics-daily-wrap{
+  margin-top:18px;
+  padding-top:18px;
+  border-top:1px solid #2e3742;
+}
+.analytics-daily-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:end;
+  gap:12px;
+  margin-bottom:12px;
+}
+.analytics-daily-head h3{
+  margin:4px 0 0;
+  font-size:1.25rem;
+}
+.analytics-daily-controls{
+  display:flex;
+  gap:8px;
+}
+.analytics-daily-controls select{
+  min-height:40px;
+  border:1px solid #3a4450;
+  border-radius:10px;
+  background:#0d141c;
+  color:#e8ebef;
+  padding:0 10px;
+}
+.daily-summary{
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:8px;
+  margin-bottom:10px;
+}
+.daily-summary>div{
+  padding:10px;
+  border:1px solid #38424d;
+  border-radius:10px;
+  background:#101720;
+  text-align:center;
+}
+.daily-summary small{
+  display:block;
+  color:#9fa7b1;
+  font-size:.66rem;
+}
+.daily-summary strong{
+  display:block;
+  margin-top:4px;
+  color:#efc45a;
+  font-size:1.1rem;
+}
+.daily-analytics-list{
+  display:grid;
+  gap:7px;
+}
+.daily-row{
+  display:grid;
+  grid-template-columns:72px 70px 70px 1fr;
+  gap:10px;
+  align-items:center;
+  padding:10px 12px;
+  border:1px solid #35404b;
+  border-radius:10px;
+  background:#0d141c;
+}
+.daily-date{
+  display:flex;
+  align-items:baseline;
+  gap:4px;
+}
+.daily-date b{
+  color:#f1f3f6;
+}
+.daily-date small,
+.daily-row small{
+  color:#9fa7b1;
+  font-size:.64rem;
+}
+.daily-row>div:not(.daily-date):not(.daily-breakdown){
+  text-align:center;
+}
+.daily-row strong{
+  color:#efc45a;
+  font-size:.95rem;
+}
+.daily-breakdown{
+  text-align:right;
+}
+@media(max-width:640px){
+  .analytics-daily-head{
+    align-items:stretch;
+    flex-direction:column;
+  }
+  .analytics-daily-controls{
+    display:grid;
+    grid-template-columns:1fr 90px;
+  }
+  .daily-row{
+    grid-template-columns:64px 1fr 1fr;
+  }
+  .daily-breakdown{
+    grid-column:1/-1;
+    text-align:left;
+    padding-top:6px;
+    border-top:1px solid #29323c;
+  }
+}

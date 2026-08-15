@@ -62,6 +62,30 @@
 <p style="color:#aeb4bd">店舗ページの閲覧数と、地図・Instagram・電話などのクリック数を確認できます。</p>
 <div id="analyticsSummary" class="analytics-summary"></div>
 <div id="analyticsList" class="admin-shop-list"></div>
+
+<div class="analytics-daily-wrap">
+  <div class="analytics-daily-head">
+    <div>
+      <p class="eyebrow">DAILY</p>
+      <h3>日別アクセス</h3>
+    </div>
+    <div class="analytics-daily-controls">
+      <select id="dailyShopFilter">
+        <option value="">全店舗</option>
+      </select>
+      <select id="dailyDaysFilter">
+        <option value="7">7日</option>
+        <option value="14">14日</option>
+        <option value="30" selected>30日</option>
+      </select>
+    </div>
+  </div>
+  <div id="dailySummary" class="daily-summary"></div>
+  <div id="dailyAnalyticsList" class="daily-analytics-list">
+    <p>日別データを読み込んでいます...</p>
+  </div>
+</div>
+
 </section>
 
 </div></main>
@@ -119,6 +143,56 @@ window.approve=async id=>{await api(`/api/admin/submissions/${id}/approve`,{meth
 window.rejectSub=async id=>{await api(`/api/admin/submissions/${id}/reject`,{method:"POST"});await loadSubs()}
 
 
+
+async function loadDailyAnalytics(){
+  const list=$("dailyAnalyticsList");
+  const summary=$("dailySummary");
+  if(!list||!summary)return;
+
+  const shopId=$("dailyShopFilter")?.value||"";
+  const days=$("dailyDaysFilter")?.value||"30";
+
+  list.innerHTML="<p>日別データを読み込んでいます...</p>";
+  summary.innerHTML="";
+
+  try{
+    const q=new URLSearchParams({days});
+    if(shopId)q.set("shop_id",shopId);
+    const d=await api("/api/admin/analytics/daily?"+q.toString());
+    const rows=d.daily||[];
+
+    const totalViews=rows.reduce((n,r)=>n+Number(r.views||0),0);
+    const totalReactions=rows.reduce((n,r)=>n+Number(r.reactions||0),0);
+
+    summary.innerHTML=`
+      <div><small>${days}日閲覧</small><strong>${totalViews.toLocaleString()}</strong></div>
+      <div><small>${days}日反応</small><strong>${totalReactions.toLocaleString()}</strong></div>`;
+
+    if(!rows.length){
+      list.innerHTML='<p>この期間のアクセスデータはありません。</p>';
+      return;
+    }
+
+    list.innerHTML=rows.map(r=>{
+      const dt=new Date(r.day+"T00:00:00+09:00");
+      const label=`${dt.getMonth()+1}/${dt.getDate()}`;
+      const weekday=["日","月","火","水","木","金","土"][dt.getDay()];
+      return `
+        <div class="daily-row">
+          <div class="daily-date"><b>${label}</b><small>(${weekday})</small></div>
+          <div><small>閲覧</small><strong>${Number(r.views||0).toLocaleString()}</strong></div>
+          <div><small>反応</small><strong>${Number(r.reactions||0).toLocaleString()}</strong></div>
+          <div class="daily-breakdown">
+            <small>Instagram ${Number(r.instagram_clicks||0).toLocaleString()} ・ 地図 ${Number(r.map_clicks||0).toLocaleString()} ・ 電話 ${Number(r.phone_clicks||0).toLocaleString()}</small>
+          </div>
+        </div>`;
+    }).join("");
+  }catch(e){
+    console.error("daily analytics load failed",e);
+    list.innerHTML='<div class="analytics-error-box"><b>日別アクセスを読み込めませんでした。</b></div>';
+  }
+}
+
 async function loadAnalytics(){
   const summary=$("analyticsSummary");
   const list=$("analyticsList");
@@ -127,6 +201,12 @@ async function loadAnalytics(){
   try{
     const d=await api("/api/admin/analytics");
     const rows=d.analytics||[];
+    const dailyShop=$("dailyShopFilter");
+    if(dailyShop){
+      const current=dailyShop.value;
+      dailyShop.innerHTML='<option value="">全店舗</option>'+rows.map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join("");
+      if([...dailyShop.options].some(o=>o.value===current))dailyShop.value=current;
+    }
     const totals=rows.reduce((a,r)=>{
       a.views+=Number(r.views||0);
       a.clicks+=Number(r.instagram_clicks||0)+Number(r.map_clicks||0)+Number(r.phone_clicks||0)+Number(r.website_clicks||0);
@@ -139,6 +219,7 @@ async function loadAnalytics(){
       <div><small>総反応数</small><strong>${totals.clicks.toLocaleString()}</strong></div>
       <div><small>30日閲覧</small><strong>${totals.views30.toLocaleString()}</strong></div>
       <div><small>30日反応</small><strong>${totals.clicks30.toLocaleString()}</strong></div>`;
+    await loadDailyAnalytics();
     list.innerHTML=rows.length?rows.map(r=>`
       <article class="admin-shop-item analytics-item">
         <div>
@@ -173,6 +254,6 @@ window.finishOwnerReq=async(id,status)=>{
   await loadOwnerReq();
 }
 
-$("reloadShops").onclick=loadShops;$("reloadSubs").onclick=loadSubs;$("reloadOwnerReq").onclick=loadOwnerReq;$("reloadAnalytics").onclick=loadAnalytics;
+$("reloadShops").onclick=loadShops;$("reloadSubs").onclick=loadSubs;$("reloadOwnerReq").onclick=loadOwnerReq;$("reloadAnalytics").onclick=loadAnalytics;$("dailyDaysFilter")?.addEventListener("change",loadDailyAnalytics);$("dailyShopFilter")?.addEventListener("change",loadDailyAnalytics);
 Promise.all([loadShops(),loadJobs(),loadSubs(),loadOwnerReq(),loadAnalytics()]);
 </script></body></html>
