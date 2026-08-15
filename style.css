@@ -2320,3 +2320,16 @@ a.directory-card:hover{
     border-top:1px solid #29323c;
   }
 }
+
+/* v53 private-tab Access recovery */
+.access-auth-row{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+  margin:10px 0 4px;
+}
+.access-auth-row small{
+  color:#9fa7b1;
+  font-size:.7rem;
+}

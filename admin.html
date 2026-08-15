@@ -60,6 +60,10 @@
 <section id="tab-analytics" class="admin-block" hidden>
 <div class="admin-block-head"><div><p class="eyebrow">ANALYTICS</p><h2>店舗アクセス集計</h2></div><button id="reloadAnalytics" class="admin-secondary-btn" type="button" onclick="loadAnalytics()">再読み込み</button></div>
 <p style="color:#aeb4bd">店舗ページの閲覧数と、地図・Instagram・電話などのクリック数を確認できます。</p>
+<div class="access-auth-row">
+  <a id="accessAuthBtn" class="admin-secondary-btn" href="/api/admin/analytics" target="_self">Cloudflare Access認証</a>
+  <small>プライベートタブでエラー時は、ここを一度開いてから戻ってください。</small>
+</div>
 <div id="analyticsSummary" class="analytics-summary"></div>
 <div id="analyticsList" class="admin-shop-list"></div>
 
@@ -93,18 +97,30 @@
 const $=id=>document.getElementById(id);let shops=[],jobs=[],subs=[];
 document.querySelectorAll(".admin-tabs button").forEach(b=>b.onclick=()=>{document.querySelectorAll(".admin-tabs button").forEach(x=>x.classList.remove("active"));b.classList.add("active");["shops","jobs","subs","ownerreq","analytics"].forEach(x=>$("tab-"+x).hidden=x!==b.dataset.tab)});
 const esc=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
-async function api(u,o={}){const r=await fetch(u,{credentials:"same-origin",...o});const d=await r.json();if(!r.ok)throw new Error(d.error||r.status);return d}
-async function loadShops(){const d=await api("/api/admin/shops");shops=d.shops||[];$("jobShop").innerHTML='<option value="">店舗なし</option>'+shops.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("");$("shopList").innerHTML=shops.map(s=>`<article class="admin-shop-item"><div><h3>${esc(s.name)} ${s.is_featured?'⭐':''} ${s.is_new?'NEW':''}</h3><p>${esc(s.area)} / ${esc(s.genre||'')}</p><small>順:${s.sort_order} / ${s.is_published?'公開':'非公開'} / 専用URL:${s.owner_token_hash?'発行済み':'未発行'}</small></div><div class="admin-item-actions"><button onclick="editShop(${s.id})">編集</button><button onclick="issueOwnerLink(${s.id})">専用URL発行</button>${s.owner_token_hash?`<button onclick="revokeOwnerLink(${s.id})">URL無効化</button>`:''}<button onclick="deleteShop(${s.id})" style="border-color:#7a3030;color:#ffb3b3">完全削除</button></div></article>`).join("")}
-window.editShop=id=>{const s=shops.find(x=>x.id==id);["name","name_kana","slug","area","address","hours","holiday","genre","instagram","features","description","image_url","sort_order","seats","budget_min","budget_max"].forEach(k=>$(k).value=s[k]??"");["is_published","is_featured","is_new","is_recruiting"].forEach(k=>$(k).checked=!!Number(s[k]));$("shopId").value=id;scrollTo(0,0)}
+async function api(path,opt={}){
+  const options={...opt};
+  options.credentials="include";
+  options.headers={...(opt.headers||{})};
 
-window.issueOwnerLink=async id=>{
-  const s=shops.find(x=>x.id==id);if(!s)return;
-  if(s.owner_token_hash&&!confirm(`「${s.name}」の専用URLを再発行しますか？\n古いURLは使えなくなります。`))return;
-  try{
-    const d=await api(`/api/admin/shops/${id}/owner-token`,{method:"POST"});
-    await loadShops();
-    prompt("このURLを店舗様へ送ってください。URLはこの画面で再表示できないため、必ずコピーしてください。",d.url);
-  }catch(e){alert("URLを発行できませんでした: "+e.message)}
+  const r=await fetch(path,options);
+
+  // Cloudflare Accessのログイン画面へリダイレクトされた場合、
+  // JSONとして扱わず認証切れとして明示する。
+  const ct=r.headers.get("content-type")||"";
+  if(r.redirected && /cloudflareaccess\.com/i.test(r.url)){
+    throw new Error("ACCESS_AUTH_REQUIRED");
+  }
+  if(!ct.includes("application/json")){
+    const text=await r.text();
+    if(/Cloudflare Access|cloudflareaccess\.com|Log in to/i.test(text)){
+      throw new Error("ACCESS_AUTH_REQUIRED");
+    }
+    throw new Error("NON_JSON_RESPONSE");
+  }
+
+  const d=await r.json();
+  if(!r.ok||d.ok===false)throw new Error(d.error||("HTTP_"+r.status));
+  return d;
 }
 window.revokeOwnerLink=async id=>{
   const s=shops.find(x=>x.id==id);if(!s)return;
@@ -189,7 +205,9 @@ async function loadDailyAnalytics(){
     }).join("");
   }catch(e){
     console.error("daily analytics load failed",e);
-    list.innerHTML='<div class="analytics-error-box"><b>日別アクセスを読み込めませんでした。</b></div>';
+    list.innerHTML=e?.message==="ACCESS_AUTH_REQUIRED"
+      ? '<div class="analytics-error-box"><b>Cloudflare Accessの認証が必要です。</b><p>同じタブで一度認証してから再読み込みしてください。</p></div>'
+      : '<div class="analytics-error-box"><b>日別アクセスを読み込めませんでした。</b></div>';
   }
 }
 
@@ -235,7 +253,9 @@ async function loadAnalytics(){
   }catch(e){
     console.error(e);
     if(summary) summary.innerHTML='<div style="grid-column:1/-1"><small>読み込みエラー</small><strong>!</strong></div>';
-    if(list) list.innerHTML='<div class="analytics-error-box"><b>アクセス集計を読み込めませんでした。</b><p>WorkerまたはD1との接続を確認してください。</p></div>';
+    if(list) list.innerHTML=e?.message==="ACCESS_AUTH_REQUIRED"
+      ? '<div class="analytics-error-box"><b>Cloudflare Accessの認証が必要です。</b><p>同じタブで一度認証してから「再読み込み」を押してください。</p></div>'
+      : '<div class="analytics-error-box"><b>アクセス集計を読み込めませんでした。</b><p>WorkerまたはD1との接続を確認してください。</p></div>';
   }
 }
 
@@ -256,4 +276,15 @@ window.finishOwnerReq=async(id,status)=>{
 
 $("reloadShops").onclick=loadShops;$("reloadSubs").onclick=loadSubs;$("reloadOwnerReq").onclick=loadOwnerReq;$("reloadAnalytics").onclick=loadAnalytics;$("dailyDaysFilter")?.addEventListener("change",loadDailyAnalytics);$("dailyShopFilter")?.addEventListener("change",loadDailyAnalytics);
 Promise.all([loadShops(),loadJobs(),loadSubs(),loadOwnerReq(),loadAnalytics()]);
+
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="visible"){
+    setTimeout(()=>{
+      if(document.querySelector('[data-tab="analytics"]')?.classList.contains("active")){
+        loadAnalytics().catch(()=>{});
+      }
+    },300);
+  }
+});
+
 </script></body></html>
