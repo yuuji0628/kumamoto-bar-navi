@@ -125,7 +125,7 @@
 
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
-<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN v74</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><div class="admin-security-badge">🔐 管理者ログイン</div></section>
+<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN v75</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><div class="admin-security-badge">🔐 管理者ログイン</div></section>
 
 <div class="admin-login-bar">
   <span>🔐 管理者ログイン中</span>
@@ -273,10 +273,23 @@ document.querySelectorAll(".admin-tabs button").forEach(b=>b.onclick=async()=>{
 });
 const esc=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 async function api(path,opt={}){
-  const options={...opt,credentials:"include",headers:{...(opt.headers||{})}};
+  const token=localStorage.getItem("kbn_admin_token")||"";
+  if(!token){
+    location.href="/admin-login";
+    throw new Error("ADMIN_AUTH_REQUIRED");
+  }
+  const options={
+    ...opt,
+    credentials:"include",
+    headers:{
+      ...(opt.headers||{}),
+      "Authorization":`Bearer ${token}`
+    }
+  };
   const r=await fetch(path,options);
   const ct=r.headers.get("content-type")||"";
   if(r.status===401){
+    localStorage.removeItem("kbn_admin_token");
     location.href="/admin-login";
     throw new Error("ADMIN_AUTH_REQUIRED");
   }
@@ -533,7 +546,10 @@ document.addEventListener("visibilitychange",()=>{
 
 $("adminLogoutBtn")?.addEventListener("click",async()=>{
   try{await fetch("/api/admin/logout",{method:"POST",credentials:"include"});}
-  finally{location.href="/admin-login";}
+  finally{
+    localStorage.removeItem("kbn_admin_token");
+    location.href="/admin-login";
+  }
 });
 
 

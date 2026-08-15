@@ -121,6 +121,29 @@ function authEqual(a,b){
   let x=0;for(let i=0;i<a.length;i++)x|=a.charCodeAt(i)^b.charCodeAt(i);
   return x===0;
 }
+
+function adminBearer(request){
+  const h=request.headers.get("Authorization")||"";
+  const m=h.match(/^Bearer\s+(.+)$/i);
+  return m?m[1].trim():"";
+}
+async function validAdminToken(token,env){
+  try{
+    if(!env.ADMIN_SESSION_SECRET||!token)return false;
+    const p=String(token).split(".");
+    if(p.length!==3||p[0]!=="admin")return false;
+    const exp=Number(p[1]);
+    if(!Number.isFinite(exp)||exp<Date.now())return false;
+    const expected=await authHmac(env.ADMIN_SESSION_SECRET,`admin.${exp}`);
+    return authEqual(p[2],expected);
+  }catch{return false}
+}
+async function validAdminRequest(request,env){
+  const bearer=adminBearer(request);
+  if(bearer && await validAdminToken(bearer,env))return true;
+  return await validAdminSession(request,env);
+}
+
 async function makeAdminSession(env){
   const exp=Date.now()+ADMIN_SESSION_DAYS*86400000;
   const payload=`admin.${exp}`;
@@ -171,7 +194,7 @@ export default {
         return json({ok:false,error:"INVALID_CREDENTIALS"},{status:401});
       }
       const token=await makeAdminSession(env);
-      return new Response(JSON.stringify({ok:true}),{
+      return new Response(JSON.stringify({ok:true,token,expires_in_days:ADMIN_SESSION_DAYS}),{
         status:200,
         headers:{
           "content-type":"application/json; charset=utf-8",
@@ -191,8 +214,8 @@ export default {
       });
     }
 
-    if(url.pathname==="/admin.html" && !(await validAdminSession(request,env))){
-      return Response.redirect(new URL("/admin-login",request.url).toString(),302);
+    if(url.pathname==="/admin.html"){
+      // 管理APIはBearerトークンで保護。ページ自体はJS側でログイン状態を確認。
     }
 
 
@@ -443,13 +466,13 @@ export default {
     if(url.pathname==="/api/admin/status" && request.method==="GET"){
       return json({
         ok:true,
-        authenticated:await validAdminSession(request,env),
+        authenticated:await validAdminRequest(request,env),
         db_bound:!!env.DB
       });
     }
 
     if(url.pathname.startsWith("/api/admin/") && !["/api/admin/login","/api/admin/logout"].includes(url.pathname)){
-      if(!(await validAdminSession(request,env))) return json({ok:false,error:"ADMIN_AUTH_REQUIRED"},{status:401});
+      if(!(await validAdminRequest(request,env))) return json({ok:false,error:"ADMIN_AUTH_REQUIRED"},{status:401});
 
 
 
