@@ -354,9 +354,27 @@ window.approve=async id=>{
   if(!confirm(`「${name}」を承認して店舗化しますか？`))return;
 
   try{
-    await api(`/api/admin/submissions/${id}/approve`,{method:"POST"});
-    await loadSubs();
-    alert("店舗化しました");
+    const result=await api(`/api/admin/submissions/${id}/approve`,{method:"POST"});
+    await Promise.allSettled([loadSubs(),loadShops()]);
+
+    const makePost=confirm("店舗化しました。\n\n続けてInstagram投稿を作成しますか？");
+    if(makePost){
+      const shopId=Number(result?.shop_id);
+      if(shopId){
+        let shop=shops.find(x=>Number(x.id)===shopId);
+        if(!shop){
+          await loadShops();
+          shop=shops.find(x=>Number(x.id)===shopId);
+        }
+        if(shop){
+          await createInstaPost(shopId);
+        }else{
+          alert("店舗化は完了しましたが、投稿メーカー用の店舗情報を取得できませんでした。店舗タブから「Instagram投稿を作成」を押してください。");
+        }
+      }else{
+        alert("店舗化は完了しました。店舗タブから「Instagram投稿を作成」を押してください。");
+      }
+    }
   }catch(e){
     console.error("approve failed",e);
     if(e?.message==="ACCESS_AUTH_REQUIRED"){

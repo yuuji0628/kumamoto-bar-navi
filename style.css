@@ -2333,3 +2333,36 @@ a.directory-card:hover{
   color:#9fa7b1;
   font-size:.7rem;
 }
+
+
+/* v62: おすすめBAR画像をカードの高さに揃える */
+#search .featured-link,
+#search .bar-card.featured-link{
+  align-items:stretch !important;
+}
+
+#search .featured-link .card-image,
+#search .bar-card.featured-link .card-image{
+  align-self:stretch !important;
+  height:auto !important;
+  min-height:116px !important;
+  overflow:hidden !important;
+}
+
+#search .featured-link .card-image img,
+#search .bar-card.featured-link .card-image img{
+  width:100% !important;
+  height:100% !important;
+  min-height:100% !important;
+  object-fit:cover !important;
+  object-position:center center !important;
+  display:block !important;
+}
+
+@media(max-width:640px){
+  #search .featured-link .card-image,
+  #search .bar-card.featured-link .card-image{
+    height:auto !important;
+    min-height:96px !important;
+  }
+}
