@@ -46,8 +46,12 @@
 </section>
 
 <section id="tab-subs" class="admin-block" hidden>
-<div class="admin-block-head"><div><p class="eyebrow">SUBMISSIONS</p><h2>掲載申込み</h2></div><button id="reloadSubs" class="admin-secondary-btn">再読み込み</button></div>
-<div id="subList" class="admin-shop-list"></div>
+<div class="admin-block-head"><div><p class="eyebrow">SUBMISSIONS</p><h2>掲載申込み</h2></div><button id="reloadSubs" class="admin-secondary-btn" type="button" onclick="loadSubs()">再読み込み</button></div>
+<div class="access-auth-row">
+  <a class="admin-secondary-btn" href="/api/admin/submissions" target="_self">Cloudflare Access認証</a>
+  <small>表示されない場合は一度ここを開いて認証してください。</small>
+</div>
+<div id="subList" class="admin-shop-list"><p>申込みを読み込んでいます...</p></div>
 </section>
 
 <section id="tab-ownerreq" class="admin-block" hidden>
@@ -95,7 +99,18 @@
 </div></main>
 <script>
 const $=id=>document.getElementById(id);let shops=[],jobs=[],subs=[];
-document.querySelectorAll(".admin-tabs button").forEach(b=>b.onclick=()=>{document.querySelectorAll(".admin-tabs button").forEach(x=>x.classList.remove("active"));b.classList.add("active");["shops","jobs","subs","ownerreq","analytics"].forEach(x=>$("tab-"+x).hidden=x!==b.dataset.tab)});
+document.querySelectorAll(".admin-tabs button").forEach(b=>b.onclick=async()=>{
+  document.querySelectorAll(".admin-tabs button").forEach(x=>x.classList.remove("active"));
+  b.classList.add("active");
+  ["shops","jobs","subs","ownerreq","analytics"].forEach(x=>$("tab-"+x).hidden=x!==b.dataset.tab);
+  try{
+    if(b.dataset.tab==="subs")await loadSubs();
+    else if(b.dataset.tab==="shops")await loadShops();
+    else if(b.dataset.tab==="jobs")await loadJobs();
+    else if(b.dataset.tab==="ownerreq")await loadOwnerReq();
+    else if(b.dataset.tab==="analytics")await loadAnalytics();
+  }catch(e){console.error(e)}
+});
 const esc=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 async function api(path,opt={}){
   const options={...opt};
@@ -154,60 +169,36 @@ $("resetShop").onclick=()=>{$("shopForm").reset();$("shopId").value="";$("sort_o
 $("uploadImage").onclick=async()=>{const f=$("imageFile").files[0];if(!f)return alert("画像を選択してください");const fd=new FormData();fd.append("file",f);$("uploadStatus").textContent="アップロード中...";try{const d=await api("/api/admin/upload",{method:"POST",body:fd});$("image_url").value=d.url;$("uploadStatus").textContent="完了"}catch(e){$("uploadStatus").textContent=e.message}}
 async function loadJobs(){const d=await api("/api/admin/jobs");jobs=d.jobs||[];$("jobList").innerHTML=jobs.map(j=>`<article class="admin-shop-item"><div><h3>${esc(j.title)}</h3><p>${esc(j.shop_name||'店舗未指定')} / ${esc(j.salary||'')}</p></div></article>`).join("")}
 $("jobForm").onsubmit=async e=>{e.preventDefault();const data={shop_id:$("jobShop").value,title:$("jobTitle").value,employment_type:$("jobType").value,salary:$("jobSalary").value,hours:$("jobHours").value,description:$("jobDescription").value,contact:$("jobContact").value,is_published:$("jobPublished").checked,sort_order:$("jobOrder").value};await api("/api/admin/jobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});await loadJobs();alert("求人を保存しました")}
-async function loadSubs(){const d=await api("/api/admin/submissions");subs=d.submissions||[];$("subList").innerHTML=subs.map(s=>`<article class="admin-shop-item"><div><h3>${esc(s.shop_name)}</h3><p>${esc(s.contact_name||'')} / ${esc(s.status)}</p><small>${esc(s.address||'')}</small></div><div class="admin-item-actions">${s.status==='pending'?`<button onclick="approve(${s.id})">承認して店舗化</button><button onclick="rejectSub(${s.id})">却下</button>`:''}</div></article>`).join("")}
-window.approve=async id=>{await api(`/api/admin/submissions/${id}/approve`,{method:"POST"});await Promise.all([loadSubs(),loadShops()])}
-window.rejectSub=async id=>{await api(`/api/admin/submissions/${id}/reject`,{method:"POST"});await loadSubs()}
-
-
-
-async function loadDailyAnalytics(){
-  const list=$("dailyAnalyticsList");
-  const summary=$("dailySummary");
-  if(!list||!summary)return;
-
-  const shopId=$("dailyShopFilter")?.value||"";
-  const days=$("dailyDaysFilter")?.value||"30";
-
-  list.innerHTML="<p>日別データを読み込んでいます...</p>";
-  summary.innerHTML="";
-
+async function loadSubs(){
+  const list=$("subList");
+  if(!list)return;
+  list.innerHTML="<p>申込みを読み込んでいます...</p>";
   try{
-    const q=new URLSearchParams({days});
-    if(shopId)q.set("shop_id",shopId);
-    const d=await api("/api/admin/analytics/daily?"+q.toString());
-    const rows=d.daily||[];
-
-    const totalViews=rows.reduce((n,r)=>n+Number(r.views||0),0);
-    const totalReactions=rows.reduce((n,r)=>n+Number(r.reactions||0),0);
-
-    summary.innerHTML=`
-      <div><small>${days}日閲覧</small><strong>${totalViews.toLocaleString()}</strong></div>
-      <div><small>${days}日反応</small><strong>${totalReactions.toLocaleString()}</strong></div>`;
-
-    if(!rows.length){
-      list.innerHTML='<p>この期間のアクセスデータはありません。</p>';
-      return;
-    }
-
-    list.innerHTML=rows.map(r=>{
-      const dt=new Date(r.day+"T00:00:00+09:00");
-      const label=`${dt.getMonth()+1}/${dt.getDate()}`;
-      const weekday=["日","月","火","水","木","金","土"][dt.getDay()];
-      return `
-        <div class="daily-row">
-          <div class="daily-date"><b>${label}</b><small>(${weekday})</small></div>
-          <div><small>閲覧</small><strong>${Number(r.views||0).toLocaleString()}</strong></div>
-          <div><small>反応</small><strong>${Number(r.reactions||0).toLocaleString()}</strong></div>
-          <div class="daily-breakdown">
-            <small>Instagram ${Number(r.instagram_clicks||0).toLocaleString()} ・ 地図 ${Number(r.map_clicks||0).toLocaleString()} ・ 電話 ${Number(r.phone_clicks||0).toLocaleString()}</small>
+    const d=await api("/api/admin/submissions");
+    subs=d.submissions||[];
+    list.innerHTML=subs.length?subs.map(s=>`
+      <article class="admin-shop-item">
+        <div>
+          <h3>${esc(s.shop_name)}</h3>
+          <p>${esc(s.contact_name||"担当者未入力")} / ${esc(s.status||"pending")}</p>
+          <small>${esc(s.address||"住所未入力")}</small>
+          <div style="margin-top:8px;color:#bfc6cf;font-size:12px;line-height:1.7">
+            ${s.hours?`営業時間：${esc(s.hours)}<br>`:""}
+            ${s.holiday?`定休日：${esc(s.holiday)}<br>`:""}
+            ${s.genre?`ジャンル：${esc(s.genre)}<br>`:""}
+            ${s.instagram?`Instagram：${esc(s.instagram)}<br>`:""}
+            ${s.description?`紹介：${esc(s.description)}`:""}
           </div>
-        </div>`;
-    }).join("");
+        </div>
+        <div class="admin-item-actions">
+          ${s.status==="pending"?`<button onclick="approve(${s.id})">承認して店舗化</button><button onclick="rejectSub(${s.id})">却下</button>`:""}
+        </div>
+      </article>`).join(""):"<p>現在、掲載申込みはありません。</p>";
   }catch(e){
-    console.error("daily analytics load failed",e);
+    console.error(e);
     list.innerHTML=e?.message==="ACCESS_AUTH_REQUIRED"
-      ? '<div class="analytics-error-box"><b>Cloudflare Accessの認証が必要です。</b><p>同じタブで一度認証してから再読み込みしてください。</p></div>'
-      : '<div class="analytics-error-box"><b>日別アクセスを読み込めませんでした。</b></div>';
+      ? '<div class="analytics-error-box"><b>Cloudflare Accessの認証が必要です。</b><p>上の認証ボタンを一度開いてから戻ってください。</p></div>'
+      : `<div class="analytics-error-box"><b>掲載申込みを読み込めませんでした。</b><p>${esc(e?.message||"UNKNOWN_ERROR")}</p></div>`;
   }
 }
 
@@ -275,7 +266,7 @@ window.finishOwnerReq=async(id,status)=>{
 }
 
 $("reloadShops").onclick=loadShops;$("reloadSubs").onclick=loadSubs;$("reloadOwnerReq").onclick=loadOwnerReq;$("reloadAnalytics").onclick=loadAnalytics;$("dailyDaysFilter")?.addEventListener("change",loadDailyAnalytics);$("dailyShopFilter")?.addEventListener("change",loadDailyAnalytics);
-Promise.all([loadShops(),loadJobs(),loadSubs(),loadOwnerReq(),loadAnalytics()]);
+Promise.allSettled([loadShops(),loadJobs(),loadSubs(),loadOwnerReq(),loadAnalytics()]);
 
 document.addEventListener("visibilitychange",()=>{
   if(document.visibilityState==="visible"){
