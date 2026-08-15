@@ -162,10 +162,10 @@
 
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
-<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN v82</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><div class="admin-security-badge">🔐 管理者ログイン</div></section>
+<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN v83</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><div class="admin-security-badge">🔐 管理者ログイン</div></section>
 
 <div class="admin-login-bar">
-  <span>🔐 管理者ログイン中 <small id="authStatusText">v82</small></span>
+  <span>🔐 管理者ログイン中 <small id="authStatusText">v83</small></span>
   <button type="button" id="adminLogoutBtn">ログアウト</button>
 </div>
 
@@ -204,7 +204,7 @@
   </div>
 
 <div id="buttonHealthNote" style="margin-top:10px;color:#8e97a2;font-size:.72rem">
-  v82：onclick非依存の共通ボタン制御へ切替済み
+  v83：起動エラー修正・全ボタン安全起動済み
 </div>
 </section>
 
@@ -248,7 +248,7 @@
 </section>
 
 <section id="tab-jobs" class="admin-block" hidden>
-<div class="admin-block-head"><div><p class="eyebrow">JOBS</p><h2>求人管理</h2></div></div>
+<div class="admin-block-head"><div><p class="eyebrow">JOBS</p><h2>求人管理</h2></div><button id="reloadJobs" class="admin-secondary-btn" type="button">再読み込み</button></div>
 <form id="jobForm" class="admin-shop-form">
 <input type="hidden" id="jobId">
 <div class="admin-form-grid">
@@ -383,11 +383,11 @@ document.querySelectorAll(".admin-tabs button").forEach(b=>b.onclick=async()=>{
   b.classList.add("active");
   ["shops","jobs","subs","ownerreq","analytics"].forEach(x=>$("tab-"+x).hidden=x!==b.dataset.tab);
   try{
-    if(b.dataset.tab==="subs")await loadSubs();
-    else if(b.dataset.tab==="shops")await loadShops();
-    else if(b.dataset.tab==="jobs")await loadJobs();
-    else if(b.dataset.tab==="ownerreq")await loadOwnerReq();
-    else if(b.dataset.tab==="analytics")await loadAnalytics();
+    if(b.dataset.tab==="subs" && typeof window.loadSubs==="function")await window.loadSubs();
+    else if(b.dataset.tab==="shops" && typeof window.loadShops==="function")await window.loadShops();
+    else if(b.dataset.tab==="jobs" && typeof window.loadJobs==="function")await window.loadJobs();
+    else if(b.dataset.tab==="ownerreq" && typeof window.loadOwnerReq==="function")await window.loadOwnerReq();
+    else if(b.dataset.tab==="analytics" && typeof window.loadAnalytics==="function")await window.loadAnalytics();
   }catch(e){console.error(e)}
 });
 
@@ -524,6 +524,114 @@ window.deleteShop=async id=>{
   }
 };
 
+
+
+window.loadJobs=async function(){
+  const list=$("jobList");
+  if(list)list.innerHTML="<p>求人を読み込んでいます...</p>";
+
+  try{
+    const d=await api("/api/admin/jobs");
+    jobs=d.jobs||[];
+
+    if(!list)return;
+
+    if(!jobs.length){
+      list.innerHTML="<p>登録されている求人はありません。</p>";
+      return;
+    }
+
+    list.innerHTML=jobs.map(j=>`
+      <article class="admin-shop-item">
+        <div>
+          <h3>${esc(j.title||"求人タイトル未設定")}</h3>
+          <p>${esc(j.shop_name||"店舗未設定")} / ${esc(j.employment_type||"")}</p>
+          <small>
+            ${j.salary?`給与：${esc(j.salary)} / `:""}
+            ${j.hours?`勤務：${esc(j.hours)} / `:""}
+            ${Number(j.is_published)?"公開":"非公開"}
+          </small>
+        </div>
+        <div class="admin-item-actions">
+          <button type="button" onclick="editJob(${Number(j.id)})">編集</button>
+        </div>
+      </article>
+    `).join("");
+  }catch(e){
+    console.error("loadJobs failed",e);
+    if(list){
+      list.innerHTML=`<div class="analytics-error-box"><b>求人を読み込めませんでした。</b><p>${esc(e?.message||"UNKNOWN_ERROR")}</p></div>`;
+    }
+  }
+};
+
+window.editJob=function(id){
+  const j=jobs.find(x=>Number(x.id)===Number(id));
+  if(!j)return;
+
+  switchAdminTab("jobs");
+
+  $("jobId").value=j.id||"";
+  $("jobShop").value=j.shop_id||"";
+  $("jobTitle").value=j.title||"";
+  $("jobType").value=j.employment_type||"";
+  $("jobSalary").value=j.salary||"";
+  $("jobHours").value=j.hours||"";
+  $("jobOrder").value=j.sort_order??100;
+  $("jobDescription").value=j.description||"";
+  $("jobContact").value=j.contact||"";
+  $("jobPublished").checked=!!Number(j.is_published);
+
+  setTimeout(()=>$("jobForm")?.scrollIntoView({behavior:"smooth",block:"start"}),80);
+};
+
+window.saveJob=async function(){
+  const id=Number($("jobId")?.value||0);
+  const title=String($("jobTitle")?.value||"").trim();
+  if(!title){
+    alert("求人タイトルを入力してください。");
+    return;
+  }
+
+  const payload={
+    shop_id:Number($("jobShop")?.value||0)||null,
+    title,
+    employment_type:$("jobType")?.value||"",
+    salary:$("jobSalary")?.value||"",
+    hours:$("jobHours")?.value||"",
+    description:$("jobDescription")?.value||"",
+    contact:$("jobContact")?.value||"",
+    is_published:!!$("jobPublished")?.checked,
+    sort_order:Number($("jobOrder")?.value||100)
+  };
+
+  try{
+    if(id){
+      await api(`/api/admin/jobs/${id}`,{
+        method:"PUT",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify(payload)
+      });
+    }else{
+      await api("/api/admin/jobs",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify(payload)
+      });
+    }
+
+    $("jobForm")?.reset();
+    $("jobId").value="";
+    if($("jobOrder"))$("jobOrder").value="100";
+    if($("jobPublished"))$("jobPublished").checked=true;
+
+    await loadJobs();
+    alert(id?"求人を更新しました。":"求人を登録しました。");
+  }catch(e){
+    console.error("saveJob failed",e);
+    alert("求人を保存できませんでした: "+(e?.message||"UNKNOWN_ERROR"));
+  }
+};
 
 window.loadSubs=async function(){
   const list=$("subList");
@@ -807,8 +915,174 @@ window.finishOwnerReq=async(id,status)=>{
   }
 };
 
-$("reloadShops").onclick=loadShops;$("reloadSubs").onclick=loadSubs;$("reloadOwnerReq").onclick=loadOwnerReq;$("reloadAnalytics").onclick=loadAnalytics;$("dailyDaysFilter")?.addEventListener("change",loadDailyAnalytics);$("dailyShopFilter")?.addEventListener("change",loadDailyAnalytics);
-Promise.allSettled([loadShops(),loadJobs(),loadSubs(),loadOwnerReq(),loadAnalytics()]).catch(console.error);
+
+// v83: ボタン制御は起動処理より先に登録。
+// 1つの機能が壊れても、他の管理ボタンを止めない。
+function runLegacyButtonAction(btn,e){
+  const raw=(btn.getAttribute("onclick")||"").trim();
+
+  if(btn.dataset?.tab){
+    e.preventDefault();
+    switchAdminTab(btn.dataset.tab);
+    return true;
+  }
+
+  if(btn.dataset?.goTab){
+    e.preventDefault();
+    switchAdminTab(btn.dataset.goTab);
+    return true;
+  }
+
+  if(btn.id==="openShopFormBtn"){
+    e.preventDefault();
+    openShopForm();
+    return true;
+  }
+
+  if(btn.id==="toggleShopFormBtn"){
+    e.preventDefault();
+    toggleShopForm();
+    return true;
+  }
+
+  if(btn.id==="reloadShops"){
+    e.preventDefault();
+    loadShops();
+    return true;
+  }
+  if(btn.id==="reloadJobs"){
+    e.preventDefault();
+    window.loadJobs?.();
+    return true;
+  }
+  if(btn.id==="reloadSubs"){
+    e.preventDefault();
+    loadSubs();
+    return true;
+  }
+  if(btn.id==="reloadOwnerReq"){
+    e.preventDefault();
+    loadOwnerReq();
+    return true;
+  }
+  if(btn.id==="reloadAnalytics"){
+    e.preventDefault();
+    loadAnalytics();
+    return true;
+  }
+
+  let m;
+
+  if((m=raw.match(/^editJob\((\d+)\)/))){
+    e.preventDefault();
+    window.editJob?.(Number(m[1]));
+    return true;
+  }
+
+  if((m=raw.match(/^editShop\((\d+)\)/))){
+    e.preventDefault();
+    editShop(Number(m[1]));
+    return true;
+  }
+  if((m=raw.match(/^issueOwnerLink\((\d+)\)/))){
+    e.preventDefault();
+    issueOwnerLink(Number(m[1]));
+    return true;
+  }
+  if((m=raw.match(/^revokeOwnerLink\((\d+)\)/))){
+    e.preventDefault();
+    revokeOwnerLink(Number(m[1]));
+    return true;
+  }
+  if((m=raw.match(/^deleteShop\((\d+)\)/))){
+    e.preventDefault();
+    deleteShop(Number(m[1]));
+    return true;
+  }
+  if((m=raw.match(/^approve\((\d+)\)/))){
+    e.preventDefault();
+    approve(Number(m[1]));
+    return true;
+  }
+  if((m=raw.match(/^rejectSub\((\d+)\)/))){
+    e.preventDefault();
+    rejectSub(Number(m[1]));
+    return true;
+  }
+  if((m=raw.match(/^createInstaPost\((\d+)\)/))){
+    e.preventDefault();
+    createInstaPost(Number(m[1]));
+    return true;
+  }
+  if((m=raw.match(/^applyOwnerPhoto\((\d+),'(main|gallery)'\)/))){
+    e.preventDefault();
+    applyOwnerPhoto(Number(m[1]),m[2]);
+    return true;
+  }
+  if((m=raw.match(/^finishOwnerReq\((\d+),'(reviewed|rejected)'\)/))){
+    e.preventDefault();
+    finishOwnerReq(Number(m[1]),m[2]);
+    return true;
+  }
+
+  return false;
+}
+
+document.addEventListener("click",function(e){
+  const btn=e.target.closest("button");
+  if(!btn)return;
+
+  const handled=runLegacyButtonAction(btn,e);
+
+  if(handled){
+    // Capture phase: stop blocked/duplicate inline onclick from being the thing we depend on.
+    e.stopPropagation();
+  }
+},true);
+
+function safeBind(id,eventName,handler){
+  const el=$(id);
+  if(!el || typeof handler!=="function")return;
+  el.addEventListener(eventName,handler);
+}
+
+safeBind("reloadShops","click",()=>window.loadShops?.());
+safeBind("reloadJobs","click",()=>window.loadJobs?.());
+safeBind("reloadSubs","click",()=>window.loadSubs?.());
+safeBind("reloadOwnerReq","click",()=>window.loadOwnerReq?.());
+safeBind("reloadAnalytics","click",()=>window.loadAnalytics?.());
+safeBind("dailyDaysFilter","change",()=>window.loadDailyAnalytics?.());
+safeBind("dailyShopFilter","change",()=>window.loadDailyAnalytics?.());
+
+safeBind("jobForm","submit",e=>{
+  e.preventDefault();
+  window.saveJob?.();
+});
+
+(async()=>{
+  const loaders=[
+    ["shops",window.loadShops],
+    ["jobs",window.loadJobs],
+    ["subs",window.loadSubs],
+    ["ownerreq",window.loadOwnerReq],
+    ["analytics",window.loadAnalytics]
+  ];
+
+  await Promise.allSettled(
+    loaders.map(async([name,fn])=>{
+      if(typeof fn!=="function"){
+        console.warn(`loader missing: ${name}`);
+        return;
+      }
+      try{
+        await fn();
+      }catch(e){
+        console.error(`initial load failed: ${name}`,e);
+      }
+    })
+  );
+})();
+
 
 document.addEventListener("visibilitychange",()=>{
   if(document.visibilityState==="visible"){
@@ -926,120 +1200,6 @@ window.reloadCurrentTab=async function(tab){
 
 
 
-function runLegacyButtonAction(btn,e){
-  const raw=(btn.getAttribute("onclick")||"").trim();
 
-  if(btn.dataset?.tab){
-    e.preventDefault();
-    switchAdminTab(btn.dataset.tab);
-    return true;
-  }
-
-  if(btn.dataset?.goTab){
-    e.preventDefault();
-    switchAdminTab(btn.dataset.goTab);
-    return true;
-  }
-
-  if(btn.id==="openShopFormBtn"){
-    e.preventDefault();
-    openShopForm();
-    return true;
-  }
-
-  if(btn.id==="toggleShopFormBtn"){
-    e.preventDefault();
-    toggleShopForm();
-    return true;
-  }
-
-  if(btn.id==="reloadShops"){
-    e.preventDefault();
-    loadShops();
-    return true;
-  }
-  if(btn.id==="reloadJobs"){
-    e.preventDefault();
-    loadJobs();
-    return true;
-  }
-  if(btn.id==="reloadSubs"){
-    e.preventDefault();
-    loadSubs();
-    return true;
-  }
-  if(btn.id==="reloadOwnerReq"){
-    e.preventDefault();
-    loadOwnerReq();
-    return true;
-  }
-  if(btn.id==="reloadAnalytics"){
-    e.preventDefault();
-    loadAnalytics();
-    return true;
-  }
-
-  let m;
-
-  if((m=raw.match(/^editShop\((\d+)\)/))){
-    e.preventDefault();
-    editShop(Number(m[1]));
-    return true;
-  }
-  if((m=raw.match(/^issueOwnerLink\((\d+)\)/))){
-    e.preventDefault();
-    issueOwnerLink(Number(m[1]));
-    return true;
-  }
-  if((m=raw.match(/^revokeOwnerLink\((\d+)\)/))){
-    e.preventDefault();
-    revokeOwnerLink(Number(m[1]));
-    return true;
-  }
-  if((m=raw.match(/^deleteShop\((\d+)\)/))){
-    e.preventDefault();
-    deleteShop(Number(m[1]));
-    return true;
-  }
-  if((m=raw.match(/^approve\((\d+)\)/))){
-    e.preventDefault();
-    approve(Number(m[1]));
-    return true;
-  }
-  if((m=raw.match(/^rejectSub\((\d+)\)/))){
-    e.preventDefault();
-    rejectSub(Number(m[1]));
-    return true;
-  }
-  if((m=raw.match(/^createInstaPost\((\d+)\)/))){
-    e.preventDefault();
-    createInstaPost(Number(m[1]));
-    return true;
-  }
-  if((m=raw.match(/^applyOwnerPhoto\((\d+),'(main|gallery)'\)/))){
-    e.preventDefault();
-    applyOwnerPhoto(Number(m[1]),m[2]);
-    return true;
-  }
-  if((m=raw.match(/^finishOwnerReq\((\d+),'(reviewed|rejected)'\)/))){
-    e.preventDefault();
-    finishOwnerReq(Number(m[1]),m[2]);
-    return true;
-  }
-
-  return false;
-}
-
-document.addEventListener("click",function(e){
-  const btn=e.target.closest("button");
-  if(!btn)return;
-
-  const handled=runLegacyButtonAction(btn,e);
-
-  if(handled){
-    // Capture phase: stop blocked/duplicate inline onclick from being the thing we depend on.
-    e.stopPropagation();
-  }
-},true);
 
 </script></body></html>
