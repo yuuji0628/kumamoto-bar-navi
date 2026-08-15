@@ -157,8 +157,12 @@ export default {
     }
 
     if(url.pathname==="/api/admin/login" && request.method==="POST"){
-      if(!env.ADMIN_EMAIL||!env.ADMIN_PASSWORD||!env.ADMIN_SESSION_SECRET){
-        return json({ok:false,error:"ADMIN_AUTH_NOT_CONFIGURED"},{status:500});
+      const missing=[];
+      if(!env.ADMIN_EMAIL)missing.push("ADMIN_EMAIL");
+      if(!env.ADMIN_PASSWORD)missing.push("ADMIN_PASSWORD");
+      if(!env.ADMIN_SESSION_SECRET)missing.push("ADMIN_SESSION_SECRET");
+      if(missing.length){
+        return json({ok:false,error:"ADMIN_AUTH_NOT_CONFIGURED",missing},{status:500});
       }
       let body={};try{body=await request.json()}catch{}
       const email=String(body.email||"").trim().toLowerCase();
