@@ -4,7 +4,7 @@
 <nav class="admin-tabs"><button data-tab="shops" class="active">店舗</button><button data-tab="jobs">求人</button><button data-tab="subs">申込み</button><button data-tab="ownerreq">店舗申請</button><button data-tab="analytics">アクセス</button></nav>
 
 <section id="tab-shops" class="admin-block">
-<div class="admin-block-head"><div><p class="eyebrow">SHOPS</p><h2>店舗管理</h2></div><button id="reloadShops" class="admin-secondary-btn">再読み込み</button></div>
+<div class="admin-block-head"><div><p class="eyebrow">SHOPS</p><h2>店舗管理</h2></div><button id="reloadShops" class="admin-secondary-btn" type="button" onclick="loadShops()">再読み込み</button></div>
 <form id="shopForm" class="admin-shop-form">
 <input type="hidden" id="shopId">
 <div class="admin-form-grid">
@@ -137,6 +137,18 @@ async function api(path,opt={}){
   if(!r.ok||d.ok===false)throw new Error(d.error||("HTTP_"+r.status));
   return d;
 }
+async function loadShops(){const d=await api("/api/admin/shops");shops=d.shops||[];$("jobShop").innerHTML='<option value="">店舗なし</option>'+shops.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("");$("shopList").innerHTML=shops.map(s=>`<article class="admin-shop-item"><div><h3>${esc(s.name)} ${s.is_featured?'⭐':''} ${s.is_new?'NEW':''}</h3><p>${esc(s.area)} / ${esc(s.genre||'')}</p><small>順:${s.sort_order} / ${s.is_published?'公開':'非公開'} / 専用URL:${s.owner_token_hash?'発行済み':'未発行'}</small></div><div class="admin-item-actions"><button onclick="editShop(${s.id})">編集</button><button onclick="issueOwnerLink(${s.id})">専用URL発行</button>${s.owner_token_hash?`<button onclick="revokeOwnerLink(${s.id})">URL無効化</button>`:''}<button onclick="deleteShop(${s.id})" style="border-color:#7a3030;color:#ffb3b3">完全削除</button></div></article>`).join("")}
+window.editShop=id=>{const s=shops.find(x=>x.id==id);if(!s)return;["name","name_kana","slug","area","address","hours","holiday","genre","instagram","features","description","image_url","sort_order","seats","budget_min","budget_max"].forEach(k=>$(k).value=s[k]??"");["is_published","is_featured","is_new","is_recruiting"].forEach(k=>$(k).checked=!!Number(s[k]));$("shopId").value=id;$("shopForm").scrollIntoView({behavior:"smooth",block:"start"});setTimeout(()=>$("name")?.focus(),350)}
+
+window.issueOwnerLink=async id=>{
+  const s=shops.find(x=>x.id==id);if(!s)return;
+  if(s.owner_token_hash&&!confirm(`「${s.name}」の専用URLを再発行しますか？\n古いURLは使えなくなります。`))return;
+  try{
+    const d=await api(`/api/admin/shops/${id}/owner-token`,{method:"POST"});
+    await loadShops();
+    prompt("このURLを店舗様へ送ってください。URLはこの画面で再表示できないため、必ずコピーしてください。",d.url);
+  }catch(e){alert("URLを発行できませんでした: "+e.message)}
+}
 window.revokeOwnerLink=async id=>{
   const s=shops.find(x=>x.id==id);if(!s)return;
   if(!confirm(`「${s.name}」の専用URLを無効化しますか？`))return;
@@ -240,6 +252,55 @@ window.rejectSub=async id=>{
     }
   }
 };
+
+async function loadDailyAnalytics(){
+  const list=$("dailyAnalyticsList");
+  const summary=$("dailySummary");
+  if(!list||!summary)return;
+
+  const shopId=$("dailyShopFilter")?.value||"";
+  const days=$("dailyDaysFilter")?.value||"30";
+
+  list.innerHTML="<p>日別データを読み込んでいます...</p>";
+  summary.innerHTML="";
+
+  try{
+    const q=new URLSearchParams({days});
+    if(shopId)q.set("shop_id",shopId);
+    const d=await api("/api/admin/analytics/daily?"+q.toString());
+    const rows=d.daily||[];
+
+    const totalViews=rows.reduce((n,r)=>n+Number(r.views||0),0);
+    const totalReactions=rows.reduce((n,r)=>n+Number(r.reactions||0),0);
+
+    summary.innerHTML=`
+      <div><small>${days}日閲覧</small><strong>${totalViews.toLocaleString()}</strong></div>
+      <div><small>${days}日反応</small><strong>${totalReactions.toLocaleString()}</strong></div>`;
+
+    if(!rows.length){
+      list.innerHTML='<p>この期間のアクセスデータはありません。</p>';
+      return;
+    }
+
+    list.innerHTML=rows.map(r=>{
+      const dt=new Date(r.day+"T00:00:00+09:00");
+      const label=`${dt.getMonth()+1}/${dt.getDate()}`;
+      const weekday=["日","月","火","水","木","金","土"][dt.getDay()];
+      return `
+        <div class="daily-row">
+          <div class="daily-date"><b>${label}</b><small>(${weekday})</small></div>
+          <div><small>閲覧</small><strong>${Number(r.views||0).toLocaleString()}</strong></div>
+          <div><small>反応</small><strong>${Number(r.reactions||0).toLocaleString()}</strong></div>
+          <div class="daily-breakdown">
+            <small>Instagram ${Number(r.instagram_clicks||0).toLocaleString()} ・ 地図 ${Number(r.map_clicks||0).toLocaleString()} ・ 電話 ${Number(r.phone_clicks||0).toLocaleString()}</small>
+          </div>
+        </div>`;
+    }).join("");
+  }catch(e){
+    console.error("daily analytics load failed",e);
+    list.innerHTML='<div class="analytics-error-box"><b>日別アクセスを読み込めませんでした。</b></div>';
+  }
+}
 
 async function loadAnalytics(){
   const summary=$("analyticsSummary");
