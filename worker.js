@@ -388,21 +388,57 @@ export default {
 
       if(sm && request.method==="DELETE"){
         const id=Number(sm[1]);
+        const deleted=[];
         try{
-          await env.DB.batch([
-            env.DB.prepare("DELETE FROM shop_images WHERE shop_id=?").bind(id),
-            env.DB.prepare("DELETE FROM shop_analytics WHERE shop_id=?").bind(id),
-            env.DB.prepare("DELETE FROM jobs WHERE shop_id=?").bind(id),
-            env.DB.prepare("DELETE FROM owner_requests WHERE shop_id=?").bind(id),
-            env.DB.prepare("DELETE FROM shops WHERE id=?").bind(id)
-          ]);
-          return json({ok:true,success:true,message:"削除しました",id});
+          const shop=await env.DB.prepare("SELECT id,name FROM shops WHERE id=?").bind(id).first();
+          if(!shop)return json({ok:false,error:"NOT_FOUND"},{status:404});
+
+          const tableExists=async(name)=>{
+            const row=await env.DB.prepare(
+              "SELECT name FROM sqlite_master WHERE type='table' AND name=?"
+            ).bind(name).first();
+            return !!row;
+          };
+
+          const safeDelete=async(table,sql)=>{
+            if(!(await tableExists(table)))return;
+            try{
+              await env.DB.prepare(sql).bind(id).run();
+              deleted.push(table);
+            }catch(e){
+              throw new Error(`${table}: ${String(e?.message||e)}`);
+            }
+          };
+
+          await safeDelete("shop_images","DELETE FROM shop_images WHERE shop_id=?");
+          await safeDelete("shop_analytics","DELETE FROM shop_analytics WHERE shop_id=?");
+          await safeDelete("jobs","DELETE FROM jobs WHERE shop_id=?");
+          await safeDelete("owner_requests","DELETE FROM owner_requests WHERE shop_id=?");
+
+          try{
+            await env.DB.prepare("DELETE FROM shops WHERE id=?").bind(id).run();
+            deleted.push("shops");
+          }catch(e){
+            throw new Error(`shops: ${String(e?.message||e)}`);
+          }
+
+          return json({
+            ok:true,
+            success:true,
+            message:"削除しました",
+            id,
+            name:shop.name,
+            deleted
+          });
         }catch(e){
           console.error("shop delete failed",e);
-          return json(
-            {ok:false,success:false,error:"DELETE_FAILED",message:String(e?.message||e)},
-            {status:500}
-          );
+          return json({
+            ok:false,
+            success:false,
+            error:"DELETE_FAILED",
+            message:String(e?.message||e),
+            deleted
+          },{status:500});
         }
       }
 

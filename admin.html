@@ -298,7 +298,7 @@ window.deleteShop=async id=>{
 
   try{
     const d=await api(`/api/admin/shops/${id}`,{method:"DELETE"});
-    if(d?.ok===false)throw new Error(d?.error||"DELETE_FAILED");
+    if(d?.ok===false)throw new Error(d?.message||d?.error||"DELETE_FAILED");
     alert("削除しました");
     await loadShops();
   }catch(e){
