@@ -270,12 +270,54 @@
 }
 </style>
 
+
+<style>
+.insta-full-preview{
+  margin:14px 0;
+  padding:12px;
+  border:1px solid #4b5662;
+  border-radius:14px;
+  background:#060b10;
+}
+.insta-full-preview[hidden]{display:none!important}
+.insta-full-preview-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:10px;
+}
+.insta-full-preview-head strong{
+  color:#f1c75b;
+}
+.insta-full-preview-head button{
+  min-height:38px;
+  padding:0 14px;
+  border:1px solid #49535e;
+  border-radius:9px;
+  background:#101821;
+  color:#fff;
+}
+#instaFullPreviewImg{
+  display:block;
+  width:100%;
+  height:auto;
+  border-radius:10px;
+}
+.insta-full-preview p{
+  margin:9px 0 0;
+  color:#9da6b0;
+  font-size:.75rem;
+  line-height:1.5;
+}
+</style>
+
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
-<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN v90</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><div class="admin-security-badge">🔐 管理者ログイン</div></section>
+<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN v92</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><div class="admin-security-badge">🔐 管理者ログイン</div></section>
 
 <div class="admin-login-bar">
-  <span>🔐 管理者ログイン中 <small id="authStatusText">v90</small></span>
+  <span>🔐 管理者ログイン中 <small id="authStatusText">v92</small></span>
   <button type="button" id="adminLogoutBtn">ログアウト</button>
 </div>
 
@@ -321,7 +363,7 @@
   </div>
 
 <div id="buttonHealthNote" style="margin-top:10px;color:#8e97a2;font-size:.72rem">
-  v90：店舗ごとのInstagram画像を自動生成
+  v92：店舗承認＝Instagram投稿準備を自動生成
 </div>
 </section>
 
@@ -437,7 +479,7 @@
     <div class="insta-post-head">
       <div>
         <p class="eyebrow">INSTAGRAM POST</p>
-        <h2>Instagram投稿を作成</h2>
+        <h2>承認店舗のInstagram投稿</h2>
       </div>
       <button type="button" class="admin-secondary-btn" onclick="closeInstaPost()">閉じる</button>
     </div>
@@ -445,6 +487,15 @@
     <div class="insta-preview-wrap">
       <canvas id="instaPostCanvas" width="1080" height="1080"></canvas>
       <div id="instaPreviewStatus" class="insta-preview-status">プレビュー生成中...</div>
+    </div>
+
+    <div id="instaFullPreview" class="insta-full-preview" hidden>
+      <div class="insta-full-preview-head">
+        <strong>完成画像プレビュー</strong>
+        <button type="button" onclick="closeInstaFullPreview()">閉じる</button>
+      </div>
+      <img id="instaFullPreviewImg" alt="Instagram投稿画像プレビュー">
+      <p>iPhoneでは、この画像を長押しして保存することもできます。</p>
     </div>
 
     <div id="instaMentionPreview" class="insta-mention-preview"></div>
@@ -461,7 +512,7 @@
     <div id="instaSaveStatus" class="insta-save-status"></div>
 
     <p class="insta-post-note">
-      店舗情報を確認してから投稿してください。Instagramへの完全自動投稿はMeta API連携後に追加できます。
+      店舗承認時に画像と投稿文を自動生成しています。内容を確認して、そのまま保存・コピーしてInstagramへ投稿できます。
     </p>
   </div>
 </div>
@@ -1110,85 +1161,237 @@ function drawAutoBackground(ctx,shop){
 async function renderInstaPost(shop){
   const canvas=$("instaPostCanvas");
   const status=$("instaPreviewStatus");
-  if(!canvas)return;
+  if(!canvas)return false;
 
   const ctx=canvas.getContext("2d");
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-
-  ctx.fillStyle="#080d13";
-  ctx.fillRect(0,0,1080,1080);
-
-  const imageUrl=absoluteMediaUrl(shop?.image_url||"");
-  let imageLoaded=false;
+  const W=1080,H=1080;
+  ctx.clearRect(0,0,W,H);
 
   if(status){
-    status.textContent="店舗情報から画像を自動生成中...";
+    status.textContent="承認した店舗情報から投稿画像を自動生成中...";
     status.dataset.state="loading";
   }
 
+  const gold="#d9ad45";
+  const gold2="#f1c75b";
+  const white="#f7f8fa";
+  const muted="#c0c7cf";
+  const dark="#070b10";
+  const dark2="#101720";
+
+  // Background
+  const bg=ctx.createLinearGradient(0,0,W,H);
+  bg.addColorStop(0,"#05080d");
+  bg.addColorStop(.5,"#0b1118");
+  bg.addColorStop(1,"#030507");
+  ctx.fillStyle=bg;
+  ctx.fillRect(0,0,W,H);
+
+  // subtle texture
+  const seed=stringHash((shop?.name||"")+(shop?.area||"")+(shop?.genre||""));
+  ctx.save();
+  ctx.globalAlpha=.06;
+  ctx.strokeStyle=gold;
+  ctx.lineWidth=2;
+  for(let i=0;i<18;i++){
+    const x=(seed*(i+7)*17)%W;
+    const y=(seed*(i+11)*23)%H;
+    const r=50+((seed>>(i%12))%150);
+    ctx.beginPath();
+    ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // top brand and tagline
+  ctx.textAlign="left";
+  ctx.fillStyle=gold2;
+  ctx.font="800 34px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+  ctx.fillText("熊本の夜をもっと楽しく、もっとおいしく。",250,60);
+
+  // logo-like mark
+  ctx.strokeStyle=gold;
+  ctx.lineWidth=5;
+  ctx.beginPath();
+  ctx.arc(92,92,52,0,Math.PI*2);
+  ctx.stroke();
+  ctx.fillStyle=gold2;
+  ctx.font="900 28px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+  ctx.textAlign="center";
+  ctx.fillText("KBN",92,101);
+
+  // headline
+  ctx.textAlign="left";
+  ctx.fillStyle=white;
+  ctx.font="900 60px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+  const headName=String(shop?.name||"NEW BAR");
+  wrapCanvasText(ctx,`${headName} 様を`,210,118,780,66,1);
+
+  ctx.fillStyle=gold2;
+  ctx.font="900 72px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+  ctx.fillText("掲載",705,118);
+  ctx.fillStyle=white;
+  ctx.font="900 60px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+  ctx.fillText("しました！",856,118);
+
+  // gold ribbon
+  ctx.fillStyle=gold;
+  ctx.fillRect(44,150,992,54);
+  ctx.fillStyle="#111";
+  ctx.font="800 26px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+  ctx.textAlign="center";
+  ctx.fillText("熊本のBAR情報サイト「KUMAMOTO BAR NAVI」に新店掲載！",540,187);
+
+  // photo area
+  const px=505,py=230,pw=515,ph=470;
+  drawRoundedRect(ctx,px,py,pw,ph,18,dark2,"rgba(217,173,69,.45)");
+
+  let imageLoaded=false;
+  const imageUrl=absoluteMediaUrl(shop?.image_url||"");
   if(imageUrl){
     try{
       const img=await loadCanvasImage(imageUrl);
-      drawCover(ctx,img,0,0,1080,760);
-      imageLoaded=true;
-
-      // photo color veil for legibility
-      const veil=ctx.createLinearGradient(0,0,0,800);
-      veil.addColorStop(0,"rgba(5,9,14,.08)");
-      veil.addColorStop(.60,"rgba(5,9,14,.18)");
-      veil.addColorStop(1,"rgba(5,9,14,.95)");
+      ctx.save();
+      ctx.beginPath();
+      const rr=18;
+      ctx.moveTo(px+rr,py);
+      ctx.arcTo(px+pw,py,px+pw,py+ph,rr);
+      ctx.arcTo(px+pw,py+ph,px,py+ph,rr);
+      ctx.arcTo(px,py+ph,px,py,rr);
+      ctx.arcTo(px,py,px+pw,py,rr);
+      ctx.closePath();
+      ctx.clip();
+      drawCover(ctx,img,px,py,pw,ph);
+      const veil=ctx.createLinearGradient(px,py,px,py+ph);
+      veil.addColorStop(0,"rgba(0,0,0,.05)");
+      veil.addColorStop(1,"rgba(0,0,0,.38)");
       ctx.fillStyle=veil;
-      ctx.fillRect(0,0,1080,820);
+      ctx.fillRect(px,py,pw,ph);
+      ctx.restore();
+      imageLoaded=true;
     }catch(e){
-      console.warn("Instagram shop image load failed",e);
+      console.warn("shop image load failed",e);
     }
   }
 
-  // No photo -> generate a unique design from this shop's data
   if(!imageLoaded){
-    drawAutoBackground(ctx,shop);
+    // storefront fallback generated from data
+    const g=ctx.createLinearGradient(px,py,px+pw,py+ph);
+    g.addColorStop(0,"#1a232e");
+    g.addColorStop(1,"#080c11");
+    ctx.fillStyle=g;
+    ctx.fillRect(px,py,pw,ph);
+
+    ctx.textAlign="center";
+    ctx.fillStyle="rgba(217,173,69,.14)";
+    ctx.font="900 210px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+    ctx.fillText((shop?.name||"BAR").replace(/\s+/g,"").slice(0,2),px+pw/2,py+280);
+
+    ctx.fillStyle=gold2;
+    ctx.font="700 30px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+    ctx.fillText("KUMAMOTO NIGHT BAR",px+pw/2,py+360);
   }
 
-  // top branding
+  // left "New" and store info
   ctx.textAlign="left";
-  ctx.fillStyle="#f1c75b";
-  ctx.font="800 38px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
-  ctx.fillText("KUMAMOTO BAR NAVI",72,90);
+  ctx.fillStyle=gold2;
+  ctx.font="italic 700 58px Georgia,serif";
+  ctx.fillText("New!",60,320);
 
-  ctx.fillStyle="#ffffff";
-  ctx.font="900 78px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
-  wrapCanvasText(ctx,shop?.name||"BAR",72,830,930,86,2);
+  ctx.fillStyle=white;
+  ctx.font="800 31px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+  ctx.fillText("BAR",64,375);
 
-  // area / genre
-  const sub=[shop?.area, ...splitGenre(shop?.genre).slice(0,2)].filter(Boolean).join("  /  ");
-  if(sub){
-    ctx.fillStyle="#c8d0da";
-    ctx.font="600 31px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
-    wrapCanvasText(ctx,sub,72,960,820,42,2);
+  ctx.font="900 64px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+  wrapCanvasText(ctx,shop?.name||"BAR",64,450,410,68,2);
+
+  // chips
+  const chips=[
+    shop?.area,
+    ...splitGenre(shop?.genre).slice(0,2)
+  ].filter(Boolean);
+
+  let cx=64,cy=555;
+  ctx.font="700 24px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+  for(const c of chips){
+    const tw=Math.min(190,ctx.measureText(c).width+42);
+    drawRoundedRect(ctx,cx,cy,tw,48,22,"#152233","rgba(255,255,255,.08)");
+    ctx.fillStyle=white;
+    ctx.fillText(c,cx+20,cy+32);
+    cx+=tw+10;
+    if(cx>420){cx=64;cy+=58;}
   }
 
-  // announcement badge
-  ctx.textAlign="left";
-  drawRoundedRect(ctx,72,995,360,62,31,"#f1c75b");
-  ctx.fillStyle="#111820";
-  ctx.font="900 34px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
-  ctx.fillText("掲載しました！",110,1038);
+  // description
+  let desc=String(shop?.description||"").trim().replace(/\s+/g," ");
+  if(desc.length>115)desc=desc.slice(0,115)+"…";
+  if(desc){
+    ctx.fillStyle=white;
+    ctx.font="500 26px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+    wrapCanvasText(ctx,desc,64,655,410,38,4);
+  }
 
-  // Instagram handle
+  // information panel
+  const panelY=735;
+  drawRoundedRect(ctx,44,panelY,992,190,22,"rgba(8,13,18,.86)","rgba(255,255,255,.16)");
+
+  const info=[
+    ["📍","エリア",shop?.area||"熊本"],
+    ["◷","営業時間",shop?.hours||"店舗情報をご確認ください"],
+    ["▣","定休日",shop?.holiday||"店舗情報をご確認ください"],
+    ["◎","設備・特徴",[shop?.genre,shop?.features].filter(Boolean).join(" / ")||"BAR"]
+  ];
+
+  const colW=248;
+  info.forEach((it,i)=>{
+    const x=55+i*colW;
+    if(i>0){
+      ctx.strokeStyle="rgba(255,255,255,.18)";
+      ctx.lineWidth=1;
+      ctx.beginPath();
+      ctx.moveTo(x,panelY+24);
+      ctx.lineTo(x,panelY+166);
+      ctx.stroke();
+    }
+    ctx.fillStyle=gold2;
+    ctx.font="700 34px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+    ctx.fillText(it[0],x+16,panelY+57);
+
+    ctx.fillStyle=white;
+    ctx.font="700 23px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+    ctx.fillText(it[1],x+63,panelY+54);
+
+    ctx.fillStyle=muted;
+    ctx.font="500 22px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+    wrapCanvasText(ctx,it[2],x+16,panelY+112,colW-32,29,2);
+  });
+
+  // footer CTA
+  ctx.fillStyle=gold2;
+  ctx.font="800 28px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+  ctx.fillText("熊本のBAR探しは KUMAMOTO BAR NAVIで！",60,982);
+
+  drawRoundedRect(ctx,635,950,300,74,30,gold);
+  ctx.fillStyle="#111";
+  ctx.textAlign="center";
+  ctx.font="800 24px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+  ctx.fillText("ぜひチェック＆",785,982);
+  ctx.fillText("シェアお願いします！",785,1011);
+
   const handle=cleanInstagramHandle(shop?.instagram||"");
   if(handle){
-    ctx.textAlign="right";
-    ctx.fillStyle="#c3cad2";
-    ctx.font="600 27px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
-    ctx.fillText("@"+handle,1008,1038);
+    ctx.textAlign="left";
+    ctx.fillStyle=muted;
+    ctx.font="600 20px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+    ctx.fillText("@"+handle,60,1032);
   }
 
   ctx.textAlign="left";
 
   if(status){
     status.textContent=imageLoaded
-      ? "店舗写真＋店舗情報から自動生成しました"
-      : "店舗情報から専用デザインを自動生成しました";
+      ? "店舗写真＋店舗情報から掲載画像を自動生成しました"
+      : "店舗情報から掲載画像を自動生成しました";
     status.dataset.state="ok";
   }
 
@@ -1196,31 +1399,101 @@ async function renderInstaPost(shop){
 }
 
 function buildInstaCaption(shop){
-  const name=shop?.name||"";
-  const area=shop?.area||"熊本";
-  const genre=shop?.genre||"";
+  const name=String(shop?.name||"").trim();
+  const area=String(shop?.area||"熊本").trim();
+  const genre=String(shop?.genre||"").trim();
+  const features=String(shop?.features||"").trim();
+  const hours=String(shop?.hours||"").trim();
+  const holiday=String(shop?.holiday||"").trim();
+  const desc=String(shop?.description||"").trim();
   const handle=cleanInstagramHandle(shop?.instagram||"");
 
-  const parts=[
-    "【掲載しました！】",
-    "",
-    `🍸 ${name}`,
-    `📍 ${area}`,
+  const genreParts=String(genre)
+    .split(/[、,／/・]+/)
+    .map(x=>x.trim())
+    .filter(Boolean);
+
+  const featureParts=String(features)
+    .split(/[、,／/・]+/)
+    .map(x=>x.trim())
+    .filter(Boolean);
+
+  let intro=desc.replace(/\s+/g," ").trim();
+  if(intro.length>180)intro=intro.slice(0,180)+"…";
+
+  const detailLines=[];
+  detailLines.push(`📍 ${area}`);
+  genreParts.slice(0,3).forEach((g,i)=>{
+    detailLines.push(`${i===0?"🎯":i===1?"🎤":"🍸"} ${g}`);
+  });
+  featureParts.slice(0,2).forEach((f,i)=>{
+    detailLines.push(`${i===0?"🍻":"✨"} ${f}`);
+  });
+  if(hours)detailLines.push(`🕰 ${hours}`);
+  if(holiday)detailLines.push(`📅 定休日：${holiday}`);
+
+  const hashtags=[
+    "#熊本BAR",
+    "#熊本バー",
+    `#${area.replace(/\s+/g,"")}BAR`,
+    "#熊本夜遊び",
+    "#熊本グルメ",
+    "#バー巡り",
+    "#熊本ナイトスポット",
+    "#KUMAMOTOBARNAVI"
   ];
 
-  if(genre)parts.push(`🏷️ ${genre}`);
-  if(handle)parts.push(`📷 @${handle}`);
+  const lines=[
+    "🍸 新規掲載BARのお知らせ🎯",
+    "",
+    "熊本県内のBARを探せる",
+    "「KUMAMOTO BAR NAVI」に、",
+    "",
+    `🎉 ${name} 様`,
+    "を新しく掲載させていただきました！",
+    ""
+  ];
 
-  parts.push(
+  lines.push(...detailLines);
+
+  if(handle){
+    lines.push(`📷 @${handle}`);
+  }
+
+  if(intro){
+    lines.push("",intro);
+  }
+
+  lines.push(
     "",
-    "熊本のBAR情報を掲載中。",
-    "お店探し・求人情報は KUMAMOTO BAR NAVI へ。",
+    "熊本で「今夜どこ行こう？」と思ったら、",
+    "KUMAMOTO BAR NAVIでぜひチェック🍸",
     "",
-    "#熊本バー #熊本BAR #熊本夜遊び #熊本グルメ #KUMAMOTOBARNAVI"
+    `今回掲載させていただいた`,
+    `${name} 様もぜひチェックしてみてください！`,
+    "",
+    "📲 この投稿のシェア・ストーリーズでの拡散も大歓迎です！",
+    "熊本のBARをもっと盛り上げていきましょう🔥",
+    "",
+    hashtags.join(" ")
   );
 
-  return parts.join("\n");
+  return lines.join("\n");
 }
+
+
+window.reopenInstaDraft=async function(shopId){
+  await window.createInstaPost(shopId);
+  try{
+    const raw=localStorage.getItem(`kbn_insta_post_${shopId}`);
+    if(raw){
+      const d=JSON.parse(raw);
+      if(d?.caption && $("instaPostCaption"))$("instaPostCaption").value=d.caption;
+    }
+  }catch(e){
+    console.warn("Instagram draft restore failed",e);
+  }
+};
 
 window.createInstaPost=async function(shopId){
   let shop=shops.find(x=>Number(x.id)===Number(shopId));
@@ -1308,36 +1581,47 @@ window.downloadInstaImage=async function(){
     const blob=await canvasToBlob(canvas,"image/png",1);
     const file=new File([blob],filename,{type:"image/png"});
 
-    // Best path for iPhone Safari: open native share sheet
     if(navigator.canShare && navigator.canShare({files:[file]}) && navigator.share){
-      if(status)status.textContent="共有メニューを開きます";
-      await navigator.share({
-        files:[file],
-        title:"KUMAMOTO BAR NAVI Instagram画像"
-      });
-      if(status)status.textContent="共有メニューから「画像を保存」を選べます";
+      try{
+        if(status)status.textContent="共有メニューを開きます";
+        await navigator.share({
+          files:[file],
+          title:"KUMAMOTO BAR NAVI Instagram画像"
+        });
+        if(status)status.textContent="共有メニューから「画像を保存」を選択してください";
+        return;
+      }catch(e){
+        if(e?.name!=="AbortError"){
+          console.warn("share failed; showing inline preview",e);
+        }
+      }
+    }
+
+    // iPhone Safari fallback: do not open popup.
+    // Show the PNG inline and let the user long-press/save.
+    const box=$("instaFullPreview");
+    const img=$("instaFullPreviewImg");
+
+    if(box&&img){
+      img.src=canvas.toDataURL("image/png");
+      box.hidden=false;
+      box.style.display="block";
+      if(status)status.textContent="画像を表示しました。長押しして「写真に保存」を選べます";
+      setTimeout(()=>box.scrollIntoView({behavior:"smooth",block:"start"}),50);
       return;
     }
 
-    // Fallback: open PNG in a new tab so long-press/save works
+    // Last fallback for desktop browsers
     const url=URL.createObjectURL(blob);
-    const w=window.open(url,"_blank");
-
-    if(!w){
-      // desktop fallback
-      const a=document.createElement("a");
-      a.href=url;
-      a.download=filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    }
-
+    const a=document.createElement("a");
+    a.href=url;
+    a.download=filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
     setTimeout(()=>URL.revokeObjectURL(url),60000);
 
-    if(status){
-      status.textContent="画像を開きました。長押しまたは共有から保存してください";
-    }
+    if(status)status.textContent="画像を保存しました";
   }catch(e){
     console.error("Instagram image save failed",e);
     if(status)status.textContent="画像保存に失敗しました";
@@ -1358,16 +1642,26 @@ window.refreshInstaPreview=async function(){
 
 window.openInstaImagePreview=async function(){
   const canvas=$("instaPostCanvas");
-  if(!canvas)return;
+  const box=$("instaFullPreview");
+  const img=$("instaFullPreviewImg");
+  if(!canvas||!box||!img)return;
 
   try{
-    const blob=await canvasToBlob(canvas,"image/png",1);
-    const url=URL.createObjectURL(blob);
-    const w=window.open(url,"_blank");
-    if(!w)throw new Error("POPUP_BLOCKED");
-    setTimeout(()=>URL.revokeObjectURL(url),60000);
+    img.src=canvas.toDataURL("image/png");
+    box.hidden=false;
+    box.style.display="block";
+    setTimeout(()=>box.scrollIntoView({behavior:"smooth",block:"start"}),50);
   }catch(e){
-    alert("画像プレビューを開けませんでした: "+(e?.message||"UNKNOWN_ERROR"));
+    console.error("inline image preview failed",e);
+    alert("画像プレビューを表示できませんでした: "+(e?.message||"UNKNOWN_ERROR"));
+  }
+};
+
+window.closeInstaFullPreview=function(){
+  const box=$("instaFullPreview");
+  if(box){
+    box.hidden=true;
+    box.style.display="none";
   }
 };
 
@@ -1400,16 +1694,30 @@ window.approve=async id=>{
       return;
     }
 
-    const makePost=confirm("店舗化しました！\n\n続けて「掲載しました！」Instagram投稿を作成しますか？");
+    // 承認した瞬間にInstagram投稿準備を自動生成
+    await window.createInstaPost(shopId);
 
-    if(makePost){
-      try{
-        await window.createInstaPost(shopId);
-      }catch(e){
-        console.error("Instagram post maker failed",e);
-        alert("店舗化は完了しましたが、Instagram投稿作成画面を開けませんでした: "+(e?.message||"UNKNOWN_ERROR"));
-      }
+    const shop=shops.find(x=>Number(x.id)===shopId);
+    const caption=$("instaPostCaption")?.value||"";
+
+    // 投稿文は再表示できるようローカル保存
+    try{
+      localStorage.setItem(
+        `kbn_insta_post_${shopId}`,
+        JSON.stringify({
+          shop_id:shopId,
+          shop_name:shop?.name||name,
+          caption,
+          generated_at:new Date().toISOString()
+        })
+      );
+    }catch(e){
+      console.warn("Instagram draft local save failed",e);
     }
+
+    const st=$("instaSaveStatus");
+    if(st)st.textContent="店舗承認と同時に投稿画像・投稿文を自動生成しました。";
+
   }catch(e){
     console.error("approve failed",e);
     alert("店舗化できませんでした: "+(e?.message||"UNKNOWN_ERROR"));
@@ -1675,6 +1983,11 @@ function runLegacyButtonAction(btn,e){
       e.preventDefault(); window.openInstaImagePreview?.(); return true;
     }
 
+    
+    if(raw.startsWith("closeInstaFullPreview(")){
+      e.preventDefault(); window.closeInstaFullPreview?.(); return true;
+    }
+
     if(raw.startsWith("closeInstaPost(")){
       e.preventDefault(); window.closeInstaPost?.(); return true;
     }
@@ -1687,6 +2000,13 @@ function runLegacyButtonAction(btn,e){
     if(raw.startsWith("openInstagram(")){
       e.preventDefault(); window.openInstagram?.(); return true;
     }
+  }
+
+
+  if((m=raw.match(/^reopenInstaDraft\((\d+)\)/))){
+    e.preventDefault();
+    window.reopenInstaDraft?.(Number(m[1]));
+    return true;
   }
 
 let m;
