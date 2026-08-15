@@ -202,6 +202,45 @@ async function loadSubs(){
   }
 }
 
+
+window.approve=async id=>{
+  const s=subs.find(x=>Number(x.id)===Number(id));
+  const name=s?.shop_name||`申込みID ${id}`;
+  if(!confirm(`「${name}」を承認して店舗化しますか？`))return;
+
+  try{
+    await api(`/api/admin/submissions/${id}/approve`,{method:"POST"});
+    await Promise.allSettled([loadSubs(),loadShops()]);
+    alert("店舗化しました");
+  }catch(e){
+    console.error("approve failed",e);
+    if(e?.message==="ACCESS_AUTH_REQUIRED"){
+      alert("Cloudflare Accessの認証が必要です。認証後にもう一度お試しください。");
+    }else{
+      alert("店舗化できませんでした: "+(e?.message||"UNKNOWN_ERROR"));
+    }
+  }
+};
+
+window.rejectSub=async id=>{
+  const s=subs.find(x=>Number(x.id)===Number(id));
+  const name=s?.shop_name||`申込みID ${id}`;
+  if(!confirm(`「${name}」を却下しますか？`))return;
+
+  try{
+    await api(`/api/admin/submissions/${id}/reject`,{method:"POST"});
+    await loadSubs();
+    alert("却下しました");
+  }catch(e){
+    console.error("reject failed",e);
+    if(e?.message==="ACCESS_AUTH_REQUIRED"){
+      alert("Cloudflare Accessの認証が必要です。認証後にもう一度お試しください。");
+    }else{
+      alert("却下できませんでした: "+(e?.message||"UNKNOWN_ERROR"));
+    }
+  }
+};
+
 async function loadAnalytics(){
   const summary=$("analyticsSummary");
   const list=$("analyticsList");
