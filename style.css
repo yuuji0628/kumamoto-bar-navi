@@ -2431,3 +2431,59 @@ a.directory-card:hover{
     object-position:center center !important;
   }
 }
+
+
+/* v65 実際の店舗詳細画像クラスを直接修正 */
+.shop-ref-gallery{
+  display:grid !important;
+  grid-template-columns:1fr !important;
+  gap:10px !important;
+  width:100% !important;
+}
+
+.shop-ref-gallery-main{
+  display:grid !important;
+  grid-template-columns:1fr !important;
+  gap:10px !important;
+  width:100% !important;
+  overflow:visible !important;
+}
+
+.shop-ref-gallery-main .shop-hero-photo,
+.shop-hero-photo{
+  width:100% !important;
+  height:auto !important;
+  aspect-ratio:1 / 1 !important;
+  max-height:none !important;
+  object-fit:contain !important;
+  object-position:center center !important;
+  display:block !important;
+  margin:0 auto !important;
+  background:#0b1016 !important;
+  border:1px solid #3a434e !important;
+  border-radius:11px !important;
+  box-sizing:border-box !important;
+}
+
+/* 複数画像も同じ大きさに統一 */
+.shop-ref-gallery-main .shop-hero-photo + .shop-hero-photo{
+  margin-top:0 !important;
+}
+
+/* プレースホルダーも同じサイズ */
+.shop-ref-gallery-main .shop-photo-placeholder{
+  width:100% !important;
+  aspect-ratio:1 / 1 !important;
+  max-height:none !important;
+  box-sizing:border-box !important;
+}
+
+@media(max-width:640px){
+  .shop-ref-gallery-main .shop-hero-photo,
+  .shop-hero-photo,
+  .shop-ref-gallery-main .shop-photo-placeholder{
+    aspect-ratio:1 / 1 !important;
+    object-fit:contain !important;
+    object-position:center center !important;
+  }
+}

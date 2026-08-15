@@ -48,6 +48,27 @@
 }
 </style>
 
+
+<style>
+/* v65 強制上書き */
+.shop-ref-gallery-main .shop-hero-photo,
+.shop-hero-photo{
+  width:100%!important;
+  height:auto!important;
+  aspect-ratio:1/1!important;
+  max-height:none!important;
+  object-fit:contain!important;
+  object-position:center center!important;
+  display:block!important;
+  background:#0b1016!important;
+}
+.shop-ref-gallery-main{
+  display:grid!important;
+  grid-template-columns:1fr!important;
+  gap:10px!important;
+}
+</style>
+
 </head>
 <body>
 <header class="site-header">
@@ -67,7 +88,6 @@
       <div id="shopDetail" class="shop-db-detail"><p>読み込み中...</p></div>
     </div>
   </section>
-${uniqueGallery.length?`<div class="shop-gallery">${uniqueGallery.map((u,i)=>`<img src="${esc(u)}" alt="${esc(s.name)} ${i+1}" loading="lazy" onerror="this.style.display='none'">`).join("")}</div>`:""}
 </main>
 
 <script>
@@ -113,8 +133,8 @@ async function load(){
       :s.budget_max?`〜${Number(s.budget_max).toLocaleString()}円`:"—";
     const featureTags=String(s.features||"").split(",").map(x=>x.trim()).filter(Boolean).slice(0,5);
     const mapUrl=s.address?`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.address)}`:"";
-    const media=s.image_url
-      ? `<img class="shop-hero-photo" src="${esc(s.image_url)}" alt="${esc(s.name)}" onerror="this.onerror=null;this.outerHTML='<div class=&quot;shop-photo-placeholder&quot;>BAR IMAGE</div>'">`
+    const media=uniqueGallery.length
+      ? uniqueGallery.map((u,i)=>`<img class="shop-hero-photo${i===0?" is-main":""}" src="${esc(u)}" alt="${esc(s.name)} ${i+1}" loading="${i===0?"eager":"lazy"}" onerror="this.style.display='none'">`).join("")
       : `<div class="shop-photo-placeholder">BAR IMAGE</div>`;
 
     document.getElementById("shopDetail").innerHTML=`
