@@ -280,7 +280,10 @@ async function api(path,opt={}){
     location.href="/admin-login";
     throw new Error("ADMIN_AUTH_REQUIRED");
   }
-  if(!ct.includes("application/json"))throw new Error("NON_JSON_RESPONSE");
+  if(!ct.includes("application/json")){
+    const text=await r.text();
+    throw new Error("NON_JSON_RESPONSE: "+text.slice(0,120));
+  }
   const d=await r.json();
   if(!r.ok||d.ok===false)throw new Error(d.message||d.error||("HTTP_"+r.status));
   return d;
@@ -397,48 +400,26 @@ async function loadDailyAnalytics(){
 async function loadAnalytics(){
   const summary=$("analyticsSummary");
   const list=$("analyticsList");
-  if(summary) summary.innerHTML='<div style="grid-column:1/-1"><small>読み込み中</small><strong>…</strong></div>';
-  if(list) list.innerHTML='<p>アクセスデータを読み込んでいます...</p>';
+  const daily=$("dailyAnalyticsList");
   try{
+    summary.innerHTML="<p>アクセス集計を読み込んでいます...</p>";
     const d=await api("/api/admin/analytics");
     const rows=d.analytics||[];
-    const dailyShop=$("dailyShopFilter");
-    if(dailyShop){
-      const current=dailyShop.value;
-      dailyShop.innerHTML='<option value="">全店舗</option>'+rows.map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join("");
-      if([...dailyShop.options].some(o=>o.value===current))dailyShop.value=current;
-    }
-    const totals=rows.reduce((a,r)=>{
-      a.views+=Number(r.views||0);
-      a.clicks+=Number(r.instagram_clicks||0)+Number(r.map_clicks||0)+Number(r.phone_clicks||0)+Number(r.website_clicks||0);
-      a.views30+=Number(r.views_30d||0);
-      a.clicks30+=Number(r.clicks_30d||0);
-      return a;
-    },{views:0,clicks:0,views30:0,clicks30:0});
-    summary.innerHTML=`
-      <div><small>総閲覧数</small><strong>${totals.views.toLocaleString()}</strong></div>
-      <div><small>総反応数</small><strong>${totals.clicks.toLocaleString()}</strong></div>
-      <div><small>30日閲覧</small><strong>${totals.views30.toLocaleString()}</strong></div>
-      <div><small>30日反応</small><strong>${totals.clicks30.toLocaleString()}</strong></div>`;
+    const totalViews=rows.reduce((a,x)=>a+Number(x.views||0),0);
+    const totalClicks=rows.reduce((a,x)=>a+Number(x.instagram_clicks||0)+Number(x.map_clicks||0)+Number(x.phone_clicks||0)+Number(x.website_clicks||0),0);
+    summary.innerHTML=`<div><b>総閲覧数</b><strong>${totalViews}</strong></div><div><b>総反応数</b><strong>${totalClicks}</strong></div>`;
+    list.innerHTML=rows.length?rows.map(x=>`
+      <article class="admin-shop-item">
+        <h3>${esc(x.name||"")}</h3>
+        <p>30日：閲覧 ${Number(x.views_30d||0)} / 反応 ${Number(x.clicks_30d||0)}</p>
+        <small>累計閲覧 ${Number(x.views||0)} ・ Instagram ${Number(x.instagram_clicks||0)} ・ 地図 ${Number(x.map_clicks||0)} ・ 電話 ${Number(x.phone_clicks||0)}</small>
+      </article>`).join(""):"<p>アクセスデータはまだありません。</p>";
     await loadDailyAnalytics();
-    list.innerHTML=rows.length?rows.map(r=>`
-      <article class="admin-shop-item analytics-item">
-        <div>
-          <h3>${esc(r.name)}</h3>
-          <p>30日：閲覧 ${Number(r.views_30d||0).toLocaleString()} / 反応 ${Number(r.clicks_30d||0).toLocaleString()}</p>
-          <small>累計閲覧 ${Number(r.views||0).toLocaleString()} ・ Instagram ${Number(r.instagram_clicks||0).toLocaleString()} ・ 地図 ${Number(r.map_clicks||0).toLocaleString()} ・ 電話 ${Number(r.phone_clicks||0).toLocaleString()}</small>
-        </div>
-        <div class="analytics-rate">
-          <b>${(Number(r.instagram_clicks||0)+Number(r.map_clicks||0)+Number(r.phone_clicks||0)+Number(r.website_clicks||0)).toLocaleString()}</b>
-          <small>反応数</small>
-        </div>
-      </article>`).join(""):'<p>まだアクセスデータはありません。</p>';
   }catch(e){
-    console.error(e);
-    if(summary) summary.innerHTML='<div style="grid-column:1/-1"><small>読み込みエラー</small><strong>!</strong></div>';
-    if(list) list.innerHTML=e?.message==="ADMIN_AUTH_REQUIRED"
-      ? '<div class="analytics-error-box"><b>管理画面へ再ログインしてください。</b><p>同じタブで一度認証してから「再読み込み」を押してください。</p></div>'
-      : '<div class="analytics-error-box"><b>アクセス集計を読み込めませんでした。</b><p>WorkerまたはD1との接続を確認してください。</p></div>';
+    console.error("analytics load failed",e);
+    summary.innerHTML='<div class="analytics-error-box"><b>アクセス集計を読み込めませんでした。</b><p>'+esc(e?.message||"UNKNOWN_ERROR")+'</p></div>';
+    list.innerHTML="";
+    if(daily)daily.innerHTML='<div class="analytics-error-box"><b>日別データも読み込めませんでした。</b><p>'+esc(e?.message||"UNKNOWN_ERROR")+'</p></div>';
   }
 }
 
@@ -554,5 +535,18 @@ $("adminLogoutBtn")?.addEventListener("click",async()=>{
   try{await fetch("/api/admin/logout",{method:"POST",credentials:"include"});}
   finally{location.href="/admin-login";}
 });
+
+
+(async()=>{
+  try{
+    const s=await api("/api/admin/status");
+    if(!s.authenticated){
+      location.href="/admin-login";
+      return;
+    }
+  }catch(e){
+    console.error("admin status failed",e);
+  }
+})();
 
 </script></body></html>

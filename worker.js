@@ -439,12 +439,22 @@ export default {
       return new Response(obj.body,{headers:h});
     }
 
-    if(url.pathname.startsWith("/api/admin/")){
+
+    if(url.pathname==="/api/admin/status" && request.method==="GET"){
+      return json({
+        ok:true,
+        authenticated:await validAdminSession(request,env),
+        db_bound:!!env.DB
+      });
+    }
+
+    if(url.pathname.startsWith("/api/admin/") && !["/api/admin/login","/api/admin/logout"].includes(url.pathname)){
       if(!(await validAdminSession(request,env))) return json({ok:false,error:"ADMIN_AUTH_REQUIRED"},{status:401});
 
 
 
       if(url.pathname==="/api/admin/analytics/daily" && request.method==="GET"){
+        try{
         const shopIdRaw=url.searchParams.get("shop_id");
         const shopId=shopIdRaw?Number(shopIdRaw):null;
         const daysRaw=Number(url.searchParams.get("days")||30);
@@ -476,9 +486,15 @@ export default {
 
         const r=await env.DB.prepare(sql).bind(...binds).all();
         return json({ok:true,days,daily:r.results||[]});
+      
+        }catch(e){
+          console.error("admin analytics daily failed",e);
+          return json({ok:false,error:"ADMIN_ANALYTICS_DAILY_FAILED",message:String(e?.message||e)},{status:500});
+        }
       }
 
       if(url.pathname==="/api/admin/analytics" && request.method==="GET"){
+        try{
         const r=await env.DB.prepare(`
           SELECT
             s.id,s.name,s.slug,
@@ -495,6 +511,11 @@ export default {
           ORDER BY views_30d DESC, views DESC, s.id DESC
         `).all();
         return json({ok:true,analytics:r.results||[]});
+      
+        }catch(e){
+          console.error("admin analytics failed",e);
+          return json({ok:false,error:"ADMIN_ANALYTICS_FAILED",message:String(e?.message||e)},{status:500});
+        }
       }
 
 
