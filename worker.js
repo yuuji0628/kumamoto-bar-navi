@@ -432,6 +432,41 @@ export default {
         `).all();
         return json({ok:true,requests:r.results||[]});
       }
+
+      const orPhoto=url.pathname.match(/^\/api\/admin\/owner-requests\/(\d+)\/apply-photo$/);
+      if(orPhoto && request.method==="POST"){
+        const id=Number(orPhoto[1]);
+        const req=await env.DB.prepare(`
+          SELECT owner_requests.*,shops.id AS target_shop_id
+          FROM owner_requests
+          JOIN shops ON shops.id=owner_requests.shop_id
+          WHERE owner_requests.id=?
+        `).bind(id).first();
+
+        if(!req)return json({ok:false,error:"NOT_FOUND"},{status:404});
+        if(req.request_type!=="photo")return json({ok:false,error:"NOT_PHOTO_REQUEST"},{status:400});
+
+        let payload={};
+        try{payload=JSON.parse(req.payload||"{}")}catch{}
+        const imageUrl=t(payload.image_url||payload.url||"",1000);
+        if(!imageUrl)return json({ok:false,error:"IMAGE_URL_NOT_FOUND"},{status:400});
+
+        await env.DB.batch([
+          env.DB.prepare(`
+            UPDATE shops
+            SET image_url=?,updated_at=CURRENT_TIMESTAMP
+            WHERE id=?
+          `).bind(imageUrl,req.target_shop_id),
+          env.DB.prepare(`
+            UPDATE owner_requests
+            SET status='reviewed',reviewed_at=CURRENT_TIMESTAMP
+            WHERE id=?
+          `).bind(id)
+        ]);
+
+        return json({ok:true,image_url:imageUrl,shop_id:req.target_shop_id});
+      }
+
       const orm=url.pathname.match(/^\/api\/admin\/owner-requests\/(\d+)$/);
       if(orm && request.method==="PUT"){
         const id=Number(orm[1]);
