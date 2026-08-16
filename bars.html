@@ -2,119 +2,193 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="description" content="熊本県内のBAR一覧｜KUMAMOTO BAR NAVI">
-  <title>BAR一覧｜KUMAMOTO BAR NAVI</title>
-  <link rel="stylesheet" href="style.css">
+  <meta name="theme-color" content="#080b10">
+  <title>BARを探す｜KUMAMOTO BAR NAVI</title>
+  <link rel="stylesheet" href="style.css?v=109">
 </head>
-<body>
-<header class="site-header">
-  <div class="container header-inner">
-    <a class="brand" href="index.html">
-      <img class="brand-logo" src="logo.png" alt="KUMAMOTO BAR NAVI ロゴ">
-      <span><b>KUMAMOTO</b><br>BAR NAVI<small>BAR & JOB INFORMATION</small></span>
+<body class="public-v109">
+
+<header class="public-header">
+  <div class="container public-header-inner">
+    <a class="public-brand" href="index.html">
+      <img src="logo.png" alt="KUMAMOTO BAR NAVI">
+      <span><b>KUMAMOTO</b><strong>BAR NAVI</strong><small>BAR & JOB INFORMATION</small></span>
     </a>
-    <a class="header-cta" href="listing-form.html">店舗掲載申込み</a>
+    <nav class="public-desktop-nav">
+      <a href="bars.html" class="active">BARを探す</a>
+      <a href="jobs.html">求人</a>
+      <a href="column.html">コラム</a>
+      <a href="listing-form.html">店舗掲載</a>
+    </nav>
+    <a class="public-header-cta" href="listing-form.html">店舗掲載</a>
   </div>
 </header>
 
-<main class="bars-page">
-<section class="bars-hero">
-  <div class="container">
-    <a class="back-link" href="index.html">← ホームへ戻る</a>
-    <p class="eyebrow">KUMAMOTO BAR DIRECTORY</p>
-    <h1>熊本県内のBAR一覧</h1>
-    <p>掲載中の店舗を、エリア・ジャンル・キーワードから探せます。</p>
+<main class="public-directory-page">
+  <section class="public-directory-hero">
+    <div class="container">
+      <a class="public-back-link" href="index.html">← ホーム</a>
+      <p class="public-kicker">KUMAMOTO BAR DIRECTORY</p>
+      <h1>今夜のBARを探す</h1>
+      <p>エリア・ジャンル・キーワードで絞り込めます。</p>
 
-    <div class="directory-search">
-      <select id="areaFilter"><option value="">すべてのエリア</option></select>
-      <select id="genreFilter"><option value="">すべてのジャンル</option></select>
-      <input id="keyword" type="search" placeholder="店名・住所・特徴">
-      <button id="filterBtn" type="button">検索する</button>
-    </div>
-  </div>
-</section>
+      <div id="filters" class="public-directory-search">
+        <label><span>📍 エリア</span><select id="areaFilter"><option value="">熊本県内すべて</option></select></label>
+        <label><span>🍸 ジャンル</span><select id="genreFilter"><option value="">すべてのジャンル</option></select></label>
+        <label class="public-directory-keyword"><span>⌕ キーワード</span><input id="keyword" type="search" placeholder="店名・特徴・住所"></label>
+        <button id="filterBtn" type="button">検索する</button>
+      </div>
 
-<section class="section">
-  <div class="container">
-    <div class="directory-top">
-      <div><p class="eyebrow">BAR LIST</p><h2>掲載BAR</h2></div>
-      <span id="resultCount" class="result-count">読込中</span>
+      <div class="public-filter-chips">
+        <button type="button" data-quick-q="飲み放題">飲み放題</button>
+        <button type="button" data-quick-q="ダーツ">ダーツ</button>
+        <button type="button" data-quick-q="カラオケ">カラオケ</button>
+        <button type="button" data-quick-q="シーシャ">シーシャ</button>
+        <button type="button" data-quick-q="一人飲み">一人飲み</button>
+      </div>
     </div>
-    <div class="directory-grid" id="barCards"></div>
-    <p id="noResult" class="no-result" style="display:none">条件に一致するBARがありません。</p>
-    <p id="loadError" class="no-result" style="display:none">店舗情報を読み込めませんでした。</p>
-  </div>
-</section>
+  </section>
+
+  <section class="public-section public-directory-results">
+    <div class="container">
+      <div class="public-directory-top">
+        <div>
+          <p class="public-kicker">BAR LIST</p>
+          <h2>掲載店舗</h2>
+        </div>
+        <span id="resultCount" class="public-result-count">読込中</span>
+      </div>
+
+      <div id="barCards" class="public-directory-grid"></div>
+      <div id="noResult" class="public-empty" hidden>
+        <b>条件に合う店舗が見つかりませんでした。</b>
+        <span>エリアやキーワードを変えて検索してください。</span>
+      </div>
+      <div id="loadError" class="public-empty" hidden>
+        <b>店舗情報を読み込めませんでした。</b>
+        <span>時間をおいてもう一度お試しください。</span>
+      </div>
+    </div>
+  </section>
 </main>
+
+<nav class="public-bottom-nav" aria-label="スマホ用メニュー">
+  <a href="index.html"><span>⌂</span><b>ホーム</b></a>
+  <a href="bars.html" class="active"><span>⌕</span><b>BARを探す</b></a>
+  <a href="jobs.html"><span>▣</span><b>求人</b></a>
+  <a href="listing-form.html"><span>＋</span><b>店舗掲載</b></a>
+</nav>
 
 <script>
 let allShops=[];
 const $=id=>document.getElementById(id);
 const esc=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 
+function cleanName(s){
+  return String(s||"").replace(/^【KBN独自掲載】/,"").trim();
+}
+function isEditorial(s){
+  return String(s.listing_status||"")==="provisional" || /^【KBN独自掲載】/.test(String(s.name||""));
+}
+function featureTokens(v){
+  return String(v||"").split(/[、,／/・\s]+/).map(x=>x.trim()).filter(Boolean);
+}
 function fillFilters(){
-  const areas=[...new Set(allShops.map(s=>s.area).filter(Boolean))].sort();
-  const genres=[...new Set(allShops.map(s=>s.genre).filter(Boolean))].sort();
-  $("areaFilter").innerHTML='<option value="">すべてのエリア</option>'+areas.map(x=>`<option>${esc(x)}</option>`).join("");
-  $("genreFilter").innerHTML='<option value="">すべてのジャンル</option>'+genres.map(x=>`<option>${esc(x)}</option>`).join("");
+  const areas=[...new Set(allShops.map(s=>s.area).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"ja"));
+  const genres=[...new Set(allShops.map(s=>s.genre).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"ja"));
+  $("areaFilter").innerHTML='<option value="">熊本県内すべて</option>'+areas.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join("");
+  $("genreFilter").innerHTML='<option value="">すべてのジャンル</option>'+genres.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join("");
 }
 function money(s){
-  if(s.budget_min&&s.budget_max)return `${Number(s.budget_min).toLocaleString()}〜${Number(s.budget_max).toLocaleString()}円`;
-  if(s.budget_min)return `${Number(s.budget_min).toLocaleString()}円〜`;
+  const min=Number(s.budget_min||0),max=Number(s.budget_max||0);
+  if(min&&max&&min!==max)return `${min.toLocaleString()}〜${max.toLocaleString()}円`;
+  if(min)return `${min.toLocaleString()}円〜`;
+  if(max)return `〜${max.toLocaleString()}円`;
   return "";
 }
-function cardMedia(s,i){
-  if(s.image_url){
-    return `<div class="directory-photo has-image"><img src="${esc(s.image_url)}" alt="${esc(s.name)}" loading="lazy" onerror="this.onerror=null;this.src=\'default-bar.svg\'"></div>`;
-  }
-  return `<div class="directory-photo has-image default-image"><img src="default-bar.svg" alt="${esc(s.name)} 画像準備中" loading="lazy"></div>`;
+function cardMedia(s){
+  const name=cleanName(s.name);
+  const src=s.image_url||"default-bar.svg";
+  return `<div class="public-card-photo${s.image_url?"":" is-placeholder"}">
+    <img src="${esc(src)}" alt="${esc(name)}" loading="lazy" onerror="this.onerror=null;this.src='default-bar.svg'">
+    ${s.is_new?'<span class="public-photo-badge">NEW</span>':""}
+  </div>`;
 }
 function render(list){
-  $("resultCount").textContent=`${list.length}件`;
-  $("noResult").style.display=list.length?"none":"block";
-  $("barCards").innerHTML=list.map((s,i)=>`
-    <a class="directory-card" href="shop.html?slug=${encodeURIComponent(s.slug)}">
-      ${cardMedia(s,i)}
-      <div class="directory-body">
-        <div class="badges">
-          ${s.is_featured?`<span>おすすめ</span>`:""}
-          ${s.is_new?`<span>NEW</span>`:""}
+  $("resultCount").textContent=`${list.length}店舗`;
+  $("noResult").hidden=!!list.length;
+  $("barCards").innerHTML=list.map(s=>{
+    const name=cleanName(s.name);
+    const features=featureTokens(s.features).slice(0,2);
+    const budget=money(s);
+    return `<a class="public-directory-card" href="shop.html?slug=${encodeURIComponent(s.slug)}">
+      ${cardMedia(s)}
+      <div class="public-directory-card-body">
+        <div class="public-card-meta">
+          ${isEditorial(s)?'<span class="public-editorial-badge">KBN独自掲載</span>':""}
+          ${s.is_featured?'<span class="public-recommend-badge">おすすめ</span>':""}
+        </div>
+        <h3>${esc(name)}</h3>
+        <div class="public-card-tags">
           ${s.area?`<span>${esc(s.area)}</span>`:""}
           ${s.genre?`<span>${esc(s.genre)}</span>`:""}
+          ${features.map(x=>`<span>${esc(x)}</span>`).join("")}
         </div>
-        <h3>${esc(s.name)}</h3>
-        <p>${esc((s.description||"").slice(0,92))}${(s.description||"").length>92?"…":""}</p>
-        ${money(s)?`<small class="directory-budget">平均予算 ${money(s)}</small>`:""}
-        <strong>詳細を見る →</strong>
+        <div class="public-card-facts">
+          ${s.hours?`<span><small>営業時間</small><b>${esc(s.hours)}</b></span>`:""}
+          ${budget?`<span><small>料金目安</small><b>${esc(budget)}</b></span>`:""}
+        </div>
+        <p>${esc((s.description||"").replace(/※本ページ[\s\S]*/,"").slice(0,78))}${(s.description||"").length>78?"…":""}</p>
+        <strong class="public-card-link">店舗を見る <i>›</i></strong>
       </div>
-    </a>
-  `).join("");
+    </a>`;
+  }).join("");
 }
 function filter(){
   const area=$("areaFilter").value;
   const genre=$("genreFilter").value;
   const q=$("keyword").value.trim().toLowerCase();
-  render(allShops.filter(s=>{
-    const text=[s.name,s.address,s.features,s.description,s.genre,s.area].join(" ").toLowerCase();
-    return (!area||s.area===area)&&(!genre||s.genre===genre)&&(!q||text.includes(q));
-  }));
+
+  const filtered=allShops.filter(s=>{
+    const text=[cleanName(s.name),s.address,s.features,s.description,s.genre,s.area,s.hours].join(" ").toLowerCase();
+    return (!area||s.area===area)&&(!genre||String(s.genre||"").includes(genre))&&(!q||text.includes(q));
+  });
+  render(filtered);
+  const url=new URL(location.href);
+  area?url.searchParams.set("area",area):url.searchParams.delete("area");
+  genre?url.searchParams.set("genre",genre):url.searchParams.delete("genre");
+  q?url.searchParams.set("q",q):url.searchParams.delete("q");
+  history.replaceState(null,"",url);
+}
+function applyUrlFilters(){
+  const p=new URLSearchParams(location.search);
+  $("areaFilter").value=p.get("area")||"";
+  $("genreFilter").value=p.get("genre")||"";
+  $("keyword").value=p.get("q")||"";
 }
 async function load(){
   try{
-    const r=await fetch("/api/shops");
+    const r=await fetch("/api/shops",{cache:"no-store"});
     const d=await r.json();
-    if(!r.ok||!d.ok)throw new Error();
+    if(!r.ok||!d.ok)throw new Error("LOAD_FAILED");
     allShops=d.shops||[];
-    fillFilters(); render(allShops);
-  }catch{
-    $("resultCount").textContent="0件";
-    $("loadError").style.display="block";
+    fillFilters();
+    applyUrlFilters();
+    filter();
+  }catch(e){
+    $("resultCount").textContent="0店舗";
+    $("loadError").hidden=false;
   }
 }
 $("filterBtn").addEventListener("click",filter);
 ["areaFilter","genreFilter"].forEach(id=>$(id).addEventListener("change",filter));
-$("keyword").addEventListener("input",filter);
+$("keyword").addEventListener("keydown",e=>{if(e.key==="Enter")filter()});
+document.querySelectorAll("[data-quick-q]").forEach(b=>b.addEventListener("click",()=>{
+  $("keyword").value=b.dataset.quickQ||"";
+  filter();
+}));
 load();
 </script>
 </body>

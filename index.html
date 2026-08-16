@@ -2,375 +2,192 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="robots" content="index,follow">
   <meta name="theme-color" content="#080b10">
   <meta property="og:type" content="website">
   <meta property="og:title" content="KUMAMOTO BAR NAVI｜熊本のBAR・求人情報">
-  <meta property="og:description" content="熊本県内のBARをエリア・ジャンル・特徴から探せるBAR情報サイト。店舗掲載も無料受付中。">
+  <meta property="og:description" content="熊本県内のBARをエリア・ジャンル・特徴から探せるBAR情報サイト。">
   <meta property="og:url" content="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/">
   <meta name="description" content="熊本県内のBAR紹介・求人情報ポータル KUMAMOTO BAR NAVI">
   <title>KUMAMOTO BAR NAVI｜熊本のBAR・求人情報</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700;800&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
-
-<script type="application/ld+json">
-{
-  "@context":"https://schema.org",
-  "@type":"WebSite",
-  "name":"KUMAMOTO BAR NAVI",
-  "url":"https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/",
-  "description":"熊本県内のBAR・求人情報を探せる地域情報サイト"
-}
-</script>
-
-
-<style>
-.top-notice-kbn{
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  gap:8px;
-  flex-wrap:wrap;
-  box-sizing:border-box;
-  width:100%;
-  padding:7px 14px;
-  background:#0b0d11;
-  border-bottom:1px solid rgba(224,183,86,.28);
-  color:#d8dde4;
-  font-size:12px;
-  line-height:1.45;
-  text-align:center;
-  letter-spacing:.02em;
-}
-.top-notice-kbn a{
-  color:#e9c460;
-  font-weight:800;
-  text-decoration:none;
-  white-space:nowrap;
-}
-.top-notice-kbn a:hover{
-  text-decoration:underline;
-}
-@media(max-width:520px){
-  .top-notice-kbn{
-    padding:6px 10px;
-    gap:5px;
-    font-size:11px;
+  <link rel="stylesheet" href="style.css?v=109">
+  <script type="application/ld+json">
+  {
+    "@context":"https://schema.org",
+    "@type":"WebSite",
+    "name":"KUMAMOTO BAR NAVI",
+    "url":"https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/",
+    "description":"熊本県内のBAR・求人情報を探せる地域情報サイト"
   }
-}
-</style>
-
+  </script>
 </head>
-<body>
+<body class="public-v109">
 
-<div class="top-notice-kbn">
-  <span>📢 お知らせ：掲載店舗を募集中です。</span>
-
-  <a href="listing-form.html">掲載申込はこちら →</a>
+<div class="public-notice">
+  <span>熊本県内のBARを掲載中</span>
+  <a href="listing-form.html">店舗掲載はこちら →</a>
 </div>
 
-<header class="site-header">
-  <div class="container header-inner">
-    <a class="brand" href="#top">
-      <img class="brand-logo" src="logo.png" alt="KUMAMOTO BAR NAVI ロゴ">
-      <span><b>KUMAMOTO</b><br>BAR NAVI<small>BAR & JOB INFORMATION</small></span>
+<header class="public-header">
+  <div class="container public-header-inner">
+    <a class="public-brand" href="index.html" aria-label="KUMAMOTO BAR NAVI ホーム">
+      <img src="logo.png" alt="KUMAMOTO BAR NAVI">
+      <span><b>KUMAMOTO</b><strong>BAR NAVI</strong><small>BAR & JOB INFORMATION</small></span>
     </a>
-    <button id="menuBtn" class="menu-btn" aria-expanded="false">☰</button>
-    <nav id="nav" class="nav">
-      <a href="#top">ホーム</a>
-      <a href="bars.html">BAR一覧</a>
-      <a href="#jobs">求人情報</a>
-      <a href="#new">新着情報</a>
-      <a href="#owner">掲載申込み</a>
-      <a href="#column">コラム</a>
-      <a href="https://www.instagram.com/kumamoto_bar_navi/" target="_blank" rel="noopener">Instagram</a>
+    <nav class="public-desktop-nav">
+      <a href="bars.html">BARを探す</a>
+      <a href="jobs.html">求人</a>
+      <a href="column.html">コラム</a>
+      <a href="listing-form.html">店舗掲載</a>
     </nav>
-    <a class="header-cta" href="#owner">掲載申込み</a>
+    <a class="public-header-cta" href="bars.html">BARを探す</a>
   </div>
 </header>
 
-<main id="top">
-<section class="hero">
-  <div class="hero-overlay"></div>
-  <div class="container hero-inner">
-    <p class="eyebrow">KUMAMOTO NIGHT GUIDE</p>
-    <h1><span class="hero-line1">熊本の夜を、</span><span class="hero-line2">もっと見つけやすく。</span></h1>
-    <p class="hero-copy">BAR探しも、求人も、ここから。</p>
+<main>
+  <section class="public-hero">
+    <div class="public-hero-glow"></div>
+    <div class="container public-hero-inner">
+      <p class="public-kicker">KUMAMOTO NIGHT GUIDE</p>
+      <h1>今夜行きたいBARを、<br><em>熊本で見つける。</em></h1>
+      <p class="public-hero-lead">エリア・ジャンルから、あなたに合う一軒をすぐ探せます。</p>
 
-    <div class="hero-search hero-search-v6">
-      <select id="areaFilter">
-        <option value="all">エリアを選択</option>
-        <option value="熊本市">熊本市</option>
-        <option value="八代市">八代</option>
-        <option value="人吉・球磨">人吉・球磨</option>
-        <option value="天草">天草</option>
-        <option value="阿蘇">阿蘇</option>
-        <option value="玉名">玉名</option>
-        <option value="宇城">宇城</option>
-        <option value="その他">その他</option>
-      </select>
-      <select id="genreFilter">
-        <option value="all">ジャンルを選択</option>
-        <option value="オーセンティック">オーセンティック</option>
-        <option value="ショットバー">ショットバー</option>
-        <option value="カジュアル">カジュアルバー</option>
-        <option value="ダーツ">ダーツバー</option>
-        <option value="カラオケ">カラオケバー</option>
-        <option value="スポーツ">スポーツバー</option>
-        <option value="ワイン">ワインバー</option>
-        <option value="ウイスキー">ウイスキーバー</option>
-        <option value="シーシャ">シーシャバー</option>
-        <option value="ラウンジ">ラウンジ</option>
-      </select>
-      <select id="featureFilter">
-        <option value="all">特徴を選択</option>
-        <option value="一人飲み">一人飲み</option>
-        <option value="デート">デート向け</option>
-        <option value="深夜営業">深夜営業</option>
-        <option value="朝まで">朝まで営業</option>
-        <option value="飲み放題">飲み放題あり</option>
-        <option value="フード充実">フード充実</option>
-        <option value="喫煙可">喫煙可</option>
-        <option value="禁煙">禁煙</option>
-      </select>
-      <input id="keyword" type="search" placeholder="店名・キーワード">
-      <button id="filterBtn">検索する →</button>
+      <form id="homeSearchForm" class="public-search-panel">
+        <div class="public-search-field">
+          <span>📍</span>
+          <label>エリア
+            <select id="homeArea" name="area">
+              <option value="">熊本県内すべて</option>
+              <option>熊本市</option><option>八代市</option><option>人吉市</option><option>荒尾市</option>
+              <option>水俣市</option><option>玉名市</option><option>山鹿市</option><option>菊池市</option>
+              <option>宇土市</option><option>上天草市</option><option>宇城市</option><option>阿蘇市</option>
+              <option>天草市</option><option>合志市</option><option>美里町</option><option>玉東町</option>
+              <option>南関町</option><option>長洲町</option><option>和水町</option><option>大津町</option>
+              <option>菊陽町</option><option>南小国町</option><option>小国町</option><option>産山村</option>
+              <option>高森町</option><option>西原村</option><option>南阿蘇村</option><option>御船町</option>
+              <option>嘉島町</option><option>益城町</option><option>甲佐町</option><option>山都町</option>
+              <option>氷川町</option><option>芦北町</option><option>津奈木町</option><option>錦町</option>
+              <option>多良木町</option><option>湯前町</option><option>水上村</option><option>相良村</option>
+              <option>五木村</option><option>山江村</option><option>球磨村</option><option>あさぎり町</option>
+              <option>苓北町</option>
+            </select>
+          </label>
+        </div>
+        <div class="public-search-field">
+          <span>🍸</span>
+          <label>ジャンル
+            <select id="homeGenre" name="genre">
+              <option value="">すべてのジャンル</option>
+              <option>BAR</option><option>ダーツバー</option><option>カラオケバー</option><option>スナック</option>
+              <option>ラウンジ</option><option>ガールズバー</option><option>ショットバー</option><option>スポーツバー</option>
+              <option>ワインバー</option><option>ビアバー</option><option>カクテルバー</option><option>ミュージックバー</option>
+              <option>シーシャバー</option><option>コンセプトバー</option>
+            </select>
+          </label>
+        </div>
+        <div class="public-search-field public-search-keyword">
+          <span>⌕</span>
+          <label>キーワード
+            <input id="homeKeyword" name="q" type="search" placeholder="店名・ダーツ・飲み放題など">
+          </label>
+        </div>
+        <button class="public-search-submit" type="submit">この条件で探す</button>
+      </form>
+
+      <div class="public-scene-links" aria-label="おすすめ検索">
+        <a href="bars.html?q=一人飲み">一人でゆっくり</a>
+        <a href="bars.html?q=飲み放題">飲み放題</a>
+        <a href="bars.html?genre=ダーツバー">ダーツ</a>
+        <a href="bars.html?genre=カラオケバー">カラオケ</a>
+      </div>
     </div>
-</div>
-</section>
-<section class="top-news" id="news">
-  <div class="container">
-    <div class="top-news-head">
+  </section>
+
+  <section class="public-shortcuts">
+    <div class="container">
+      <div class="public-shortcut-grid">
+        <a href="bars.html">
+          <span>📍</span><div><b>エリアから探す</b><small>熊本県内45市町村</small></div><i>›</i>
+        </a>
+        <a href="bars.html#filters">
+          <span>🍸</span><div><b>ジャンルから探す</b><small>BAR・ダーツ・ラウンジなど</small></div><i>›</i>
+        </a>
+        <a href="jobs.html">
+          <span>💼</span><div><b>求人を探す</b><small>BARで働きたい方へ</small></div><i>›</i>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="public-section">
+    <div class="container">
+      <div class="public-section-head">
+        <div><p class="public-kicker">FEATURED</p><h2>おすすめBAR</h2><p>まず見てほしい、熊本の注目店。</p></div>
+        <a href="bars.html">すべて見る →</a>
+      </div>
+      <div id="barCards" class="public-featured-grid">
+        <div class="public-loading">おすすめ店舗を読み込んでいます...</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="public-section public-section-soft">
+    <div class="container">
+      <div class="public-section-head">
+        <div><p class="public-kicker">LATEST</p><h2>新しく掲載されたBAR</h2><p>KUMAMOTO BAR NAVIに加わった店舗。</p></div>
+        <a href="bars.html">BAR一覧 →</a>
+      </div>
+      <div id="homeLatestBars" class="public-latest-list">
+        <div class="public-loading">新着店舗を読み込んでいます...</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="public-section public-section-compact">
+    <div class="container">
+      <div class="public-section-head">
+        <div><p class="public-kicker">NEWS</p><h2>お知らせ</h2></div>
+      </div>
+      <div id="kbnAutoNews" class="public-news-list">
+        <div class="public-loading">お知らせを読み込んでいます...</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="public-owner-cta">
+    <div class="container public-owner-card">
       <div>
-        <p class="eyebrow">LATEST NEWS</p>
-        <h2>お知らせ</h2>
-      </div>
-      <a href="#news" class="more-link">一覧を見る →</a>
-    </div>
-
-    <div id="kbnAutoNews" class="kbn-auto-news"><p class="kbn-news-empty">新着情報を読み込んでいます...</p></div>
-
-    <div class="top-news-list compact-news-list">
-      <a class="compact-news-item" href="jobs.html">
-        <time>INFO</time>
-        <span><b>JOB</b>BAR求人情報も掲載受付中</span>
-        <span class="compact-news-arrow">→</span>
-      </a>
-
-      <a class="compact-news-item" href="listing-form.html">
-        <time>INFO</time>
-        <span><b>INFO</b>熊本県内のBARを無料掲載受付中</span>
-        <span class="compact-news-arrow">→</span>
-      </a>
-    </div>
-  </div>
-</section>
-
-
-<section class="section" id="search">
-  <div class="container content-grid">
-    <div>
-      <div class="section-title-row">
-        <div>
-          <p class="eyebrow">FEATURED</p>
-          <h2>おすすめBAR</h2>
-        </div>
-        <a href="bars.html" class="more-link">BAR一覧を見る →</a>
-      </div>
-
-      <div class="cards" id="barCards">
-        <p class="note" id="featuredLoading">おすすめ店舗を読み込んでいます...</p>
-      </div>
-      <p id="noResult" class="note" style="display:none">条件に一致する店舗がありません。</p>
-    </div>
-
-    <aside class="side-panel" id="new">
-      <div class="side-head"><h3>新着BAR</h3><span>NEW</span></div>
-      <a href="shop.html?slug=darts-bar-ark"><b>darts&amp;bar ark</b><small>熊本市中央区安政町 / ダーツバー</small></a>
-      <a href="#"><b>LOUNGE R</b><small>玉名市 / ラウンジ</small></a>
-      <a href="#"><b>BAR RISE</b><small>宇城市 / カジュアル</small></a>
-      <a class="side-banner" id="owner" href="listing-form.html">
-        <small>店舗オーナー様へ</small>
-        <strong>掲載申込み →</strong>
-      </a>
-      <a class="side-banner alt" href="#jobs">
-        <small>働きたい方へ</small>
-        <strong>求人を探す →</strong>
-      </a>
-    </aside>
-  </div>
-</section>
-
-<section class="section section-dark" id="jobs">
-  <div class="container">
-    <div class="section-title-row">
-      <div>
-        <p class="eyebrow">BAR JOBS</p>
-        <h2>求人募集中のBAR</h2>
-      </div>
-      <a class="more-link" href="#jobs">もっと見る →</a>
-    </div>
-    <div class="job-grid">
-      <a class="job-card job-card-link" href="job-lumiere.html">
-        <div class="job-photo has-default-image"><img src="default-bar.svg" alt="店舗画像準備中" loading="lazy"></div>
-        <div><h3>BAR LUMIÈRE</h3><div class="badges"><span>ホールスタッフ</span><span>バーテンダー</span></div><strong>時給 1,200円〜</strong><p>熊本市中央区 / 未経験OK・週2日〜</p><span class="job-more">求人詳細を見る →</span></div>
-      </a>
-      <article class="job-card">
-        <div class="job-photo has-default-image"><img src="default-bar.svg" alt="店舗画像準備中" loading="lazy"></div>
-        <div><h3>Darts & Bar EDGE</h3><div class="badges"><span>ホールスタッフ</span></div><strong>時給 1,000円〜</strong><p>熊本市中央区 / WワークOK</p></div>
-      </article>
-      <article class="job-card">
-        <div class="job-photo has-default-image"><img src="default-bar.svg" alt="店舗画像準備中" loading="lazy"></div>
-        <div><h3>LOUNGE R</h3><div class="badges"><span>バーテンダー</span><span>店長候補</span></div><strong>月給 25万円〜</strong><p>玉名市 / 経験者優遇</p></div>
-      </article>
-    </div>
-    <p class="note">※店舗名・給与・条件はデザイン確認用のサンプルです。</p>
-  </div>
-</section>
-
-<section class="compact-column-section" id="column">
-  <div class="container">
-    <div class="section-title-row compact-column-head">
-      <div>
-        <p class="eyebrow">COLUMN</p>
-        <h2>熊本の夜コラム</h2>
-      </div>
-      <a class="more-link" href="column.html">一覧を見る →</a>
-    </div>
-
-    <div class="compact-column-list">
-      <a class="compact-column-card" href="column-kumamoto-night.html">
-        <div>
-          <small>NIGHT GUIDE</small>
-          <h3>熊本の夜を楽しむなら</h3>
-          <p>初めての方にも分かりやすい、熊本の夜の楽しみ方。</p>
-        </div>
-        <span>→</span>
-      </a>
-
-      <a class="compact-column-card" href="column-bar-beginner.html">
-        <div>
-          <small>BAR BEGINNER</small>
-          <h3>BAR初心者でも楽しめるポイント</h3>
-          <p>お店選びから注文まで、気軽に楽しむコツをご紹介。</p>
-        </div>
-        <span>→</span>
-      </a>
-
-      <a class="compact-column-card" href="column-solo-bar.html">
-        <div>
-          <small>SOLO BAR</small>
-          <h3>熊本で一人飲みを楽しむ</h3>
-          <p>一人でも入りやすいBARを探すときのポイント。</p>
-        </div>
-        <span>→</span>
-      </a>
-    </div>
-  </div>
-</section>
-
-<section class="cta-owner compact-owner-cta" id="owner">
-  <div class="container">
-    <div class="compact-owner-card">
-      <div class="compact-owner-copy">
-        <p class="eyebrow">FOR OWNERS</p>
+        <p class="public-kicker">FOR BAR OWNERS</p>
         <h2>熊本県内のBARオーナー様へ</h2>
-        <p>KUMAMOTO BAR NAVIでは、現在BARの無料掲載を受け付けています。</p>
+        <p>店舗情報の掲載を受け付けています。営業時間や写真、求人情報も掲載できます。</p>
       </div>
-      <div class="compact-owner-actions">
-        <a class="compact-owner-primary" href="listing-form.html">無料掲載を申し込む →</a>
-        <a class="compact-owner-secondary" href="pricing.html">掲載について見る</a>
+      <div class="public-owner-actions">
+        <a class="public-btn-gold" href="listing-form.html">店舗掲載を申し込む</a>
+        <a class="public-btn-ghost" href="pricing.html">掲載について</a>
       </div>
     </div>
-  </div>
-</section>
-
-
-<section class="area-section slim-area-section">
-  <div class="container">
-    <div class="section-title-row slim-section-head">
-      <div><p class="eyebrow">SEARCH</p><h2>エリアからBARを探す</h2></div>
-      <a class="more-link" href="areas.html">一覧を見る →</a>
-    </div>
-    <div class="slim-area-search">
-      <select id="areaQuickSelect" aria-label="エリアを選択">
-        <option value="">エリアを選択してください</option>
-        <option value="area-kumamoto.html">熊本市</option>
-        <option value="area-yatsushiro.html">八代</option>
-        <option value="area-hitoyoshi.html">人吉・球磨</option>
-        <option value="area-amakusa.html">天草</option>
-        <option value="area-aso.html">阿蘇</option>
-      </select>
-      <button type="button" id="areaQuickGo">探す →</button>
-    </div>
-  </div>
-</section>
-
-
-
-<section class="trust-section">
-  <div class="container">
-    <p class="eyebrow">TRUST & SUPPORT</p>
-    <h2>安心してご利用いただくために</h2>
-    <div class="trust-grid">
-      <a class="trust-card" href="about.html"><b>運営について</b><span>KUMAMOTO BAR NAVIの目的・掲載方針</span></a>
-      <a class="trust-card" href="faq.html"><b>よくある質問</b><span>店舗掲載・修正・求人掲載について</span></a>
-      <a class="trust-card" href="contact.html"><b>お問い合わせ</b><span>掲載内容の修正やご相談はこちら</span></a>
-    </div>
-  </div>
-</section>
-
-
-
+  </section>
 </main>
 
-<footer>
-  <div class="container footer-inner">
-    <div class="brand footer-brand"><img class="brand-logo" src="logo.png" alt="KUMAMOTO BAR NAVI ロゴ"><span><b>KUMAMOTO</b><br>BAR NAVI</span></div>
-    <div class="footer-links"><a href="#search">BAR検索</a><a href="#jobs">求人情報</a><a href="#owner">掲載申込み</a><a href="#column">コラム</a><a href="https://www.instagram.com/kumamoto_bar_navi/" target="_blank" rel="noopener">Instagram</a></div>
+<footer class="public-footer">
+  <div class="container">
+    <div class="public-footer-brand">KUMAMOTO <b>BAR NAVI</b></div>
+    <div class="public-footer-links">
+      <a href="bars.html">BARを探す</a><a href="jobs.html">求人</a><a href="column.html">コラム</a>
+      <a href="listing-form.html">店舗掲載</a><a href="contact.html">お問い合わせ</a>
+    </div>
     <small>© 2026 KUMAMOTO BAR NAVI</small>
   </div>
 </footer>
-<script src="script.js"></script>
 
-<script>
-(async()=>{
-  const box=document.getElementById("kbnAutoNews");
-  if(!box)return;
-  try{
-    const r=await fetch("/api/news");
-    const d=await r.json();
-    if(!r.ok||!d.ok)throw new Error();
-    const items=d.news||[];
-    if(!items.length){
-      box.innerHTML='<p class="kbn-news-empty">現在、新着のお知らせはありません。</p>';
-      return;
-    }
-    const fmt=(v)=>{
-      if(!v)return "";
-      const dt=new Date(String(v).replace(" ","T")+"Z");
-      if(Number.isNaN(dt.getTime()))return "";
-      return `${dt.getMonth()+1}/${dt.getDate()}`;
-    };
-    const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
-    box.innerHTML=items.map(x=>`
-      <a class="compact-news-item" href="shop.html?slug=${encodeURIComponent(x.slug)}">
-        <time>${fmt(x.date)}</time>
-        <span><b>NEW</b>${esc(x.name)}を掲載しました！</span>
-        <span class="compact-news-arrow">→</span>
-      </a>
-    `).join("");
-  }catch{
-    box.innerHTML='<p class="kbn-news-empty">お知らせを読み込めませんでした。</p>';
-  }
-})();
-</script>
+<nav class="public-bottom-nav" aria-label="スマホ用メニュー">
+  <a href="index.html" class="active"><span>⌂</span><b>ホーム</b></a>
+  <a href="bars.html"><span>⌕</span><b>BARを探す</b></a>
+  <a href="jobs.html"><span>▣</span><b>求人</b></a>
+  <a href="listing-form.html"><span>＋</span><b>店舗掲載</b></a>
+</nav>
 
-<script>
-(()=>{const s=document.getElementById("areaQuickSelect"),b=document.getElementById("areaQuickGo");if(!s||!b)return;b.addEventListener("click",()=>{if(s.value)location.href=s.value});})();
-</script>
+<script src="script.js?v=109"></script>
 </body>
 </html>

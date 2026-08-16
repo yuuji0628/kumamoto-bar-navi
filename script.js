@@ -1,99 +1,129 @@
-
 const escHtml=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 
-function featureTokens(value){
-  return String(value||"").split(/[、,／/・\s]+/).map(x=>x.trim()).filter(Boolean);
+function kbnCleanName(v){
+  return String(v||"").replace(/^【KBN独自掲載】/,"").trim();
+}
+function kbnIsEditorial(s){
+  return String(s?.listing_status||"")==="provisional" || /^【KBN独自掲載】/.test(String(s?.name||""));
+}
+function kbnTokens(v){
+  return String(v||"").split(/[、,／/・\s]+/).map(x=>x.trim()).filter(Boolean);
+}
+function kbnMoney(s){
+  const min=Number(s?.budget_min||0),max=Number(s?.budget_max||0);
+  if(min&&max&&min!==max)return `${min.toLocaleString()}〜${max.toLocaleString()}円`;
+  if(min)return `${min.toLocaleString()}円〜`;
+  if(max)return `〜${max.toLocaleString()}円`;
+  return "";
+}
+function kbnCard(s){
+  const name=kbnCleanName(s.name);
+  const image=s.image_url||"default-bar.svg";
+  const features=kbnTokens(s.features).slice(0,2);
+  const money=kbnMoney(s);
+  return `<a class="public-featured-card" href="shop.html?slug=${encodeURIComponent(s.slug)}">
+    <div class="public-featured-photo${s.image_url?"":" is-placeholder"}">
+      <img src="${escHtml(image)}" alt="${escHtml(name)}" loading="lazy" onerror="this.onerror=null;this.src='default-bar.svg'">
+      ${s.is_new?'<span class="public-photo-badge">NEW</span>':""}
+    </div>
+    <div class="public-featured-body">
+      <div class="public-card-meta">
+        ${kbnIsEditorial(s)?'<span class="public-editorial-badge">KBN独自掲載</span>':""}
+        ${s.is_featured?'<span class="public-recommend-badge">おすすめ</span>':""}
+      </div>
+      <h3>${escHtml(name)}</h3>
+      <div class="public-card-tags">
+        ${s.area?`<span>${escHtml(s.area)}</span>`:""}
+        ${s.genre?`<span>${escHtml(s.genre)}</span>`:""}
+        ${features.map(x=>`<span>${escHtml(x)}</span>`).join("")}
+      </div>
+      <div class="public-card-facts">
+        ${s.hours?`<span><small>営業時間</small><b>${escHtml(s.hours)}</b></span>`:""}
+        ${money?`<span><small>料金目安</small><b>${escHtml(money)}</b></span>`:""}
+      </div>
+      <strong class="public-card-link">店舗を見る <i>›</i></strong>
+    </div>
+  </a>`;
 }
 
-async function loadFeaturedBars(){
-  const box=document.getElementById("barCards");
-  if(!box)return;
+async function loadHomeShops(){
+  const featuredBox=document.getElementById("barCards");
+  const latestBox=document.getElementById("homeLatestBars");
+  if(!featuredBox&&!latestBox)return;
 
   try{
     const r=await fetch("/api/shops",{cache:"no-store"});
     const d=await r.json();
     if(!r.ok||!d.ok)throw new Error("LOAD_FAILED");
+    const shops=d.shops||[];
 
-    const featured=(d.shops||[])
-      .filter(s=>Number(s.is_published)===1 && Number(s.is_featured)===1);
-
-    if(!featured.length){
-      box.innerHTML='<p class="note">現在、おすすめ店舗を準備中です。</p>';
-      return;
+    if(featuredBox){
+      let featured=shops.filter(s=>Number(s.is_featured)===1).slice(0,6);
+      if(!featured.length)featured=shops.slice(0,6);
+      featuredBox.innerHTML=featured.length?featured.map(kbnCard).join(""):'<div class="public-empty"><b>おすすめ店舗を準備中です。</b></div>';
     }
 
-    box.innerHTML=featured.map(s=>{
-      const features=featureTokens(s.features);
-      const badges=[
-        s.area||"",
-        s.genre||"",
-        features[0]||""
-      ].filter(Boolean).slice(0,3);
-
-      const image=s.image_url
-        ? `<img src="${escHtml(s.image_url)}" alt="${escHtml(s.name)}" loading="lazy" onerror="this.onerror=null;this.src='default-bar.svg'">`
-        : `<img src="default-bar.svg" alt="${escHtml(s.name)} 画像準備中" loading="lazy">`;
-
-      return `
-        <a class="bar-card featured-link"
-           href="shop.html?slug=${encodeURIComponent(s.slug)}"
-           data-area="${escHtml(s.area||"")}"
-           data-genre="${escHtml(s.genre||"")}"
-           data-types="${escHtml(s.features||"")}"
-           data-name="${escHtml(s.name||"")}">
-          <div class="card-image has-default-image">${image}</div>
-          <div class="card-body">
-            <h3>${escHtml(s.name)}</h3>
-            <div class="badges">${badges.map(x=>`<span>${escHtml(x)}</span>`).join("")}</div>
-            <p>${escHtml(s.description||"")}</p>
+    if(latestBox){
+      const latest=[...shops].sort((a,b)=>Number(b.id||0)-Number(a.id||0)).slice(0,5);
+      latestBox.innerHTML=latest.length?latest.map(s=>{
+        const name=kbnCleanName(s.name);
+        return `<a href="shop.html?slug=${encodeURIComponent(s.slug)}" class="public-latest-item">
+          <div>
+            <small>${escHtml(s.area||"熊本県")} ${s.genre?`/ ${escHtml(s.genre)}`:""}</small>
+            <b>${escHtml(name)}</b>
           </div>
+          <span>${kbnIsEditorial(s)?'<em>KBN独自掲載</em>':""} ›</span>
         </a>`;
-    }).join("");
-  }catch(e){
-    box.innerHTML='<p class="note">おすすめ店舗を読み込めませんでした。</p>';
+      }).join(""):'<div class="public-empty"><b>新着店舗はありません。</b></div>';
+    }
+  }catch{
+    if(featuredBox)featuredBox.innerHTML='<div class="public-empty"><b>おすすめ店舗を読み込めませんでした。</b></div>';
+    if(latestBox)latestBox.innerHTML='<div class="public-empty"><b>新着店舗を読み込めませんでした。</b></div>';
   }
 }
 
-loadFeaturedBars();
-
-const menuBtn=document.getElementById('menuBtn');
-const nav=document.getElementById('nav');
-menuBtn?.addEventListener('click',()=>{
-  nav.classList.toggle('open');
-  menuBtn.setAttribute('aria-expanded',nav.classList.contains('open'));
-});
-nav?.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>nav.classList.remove('open')));
-
-function applyFilters(){
-  const area=document.getElementById('areaFilter')?.value || 'all';
-  const genre=document.getElementById('genreFilter')?.value || 'all';
-  const feature=document.getElementById('featureFilter')?.value || 'all';
-  const kw=(document.getElementById('keyword')?.value || '').trim().toLowerCase();
-
-  let count=0;
-  document.querySelectorAll('.bar-card').forEach(card=>{
-    const cardArea=card.dataset.area || '';
-    const cardGenre=card.dataset.genre || '';
-    const cardTypes=card.dataset.types || '';
-    const haystack=(card.dataset.name+' '+card.innerText+' '+cardGenre+' '+cardTypes).toLowerCase();
-
-    const okArea=area==='all'||cardArea===area;
-    const okGenre=genre==='all'||cardGenre.includes(genre);
-    const okFeature=feature==='all'||cardTypes.includes(feature);
-    const okKw=!kw||haystack.includes(kw);
-
-    const show=okArea&&okGenre&&okFeature&&okKw;
-    card.style.display=show?'':'none';
-    if(show) count++;
-  });
-
-  const noResult=document.getElementById('noResult');
-  if(noResult) noResult.style.display=count===0?'block':'none';
-
-  document.getElementById('search')?.scrollIntoView({behavior:'smooth'});
+async function loadHomeNews(){
+  const box=document.getElementById("kbnAutoNews");
+  if(!box)return;
+  try{
+    const r=await fetch("/api/news",{cache:"no-store"});
+    const d=await r.json();
+    if(!r.ok||!d.ok)throw new Error();
+    const items=(d.news||[]).slice(0,4);
+    if(!items.length){
+      box.innerHTML='<div class="public-empty"><b>現在、お知らせはありません。</b></div>';
+      return;
+    }
+    box.innerHTML=items.map(x=>{
+      let date="";
+      try{
+        const raw=String(x.date||x.published_at||x.created_at||"");
+        const dt=new Date(raw.includes("T")?raw:raw.replace(" ","T")+"Z");
+        if(!Number.isNaN(dt.getTime()))date=`${dt.getMonth()+1}/${dt.getDate()}`;
+      }catch{}
+      const href=x.slug?`shop.html?slug=${encodeURIComponent(x.slug)}`:"bars.html";
+      return `<a href="${href}" class="public-news-item">
+        <time>${escHtml(date||"NEW")}</time>
+        <span>${escHtml(kbnCleanName(x.name||"新しい店舗を掲載しました"))}</span>
+        <i>›</i>
+      </a>`;
+    }).join("");
+  }catch{
+    box.innerHTML='<div class="public-empty"><b>お知らせを読み込めませんでした。</b></div>';
+  }
 }
 
-document.getElementById('filterBtn')?.addEventListener('click',applyFilters);
-document.getElementById('keyword')?.addEventListener('keydown',e=>{
-  if(e.key==='Enter') applyFilters();
+document.getElementById("homeSearchForm")?.addEventListener("submit",e=>{
+  e.preventDefault();
+  const area=document.getElementById("homeArea")?.value||"";
+  const genre=document.getElementById("homeGenre")?.value||"";
+  const q=document.getElementById("homeKeyword")?.value.trim()||"";
+  const p=new URLSearchParams();
+  if(area)p.set("area",area);
+  if(genre)p.set("genre",genre);
+  if(q)p.set("q",q);
+  location.href="bars.html"+(p.toString()?`?${p}`:"");
 });
+
+loadHomeShops();
+loadHomeNews();

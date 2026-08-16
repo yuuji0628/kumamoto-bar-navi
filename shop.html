@@ -2,216 +2,188 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="description" content="熊本のBAR店舗情報｜KUMAMOTO BAR NAVI">
+  <meta name="theme-color" content="#080b10">
   <title>店舗詳細｜KUMAMOTO BAR NAVI</title>
-  <link rel="stylesheet" href="style.css">
-
-<style>
-.shop-gallery{
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:8px;
-  margin:14px 0 18px;
-}
-.shop-gallery img{
-  width:100%;
-  aspect-ratio:1/1;
-  object-fit:cover;
-  border-radius:10px;
-  border:1px solid #3a4550;
-  background:#0c1117;
-}
-.shop-gallery img:first-child{grid-column:span 2;grid-row:span 2}
-@media(max-width:640px){
-  .shop-gallery{grid-template-columns:repeat(2,1fr)}
-  .shop-gallery img:first-child{grid-column:span 2;grid-row:auto;aspect-ratio:16/10}
-}
-</style>
-
-
-<style>
-/* v63 fallback */
-.shop-gallery{grid-template-columns:1fr!important}
-.shop-gallery img,
-.shop-gallery img:first-child{
-  width:100%!important;
-  height:auto!important;
-  aspect-ratio:16/9!important;
-  object-fit:contain!important;
-  object-position:center center!important;
-  display:block!important;
-  background:#0b1016!important;
-  border-radius:12px!important;
-  grid-column:auto!important;
-  grid-row:auto!important;
-}
-</style>
-
-
-<style>
-/* v65 強制上書き */
-.shop-ref-gallery-main .shop-hero-photo,
-.shop-hero-photo{
-  width:100%!important;
-  height:auto!important;
-  aspect-ratio:1/1!important;
-  max-height:none!important;
-  object-fit:contain!important;
-  object-position:center center!important;
-  display:block!important;
-  background:#0b1016!important;
-}
-.shop-ref-gallery-main{
-  display:grid!important;
-  grid-template-columns:1fr!important;
-  gap:10px!important;
-}
-</style>
-
+  <link rel="stylesheet" href="style.css?v=109">
 </head>
-<body>
-<header class="site-header">
-  <div class="container header-inner">
-    <a class="brand" href="index.html">
-      <img class="brand-logo" src="logo.png" alt="KUMAMOTO BAR NAVI ロゴ">
-      <span><b>KUMAMOTO</b><br>BAR NAVI<small>BAR & JOB INFORMATION</small></span>
+<body class="public-v109">
+
+<header class="public-header">
+  <div class="container public-header-inner">
+    <a class="public-brand" href="index.html">
+      <img src="logo.png" alt="KUMAMOTO BAR NAVI">
+      <span><b>KUMAMOTO</b><strong>BAR NAVI</strong><small>BAR & JOB INFORMATION</small></span>
     </a>
-    <a class="header-cta" href="bars.html">BAR一覧</a>
+    <a class="public-header-cta" href="bars.html">BARを探す</a>
   </div>
 </header>
 
-<main class="shop-compact-page">
-  <section class="shop-compact-section">
-    <div class="container shop-compact-container">
-      <a class="back-link compact-back" href="bars.html">← BAR一覧へ戻る</a>
-      <div id="shopDetail" class="shop-db-detail"><p>読み込み中...</p></div>
-    </div>
-  </section>
+<main class="public-shop-page">
+  <div class="container">
+    <a class="public-back-link public-shop-back" href="bars.html">← BAR一覧へ</a>
+    <div id="shopDetail"><div class="public-loading">店舗情報を読み込んでいます...</div></div>
+  </div>
 </main>
+
+<nav class="public-bottom-nav" aria-label="スマホ用メニュー">
+  <a href="index.html"><span>⌂</span><b>ホーム</b></a>
+  <a href="bars.html" class="active"><span>⌕</span><b>BARを探す</b></a>
+  <a href="jobs.html"><span>▣</span><b>求人</b></a>
+  <a href="listing-form.html"><span>＋</span><b>店舗掲載</b></a>
+</nav>
 
 <script>
 const esc=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 const slug=new URLSearchParams(location.search).get("slug");
 
+function cleanName(v){return String(v||"").replace(/^【KBN独自掲載】/,"").trim()}
+function isEditorial(s){return String(s.listing_status||"")==="provisional" || /^【KBN独自掲載】/.test(String(s.name||""))}
+function tokens(v){return String(v||"").split(/[、,／/・\s]+/).map(x=>x.trim()).filter(Boolean)}
 function normalizeInstagramUrl(value){
   let v=String(value||"").trim();
   if(!v)return "";
   if(/^https?:\/\//i.test(v))return v;
-  if(/^www\./i.test(v))return "https://"+v;
-  if(/^instagram\.com\//i.test(v))return "https://"+v;
   if(/^@/.test(v))v=v.slice(1);
-  v=v.replace(/^\/+|\/+$/g,"");
+  v=v.replace(/^www\./i,"").replace(/^instagram\.com\//i,"").replace(/^\/+|\/+$/g,"");
   return "https://www.instagram.com/"+encodeURIComponent(v)+"/";
 }
-
-
+function budgetText(s){
+  const min=Number(s.budget_min||0),max=Number(s.budget_max||0);
+  if(min&&max&&min!==max)return `${min.toLocaleString()}〜${max.toLocaleString()}円`;
+  if(min)return `${min.toLocaleString()}円〜`;
+  if(max)return `〜${max.toLocaleString()}円`;
+  return "情報なし";
+}
 async function track(action){
   if(!slug)return;
   try{
     await fetch(`/api/analytics/${encodeURIComponent(slug)}`,{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({action}),
-      keepalive:true
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({action}),keepalive:true
     });
   }catch{}
 }
-
 async function load(){
-  if(!slug){document.getElementById("shopDetail").innerHTML="<p>店舗が指定されていません。</p>";return;}
+  const box=document.getElementById("shopDetail");
+  if(!slug){box.innerHTML='<div class="public-empty"><b>店舗が指定されていません。</b></div>';return;}
   try{
-    const r=await fetch(`/api/shops/${encodeURIComponent(slug)}`);
+    const r=await fetch(`/api/shops/${encodeURIComponent(slug)}`,{cache:"no-store"});
     const d=await r.json();
-    if(!r.ok||!d.ok)throw new Error("not found");
+    if(!r.ok||!d.ok)throw new Error("NOT_FOUND");
     const s=d.shop;
-    const galleryImages=[s.image_url,...(d.images||[]).map(x=>x.image_url)].filter(Boolean);
-    const uniqueGallery=[...new Set(galleryImages)];
-    document.title=`${s.name}｜KUMAMOTO BAR NAVI`;
-    const budget=s.budget_min&&s.budget_max?`${Number(s.budget_min).toLocaleString()}〜${Number(s.budget_max).toLocaleString()}円`
-      :s.budget_min?`${Number(s.budget_min).toLocaleString()}円〜`
-      :s.budget_max?`〜${Number(s.budget_max).toLocaleString()}円`:"—";
-    const featureTags=String(s.features||"").split(",").map(x=>x.trim()).filter(Boolean).slice(0,5);
+    const name=cleanName(s.name);
+    const editorial=isEditorial(s);
+    document.title=`${name}｜KUMAMOTO BAR NAVI`;
+
+    const gallery=[s.image_url,...(d.images||[]).map(x=>x.image_url)].filter(Boolean);
+    const images=[...new Set(gallery)];
+    const mainImage=images[0]||"default-bar.svg";
+    const extra=images.slice(1,5);
+    const features=tokens(s.features).slice(0,8);
     const mapUrl=s.address?`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.address)}`:"";
-    const media=uniqueGallery.length
-      ? uniqueGallery.map((u,i)=>`<img class="shop-hero-photo${i===0?" is-main":""}" src="${esc(u)}" alt="${esc(s.name)} ${i+1}" loading="${i===0?"eager":"lazy"}" onerror="this.style.display='none'">`).join("")
-      : `<div class="shop-photo-placeholder">BAR IMAGE</div>`;
+    const insta=normalizeInstagramUrl(s.instagram);
+    const desc=String(s.description||"").replace(/※本ページ[\s\S]*/,"").trim();
 
-    document.getElementById("shopDetail").innerHTML=`
-      <article class="shop-ref-card">
-        <div class="shop-ref-head">
-          <p class="shop-ref-location">${esc([s.area,s.genre].filter(Boolean).join(" / "))}</p>
-          <h1>${esc(s.name)}</h1>
-          <div class="shop-ref-tags">${featureTags.map(x=>`<span>${esc(x)}</span>`).join("")}</div>
-        </div>
-
-        <div class="shop-ref-specs">
-          <div><small>営業時間</small><strong>${esc(s.hours||"—")}</strong></div>
-          <div><small>定休日</small><strong>${esc(s.holiday||"—")}</strong></div>
-          <div><small>収容人数</small><strong>${s.seats?`${Number(s.seats)}席`:"—"}</strong></div>
-          <div><small>予算</small><strong>${budget}</strong></div>
-          <div><small>喫煙</small><strong>${String(s.features||"").includes("喫煙可")?"喫煙可":"—"}</strong></div>
-        </div>
-
-        <div class="shop-ref-actions">
-          ${mapUrl?`<a href="${mapUrl}" target="_blank" rel="noopener" data-track="map">地図で見る</a>`:""}
-          ${s.address?`<button type="button" data-copy-address="${esc(s.address)}">住所をコピー</button>`:""}
-          <button type="button" data-favorite-shop>お気に入り</button>
-          <button type="button" data-share-shop>共有する</button>
-        </div>
-
-        <section class="shop-ref-mainbox">
-          <div class="shop-ref-gallery"><div class="shop-ref-gallery-main">${media}</div></div>
-          ${s.description?`<p class="shop-ref-description">${esc(s.description)}</p>`:""}
-          <dl class="shop-ref-detail-list">
-            ${s.address?`<div><dt>住所</dt><dd>${esc(s.address)}</dd><span></span></div>`:""}
-            ${s.phone?`<div><dt>電話番号</dt><dd><a href="tel:${esc(s.phone)}" data-track="phone">${esc(s.phone)}</a></dd><span></span></div>`:""}
-            ${s.hours?`<div><dt>営業時間</dt><dd>${esc(s.hours)}</dd><span></span></div>`:""}
-            ${s.holiday?`<div><dt>定休日</dt><dd>${esc(s.holiday)}</dd><span></span></div>`:""}
-            ${s.instagram?`<div><dt>SNS</dt><dd><a href="${esc(normalizeInstagramUrl(s.instagram))}" target="_blank" rel="noopener noreferrer" data-track="instagram">Instagram</a></dd><span>↗</span></div>`:""}
-          </dl>
+    box.innerHTML=`
+      <article class="public-shop-layout">
+        <section class="public-shop-visual">
+          <div class="public-shop-main-photo${s.image_url?"":" is-placeholder"}">
+            <img src="${esc(mainImage)}" alt="${esc(name)}" onerror="this.onerror=null;this.src='default-bar.svg'">
+          </div>
+          ${extra.length?`<div class="public-shop-thumbs">${extra.map(u=>`<img src="${esc(u)}" alt="${esc(name)}" loading="lazy">`).join("")}</div>`:""}
         </section>
 
-        <div class="shop-ref-foot">
-          ${s.is_new?`<span class="shop-ref-new"><b>NEW</b> 実掲載店舗</span>`:""}
-          <small>※情報は変更される場合があります。ご来店前にご確認ください。</small>
-        </div>
+        <section class="public-shop-summary">
+          <div class="public-shop-badges">
+            ${editorial?'<span class="public-editorial-badge">KBN独自掲載</span>':""}
+            ${s.is_new?'<span class="public-new-badge">NEW</span>':""}
+          </div>
+          <p class="public-shop-location">${esc([s.area,s.genre].filter(Boolean).join(" / "))}</p>
+          <h1>${esc(name)}</h1>
+
+          <div class="public-shop-tags">
+            ${features.map(x=>`<span>${esc(x)}</span>`).join("")}
+          </div>
+
+          <div class="public-shop-keyfacts">
+            <div><small>営業時間</small><b>${esc(s.hours||"情報なし")}</b></div>
+            <div><small>料金目安</small><b>${esc(budgetText(s))}</b></div>
+            <div><small>定休日</small><b>${esc(s.holiday||"情報なし")}</b></div>
+            <div><small>席数</small><b>${s.seats?`${Number(s.seats)}席`:"情報なし"}</b></div>
+          </div>
+
+          <div class="public-shop-primary-actions">
+            ${mapUrl?`<a href="${esc(mapUrl)}" target="_blank" rel="noopener" data-track="map">📍 地図で見る</a>`:""}
+            ${insta?`<a href="${esc(insta)}" target="_blank" rel="noopener" data-track="instagram">Instagram ↗</a>`:""}
+            ${s.phone?`<a href="tel:${esc(s.phone)}" data-track="phone">☎ 電話する</a>`:""}
+          </div>
+        </section>
+
+        <section class="public-shop-content">
+          ${desc?`<div class="public-shop-description"><p class="public-kicker">ABOUT</p><h2>お店について</h2><p>${esc(desc)}</p></div>`:""}
+
+          <div class="public-shop-info">
+            <div class="public-shop-info-head"><p class="public-kicker">INFORMATION</p><h2>店舗情報</h2></div>
+            <dl>
+              <div><dt>店名</dt><dd>${esc(name)}</dd></div>
+              ${s.area?`<div><dt>エリア</dt><dd>${esc(s.area)}</dd></div>`:""}
+              ${s.genre?`<div><dt>ジャンル</dt><dd>${esc(s.genre)}</dd></div>`:""}
+              ${s.address?`<div><dt>住所</dt><dd>${esc(s.address)}</dd></div>`:""}
+              ${s.hours?`<div><dt>営業時間</dt><dd>${esc(s.hours)}</dd></div>`:""}
+              ${s.holiday?`<div><dt>定休日</dt><dd>${esc(s.holiday)}</dd></div>`:""}
+              ${(s.budget_min||s.budget_max)?`<div><dt>料金目安</dt><dd>${esc(budgetText(s))}</dd></div>`:""}
+              ${s.seats?`<div><dt>席数</dt><dd>${Number(s.seats)}席</dd></div>`:""}
+              ${s.phone?`<div><dt>電話番号</dt><dd><a href="tel:${esc(s.phone)}">${esc(s.phone)}</a></dd></div>`:""}
+            </dl>
+          </div>
+
+          ${editorial?`
+          <div class="public-editorial-note">
+            <b>KBN独自掲載について</b>
+            <p>このページは、公開されている情報をもとにKUMAMOTO BAR NAVIが独自に掲載しています。内容の修正・削除をご希望の場合はお問い合わせください。</p>
+            <a href="contact.html">掲載内容について連絡する →</a>
+          </div>`:""}
+
+          <div class="public-shop-secondary-actions">
+            ${s.address?`<button type="button" data-copy-address="${esc(s.address)}">住所をコピー</button>`:""}
+            <button type="button" data-favorite-shop>♡ お気に入り</button>
+            <button type="button" data-share-shop>共有する</button>
+          </div>
+
+          <p class="public-shop-disclaimer">※営業時間・料金・定休日などは変更される場合があります。ご来店前に店舗の公式情報をご確認ください。</p>
+        </section>
       </article>
     `;
 
     track("view");
-    document.querySelectorAll("[data-track]").forEach(el=>{
-      el.addEventListener("click",()=>track(el.dataset.track));
+    document.querySelectorAll("[data-track]").forEach(el=>el.addEventListener("click",()=>track(el.dataset.track)));
+
+    const copy=document.querySelector("[data-copy-address]");
+    copy?.addEventListener("click",async()=>{
+      try{await navigator.clipboard.writeText(copy.dataset.copyAddress);copy.textContent="✓ コピーしました"}catch{}
     });
 
-    const copyBtn=document.querySelector("[data-copy-address]");
-    if(copyBtn){
-      copyBtn.addEventListener("click",async()=>{
-        try{await navigator.clipboard.writeText(copyBtn.dataset.copyAddress);copyBtn.textContent="コピーしました";}
-        catch{copyBtn.textContent="コピーできませんでした";}
+    const fav=document.querySelector("[data-favorite-shop]");
+    if(fav){
+      const key="kbn_fav_"+String(s.id||s.slug||name);
+      const paint=()=>fav.textContent=localStorage.getItem(key)==="1"?"♥ お気に入り済み":"♡ お気に入り";
+      paint();
+      fav.addEventListener("click",()=>{
+        localStorage.setItem(key,localStorage.getItem(key)==="1"?"0":"1");paint();
       });
     }
-    const shareBtn=document.querySelector("[data-share-shop]");
-    if(shareBtn){
-      shareBtn.addEventListener("click",async()=>{
-        try{
-          if(navigator.share) await navigator.share({title:s.name,url:location.href});
-          else {await navigator.clipboard.writeText(location.href);shareBtn.textContent="URLをコピーしました";}
-        }catch{}
-      });
-    }
-    const favBtn=document.querySelector("[data-favorite-shop]");
-    if(favBtn){
-      const key="kbn_fav_"+String(s.id||s.slug||s.name);
-      const apply=()=>favBtn.textContent=localStorage.getItem(key)==="1"?"お気に入り済み":"お気に入り";
-      apply();
-      favBtn.addEventListener("click",()=>{
-        localStorage.setItem(key,localStorage.getItem(key)==="1"?"0":"1");
-        apply();
-      });
-    }
-  }catch{
-    document.getElementById("shopDetail").innerHTML='<p>この店舗は現在非公開、または削除されています。</p>';
+
+    const share=document.querySelector("[data-share-shop]");
+    share?.addEventListener("click",async()=>{
+      try{
+        if(navigator.share)await navigator.share({title:name,url:location.href});
+        else{await navigator.clipboard.writeText(location.href);share.textContent="✓ URLコピー済み"}
+      }catch{}
+    });
+  }catch(e){
+    box.innerHTML='<div class="public-empty"><b>店舗情報が見つかりませんでした。</b><span>BAR一覧からもう一度お選びください。</span></div>';
   }
 }
 load();
