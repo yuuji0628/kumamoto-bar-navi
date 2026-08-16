@@ -3136,3 +3136,151 @@ a.directory-card:hover{
   .public-news-card-v119{grid-template-columns:42px minmax(0,1fr) 14px;min-height:80px;padding:11px 12px;gap:9px}
   .public-news-card-copy-v119 b{font-size:10px}
 }
+
+
+/* ============================================================
+   KUMAMOTO BAR NAVI ver1.20 — NEWS EQUAL CARD SIZE
+   ============================================================ */
+
+.public-news-list-v119{
+  display:block;
+}
+
+.public-news-equal-grid-v120{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:10px;
+}
+
+.public-news-equal-card-v120{
+  display:grid;
+  grid-template-columns:62px minmax(0,1fr) 22px;
+  align-items:center;
+  gap:14px;
+  width:100%;
+  min-height:118px;
+  padding:15px 16px;
+  box-sizing:border-box;
+  border:1px solid #2a3540;
+  border-radius:16px;
+  background:#0d141c;
+  color:inherit;
+  text-decoration:none;
+}
+
+.public-news-equal-card-v120.is-latest{
+  border-color:rgba(228,187,85,.46);
+  background:
+    linear-gradient(90deg,rgba(228,187,85,.055),transparent 34%),
+    #0d141c;
+}
+
+.public-news-equal-date-v120{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  align-self:stretch;
+  border-right:1px solid #25303a;
+}
+
+.public-news-equal-date-v120 time{
+  color:#e3bb58;
+  font-size:12px;
+  font-weight:900;
+  white-space:nowrap;
+}
+
+.public-news-equal-body-v120{
+  min-width:0;
+}
+
+.public-news-equal-badges-v120{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:6px;
+  min-height:23px;
+  margin-bottom:7px;
+}
+
+.public-news-equal-badges-v120 span{
+  display:inline-flex;
+  align-items:center;
+  min-height:22px;
+  padding:0 8px;
+  border-radius:999px;
+  font-size:7px;
+  font-weight:900;
+}
+
+.news-new-v120{
+  background:#e4bb55;
+  color:#111;
+}
+
+.news-official-v120{
+  border:1px solid #675329;
+  background:rgba(228,187,85,.05);
+  color:#e0ba59;
+}
+
+.public-news-equal-body-v120>b{
+  display:block;
+  overflow:hidden;
+  color:#f0f2f4;
+  font-size:13px;
+  line-height:1.45;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.public-news-equal-body-v120>small{
+  display:block;
+  overflow:hidden;
+  margin-top:5px;
+  color:#7f8994;
+  font-size:9px;
+  line-height:1.45;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.public-news-equal-arrow-v120{
+  color:#68737f;
+  font-size:24px;
+  line-height:1;
+  text-align:right;
+}
+
+.public-news-equal-card-v120.is-latest .public-news-equal-arrow-v120{
+  color:#e0ba59;
+}
+
+.public-news-equal-card-v120:active{
+  transform:scale(.996);
+}
+
+@media(max-width:560px){
+  .public-news-equal-card-v120{
+    grid-template-columns:52px minmax(0,1fr) 18px;
+    min-height:112px;
+    padding:13px 12px;
+    gap:10px;
+  }
+
+  .public-news-equal-body-v120>b{
+    font-size:11px;
+  }
+
+  .public-news-equal-body-v120>small{
+    font-size:8px;
+  }
+
+  .public-news-equal-date-v120 time{
+    font-size:10px;
+  }
+
+  .public-news-equal-arrow-v120{
+    font-size:21px;
+  }
+}

@@ -118,8 +118,9 @@ async function loadHomeNews(){
     const d=await r.json();
     if(!r.ok||!d.ok)throw new Error();
 
-    const items=(d.news||[]).slice(0,5);
+    const items=(d.news||[]).slice(0,4);
     if(countEl)countEl.textContent=`${items.length}件`;
+
     if(!items.length){
       box.innerHTML='<div class="public-empty"><b>現在、お知らせはありません。</b></div>';
       return;
@@ -128,37 +129,28 @@ async function loadHomeNews(){
     const href=x=>x.slug?`shop.html?slug=${encodeURIComponent(x.slug)}`:"bars.html";
     const title=x=>`${kbnCleanName(x.name||"店舗")} を正式掲載しました`;
 
-    const first=items[0];
-    const d0=fmt(first.date||first.published_at||first.created_at);
-    let html=`<a href="${href(first)}" class="public-news-featured-v119">
-      <div class="public-news-featured-top">
-        <div class="public-news-badges-v119">
-          <span class="public-news-badge-new">NEW</span>
-          <span class="public-news-badge-official">正式掲載</span>
+    box.innerHTML=`<div class="public-news-equal-grid-v120">${items.map((x,i)=>{
+      const date=fmt(x.date||x.published_at||x.created_at);
+      const name=kbnCleanName(x.name||"店舗");
+
+      return `<a href="${href(x)}" class="public-news-equal-card-v120${i===0?" is-latest":""}">
+        <div class="public-news-equal-date-v120">
+          <time>${escHtml(date.short)}</time>
         </div>
-        <time>${escHtml(d0.full||d0.short)}</time>
-      </div>
-      <h3>${escHtml(title(first))}</h3>
-      <p>${escHtml(kbnCleanName(first.name||"店舗"))}の店舗情報を公開しました。営業時間・料金目安・Instagram・地図情報などをご確認いただけます。</p>
-      <div class="public-news-featured-bottom"><span>店舗詳細を見る</span><i>→</i></div>
-    </a>`;
 
-    if(items.length>1){
-      html+=`<div class="public-news-stack-v119">${items.slice(1).map(x=>{
-        const dx=fmt(x.date||x.published_at||x.created_at);
-        return `<a href="${href(x)}" class="public-news-card-v119">
-          <time>${escHtml(dx.short)}</time>
-          <div class="public-news-card-copy-v119">
-            <span>正式掲載</span>
-            <b>${escHtml(title(x))}</b>
-            <small>店舗ページを公開しました。</small>
+        <div class="public-news-equal-body-v120">
+          <div class="public-news-equal-badges-v120">
+            ${i===0?'<span class="news-new-v120">NEW</span>':""}
+            <span class="news-official-v120">正式掲載</span>
           </div>
-          <i>›</i>
-        </a>`;
-      }).join("")}</div>`;
-    }
 
-    box.innerHTML=html;
+          <b>${escHtml(title(x))}</b>
+          <small>${escHtml(name)}の店舗ページを公開しました。</small>
+        </div>
+
+        <div class="public-news-equal-arrow-v120">›</div>
+      </a>`;
+    }).join("")}</div>`;
   }catch{
     if(countEl)countEl.textContent="0件";
     box.innerHTML='<div class="public-empty"><b>お知らせを読み込めませんでした。</b></div>';
