@@ -3105,3 +3105,34 @@ a.directory-card:hover{
 .areas-hub-section h2{margin:0 0 16px}.areas-hub-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}.areas-hub-card{display:flex;flex-direction:column;gap:8px;min-height:86px;padding:13px;border:1px solid #29343f;border-radius:12px;background:#0d141c}.areas-hub-card span{color:#edf0f2;font-size:13px;font-weight:900}.areas-hub-card b{margin-top:auto;color:#d6b55e;font-size:8px}.public-seo-area-link{padding:0 0 40px}.public-seo-area-link-card{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:20px;border:1px solid #2d3843;border-radius:16px;background:#0d141c}.public-seo-area-link-card h2{margin:0;font-size:21px}.public-seo-area-link-card p:not(.public-kicker){color:#929da8;font-size:9px}
 @media(max-width:760px){.local-seo-grid{grid-template-columns:1fr}.areas-hub-grid{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:520px){.local-seo-card>a{grid-template-columns:102px 1fr}.local-seo-facts{grid-template-columns:1fr}.areas-hub-grid{grid-template-columns:repeat(2,1fr)}.public-seo-area-link-card{display:block}.public-seo-area-link-card .public-btn-gold{width:100%;margin-top:12px}}
+
+/* ver1.19 NEWS UI */
+.public-news-section-v119{position:relative;overflow:hidden}
+.public-news-section-v119:before{content:"";position:absolute;width:340px;height:340px;right:-160px;top:0;border-radius:50%;background:radial-gradient(circle,rgba(228,187,85,.08),transparent 70%);pointer-events:none}
+.public-news-count{display:inline-flex;align-items:center;justify-content:center;min-width:58px;min-height:30px;padding:0 11px;border:1px solid #394551;border-radius:999px;background:#0a1118;color:#9aa5b0;font-size:9px;font-weight:800}
+.public-news-list-v119{position:relative;display:grid;gap:12px}
+.public-news-featured-v119{display:block;padding:20px;border:1px solid rgba(228,187,85,.35);border-radius:18px;background:linear-gradient(135deg,rgba(228,187,85,.08),transparent 40%),linear-gradient(180deg,#111923,#0b1118);color:inherit}
+.public-news-featured-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.public-news-badges-v119{display:flex;gap:7px;flex-wrap:wrap}
+.public-news-badges-v119 span{display:inline-flex;align-items:center;min-height:25px;padding:0 9px;border-radius:999px;font-size:8px;font-weight:900}
+.public-news-badge-new{background:#e4bb55;color:#111}
+.public-news-badge-official{border:1px solid #715d2a;background:rgba(228,187,85,.06);color:#e8c464}
+.public-news-featured-top time{color:#87929d;font-size:9px}
+.public-news-featured-v119 h3{margin:16px 0 0;color:#f4f6f7;font-size:22px;line-height:1.42}
+.public-news-featured-v119 p{margin:9px 0 0;max-width:720px;color:#9faab5;font-size:10px;line-height:1.8}
+.public-news-featured-bottom{display:flex;justify-content:space-between;align-items:center;margin-top:17px;padding-top:13px;border-top:1px solid #29333e;color:#ddb95d;font-size:9px;font-weight:900}
+.public-news-featured-bottom i{font-style:normal;font-size:16px}
+.public-news-stack-v119{display:grid;gap:8px}
+.public-news-card-v119{display:grid;grid-template-columns:50px minmax(0,1fr) 18px;align-items:center;gap:11px;min-height:86px;padding:12px 14px;border:1px solid #29343f;border-radius:14px;background:#0d141c;color:inherit}
+.public-news-card-v119>time{color:#e0ba59;font-size:10px;font-weight:900}
+.public-news-card-copy-v119{min-width:0}
+.public-news-card-copy-v119>span{display:inline-flex;margin-bottom:4px;padding:2px 6px;border:1px solid #5e4e28;border-radius:999px;color:#d9b75d;font-size:7px;font-weight:900}
+.public-news-card-copy-v119 b{display:block;overflow:hidden;color:#edf0f2;font-size:11px;line-height:1.45;text-overflow:ellipsis;white-space:nowrap}
+.public-news-card-copy-v119 small{display:block;margin-top:3px;color:#7f8994;font-size:8px}
+.public-news-card-v119>i{color:#66717d;font-size:20px;font-style:normal;text-align:right}
+@media(max-width:560px){
+  .public-news-featured-v119{padding:16px}
+  .public-news-featured-v119 h3{font-size:19px}
+  .public-news-card-v119{grid-template-columns:42px minmax(0,1fr) 14px;min-height:80px;padding:11px 12px;gap:9px}
+  .public-news-card-copy-v119 b{font-size:10px}
+}

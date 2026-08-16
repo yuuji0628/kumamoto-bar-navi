@@ -98,31 +98,69 @@ async function loadHomeShops(){
 
 async function loadHomeNews(){
   const box=document.getElementById("kbnAutoNews");
+  const countEl=document.getElementById("kbnNewsCount");
   if(!box)return;
+
+  const fmt=v=>{
+    try{
+      const raw=String(v||"");
+      const dt=new Date(raw.includes("T")?raw:raw.replace(" ","T")+"Z");
+      if(Number.isNaN(dt.getTime()))return {short:"NEW",full:""};
+      return {
+        short:`${dt.getMonth()+1}/${dt.getDate()}`,
+        full:`${dt.getFullYear()}.${String(dt.getMonth()+1).padStart(2,"0")}.${String(dt.getDate()).padStart(2,"0")}`
+      };
+    }catch{return {short:"NEW",full:""}}
+  };
+
   try{
     const r=await fetch("/api/news",{cache:"no-store"});
     const d=await r.json();
     if(!r.ok||!d.ok)throw new Error();
-    const items=(d.news||[]).slice(0,4);
+
+    const items=(d.news||[]).slice(0,5);
+    if(countEl)countEl.textContent=`${items.length}件`;
     if(!items.length){
       box.innerHTML='<div class="public-empty"><b>現在、お知らせはありません。</b></div>';
       return;
     }
-    box.innerHTML=items.map(x=>{
-      let date="";
-      try{
-        const raw=String(x.date||x.published_at||x.created_at||"");
-        const dt=new Date(raw.includes("T")?raw:raw.replace(" ","T")+"Z");
-        if(!Number.isNaN(dt.getTime()))date=`${dt.getMonth()+1}/${dt.getDate()}`;
-      }catch{}
-      const href=x.slug?`shop.html?slug=${encodeURIComponent(x.slug)}`:"bars.html";
-      return `<a href="${href}" class="public-news-item">
-        <time>${escHtml(date||"NEW")}</time>
-        <span>${escHtml(kbnCleanName(x.name||"新しい店舗を掲載しました"))}</span>
-        <i>›</i>
-      </a>`;
-    }).join("");
+
+    const href=x=>x.slug?`shop.html?slug=${encodeURIComponent(x.slug)}`:"bars.html";
+    const title=x=>`${kbnCleanName(x.name||"店舗")} を正式掲載しました`;
+
+    const first=items[0];
+    const d0=fmt(first.date||first.published_at||first.created_at);
+    let html=`<a href="${href(first)}" class="public-news-featured-v119">
+      <div class="public-news-featured-top">
+        <div class="public-news-badges-v119">
+          <span class="public-news-badge-new">NEW</span>
+          <span class="public-news-badge-official">正式掲載</span>
+        </div>
+        <time>${escHtml(d0.full||d0.short)}</time>
+      </div>
+      <h3>${escHtml(title(first))}</h3>
+      <p>${escHtml(kbnCleanName(first.name||"店舗"))}の店舗情報を公開しました。営業時間・料金目安・Instagram・地図情報などをご確認いただけます。</p>
+      <div class="public-news-featured-bottom"><span>店舗詳細を見る</span><i>→</i></div>
+    </a>`;
+
+    if(items.length>1){
+      html+=`<div class="public-news-stack-v119">${items.slice(1).map(x=>{
+        const dx=fmt(x.date||x.published_at||x.created_at);
+        return `<a href="${href(x)}" class="public-news-card-v119">
+          <time>${escHtml(dx.short)}</time>
+          <div class="public-news-card-copy-v119">
+            <span>正式掲載</span>
+            <b>${escHtml(title(x))}</b>
+            <small>店舗ページを公開しました。</small>
+          </div>
+          <i>›</i>
+        </a>`;
+      }).join("")}</div>`;
+    }
+
+    box.innerHTML=html;
   }catch{
+    if(countEl)countEl.textContent="0件";
     box.innerHTML='<div class="public-empty"><b>お知らせを読み込めませんでした。</b></div>';
   }
 }
