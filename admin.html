@@ -514,12 +514,25 @@
 }
 </style>
 
+
+<style>
+.provisional-badge{
+  display:inline-flex;align-items:center;padding:3px 8px;margin-right:4px;
+  border-radius:999px;border:1px solid #ba8b2c;background:rgba(217,173,69,.12);
+  color:#f1c75b;font-size:.68rem;font-weight:900;vertical-align:middle
+}
+.publish-shop-btn{border-color:#6f5b25!important;color:#f1c75b!important}
+.lead-search-actions button[data-search-action="provisional"]{
+  border-color:#806426;color:#f1c75b
+}
+</style>
+
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
-<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN v99</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><div class="admin-security-badge">🔐 管理者ログイン</div></section>
+<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN v100</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><div class="admin-security-badge">🔐 管理者ログイン</div></section>
 
 <div class="admin-login-bar">
-  <span>🔐 管理者ログイン中 <small id="authStatusText">v99</small></span>
+  <span>🔐 管理者ログイン中 <small id="authStatusText">v100</small></span>
   <button type="button" id="adminLogoutBtn">ログアウト</button>
 </div>
 
@@ -566,7 +579,7 @@
   </div>
 
 <div id="buttonHealthNote" style="margin-top:10px;color:#8e97a2;font-size:.72rem">
-  v99：フォロー済み自動除外・営業DM強化
+  v100：仮掲載・検索結果から直接掲載を追加
 </div>
 </section>
 
@@ -599,6 +612,12 @@
 <label class="span-2"><span>特徴</span><input id="features"></label>
 <label class="span-2"><span>紹介文</span><textarea id="description" rows="5"></textarea></label>
 <label><span>並び順</span><input id="sort_order" type="number" value="100"></label>
+<label><span>掲載ステータス</span>
+<select id="listing_status">
+  <option value="published">本掲載</option>
+  <option value="provisional">仮掲載</option>
+</select>
+</label>
 <label><span>画像URL</span><input id="image_url"></label>
 <label class="span-2"><span>店舗画像（R2）</span><input id="imageFile" type="file" accept="image/*"><button type="button" id="uploadImage" class="admin-secondary-btn">画像をアップロード</button><small id="uploadStatus"></small></label>
 </div>
@@ -972,16 +991,44 @@ async function api(path,opt={}){
 
   return d;
 }
-window.loadShops=async function(){const d=await api("/api/admin/shops");shops=d.shops||[];
-    if($("opsShopCount"))$("opsShopCount").textContent=String(shops.length);
-    setDashboardCount("dashShopCount",shops.length);$("jobShop").innerHTML='<option value="">店舗なし</option>'+shops.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("");$("shopList").innerHTML=shops.map(s=>`<article class="admin-shop-item"><div><h3>${esc(s.name)} ${s.is_featured?'⭐':''} ${s.is_new?'NEW':''}</h3><p>${esc(s.area)} / ${esc(s.genre||'')}</p><small>順:${s.sort_order} / ${s.is_published?'公開':'非公開'} / 専用URL:${s.owner_token_hash?'発行済み':'未発行'}</small></div><div class="admin-item-actions"><button onclick="editShop(${s.id})">編集</button><button onclick="issueOwnerLink(${s.id})">専用URL発行</button>${s.owner_token_hash?`<button onclick="revokeOwnerLink(${s.id})">URL無効化</button>`:''}<button onclick="deleteShop(${s.id})" style="border-color:#7a3030;color:#ffb3b3">完全削除</button></div></article>`).join("")}
+window.loadShops=async function(){
+  const d=await api("/api/admin/shops");
+  shops=d.shops||[];
+
+  if($("opsShopCount"))$("opsShopCount").textContent=String(shops.length);
+  setDashboardCount("dashShopCount",shops.length);
+
+  $("jobShop").innerHTML=
+    '<option value="">店舗なし</option>'+
+    shops.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("");
+
+  $("shopList").innerHTML=shops.map(s=>{
+    const provisional=String(s.listing_status||"published")==="provisional";
+
+    return `<article class="admin-shop-item">
+      <div>
+        <h3>${provisional?'<span class="provisional-badge">仮掲載</span> ':''}${esc(s.name)} ${s.is_featured?'⭐':''} ${s.is_new?'NEW':''}</h3>
+        <p>${esc(s.area)} / ${esc(s.genre||'')}</p>
+        <small>順:${s.sort_order} / ${s.is_published?'公開':'非公開'} / ${provisional?'仮掲載':'本掲載'} / 専用URL:${s.owner_token_hash?'発行済み':'未発行'}</small>
+      </div>
+      <div class="admin-item-actions">
+        <button onclick="editShop(${s.id})">編集</button>
+        ${provisional?`<button onclick="publishShop(${s.id})" class="publish-shop-btn">本掲載にする</button>`:""}
+        <button onclick="issueOwnerLink(${s.id})">専用URL発行</button>
+        ${s.owner_token_hash?`<button onclick="revokeOwnerLink(${s.id})">URL無効化</button>`:""}
+        <button onclick="deleteShop(${s.id})" style="border-color:#7a3030;color:#ffb3b3">完全削除</button>
+      </div>
+    </article>`;
+  }).join("");
+}
+
 window.editShop=id=>{
   const s=shops.find(x=>x.id==id);
   if(!s)return;
 
   openShopForm();
 
-  ["name","name_kana","slug","area","address","hours","holiday","genre","instagram","features","description","image_url","sort_order","seats","budget_min","budget_max"]
+  ["name","name_kana","slug","area","address","hours","holiday","genre","instagram","features","description","image_url","sort_order","seats","budget_min","budget_max","listing_status"]
     .forEach(k=>{const el=$(k);if(el)el.value=s[k]??"";});
 
   ["is_published","is_featured","is_new","is_recruiting"]
@@ -2306,6 +2353,13 @@ function runLegacyButtonAction(btn,e){
     return true;
   }
 
+
+  if((m=raw.match(/^publishShop\((\d+)\)/))){
+    e.preventDefault();
+    window.publishShop?.(Number(m[1]));
+    return true;
+  }
+
 let m;
 
   if((m=raw.match(/^openInstagramProfile\((\d+)\)/))){
@@ -2393,6 +2447,7 @@ window.resetShopForm=function(){
   if($("is_featured"))$("is_featured").checked=false;
   if($("is_new"))$("is_new").checked=true;
   if($("is_recruiting"))$("is_recruiting").checked=false;
+  if($("listing_status"))$("listing_status").value="published";
   if($("uploadStatus"))$("uploadStatus").textContent="";
 };
 
@@ -2432,6 +2487,7 @@ window.saveShop=async function(){
     description:$("description")?.value||"",
     sort_order:Number($("sort_order")?.value||100),
     image_url:$("image_url")?.value||"",
+    listing_status:$("listing_status")?.value||"published",
     is_published:!!$("is_published")?.checked,
     is_featured:!!$("is_featured")?.checked,
     is_new:!!$("is_new")?.checked,
@@ -2470,7 +2526,7 @@ window.saveShop=async function(){
       // 編集中の店舗はフォーム内容を維持
       const refreshed=shops.find(x=>Number(x.id)===id);
       if(refreshed){
-        ["name","name_kana","slug","area","address","hours","holiday","genre","instagram","features","description","image_url","sort_order","seats","budget_min","budget_max"]
+        ["name","name_kana","slug","area","address","hours","holiday","genre","instagram","features","description","image_url","sort_order","seats","budget_min","budget_max","listing_status"]
           .forEach(k=>{
             const el=$(k);
             if(el)el.value=refreshed[k]??"";
@@ -2561,9 +2617,15 @@ window.searchLeadsInAdmin=async function({append=false}={}){
         .filter(Boolean)
     );
 
+    const listedHandles=new Set(
+      (Array.isArray(shops)?shops:[])
+        .map(x=>normalizeLeadInstagram(x.instagram).toLowerCase())
+        .filter(Boolean)
+    );
+
     const rows=rowsRaw.filter(x=>{
       const h=normalizeLeadInstagram(x.handle||x.instagram||"").toLowerCase();
-      return h && !followedHandles.has(h);
+      return h && !followedHandles.has(h) && !listedHandles.has(h);
     });
 
     if(!append && results)results.innerHTML="";
@@ -2594,6 +2656,13 @@ window.searchLeadsInAdmin=async function({append=false}={}){
                       data-handle="${esc(handle)}"
                       data-name="${esc(title)}"
                       data-area="${esc(x.area||area)}">＋候補</button>
+
+              <button type="button"
+                      data-search-action="provisional"
+                      data-handle="${esc(handle)}"
+                      data-name="${esc(title)}"
+                      data-area="${esc(x.area||area)}"
+                      data-snippet="${esc(x.snippet||"")}">仮掲載する</button>
 
               <button type="button"
                       data-search-action="followed"
@@ -2675,7 +2744,121 @@ function upsertLeadFromSearch({handle,name,area,followed=false,dm=false}){
   return row;
 }
 
-window.handleLeadSearchAction=function(btn){
+
+function buildProvisionalListingDm({name,handle,ownerUrl,publicUrl}){
+  return `${name} 様
+${handle?`@${handle}`:""}
+
+突然のDM失礼いたします。
+熊本県内のBAR情報を紹介している「KUMAMOTO BAR NAVI」です🍸
+
+このたび、公開されている店舗情報をもとに、
+${name} 様の店舗情報をKUMAMOTO BAR NAVIへ「仮掲載」させていただきました。
+
+▼仮掲載ページ
+${publicUrl}
+
+仮掲載のため、掲載内容をご確認いただき、
+営業時間・写真・店舗紹介・求人情報などに修正がある場合は、下記の店舗様専用URLから変更申請ができます。
+
+▼店舗様専用URL
+${ownerUrl}
+
+また、掲載をご希望されない場合も、こちらから削除希望としてご連絡いただければ速やかに対応いたします。
+
+内容をご確認いただき、問題なければ本掲載へ切り替えさせていただきます。
+
+熊本のBARをもっと見つけやすく、地域のお店を盛り上げていければと思っています。
+どうぞよろしくお願いいたします。
+
+KUMAMOTO BAR NAVI
+https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev`;
+}
+
+window.createProvisionalFromSearch=async function(btn){
+  const handle=btn.dataset.handle||"";
+  const name=btn.dataset.name||handle||"店舗";
+  const area=btn.dataset.area||"熊本";
+  const snippet=btn.dataset.snippet||"";
+  const type=$("leadSearchType")?.value||"bar";
+  const genre={
+    bar:"BAR",
+    darts:"ダーツバー",
+    karaoke:"カラオケバー",
+    snack:"スナック"
+  }[type]||"BAR";
+
+  if(!confirm(`「${name}」を仮掲載しますか？\n\n公開情報をもとに仮掲載し、店舗様へ確認・修正・削除案内を送る前提です。`))return;
+
+  const old=btn.textContent;
+  btn.disabled=true;
+  btn.textContent="仮掲載中...";
+
+  try{
+    const d=await api("/api/admin/leads/provisional-shop",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        name,
+        area,
+        instagram:handle?`@${handle}`:"",
+        genre,
+        snippet
+      })
+    });
+
+    await window.loadShops?.();
+    upsertLeadFromSearch({handle,name,area});
+
+    const dm=buildProvisionalListingDm({
+      name,
+      handle,
+      ownerUrl:d.owner_url,
+      publicUrl:d.public_url
+    });
+
+    const copied=await copyTextSafe(dm);
+
+    btn.textContent="✓ 仮掲載済み";
+    btn.classList.add("done");
+
+    if(copied){
+      alert("仮掲載しました。\n\n店舗確認用DMをコピーしました。Instagramを開きます。");
+    }else{
+      prompt("仮掲載しました。このDMを店舗様へ送ってください。",dm);
+    }
+
+    if(handle){
+      location.href=leadInstagramUrl(handle);
+    }
+  }catch(e){
+    console.error("provisional listing failed",e);
+    if(e?.message==="SHOP_ALREADY_LISTED"){
+      alert("このInstagramアカウントはすでに掲載されています。");
+    }else{
+      alert("仮掲載できませんでした: "+(e?.message||"UNKNOWN_ERROR"));
+    }
+    btn.disabled=false;
+    btn.textContent=old;
+  }
+};
+
+window.publishShop=async function(id){
+  const s=shops.find(x=>Number(x.id)===Number(id));
+  if(!s)return;
+
+  if(!confirm(`「${s.name}」を仮掲載から本掲載へ切り替えますか？`))return;
+
+  try{
+    await api(`/api/admin/shops/${id}/publish`,{method:"POST"});
+    await loadShops();
+    alert("本掲載へ切り替えました。");
+  }catch(e){
+    alert("本掲載へ切り替えできませんでした: "+(e?.message||"UNKNOWN_ERROR"));
+  }
+};
+
+window.handleLeadSearchAction=async function(btn){
   const action=btn.dataset.searchAction||"";
   const handle=btn.dataset.handle||"";
   const name=btn.dataset.name||"";
@@ -2690,6 +2873,11 @@ window.handleLeadSearchAction=function(btn){
     upsertLeadFromSearch({handle,name,area});
     btn.textContent="✓追加済み";
     btn.classList.add("done");
+    return;
+  }
+
+  if(action==="provisional"){
+    await window.createProvisionalFromSearch?.(btn);
     return;
   }
 

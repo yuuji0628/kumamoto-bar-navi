@@ -309,6 +309,37 @@ async function ownerShop(request,env){
   return await env.DB.prepare("SELECT * FROM shops WHERE owner_token_hash=? LIMIT 1").bind(hash).first();
 }
 
+
+async function ensureListingStatusColumn(env){
+  if(!env.DB)return;
+  try{
+    const info=await env.DB.prepare("PRAGMA table_info(shops)").all();
+    const cols=(info.results||[]).map(x=>String(x.name||""));
+    if(!cols.includes("listing_status")){
+      await env.DB.prepare(
+        "ALTER TABLE shops ADD COLUMN listing_status TEXT NOT NULL DEFAULT 'published'"
+      ).run();
+    }
+  }catch(e){
+    console.error("ensureListingStatusColumn failed",e);
+  }
+}
+
+function normalizeListingStatus(v){
+  return String(v||"published")==="provisional"?"provisional":"published";
+}
+
+function publicShopRow(s){
+  if(!s)return s;
+  const provisional=normalizeListingStatus(s.listing_status)==="provisional";
+  return {
+    ...s,
+    listing_status:provisional?"provisional":"published",
+    is_provisional:provisional?1:0,
+    name:provisional?`【仮掲載】${s.name}`:s.name
+  };
+}
+
 function shopPayload(x){
   return {
     slug: slugify(x.slug||x.name),
@@ -320,12 +351,13 @@ function shopPayload(x){
     is_published:x.is_published===false||x.is_published===0?0:1,
     image_url:t(x.image_url,1000), image_key:t(x.image_key,500),
     is_featured:b(x.is_featured), is_new:x.is_new===false||x.is_new===0?0:1,
-    sort_order:ni(x.sort_order)??100
+    sort_order:ni(x.sort_order)??100,
+    listing_status:normalizeListingStatus(x.listing_status)
   };
 }
 
 
-const LOGIN_HTML="<!doctype html>\n<html lang=\"ja\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\">\n<title>KBN ADMIN LOGIN</title>\n<style>\n:root{color-scheme:dark}\n*{box-sizing:border-box}\nbody{margin:0;min-height:100vh;display:grid;place-items:center;background:#080d13;color:#f4f6f8;font-family:-apple-system,BlinkMacSystemFont,\"Hiragino Sans\",\"Yu Gothic\",sans-serif;padding:22px}\n.card{width:min(440px,100%);padding:28px;border:1px solid #36404c;border-radius:20px;background:#101720;box-shadow:0 20px 70px rgba(0,0,0,.35)}\n.eyebrow{color:#e8be55;letter-spacing:.18em;font-weight:800;font-size:.78rem}\nh1{font-size:2rem;margin:.35rem 0 .7rem}\np{color:#aeb5bf;line-height:1.7}\nlabel{display:block;margin:18px 0 7px;color:#d9dde2;font-weight:700}\ninput{width:100%;min-height:52px;padding:0 14px;border-radius:12px;border:1px solid #3b4653;background:#0a1017;color:#fff;font-size:1rem}\nbutton{width:100%;min-height:54px;margin-top:20px;border:0;border-radius:12px;background:#efc45a;color:#111;font-weight:900;font-size:1rem}\n#error{color:#ff9a9a;min-height:1.4em;margin-top:12px}\n.note{font-size:.78rem;margin-top:16px}\n</style>\n</head>\n<body>\n<form class=\"card\" id=\"loginForm\">\n  <div class=\"eyebrow\">KBN ADMIN v99</div>\n  <h1>運営管理ログイン</h1>\n  <p>管理者用のメールアドレスとパスワードを入力してください。</p>\n  <label for=\"email\">メールアドレス</label>\n  <input id=\"email\" type=\"email\" autocomplete=\"username\" required>\n  <label for=\"password\">パスワード</label>\n  <input id=\"password\" type=\"password\" autocomplete=\"current-password\" required>\n  <button type=\"submit\">ログイン</button>\n  <div id=\"error\"></div>\n  <p class=\"note\">この端末では30日間ログイン状態を保持します。</p>\n</form>\n\n<script>\nconst form=document.getElementById(\"loginForm\");\nconst error=document.getElementById(\"error\");\n\nform.addEventListener(\"submit\",async ev=>{\n  ev.preventDefault();\n  error.textContent=\"ログイン中...\";\n\n  const email=document.getElementById(\"email\").value.trim();\n  const password=document.getElementById(\"password\").value;\n\n  try{\n    const r=await fetch(\"/api/admin/login\",{\n      method:\"POST\",\n      credentials:\"include\",\n      cache:\"no-store\",\n      headers:{\"Content-Type\":\"application/json\"},\n      body:JSON.stringify({email,password})\n    });\n\n    const ct=r.headers.get(\"content-type\")||\"\";\n    if(!ct.includes(\"application/json\")){\n      const text=await r.text();\n      throw new Error(\"NON_JSON_RESPONSE: \"+text.slice(0,80));\n    }\n\n    const d=await r.json();\n\n    if(!r.ok || !d.ok){\n      if(d.error===\"INVALID_CREDENTIALS\"){\n        throw new Error(\"INVALID_CREDENTIALS\");\n      }\n      if(d.error===\"ADMIN_AUTH_NOT_CONFIGURED\"){\n        throw new Error(\"設定不足: \"+(d.missing||[]).join(\", \"));\n      }\n      throw new Error(d.message||d.error||(\"HTTP_\"+r.status));\n    }\n\n    if(!d.token){\n      throw new Error(\"TOKEN_NOT_RETURNED\");\n    }\n\n    localStorage.setItem(\"kbn_admin_token\",d.token);\n    localStorage.setItem(\"kbn_admin_logged_in_at\",String(Date.now()));\n\n    location.replace(\"/admin.html?v=99\");\n  }catch(err){\n    console.error(err);\n\n    if(err.message===\"INVALID_CREDENTIALS\"){\n      error.textContent=\"メールアドレスまたはパスワードが違います。\";\n    }else{\n      error.textContent=\"ログインできませんでした: \"+err.message;\n    }\n  }\n});\n</script>\n\n</body></html>";
+const LOGIN_HTML="<!doctype html>\n<html lang=\"ja\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\">\n<title>KBN ADMIN LOGIN</title>\n<style>\n:root{color-scheme:dark}\n*{box-sizing:border-box}\nbody{margin:0;min-height:100vh;display:grid;place-items:center;background:#080d13;color:#f4f6f8;font-family:-apple-system,BlinkMacSystemFont,\"Hiragino Sans\",\"Yu Gothic\",sans-serif;padding:22px}\n.card{width:min(440px,100%);padding:28px;border:1px solid #36404c;border-radius:20px;background:#101720;box-shadow:0 20px 70px rgba(0,0,0,.35)}\n.eyebrow{color:#e8be55;letter-spacing:.18em;font-weight:800;font-size:.78rem}\nh1{font-size:2rem;margin:.35rem 0 .7rem}\np{color:#aeb5bf;line-height:1.7}\nlabel{display:block;margin:18px 0 7px;color:#d9dde2;font-weight:700}\ninput{width:100%;min-height:52px;padding:0 14px;border-radius:12px;border:1px solid #3b4653;background:#0a1017;color:#fff;font-size:1rem}\nbutton{width:100%;min-height:54px;margin-top:20px;border:0;border-radius:12px;background:#efc45a;color:#111;font-weight:900;font-size:1rem}\n#error{color:#ff9a9a;min-height:1.4em;margin-top:12px}\n.note{font-size:.78rem;margin-top:16px}\n</style>\n</head>\n<body>\n<form class=\"card\" id=\"loginForm\">\n  <div class=\"eyebrow\">KBN ADMIN v100</div>\n  <h1>運営管理ログイン</h1>\n  <p>管理者用のメールアドレスとパスワードを入力してください。</p>\n  <label for=\"email\">メールアドレス</label>\n  <input id=\"email\" type=\"email\" autocomplete=\"username\" required>\n  <label for=\"password\">パスワード</label>\n  <input id=\"password\" type=\"password\" autocomplete=\"current-password\" required>\n  <button type=\"submit\">ログイン</button>\n  <div id=\"error\"></div>\n  <p class=\"note\">この端末では30日間ログイン状態を保持します。</p>\n</form>\n\n<script>\nconst form=document.getElementById(\"loginForm\");\nconst error=document.getElementById(\"error\");\n\nform.addEventListener(\"submit\",async ev=>{\n  ev.preventDefault();\n  error.textContent=\"ログイン中...\";\n\n  const email=document.getElementById(\"email\").value.trim();\n  const password=document.getElementById(\"password\").value;\n\n  try{\n    const r=await fetch(\"/api/admin/login\",{\n      method:\"POST\",\n      credentials:\"include\",\n      cache:\"no-store\",\n      headers:{\"Content-Type\":\"application/json\"},\n      body:JSON.stringify({email,password})\n    });\n\n    const ct=r.headers.get(\"content-type\")||\"\";\n    if(!ct.includes(\"application/json\")){\n      const text=await r.text();\n      throw new Error(\"NON_JSON_RESPONSE: \"+text.slice(0,80));\n    }\n\n    const d=await r.json();\n\n    if(!r.ok || !d.ok){\n      if(d.error===\"INVALID_CREDENTIALS\"){\n        throw new Error(\"INVALID_CREDENTIALS\");\n      }\n      if(d.error===\"ADMIN_AUTH_NOT_CONFIGURED\"){\n        throw new Error(\"設定不足: \"+(d.missing||[]).join(\", \"));\n      }\n      throw new Error(d.message||d.error||(\"HTTP_\"+r.status));\n    }\n\n    if(!d.token){\n      throw new Error(\"TOKEN_NOT_RETURNED\");\n    }\n\n    localStorage.setItem(\"kbn_admin_token\",d.token);\n    localStorage.setItem(\"kbn_admin_logged_in_at\",String(Date.now()));\n\n    location.replace(\"/admin.html?v=100\");\n  }catch(err){\n    console.error(err);\n\n    if(err.message===\"INVALID_CREDENTIALS\"){\n      error.textContent=\"メールアドレスまたはパスワードが違います。\";\n    }else{\n      error.textContent=\"ログインできませんでした: \"+err.message;\n    }\n  }\n});\n</script>\n\n</body></html>";
 const ADMIN_COOKIE="kbn_admin_session";
 const ADMIN_SESSION_DAYS=30;
 
@@ -461,12 +493,16 @@ export default {
 
     if(!env.DB && url.pathname.startsWith("/api/")) return json({ok:false,error:"D1_NOT_BOUND"},{status:503});
 
+    if(env.DB && url.pathname.startsWith("/api/")){
+      await ensureListingStatusColumn(env);
+    }
+
     if(url.pathname==="/api/shops" && request.method==="GET"){
       const r=await env.DB.prepare(`
         SELECT * FROM shops WHERE is_published=1
         ORDER BY is_featured DESC, sort_order ASC, created_at DESC
       `).all();
-      return json({ok:true,shops:r.results||[]});
+      return json({ok:true,shops:(r.results||[]).map(publicShopRow)});
     }
 
 
@@ -493,7 +529,7 @@ export default {
     if(url.pathname.startsWith("/api/shops/") && request.method==="GET"){
       const slug=decodeURIComponent(url.pathname.replace("/api/shops/",""));
       const s=await env.DB.prepare("SELECT * FROM shops WHERE slug=? AND is_published=1 LIMIT 1").bind(slug).first();
-      return s?json({ok:true,shop:s}):json({ok:false,error:"NOT_FOUND"},{status:404});
+      return s?json({ok:true,shop:publicShopRow(s)}):json({ok:false,error:"NOT_FOUND"},{status:404});
     }
 
 
@@ -501,7 +537,7 @@ export default {
       const {results}=await env.DB.prepare(`
         SELECT name, slug, published_at, created_at, is_new
         FROM shops
-        WHERE is_published=1 AND is_new=1
+        WHERE is_published=1 AND is_new=1 AND COALESCE(listing_status,'published')='published'
         ORDER BY COALESCE(published_at,created_at) DESC
         LIMIT 8
       `).all();
@@ -836,6 +872,98 @@ export default {
         return json(result);
       }
 
+
+      if(url.pathname==="/api/admin/leads/provisional-shop" && request.method==="POST"){
+        let x;
+        try{x=await request.json()}
+        catch{return json({ok:false,error:"INVALID_JSON"},{status:400})}
+
+        const name=t(x.name,150);
+        const area=t(x.area||"熊本",80);
+        const snippet=t(x.snippet,2000);
+        const genre=t(x.genre||"BAR",120);
+        let instagram=t(x.instagram,500);
+
+        if(!name)return json({ok:false,error:"SHOP_NAME_REQUIRED"},{status:400});
+
+        const handle=String(instagram||"")
+          .replace(/^https?:\/\/(www\.)?instagram\.com\//i,"")
+          .replace(/^@/,"")
+          .split(/[/?#]/)[0]
+          .trim();
+
+        instagram=handle?`https://www.instagram.com/${handle}/`:"";
+
+        if(handle){
+          const existing=await env.DB.prepare(
+            "SELECT id,name,listing_status FROM shops WHERE LOWER(instagram) LIKE ? LIMIT 1"
+          ).bind(`%${handle.toLowerCase()}%`).first();
+
+          if(existing){
+            return json({
+              ok:false,
+              error:"SHOP_ALREADY_LISTED",
+              shop_id:existing.id,
+              shop_name:existing.name,
+              listing_status:existing.listing_status||"published"
+            },{status:409});
+          }
+        }
+
+        const description=snippet
+          ? `${snippet}\n\n※本ページは公開情報をもとに仮掲載しています。掲載内容の修正・削除をご希望の場合は店舗様専用ページよりご連絡ください。`
+          : "※本ページは公開情報をもとに仮掲載しています。掲載内容の修正・削除をご希望の場合は店舗様専用ページよりご連絡ください。";
+
+        const slug=slugify(name);
+
+        const r=await env.DB.prepare(`
+          INSERT INTO shops (
+            slug,name,name_kana,area,address,hours,holiday,instagram,genre,features,description,
+            budget_min,budget_max,seats,phone,is_recruiting,is_published,image_url,image_key,
+            is_featured,is_new,sort_order,listing_status,published_at
+          ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'provisional',CURRENT_TIMESTAMP)
+        `).bind(
+          slug,name,"",area,"","","",instagram,genre,"",description,
+          null,null,null,"",0,1,"","",
+          0,1,100
+        ).run();
+
+        const shopId=Number(r.meta?.last_row_id||0);
+
+        const token=ownerToken();
+        const hash=await sha256hex(token);
+
+        await env.DB.prepare(
+          "UPDATE shops SET owner_token_hash=?,owner_token_created_at=CURRENT_TIMESTAMP WHERE id=?"
+        ).bind(hash,shopId).run();
+
+        const origin=new URL(request.url).origin;
+
+        return json({
+          ok:true,
+          shop_id:shopId,
+          listing_status:"provisional",
+          owner_url:`${origin}/owner.html?token=${encodeURIComponent(token)}`,
+          public_url:`${origin}/shop.html?slug=${encodeURIComponent(slug)}`
+        },{status:201});
+      }
+
+      const provisionalPublish=url.pathname.match(/^\/api\/admin\/shops\/(\d+)\/publish$/);
+      if(provisionalPublish && request.method==="POST"){
+        const id=Number(provisionalPublish[1]);
+        const row=await env.DB.prepare("SELECT id,name FROM shops WHERE id=?").bind(id).first();
+        if(!row)return json({ok:false,error:"NOT_FOUND"},{status:404});
+
+        await env.DB.prepare(`
+          UPDATE shops
+          SET listing_status='published',
+              updated_at=CURRENT_TIMESTAMP
+          WHERE id=?
+        `).bind(id).run();
+
+        return json({ok:true,shop_id:id,listing_status:"published"});
+      }
+
       if(url.pathname==="/api/admin/shops" && request.method==="GET"){
         const r=await env.DB.prepare("SELECT * FROM shops ORDER BY sort_order ASC,id DESC").all();
         return json({ok:true,shops:r.results||[]});
@@ -847,12 +975,12 @@ export default {
           INSERT INTO shops (
             slug,name,name_kana,area,address,hours,holiday,instagram,genre,features,description,
             budget_min,budget_max,seats,phone,is_recruiting,is_published,image_url,image_key,
-            is_featured,is_new,sort_order,published_at
-          ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CASE WHEN ?=1 THEN CURRENT_TIMESTAMP ELSE NULL END)
+            is_featured,is_new,sort_order,listing_status,published_at
+          ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CASE WHEN ?=1 THEN CURRENT_TIMESTAMP ELSE NULL END)
         `).bind(
           s.slug,s.name,s.name_kana,s.area,s.address,s.hours,s.holiday,s.instagram,s.genre,s.features,s.description,
           s.budget_min,s.budget_max,s.seats,s.phone,s.is_recruiting,s.is_published,s.image_url,s.image_key,
-          s.is_featured,s.is_new,s.sort_order,s.is_published
+          s.is_featured,s.is_new,s.sort_order,s.listing_status,s.is_published
         ).run();
         return json({ok:true,id:r.meta?.last_row_id},{status:201});
       }
@@ -866,13 +994,13 @@ export default {
         await env.DB.prepare(`
           UPDATE shops SET slug=?,name=?,name_kana=?,area=?,address=?,hours=?,holiday=?,instagram=?,genre=?,features=?,
           description=?,budget_min=?,budget_max=?,seats=?,phone=?,is_recruiting=?,is_published=?,image_url=?,image_key=?,
-          is_featured=?,is_new=?,sort_order=?,
+          is_featured=?,is_new=?,sort_order=?,listing_status=?,
           published_at=CASE WHEN ?=1 AND published_at IS NULL THEN CURRENT_TIMESTAMP ELSE published_at END,
           updated_at=CURRENT_TIMESTAMP WHERE id=?
         `).bind(
           s.slug,s.name,s.name_kana,s.area,s.address,s.hours,s.holiday,s.instagram,s.genre,s.features,
           s.description,s.budget_min,s.budget_max,s.seats,s.phone,s.is_recruiting,s.is_published,s.image_url,s.image_key,
-          s.is_featured,s.is_new,s.sort_order,s.is_published,id
+          s.is_featured,s.is_new,s.sort_order,s.listing_status,s.is_published,id
         ).run();
         return json({ok:true});
       }
