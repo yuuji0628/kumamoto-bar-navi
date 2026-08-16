@@ -179,9 +179,10 @@ async function notifyOwnerRequest(env, shop, requestType, payload, autoApplied=f
 
 
 
+
 function leadSearchConfig(env){
   return {
-    apiKey:t(env.BRAVE_SEARCH_API_KEY,1000)
+    apiKey:t(env.SERPAPI_API_KEY,1000)
   };
 }
 
@@ -210,7 +211,7 @@ async function searchInstagramLeads(env,{area,type,start=1}){
     return {
       ok:false,
       configured:false,
-      error:"BRAVE_SEARCH_NOT_CONFIGURED"
+      error:"SERPAPI_NOT_CONFIGURED"
     };
   }
 
@@ -222,42 +223,41 @@ async function searchInstagramLeads(env,{area,type,start=1}){
   }[type]||"BAR";
 
   const q=`site:instagram.com ${area} ${typeWord} 熊本`;
-  const offset=Math.max(0,Math.floor((Math.max(1,Number(start)||1)-1)/10));
+  const page=Math.max(0,Math.floor((Math.max(1,Number(start)||1)-1)/10));
 
-  const u=new URL("https://api.search.brave.com/res/v1/web/search");
+  const u=new URL("https://serpapi.com/search.json");
+  u.searchParams.set("engine","google");
   u.searchParams.set("q",q);
-  u.searchParams.set("country","jp");
-  u.searchParams.set("search_lang","ja");
-  u.searchParams.set("count","10");
-  u.searchParams.set("offset",String(offset));
+  u.searchParams.set("google_domain","google.co.jp");
+  u.searchParams.set("gl","jp");
+  u.searchParams.set("hl","ja");
+  u.searchParams.set("num","10");
+  u.searchParams.set("start",String(page*10));
+  u.searchParams.set("api_key",cfg.apiKey);
 
   const r=await fetch(u.toString(),{
-    headers:{
-      "Accept":"application/json",
-      "Accept-Encoding":"gzip",
-      "X-Subscription-Token":cfg.apiKey
-    }
+    headers:{"Accept":"application/json"}
   });
 
   const text=await r.text();
   let d={};
   try{d=text?JSON.parse(text):{}}catch{d={raw:text}}
 
-  if(!r.ok){
+  if(!r.ok || d?.error){
     return {
       ok:false,
       configured:true,
-      error:d?.message||d?.error||`SEARCH_HTTP_${r.status}`,
+      error:d?.error||d?.message||`SEARCH_HTTP_${r.status}`,
       detail:d
     };
   }
 
-  const results=Array.isArray(d?.web?.results)?d.web.results:[];
+  const results=Array.isArray(d?.organic_results)?d.organic_results:[];
   const seen=new Set();
   const leads=[];
 
   for(const item of results){
-    const link=t(item?.url,2000);
+    const link=t(item?.link,2000);
     const handle=extractInstagramHandleFromUrl(link);
     if(!handle || seen.has(handle.toLowerCase()))continue;
     seen.add(handle.toLowerCase());
@@ -276,7 +276,7 @@ async function searchInstagramLeads(env,{area,type,start=1}){
       instagram:`@${handle}`,
       url:`https://www.instagram.com/${encodeURIComponent(handle)}/`,
       title,
-      snippet:t(item?.description,700),
+      snippet:t(item?.snippet,700),
       area:t(area,120),
       type:t(typeWord,120)
     });
@@ -287,8 +287,8 @@ async function searchInstagramLeads(env,{area,type,start=1}){
     configured:true,
     query:q,
     leads,
-    total:null,
-    next_start:results.length>=10 ? (offset+1)*10+1 : null
+    total:Number(d?.search_information?.total_results||0)||null,
+    next_start:results.length>=10 ? (page+1)*10+1 : null
   };
 }
 
@@ -325,7 +325,7 @@ function shopPayload(x){
 }
 
 
-const LOGIN_HTML="<!doctype html>\n<html lang=\"ja\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\">\n<title>KBN ADMIN LOGIN</title>\n<style>\n:root{color-scheme:dark}\n*{box-sizing:border-box}\nbody{margin:0;min-height:100vh;display:grid;place-items:center;background:#080d13;color:#f4f6f8;font-family:-apple-system,BlinkMacSystemFont,\"Hiragino Sans\",\"Yu Gothic\",sans-serif;padding:22px}\n.card{width:min(440px,100%);padding:28px;border:1px solid #36404c;border-radius:20px;background:#101720;box-shadow:0 20px 70px rgba(0,0,0,.35)}\n.eyebrow{color:#e8be55;letter-spacing:.18em;font-weight:800;font-size:.78rem}\nh1{font-size:2rem;margin:.35rem 0 .7rem}\np{color:#aeb5bf;line-height:1.7}\nlabel{display:block;margin:18px 0 7px;color:#d9dde2;font-weight:700}\ninput{width:100%;min-height:52px;padding:0 14px;border-radius:12px;border:1px solid #3b4653;background:#0a1017;color:#fff;font-size:1rem}\nbutton{width:100%;min-height:54px;margin-top:20px;border:0;border-radius:12px;background:#efc45a;color:#111;font-weight:900;font-size:1rem}\n#error{color:#ff9a9a;min-height:1.4em;margin-top:12px}\n.note{font-size:.78rem;margin-top:16px}\n</style>\n</head>\n<body>\n<form class=\"card\" id=\"loginForm\">\n  <div class=\"eyebrow\">KBN ADMIN v97</div>\n  <h1>運営管理ログイン</h1>\n  <p>管理者用のメールアドレスとパスワードを入力してください。</p>\n  <label for=\"email\">メールアドレス</label>\n  <input id=\"email\" type=\"email\" autocomplete=\"username\" required>\n  <label for=\"password\">パスワード</label>\n  <input id=\"password\" type=\"password\" autocomplete=\"current-password\" required>\n  <button type=\"submit\">ログイン</button>\n  <div id=\"error\"></div>\n  <p class=\"note\">この端末では30日間ログイン状態を保持します。</p>\n</form>\n\n<script>\nconst form=document.getElementById(\"loginForm\");\nconst error=document.getElementById(\"error\");\n\nform.addEventListener(\"submit\",async ev=>{\n  ev.preventDefault();\n  error.textContent=\"ログイン中...\";\n\n  const email=document.getElementById(\"email\").value.trim();\n  const password=document.getElementById(\"password\").value;\n\n  try{\n    const r=await fetch(\"/api/admin/login\",{\n      method:\"POST\",\n      credentials:\"include\",\n      cache:\"no-store\",\n      headers:{\"Content-Type\":\"application/json\"},\n      body:JSON.stringify({email,password})\n    });\n\n    const ct=r.headers.get(\"content-type\")||\"\";\n    if(!ct.includes(\"application/json\")){\n      const text=await r.text();\n      throw new Error(\"NON_JSON_RESPONSE: \"+text.slice(0,80));\n    }\n\n    const d=await r.json();\n\n    if(!r.ok || !d.ok){\n      if(d.error===\"INVALID_CREDENTIALS\"){\n        throw new Error(\"INVALID_CREDENTIALS\");\n      }\n      if(d.error===\"ADMIN_AUTH_NOT_CONFIGURED\"){\n        throw new Error(\"設定不足: \"+(d.missing||[]).join(\", \"));\n      }\n      throw new Error(d.message||d.error||(\"HTTP_\"+r.status));\n    }\n\n    if(!d.token){\n      throw new Error(\"TOKEN_NOT_RETURNED\");\n    }\n\n    localStorage.setItem(\"kbn_admin_token\",d.token);\n    localStorage.setItem(\"kbn_admin_logged_in_at\",String(Date.now()));\n\n    location.replace(\"/admin.html?v=97\");\n  }catch(err){\n    console.error(err);\n\n    if(err.message===\"INVALID_CREDENTIALS\"){\n      error.textContent=\"メールアドレスまたはパスワードが違います。\";\n    }else{\n      error.textContent=\"ログインできませんでした: \"+err.message;\n    }\n  }\n});\n</script>\n\n</body></html>";
+const LOGIN_HTML="<!doctype html>\n<html lang=\"ja\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\">\n<title>KBN ADMIN LOGIN</title>\n<style>\n:root{color-scheme:dark}\n*{box-sizing:border-box}\nbody{margin:0;min-height:100vh;display:grid;place-items:center;background:#080d13;color:#f4f6f8;font-family:-apple-system,BlinkMacSystemFont,\"Hiragino Sans\",\"Yu Gothic\",sans-serif;padding:22px}\n.card{width:min(440px,100%);padding:28px;border:1px solid #36404c;border-radius:20px;background:#101720;box-shadow:0 20px 70px rgba(0,0,0,.35)}\n.eyebrow{color:#e8be55;letter-spacing:.18em;font-weight:800;font-size:.78rem}\nh1{font-size:2rem;margin:.35rem 0 .7rem}\np{color:#aeb5bf;line-height:1.7}\nlabel{display:block;margin:18px 0 7px;color:#d9dde2;font-weight:700}\ninput{width:100%;min-height:52px;padding:0 14px;border-radius:12px;border:1px solid #3b4653;background:#0a1017;color:#fff;font-size:1rem}\nbutton{width:100%;min-height:54px;margin-top:20px;border:0;border-radius:12px;background:#efc45a;color:#111;font-weight:900;font-size:1rem}\n#error{color:#ff9a9a;min-height:1.4em;margin-top:12px}\n.note{font-size:.78rem;margin-top:16px}\n</style>\n</head>\n<body>\n<form class=\"card\" id=\"loginForm\">\n  <div class=\"eyebrow\">KBN ADMIN v98</div>\n  <h1>運営管理ログイン</h1>\n  <p>管理者用のメールアドレスとパスワードを入力してください。</p>\n  <label for=\"email\">メールアドレス</label>\n  <input id=\"email\" type=\"email\" autocomplete=\"username\" required>\n  <label for=\"password\">パスワード</label>\n  <input id=\"password\" type=\"password\" autocomplete=\"current-password\" required>\n  <button type=\"submit\">ログイン</button>\n  <div id=\"error\"></div>\n  <p class=\"note\">この端末では30日間ログイン状態を保持します。</p>\n</form>\n\n<script>\nconst form=document.getElementById(\"loginForm\");\nconst error=document.getElementById(\"error\");\n\nform.addEventListener(\"submit\",async ev=>{\n  ev.preventDefault();\n  error.textContent=\"ログイン中...\";\n\n  const email=document.getElementById(\"email\").value.trim();\n  const password=document.getElementById(\"password\").value;\n\n  try{\n    const r=await fetch(\"/api/admin/login\",{\n      method:\"POST\",\n      credentials:\"include\",\n      cache:\"no-store\",\n      headers:{\"Content-Type\":\"application/json\"},\n      body:JSON.stringify({email,password})\n    });\n\n    const ct=r.headers.get(\"content-type\")||\"\";\n    if(!ct.includes(\"application/json\")){\n      const text=await r.text();\n      throw new Error(\"NON_JSON_RESPONSE: \"+text.slice(0,80));\n    }\n\n    const d=await r.json();\n\n    if(!r.ok || !d.ok){\n      if(d.error===\"INVALID_CREDENTIALS\"){\n        throw new Error(\"INVALID_CREDENTIALS\");\n      }\n      if(d.error===\"ADMIN_AUTH_NOT_CONFIGURED\"){\n        throw new Error(\"設定不足: \"+(d.missing||[]).join(\", \"));\n      }\n      throw new Error(d.message||d.error||(\"HTTP_\"+r.status));\n    }\n\n    if(!d.token){\n      throw new Error(\"TOKEN_NOT_RETURNED\");\n    }\n\n    localStorage.setItem(\"kbn_admin_token\",d.token);\n    localStorage.setItem(\"kbn_admin_logged_in_at\",String(Date.now()));\n\n    location.replace(\"/admin.html?v=98\");\n  }catch(err){\n    console.error(err);\n\n    if(err.message===\"INVALID_CREDENTIALS\"){\n      error.textContent=\"メールアドレスまたはパスワードが違います。\";\n    }else{\n      error.textContent=\"ログインできませんでした: \"+err.message;\n    }\n  }\n});\n</script>\n\n</body></html>";
 const ADMIN_COOKIE="kbn_admin_session";
 const ADMIN_SESSION_DAYS=30;
 
@@ -814,7 +814,7 @@ export default {
           ok:true,
           configured:!!cfg.apiKey,
           has_api_key:!!cfg.apiKey,
-          provider:"brave"
+          provider:"serpapi"
         });
       }
 
@@ -825,7 +825,7 @@ export default {
 
         const result=await searchInstagramLeads(env,{area,type,start});
 
-        if(!result.ok && result.error==="BRAVE_SEARCH_NOT_CONFIGURED"){
+        if(!result.ok && result.error==="SERPAPI_NOT_CONFIGURED"){
           return json(result,{status:503});
         }
 
