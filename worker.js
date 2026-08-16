@@ -1,3 +1,176 @@
+
+function kbnNormInstagram(v){
+  let s=String(v||"").trim().toLowerCase();
+  try{
+    if(/^https?:\/\//i.test(s)){
+      const u=new URL(s);
+      const parts=u.pathname.split("/").filter(Boolean);
+      s=parts[0]||"";
+    }
+  }catch{}
+  return s.replace(/^@/,"").replace(/[^a-z0-9._]/g,"");
+}
+
+function kbnNormPhone(v){
+  return String(v||"").replace(/\D/g,"");
+}
+
+function kbnNormAddress(v){
+  return String(v||"")
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[〒\s　,，.。・]/g,"")
+    .replace(/[‐‑‒–—―ー−]/g,"-")
+    .replace(/丁目/g,"-")
+    .replace(/番地?/g,"-")
+    .replace(/号/g,"")
+    .replace(/-+/g,"-")
+    .replace(/^-|-$/g,"");
+}
+
+function kbnNormShopName(v){
+  return String(v||"")
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/^【kbn独自掲載】/i,"")
+    .replace(/\s*[（(]\s*@[a-z0-9._]+\s*[）)]\s*$/i,"")
+    .replace(/\s+@[a-z0-9._]+\s*$/i,"")
+    .replace(/[\s　"'’‘“”・･.,，。\-‐‑‒–—―ー_]/g,"")
+    .replace(/(bar|バー)$/i,"")
+    .trim();
+}
+
+function kbnDuplicateScore(sub,shop){
+  const reasons=[];
+  let score=0;
+  let strong=false;
+
+  const si=kbnNormInstagram(sub?.instagram);
+  const xi=kbnNormInstagram(shop?.instagram);
+  if(si && xi && si===xi){
+    score+=100;
+    strong=true;
+    reasons.push("Instagram一致");
+  }
+
+  const sp=kbnNormPhone(sub?.phone);
+  const xp=kbnNormPhone(shop?.phone);
+  if(sp && xp && sp===xp){
+    score+=95;
+    strong=true;
+    reasons.push("電話番号一致");
+  }
+
+  const sa=kbnNormAddress(sub?.address);
+  const xa=kbnNormAddress(shop?.address);
+  const addressExact=!!(sa && xa && sa===xa);
+  if(addressExact){
+    score+=80;
+    reasons.push("住所一致");
+  }
+
+  const sn=kbnNormShopName(sub?.shop_name||sub?.name);
+  const xn=kbnNormShopName(shop?.name);
+  const nameExact=!!(sn && xn && sn===xn);
+  if(nameExact){
+    score+=60;
+    reasons.push("店舗名一致");
+  }else if(sn && xn && sn.length>=4 && xn.length>=4 && (sn.includes(xn)||xn.includes(sn))){
+    score+=30;
+    reasons.push("店舗名が類似");
+  }
+
+  // 住所+店名の一致は自動統合してよい強い一致。
+  if(addressExact && nameExact)strong=true;
+
+  return {
+    score,
+    strong,
+    reasons,
+    name_exact:nameExact,
+    address_exact:addressExact
+  };
+}
+
+async function findSubmissionDuplicate(env,sub){
+  const r=await env.DB.prepare(`
+    SELECT id,slug,name,area,address,phone,instagram,listing_status,is_published,
+           hours,holiday,genre,features,description,budget_min,budget_max,seats,is_recruiting
+    FROM shops
+    ORDER BY id DESC
+    LIMIT 1000
+  `).all();
+
+  const matches=[];
+  for(const shop of (r.results||[])){
+    const m=kbnDuplicateScore(sub,shop);
+    if(m.score<30)continue;
+    matches.push({
+      shop_id:Number(shop.id),
+      slug:shop.slug,
+      name:shop.name,
+      area:shop.area,
+      address:shop.address,
+      phone:shop.phone,
+      instagram:shop.instagram,
+      listing_status:shop.listing_status||"published",
+      is_published:Number(shop.is_published||0),
+      score:m.score,
+      strong:m.strong,
+      reasons:m.reasons
+    });
+  }
+
+  matches.sort((a,b)=>b.score-a.score || b.shop_id-a.shop_id);
+  return matches[0]||null;
+}
+
+function submissionArea(sub){
+  return inferKumamotoAreaFromText(
+    `${sub?.address||""} ${sub?.description||""}`,
+    "熊本市"
+  );
+}
+
+async function mergeSubmissionIntoShop(env,sub,shopId){
+  const current=await env.DB.prepare("SELECT * FROM shops WHERE id=?").bind(shopId).first();
+  if(!current)throw new Error("DUPLICATE_SHOP_NOT_FOUND");
+
+  const area=submissionArea(sub);
+  const next={
+    name:t(sub.shop_name,180)||current.name,
+    name_kana:current.name_kana,
+    area:t(area,120)||current.area,
+    address:t(sub.address,500)||current.address,
+    hours:t(sub.hours,180)||current.hours,
+    holiday:t(sub.holiday,180)||current.holiday,
+    instagram:t(sub.instagram,500)||current.instagram,
+    genre:t(sub.genre,180)||current.genre,
+    features:t(sub.features,1500)||current.features,
+    description:t(sub.description,5000)||current.description,
+    budget_min:sub.budget_min!==null&&sub.budget_min!==undefined?ni(sub.budget_min):current.budget_min,
+    budget_max:sub.budget_max!==null&&sub.budget_max!==undefined?ni(sub.budget_max):current.budget_max,
+    seats:sub.seats!==null&&sub.seats!==undefined?ni(sub.seats):current.seats,
+    phone:t(sub.phone,80)||current.phone,
+    is_recruiting:b(sub.wants_job)||b(current.is_recruiting)
+  };
+
+  await env.DB.prepare(`
+    UPDATE shops SET
+      name=?,area=?,address=?,hours=?,holiday=?,instagram=?,genre=?,features=?,description=?,
+      budget_min=?,budget_max=?,seats=?,phone=?,is_recruiting=?,
+      listing_status='published',is_published=1,is_new=1,
+      published_at=COALESCE(published_at,CURRENT_TIMESTAMP),
+      updated_at=CURRENT_TIMESTAMP
+    WHERE id=?
+  `).bind(
+    next.name,next.area,next.address,next.hours,next.holiday,next.instagram,next.genre,next.features,next.description,
+    next.budget_min,next.budget_max,next.seats,next.phone,next.is_recruiting,shopId
+  ).run();
+
+  return await env.DB.prepare("SELECT * FROM shops WHERE id=?").bind(shopId).first();
+}
+
 function json(data, init = {}) {
   const headers = new Headers(init.headers || {});
   headers.set("content-type", "application/json; charset=utf-8");
@@ -1336,7 +1509,7 @@ async function renderLocalSeoAreaPage(env,slug){
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>${kbnSeoEsc(title)}</title><meta name="description" content="${kbnSeoEsc(description)}"><link rel="canonical" href="${canonical}">
 <meta property="og:type" content="website"><meta property="og:title" content="${kbnSeoEsc(title)}"><meta property="og:description" content="${kbnSeoEsc(description)}"><meta property="og:url" content="${canonical}">
-<meta name="robots" content="index,follow,max-image-preview:large"><link rel="stylesheet" href="/style.css?v=115">
+<meta name="robots" content="index,follow,max-image-preview:large"><link rel="stylesheet" href="/style.css?v=116">
 <script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g,"\\u003c")}</script></head>
 <body class="public-v109 local-seo-page">
 <header class="public-header"><div class="container public-header-inner"><a class="public-brand" href="/"><img src="/logo.png" alt="KUMAMOTO BAR NAVI"><span><b>KUMAMOTO</b><strong>BAR NAVI</strong><small>BAR & JOB INFORMATION</small></span></a><nav class="public-desktop-nav"><a href="/bars.html">BARを探す</a><a href="/areas.html" class="active">エリア</a><a href="/jobs.html">求人</a><a href="/column.html">コラム</a></nav><a class="public-header-cta" href="/bars.html">BARを探す</a></div></header>
@@ -2395,25 +2568,102 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
 
       if(url.pathname==="/api/admin/submissions" && request.method==="GET"){
         const r=await env.DB.prepare("SELECT * FROM submissions ORDER BY id DESC").all();
-        return json({ok:true,submissions:r.results||[]});
+        const rows=r.results||[];
+
+        const enriched=[];
+        for(const sub of rows){
+          let duplicate=null;
+          if(String(sub.status||"pending")==="pending"){
+            try{ duplicate=await findSubmissionDuplicate(env,sub); }catch(e){ console.error("duplicate check failed",e); }
+          }
+          enriched.push({...sub,duplicate});
+        }
+
+        return json({ok:true,submissions:enriched});
       }
       const ap=url.pathname.match(/^\/api\/admin\/submissions\/(\d+)\/approve$/);
       if(ap && request.method==="POST"){
         const id=Number(ap[1]);
         const sub=await env.DB.prepare("SELECT * FROM submissions WHERE id=?").bind(id).first();
         if(!sub)return json({ok:false,error:"NOT_FOUND"},{status:404});
+        if(String(sub.status||"pending")!=="pending"){
+          return json({ok:false,error:"SUBMISSION_ALREADY_REVIEWED"},{status:409});
+        }
+
+        let body={};
+        try{body=await request.json()}catch{}
+
+        const duplicate=await findSubmissionDuplicate(env,sub);
+        const requestedMergeId=Number(body?.merge_shop_id||0);
+        const forceCreate=body?.force_create===true;
+
+        // 管理画面で明示的に指定された既存店舗へ統合
+        if(requestedMergeId){
+          const merged=await mergeSubmissionIntoShop(env,sub,requestedMergeId);
+          await env.DB.prepare(
+            "UPDATE submissions SET status='approved',reviewed_at=CURRENT_TIMESTAMP WHERE id=?"
+          ).bind(id).run();
+
+          return json({
+            ok:true,
+            shop_id:Number(merged.id),
+            merged:true,
+            converted_from_provisional:String(merged.listing_status||"published")==="published",
+            message:"EXISTING_SHOP_MERGED"
+          });
+        }
+
+        // Instagram / 電話 / 店名+住所など、強い一致は自動統合
+        if(duplicate?.strong && !forceCreate){
+          const merged=await mergeSubmissionIntoShop(env,sub,duplicate.shop_id);
+          await env.DB.prepare(
+            "UPDATE submissions SET status='approved',reviewed_at=CURRENT_TIMESTAMP WHERE id=?"
+          ).bind(id).run();
+
+          return json({
+            ok:true,
+            shop_id:Number(merged.id),
+            merged:true,
+            auto_merged:true,
+            duplicate,
+            message:"DUPLICATE_AUTO_MERGED"
+          });
+        }
+
+        // 店名類似など弱い候補がある場合は、勝手に新規作成しない
+        if(duplicate && duplicate.score>=30 && !forceCreate){
+          return json({
+            ok:false,
+            error:"DUPLICATE_CONFIRM_REQUIRED",
+            message:"既存店舗と重複している可能性があります。",
+            duplicate
+          },{status:409});
+        }
+
+        const area=submissionArea(sub);
         const s=shopPayload({
-          name:sub.shop_name,area:"熊本市",address:sub.address,hours:sub.hours,holiday:sub.holiday,
+          name:sub.shop_name,area,address:sub.address,hours:sub.hours,holiday:sub.holiday,
           instagram:sub.instagram,genre:sub.genre,features:sub.features,description:sub.description,
-          budget_min:sub.budget_min,budget_max:sub.budget_max,seats:sub.seats,is_recruiting:sub.wants_job,
-          is_published:true,is_new:true
+          budget_min:sub.budget_min,budget_max:sub.budget_max,seats:sub.seats,phone:sub.phone,
+          is_recruiting:sub.wants_job,is_published:true,is_new:true,listing_status:"published"
         });
+
         const r=await env.DB.prepare(`
-          INSERT INTO shops (slug,name,area,address,hours,holiday,instagram,genre,features,description,budget_min,budget_max,seats,is_recruiting,is_published,is_new,published_at)
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,CURRENT_TIMESTAMP)
-        `).bind(s.slug,s.name,s.area,s.address,s.hours,s.holiday,s.instagram,s.genre,s.features,s.description,s.budget_min,s.budget_max,s.seats,s.is_recruiting,1).run();
-        await env.DB.prepare("UPDATE submissions SET status='approved',reviewed_at=CURRENT_TIMESTAMP WHERE id=?").bind(id).run();
-        return json({ok:true,shop_id:r.meta?.last_row_id});
+          INSERT INTO shops (
+            slug,name,area,address,hours,holiday,instagram,genre,features,description,
+            budget_min,budget_max,seats,phone,is_recruiting,is_published,is_new,listing_status,published_at
+          )
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,'published',CURRENT_TIMESTAMP)
+        `).bind(
+          s.slug,s.name,s.area,s.address,s.hours,s.holiday,s.instagram,s.genre,s.features,s.description,
+          s.budget_min,s.budget_max,s.seats,t(sub.phone,80),s.is_recruiting,1
+        ).run();
+
+        await env.DB.prepare(
+          "UPDATE submissions SET status='approved',reviewed_at=CURRENT_TIMESTAMP WHERE id=?"
+        ).bind(id).run();
+
+        return json({ok:true,shop_id:r.meta?.last_row_id,merged:false});
       }
       const rp=url.pathname.match(/^\/api\/admin\/submissions\/(\d+)\/reject$/);
       if(rp && request.method==="POST"){

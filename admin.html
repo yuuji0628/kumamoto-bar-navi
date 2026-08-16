@@ -1112,12 +1112,48 @@
 }
 </style>
 
+
+<style>
+.submission-duplicate-alert{
+  width:100%;
+  margin-bottom:8px;
+  padding:10px;
+  border:1px solid #7f682d;
+  border-radius:11px;
+  background:rgba(228,187,85,.08);
+  text-align:left;
+}
+.submission-duplicate-alert b{
+  display:block;
+  color:#e4bb55;
+  font-size:.75rem;
+}
+.submission-duplicate-alert span{
+  display:block;
+  margin-top:4px;
+  color:#eef1f4;
+  font-size:.72rem;
+  font-weight:800;
+}
+.submission-duplicate-alert small{
+  display:block;
+  margin-top:3px;
+  color:#aab2bb;
+  font-size:.65rem;
+}
+.merge-submission-btn{
+  background:#e4bb55!important;
+  color:#111!important;
+  font-weight:900!important;
+}
+</style>
+
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
-<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.13</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><div class="admin-security-badge">🔐 管理者ログイン</div></section>
+<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.16</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><div class="admin-security-badge">🔐 管理者ログイン</div></section>
 
 <div class="admin-login-bar">
-  <span>🔐 管理者ログイン中 <small id="authStatusText">ver1.13</small></span>
+  <span>🔐 管理者ログイン中 <small id="authStatusText">ver1.16</small></span>
   <button type="button" id="adminLogoutBtn">ログアウト</button>
 </div>
 
@@ -1199,7 +1235,7 @@
   </div>
 
   <div id="buttonHealthNote" class="version-note">
-    ver1.13：自動開拓エリア判定修正
+    ver1.16：自動開拓エリア判定修正
   </div>
 </section>
 
@@ -2307,7 +2343,18 @@ window.loadSubs=async function(){
 
           <div class="admin-item-actions">
             ${s.status==="pending"
-              ? `<button onclick="approve(${s.id})">承認して店舗化</button>
+              ? `${s.duplicate
+                  ? `<div class="submission-duplicate-alert">
+                       <b>⚠️ 重複の可能性あり</b>
+                       <span>${esc(s.duplicate.name||"既存店舗")} / ${esc(s.duplicate.listing_status==="provisional"?"KBN独自掲載":"正式掲載")}</span>
+                       <small>${esc((s.duplicate.reasons||[]).join("・"))}</small>
+                     </div>
+                     <button onclick="mergeSubmission(${s.id},${Number(s.duplicate.shop_id)})" class="merge-submission-btn">
+                       ${s.duplicate.listing_status==="provisional"?"既存店舗を正式掲載に切替":"既存店舗に統合"}
+                     </button>
+                     <button onclick="approve(${s.id},true)" class="admin-secondary-btn">別店舗として新規作成</button>`
+                  : `<button onclick="approve(${s.id})">承認して店舗化</button>`
+                }
                  <button onclick="rejectSub(${s.id})">却下</button>`
               : ""}
           </div>
@@ -2984,29 +3031,29 @@ window.openInstagram=function(){
   window.open("https://www.instagram.com/","_blank");
 };
 
-window.approve=async id=>{
-  const s=subs.find(x=>Number(x.id)===Number(id));
-  const name=s?.shop_name||`申込みID ${id}`;
-  if(!confirm(`「${name}」を承認して店舗化しますか？`))return;
+
+async function finishApprovedSubmission(result,name,id){
+  await Promise.allSettled([window.loadSubs?.(),window.loadShops?.()]);
+
+  const shopId=Number(result?.shop_id||0);
+  if(!shopId){
+    alert("承認は完了しましたが、店舗IDを取得できませんでした。");
+    return;
+  }
+
+  if(result?.merged){
+    alert(
+      result?.auto_merged
+        ? "既存店舗との強い一致を確認したため、重複を作らず正式掲載へ統合しました。"
+        : "既存店舗へ統合し、正式掲載として更新しました。"
+    );
+  }
 
   try{
-    const result=await api(`/api/admin/submissions/${id}/approve`,{method:"POST"});
-    await Promise.allSettled([window.loadSubs?.(),window.loadShops?.()]);
-
-    const shopId=Number(result?.shop_id||0);
-
-    if(!shopId){
-      alert("店舗化は完了しましたが、Instagram投稿用の店舗IDを取得できませんでした。");
-      return;
-    }
-
-    // 承認した瞬間にInstagram投稿準備を自動生成
     await window.createInstaPost(shopId);
 
     const shop=shops.find(x=>Number(x.id)===shopId);
     const caption=$("instaPostCaption")?.value||"";
-
-    // 投稿文は再表示できるようローカル保存
     try{
       localStorage.setItem(
         `kbn_insta_post_${shopId}`,
@@ -3017,16 +3064,66 @@ window.approve=async id=>{
           generated_at:new Date().toISOString()
         })
       );
-    }catch(e){
-      console.warn("Instagram draft local save failed",e);
-    }
+    }catch(e){ console.warn("Instagram draft local save failed",e); }
 
     const st=$("instaSaveStatus");
-    if(st)st.textContent="店舗承認と同時に投稿画像・投稿文を自動生成しました。";
+    if(st)st.textContent=result?.merged
+      ?"既存店舗を正式掲載へ統合し、投稿画像・投稿文を生成しました。"
+      :"店舗承認と同時に投稿画像・投稿文を自動生成しました。";
+  }catch(e){
+    console.warn("Instagram post maker failed after approval",e);
+  }
+}
 
+window.approve=async (id,forceCreate=false)=>{
+  const s=subs.find(x=>Number(x.id)===Number(id));
+  const name=s?.shop_name||`申込みID ${id}`;
+
+  const message=forceCreate
+    ? `「${name}」を既存候補とは別店舗として新規作成しますか？`
+    : `「${name}」を承認しますか？\n\n既存店舗との強い一致があれば、自動的に重複を作らず統合します。`;
+
+  if(!confirm(message))return;
+
+  try{
+    const result=await api(`/api/admin/submissions/${id}/approve`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({force_create:!!forceCreate})
+    });
+    await finishApprovedSubmission(result,name,id);
   }catch(e){
     console.error("approve failed",e);
-    alert("店舗化できませんでした: "+(e?.message||"UNKNOWN_ERROR"));
+    if(String(e?.message||"")==="既存店舗と重複している可能性があります。" || String(e?.message||"").includes("DUPLICATE")){
+      alert("既存店舗と重複している可能性があります。申込み一覧を再読み込みし、黄色の「既存店舗に統合」ボタンから確認してください。");
+      await window.loadSubs?.();
+    }else{
+      alert("店舗化できませんでした: "+(e?.message||"UNKNOWN_ERROR"));
+    }
+  }
+};
+
+window.mergeSubmission=async (id,shopId)=>{
+  const s=subs.find(x=>Number(x.id)===Number(id));
+  const dup=s?.duplicate;
+  const name=s?.shop_name||`申込みID ${id}`;
+  const existing=dup?.name||`店舗ID ${shopId}`;
+  const mode=dup?.listing_status==="provisional"?"正式掲載へ切り替え":"既存正式掲載へ統合";
+
+  if(!confirm(
+    `申込み「${name}」を\n既存店舗「${existing}」へ統合します。\n\n処理：${mode}\n\n新しい店舗は作成しません。よろしいですか？`
+  ))return;
+
+  try{
+    const result=await api(`/api/admin/submissions/${id}/approve`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({merge_shop_id:Number(shopId)})
+    });
+    await finishApprovedSubmission(result,name,id);
+  }catch(e){
+    console.error("merge submission failed",e);
+    alert("店舗を統合できませんでした: "+(e?.message||"UNKNOWN_ERROR"));
   }
 };
 
