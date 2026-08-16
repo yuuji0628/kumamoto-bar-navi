@@ -363,28 +363,76 @@ function likelyBar(x){
 
 
 function extractPriceInfo(text){
-  const s=String(text||"").replace(/,/g,"");
-  const nums=[];
+  const raw=String(text||"");
+  const s=raw
+    .replace(/[，,]/g,"")
+    .replace(/１/g,"1").replace(/２/g,"2").replace(/３/g,"3")
+    .replace(/４/g,"4").replace(/５/g,"5").replace(/６/g,"6")
+    .replace(/７/g,"7").replace(/８/g,"8").replace(/９/g,"9")
+    .replace(/０/g,"0");
 
-  const patterns=[
-    /(?:予算|料金|price|￥|¥)\s*[:：]?\s*([0-9]{3,6})\s*(?:円)?\s*(?:[〜~\-–—]\s*([0-9]{3,6})\s*円?)?/gi,
-    /([0-9]{3,6})\s*円\s*(?:[〜~\-–—]\s*([0-9]{3,6})\s*円)?/g,
-    /([0-9]{3,6})\s*(?:円)?\s*(?:〜|~|-)\s*([0-9]{3,6})\s*円/g
+  const prices=[];
+
+  function addPrice(v,score=1){
+    const n=Number(String(v||"").replace(/[^\d]/g,""));
+    if(!Number.isFinite(n))return;
+    if(n<100 || n>100000)return;
+    prices.push({value:n,score});
+  }
+
+  // Strong signals: explicit currency marks / 円.
+  const strongPatterns=[
+    /[¥￥]\s*([0-9]{2,6})/g,
+    /([0-9]{2,6})\s*円/g,
+    /([0-9]{2,6})\s*(?:yen|JPY)/gi
   ];
 
-  for(const p of patterns){
+  for(const p of strongPatterns){
+    let m;
+    while((m=p.exec(s)))addPrice(m[1],3);
+  }
+
+  // Strong contextual price phrases, even if 円 is omitted.
+  const contextualPatterns=[
+    /(?:料金|価格|price|チャージ|charge|セット料金|set料金|飲み放題|フリータイム|入場料|テーブルチャージ|席料|TC|SC|男性|女性|メンズ|レディース)\s*[:：]?\s*[¥￥]?\s*([0-9]{2,6})/gi,
+    /(?:お一人様|1名|一人)\s*[:：]?\s*[¥￥]?\s*([0-9]{2,6})/gi,
+    /(?:from|starting at)\s*[¥￥]?\s*([0-9]{2,6})/gi
+  ];
+
+  for(const p of contextualPatterns){
+    let m;
+    while((m=p.exec(s)))addPrice(m[1],2);
+  }
+
+  // Ranges: 1500〜3000 / ¥1500-3000 / 1500円〜3000円.
+  const rangePatterns=[
+    /[¥￥]?\s*([0-9]{2,6})\s*(?:円)?\s*(?:〜|～|~|-|–|—|to)\s*[¥￥]?\s*([0-9]{2,6})\s*(?:円)?/gi
+  ];
+
+  for(const p of rangePatterns){
     let m;
     while((m=p.exec(s))){
-      const a=Number(m[1]);
-      const b=m[2]?Number(m[2]):null;
-      if(a>=300 && a<=100000)nums.push(a);
-      if(b && b>=300 && b<=100000)nums.push(b);
+      addPrice(m[1],2);
+      addPrice(m[2],2);
     }
   }
 
-  if(!nums.length)return {min:null,max:null};
-  nums.sort((a,b)=>a-b);
-  return {min:nums[0],max:nums.length>1?nums[nums.length-1]:nums[0]};
+  if(!prices.length)return {min:null,max:null};
+
+  // Prefer values with explicit currency/price context.
+  const maxScore=Math.max(...prices.map(x=>x.score));
+  const candidates=prices
+    .filter(x=>x.score===maxScore)
+    .map(x=>x.value)
+    .filter((v,i,a)=>a.indexOf(v)===i)
+    .sort((a,b)=>a-b);
+
+  if(!candidates.length)return {min:null,max:null};
+
+  return {
+    min:candidates[0],
+    max:candidates.length>1?candidates[candidates.length-1]:candidates[0]
+  };
 }
 
 function extractHoursInfo(text){
@@ -447,6 +495,143 @@ function extractPublicMetadata(lead){
     hours:extractHoursInfo(text),
     holiday:extractHolidayInfo(text),
     features:extractFeaturesInfo(text)
+  };
+}
+
+
+async function refreshIndependentListings(env,{limit=10}={}){
+  const max=Math.max(1,Math.min(Number(limit)||10,30));
+
+  const r=await env.DB.prepare(`
+    SELECT id,name,area,instagram,genre,hours,holiday,features,budget_min,budget_max,listing_status
+    FROM shops
+    WHERE COALESCE(listing_status,'published')='provisional'
+    ORDER BY updated_at ASC, id ASC
+    LIMIT ?
+  `).bind(max).all();
+
+  const rows=r.results||[];
+  const updated=[];
+  const unchanged=[];
+  const failed=[];
+
+  for(const shop of rows){
+    const handle=kbnHandle(shop.instagram||"");
+    const queryArea=t(shop.area||"熊本",80)||"熊本";
+    const typeKey=(()=>{
+      const g=String(shop.genre||"").toLowerCase();
+      if(g.includes("ダーツ"))return "darts";
+      if(g.includes("カラオケ"))return "karaoke";
+      if(g.includes("スナック"))return "snack";
+      if(g.includes("ラウンジ"))return "lounge";
+      if(g.includes("ガールズ"))return "girls";
+      if(g.includes("ショット"))return "shot";
+      if(g.includes("スポーツ"))return "sports";
+      if(g.includes("ワイン"))return "wine";
+      if(g.includes("ビア"))return "beer";
+      if(g.includes("カクテル"))return "cocktail";
+      if(g.includes("ミュージック"))return "music";
+      if(g.includes("シーシャ"))return "shisha";
+      if(g.includes("コンセプト"))return "concept";
+      return "bar";
+    })();
+
+    try{
+      const result=await searchInstagramLeads(env,{
+        area:queryArea,
+        type:typeKey,
+        start:1
+      });
+
+      if(!result.ok){
+        failed.push({id:shop.id,name:shop.name,reason:result.error||"SEARCH_FAILED"});
+        continue;
+      }
+
+      let lead=null;
+
+      if(handle){
+        lead=(result.leads||[]).find(x=>kbnHandle(x.handle||x.instagram||"")===handle) || null;
+      }
+
+      if(!lead){
+        const shopName=String(shop.name||"").replace(/^【KBN独自掲載】/,"").trim().toLowerCase();
+        lead=(result.leads||[]).find(x=>{
+          const title=String(x.title||"").toLowerCase();
+          return shopName && (title.includes(shopName) || shopName.includes(title));
+        }) || null;
+      }
+
+      if(!lead){
+        unchanged.push({id:shop.id,name:shop.name,reason:"MATCH_NOT_FOUND"});
+        continue;
+      }
+
+      const meta=extractPublicMetadata(lead);
+
+      const next={
+        hours:shop.hours || meta.hours || "",
+        holiday:shop.holiday || meta.holiday || "",
+        features:shop.features || meta.features || "",
+        budget_min:shop.budget_min ?? meta.budget_min ?? null,
+        budget_max:shop.budget_max ?? meta.budget_max ?? null
+      };
+
+      const changed=
+        String(next.hours||"")!==String(shop.hours||"") ||
+        String(next.holiday||"")!==String(shop.holiday||"") ||
+        String(next.features||"")!==String(shop.features||"") ||
+        Number(next.budget_min||0)!==Number(shop.budget_min||0) ||
+        Number(next.budget_max||0)!==Number(shop.budget_max||0);
+
+      if(!changed){
+        unchanged.push({id:shop.id,name:shop.name,reason:"NO_NEW_DATA"});
+        continue;
+      }
+
+      await env.DB.prepare(`
+        UPDATE shops
+        SET hours=?,
+            holiday=?,
+            features=?,
+            budget_min=?,
+            budget_max=?,
+            updated_at=CURRENT_TIMESTAMP
+        WHERE id=?
+      `).bind(
+        next.hours,
+        next.holiday,
+        next.features,
+        next.budget_min,
+        next.budget_max,
+        shop.id
+      ).run();
+
+      updated.push({
+        id:shop.id,
+        name:shop.name,
+        hours:next.hours,
+        holiday:next.holiday,
+        features:next.features,
+        budget_min:next.budget_min,
+        budget_max:next.budget_max
+      });
+
+    }catch(e){
+      failed.push({
+        id:shop.id,
+        name:shop.name,
+        reason:String(e?.message||e||"UNKNOWN_ERROR").slice(0,300)
+      });
+    }
+  }
+
+  return {
+    ok:true,
+    checked:rows.length,
+    updated,
+    unchanged,
+    failed
   };
 }
 
@@ -569,7 +754,7 @@ function shopPayload(x){
 }
 
 
-const LOGIN_HTML="<!doctype html>\n<html lang=\"ja\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\">\n<title>KBN ADMIN LOGIN</title>\n<style>\n:root{color-scheme:dark}\n*{box-sizing:border-box}\nbody{margin:0;min-height:100vh;display:grid;place-items:center;background:#080d13;color:#f4f6f8;font-family:-apple-system,BlinkMacSystemFont,\"Hiragino Sans\",\"Yu Gothic\",sans-serif;padding:22px}\n.card{width:min(440px,100%);padding:28px;border:1px solid #36404c;border-radius:20px;background:#101720;box-shadow:0 20px 70px rgba(0,0,0,.35)}\n.eyebrow{color:#e8be55;letter-spacing:.18em;font-weight:800;font-size:.78rem}\nh1{font-size:2rem;margin:.35rem 0 .7rem}\np{color:#aeb5bf;line-height:1.7}\nlabel{display:block;margin:18px 0 7px;color:#d9dde2;font-weight:700}\ninput{width:100%;min-height:52px;padding:0 14px;border-radius:12px;border:1px solid #3b4653;background:#0a1017;color:#fff;font-size:1rem}\nbutton{width:100%;min-height:54px;margin-top:20px;border:0;border-radius:12px;background:#efc45a;color:#111;font-weight:900;font-size:1rem}\n#error{color:#ff9a9a;min-height:1.4em;margin-top:12px}\n.note{font-size:.78rem;margin-top:16px}\n</style>\n</head>\n<body>\n<form class=\"card\" id=\"loginForm\">\n  <div class=\"eyebrow\">KBN ADMIN ver1.04</div>\n  <h1>運営管理ログイン</h1>\n  <p>管理者用のメールアドレスとパスワードを入力してください。</p>\n  <label for=\"email\">メールアドレス</label>\n  <input id=\"email\" type=\"email\" autocomplete=\"username\" required>\n  <label for=\"password\">パスワード</label>\n  <input id=\"password\" type=\"password\" autocomplete=\"current-password\" required>\n  <button type=\"submit\">ログイン</button>\n  <div id=\"error\"></div>\n  <p class=\"note\">この端末では30日間ログイン状態を保持します。</p>\n</form>\n\n<script>\nconst form=document.getElementById(\"loginForm\");\nconst error=document.getElementById(\"error\");\n\nform.addEventListener(\"submit\",async ev=>{\n  ev.preventDefault();\n  error.textContent=\"ログイン中...\";\n\n  const email=document.getElementById(\"email\").value.trim();\n  const password=document.getElementById(\"password\").value;\n\n  try{\n    const r=await fetch(\"/api/admin/login\",{\n      method:\"POST\",\n      credentials:\"include\",\n      cache:\"no-store\",\n      headers:{\"Content-Type\":\"application/json\"},\n      body:JSON.stringify({email,password})\n    });\n\n    const ct=r.headers.get(\"content-type\")||\"\";\n    if(!ct.includes(\"application/json\")){\n      const text=await r.text();\n      throw new Error(\"NON_JSON_RESPONSE: \"+text.slice(0,80));\n    }\n\n    const d=await r.json();\n\n    if(!r.ok || !d.ok){\n      if(d.error===\"INVALID_CREDENTIALS\"){\n        throw new Error(\"INVALID_CREDENTIALS\");\n      }\n      if(d.error===\"ADMIN_AUTH_NOT_CONFIGURED\"){\n        throw new Error(\"設定不足: \"+(d.missing||[]).join(\", \"));\n      }\n      throw new Error(d.message||d.error||(\"HTTP_\"+r.status));\n    }\n\n    if(!d.token){\n      throw new Error(\"TOKEN_NOT_RETURNED\");\n    }\n\n    localStorage.setItem(\"kbn_admin_token\",d.token);\n    localStorage.setItem(\"kbn_admin_logged_in_at\",String(Date.now()));\n\n    location.replace(\"/admin.html?v=104\");\n  }catch(err){\n    console.error(err);\n\n    if(err.message===\"INVALID_CREDENTIALS\"){\n      error.textContent=\"メールアドレスまたはパスワードが違います。\";\n    }else{\n      error.textContent=\"ログインできませんでした: \"+err.message;\n    }\n  }\n});\n</script>\n\n</body></html>";
+const LOGIN_HTML="<!doctype html>\n<html lang=\"ja\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\">\n<title>KBN ADMIN LOGIN</title>\n<style>\n:root{color-scheme:dark}\n*{box-sizing:border-box}\nbody{margin:0;min-height:100vh;display:grid;place-items:center;background:#080d13;color:#f4f6f8;font-family:-apple-system,BlinkMacSystemFont,\"Hiragino Sans\",\"Yu Gothic\",sans-serif;padding:22px}\n.card{width:min(440px,100%);padding:28px;border:1px solid #36404c;border-radius:20px;background:#101720;box-shadow:0 20px 70px rgba(0,0,0,.35)}\n.eyebrow{color:#e8be55;letter-spacing:.18em;font-weight:800;font-size:.78rem}\nh1{font-size:2rem;margin:.35rem 0 .7rem}\np{color:#aeb5bf;line-height:1.7}\nlabel{display:block;margin:18px 0 7px;color:#d9dde2;font-weight:700}\ninput{width:100%;min-height:52px;padding:0 14px;border-radius:12px;border:1px solid #3b4653;background:#0a1017;color:#fff;font-size:1rem}\nbutton{width:100%;min-height:54px;margin-top:20px;border:0;border-radius:12px;background:#efc45a;color:#111;font-weight:900;font-size:1rem}\n#error{color:#ff9a9a;min-height:1.4em;margin-top:12px}\n.note{font-size:.78rem;margin-top:16px}\n</style>\n</head>\n<body>\n<form class=\"card\" id=\"loginForm\">\n  <div class=\"eyebrow\">KBN ADMIN ver1.06</div>\n  <h1>運営管理ログイン</h1>\n  <p>管理者用のメールアドレスとパスワードを入力してください。</p>\n  <label for=\"email\">メールアドレス</label>\n  <input id=\"email\" type=\"email\" autocomplete=\"username\" required>\n  <label for=\"password\">パスワード</label>\n  <input id=\"password\" type=\"password\" autocomplete=\"current-password\" required>\n  <button type=\"submit\">ログイン</button>\n  <div id=\"error\"></div>\n  <p class=\"note\">この端末では30日間ログイン状態を保持します。</p>\n</form>\n\n<script>\nconst form=document.getElementById(\"loginForm\");\nconst error=document.getElementById(\"error\");\n\nform.addEventListener(\"submit\",async ev=>{\n  ev.preventDefault();\n  error.textContent=\"ログイン中...\";\n\n  const email=document.getElementById(\"email\").value.trim();\n  const password=document.getElementById(\"password\").value;\n\n  try{\n    const r=await fetch(\"/api/admin/login\",{\n      method:\"POST\",\n      credentials:\"include\",\n      cache:\"no-store\",\n      headers:{\"Content-Type\":\"application/json\"},\n      body:JSON.stringify({email,password})\n    });\n\n    const ct=r.headers.get(\"content-type\")||\"\";\n    if(!ct.includes(\"application/json\")){\n      const text=await r.text();\n      throw new Error(\"NON_JSON_RESPONSE: \"+text.slice(0,80));\n    }\n\n    const d=await r.json();\n\n    if(!r.ok || !d.ok){\n      if(d.error===\"INVALID_CREDENTIALS\"){\n        throw new Error(\"INVALID_CREDENTIALS\");\n      }\n      if(d.error===\"ADMIN_AUTH_NOT_CONFIGURED\"){\n        throw new Error(\"設定不足: \"+(d.missing||[]).join(\", \"));\n      }\n      throw new Error(d.message||d.error||(\"HTTP_\"+r.status));\n    }\n\n    if(!d.token){\n      throw new Error(\"TOKEN_NOT_RETURNED\");\n    }\n\n    localStorage.setItem(\"kbn_admin_token\",d.token);\n    localStorage.setItem(\"kbn_admin_logged_in_at\",String(Date.now()));\n\n    location.replace(\"/admin.html?v=106\");\n  }catch(err){\n    console.error(err);\n\n    if(err.message===\"INVALID_CREDENTIALS\"){\n      error.textContent=\"メールアドレスまたはパスワードが違います。\";\n    }else{\n      error.textContent=\"ログインできませんでした: \"+err.message;\n    }\n  }\n});\n</script>\n\n</body></html>";
 const ADMIN_COOKIE="kbn_admin_session";
 const ADMIN_SESSION_DAYS=30;
 
@@ -1056,7 +1241,28 @@ export default {
       }
 
 
-            if(url.pathname==="/api/admin/leads/auto-discover" && request.method==="POST"){
+      
+      if(url.pathname==="/api/admin/leads/refresh-existing" && request.method==="POST"){
+        let x={};
+        try{x=await request.json()}catch{}
+
+        try{
+          const result=await refreshIndependentListings(env,{
+            limit:Math.max(1,Math.min(Number(x.limit)||10,30))
+          });
+
+          return json(result,{headers:{"Cache-Control":"no-store"}});
+        }catch(e){
+          console.error("refresh-existing failed",e);
+          return json({
+            ok:false,
+            error:"REFRESH_EXISTING_FAILED",
+            message:String(e?.message||e||"UNKNOWN_ERROR").slice(0,500)
+          },{status:500,headers:{"Cache-Control":"no-store"}});
+        }
+      }
+
+      if(url.pathname==="/api/admin/leads/auto-discover" && request.method==="POST"){
         let x={}; try{x=await request.json()}catch{}
         const max=Math.max(1,Math.min(Number(x.max_listings)||10,20));
         const pairs=Math.max(1,Math.min(Number(x.pair_limit)||6,10));
