@@ -1,1 +1,230 @@
-<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BAR求人｜KUMAMOTO BAR NAVI</title><link rel="stylesheet" href="style.css"></head><body><main class="utility-page"><section class="utility-hero"><div class="container"><a class="back-link" href="index.html">← ホーム</a><p class="eyebrow">BAR JOBS</p><h1>熊本のBAR求人</h1></div></section><section class="section"><div class="container"><div id="jobs" class="admin-shop-list">読み込み中...</div></div></section></main><script>const e=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));fetch("/api/jobs").then(r=>r.json()).then(d=>{jobs.innerHTML=(d.jobs||[]).map(j=>`<article class="admin-shop-item"><div><h3>${e(j.title)}</h3><p>${e(j.shop_name||'')} / ${e(j.employment_type||'')}</p><strong>${e(j.salary||'')}</strong><p>${e(j.description||'')}</p><small>${e(j.hours||'')}</small></div></article>`).join("")||"<p>現在掲載中の求人はありません。</p>"})</script></body></html>
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="description" content="熊本県内のBAR求人情報｜KUMAMOTO BAR NAVI">
+  <meta name="theme-color" content="#080b10">
+  <title>BAR求人｜KUMAMOTO BAR NAVI</title>
+  <link rel="stylesheet" href="style.css?v=112">
+</head>
+<body class="public-v109 jobs-v112">
+
+<header class="public-header">
+  <div class="container public-header-inner">
+    <a class="public-brand" href="index.html">
+      <img src="logo.png" alt="KUMAMOTO BAR NAVI">
+      <span><b>KUMAMOTO</b><strong>BAR NAVI</strong><small>BAR & JOB INFORMATION</small></span>
+    </a>
+    <nav class="public-desktop-nav">
+      <a href="bars.html">BARを探す</a>
+      <a href="jobs.html" class="active">求人</a>
+      <a href="column.html">コラム</a>
+      <a href="listing-form.html">店舗掲載</a>
+    </nav>
+    <a class="public-header-cta" href="bars.html">BARを探す</a>
+  </div>
+</header>
+
+<main class="public-jobs-page">
+  <section class="public-jobs-hero">
+    <div class="container">
+      <a class="public-back-link" href="index.html">← ホーム</a>
+      <p class="public-kicker">BAR JOBS</p>
+      <h1>熊本のBAR求人</h1>
+      <p>熊本県内のBAR・ラウンジなどの求人情報を、見やすくまとめています。</p>
+    </div>
+  </section>
+
+  <section class="public-section public-jobs-section">
+    <div class="container">
+      <div class="public-jobs-head">
+        <div>
+          <p class="public-kicker">JOB LIST</p>
+          <h2>募集中の求人</h2>
+        </div>
+        <span id="jobCount" class="public-result-count">読込中</span>
+      </div>
+
+      <div id="jobs" class="public-job-grid">
+        <div class="public-loading">求人情報を読み込んでいます...</div>
+      </div>
+
+      <div id="jobsEmpty" class="public-empty" hidden>
+        <b>現在掲載中の求人はありません。</b>
+        <span>新しい求人が追加されるまでお待ちください。</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="public-owner-cta public-jobs-owner-cta">
+    <div class="container public-owner-card">
+      <div>
+        <p class="public-kicker">FOR BAR OWNERS</p>
+        <h2>求人を掲載したい店舗様へ</h2>
+        <p>店舗情報とあわせて、スタッフ募集情報も掲載できます。</p>
+      </div>
+      <div class="public-owner-actions">
+        <a class="public-btn-gold" href="listing-form.html">掲載を申し込む</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<nav class="public-bottom-nav" aria-label="スマホ用メニュー">
+  <a href="index.html"><span>⌂</span><b>ホーム</b></a>
+  <a href="bars.html"><span>⌕</span><b>BARを探す</b></a>
+  <a href="jobs.html" class="active"><span>▣</span><b>求人</b></a>
+  <a href="listing-form.html"><span>＋</span><b>店舗掲載</b></a>
+</nav>
+
+<script>
+const $=id=>document.getElementById(id);
+const esc=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+
+function cleanShopName(v){
+  let s=String(v||"")
+    .replace(/^【KBN独自掲載】/,"")
+    .replace(/\s*[（(]\s*@[A-Za-z0-9._]+\s*[）)]\s*$/,"")
+    .replace(/\s+@[A-Za-z0-9._]+\s*$/,"")
+    .trim();
+
+  // Remove common search-result noise without changing the stored value.
+  s=s.replace(/^(熊本県?\s*)?(熊本市\s*)?(の\s*)?/,"").trim();
+
+  if(s.length>42)s=s.slice(0,42)+"…";
+  return s||"店舗名";
+}
+
+function cleanJobTitle(v){
+  let s=String(v||"").trim();
+  if(!s)return "スタッフ募集";
+  s=s.replace(/\s*[｜|]\s*.+$/,"").trim();
+  if(s.length>28)s=s.slice(0,28)+"…";
+  return s;
+}
+
+function sourceInfo(description){
+  const text=String(description||"");
+  const m=text.match(/情報元[：:]\s*(https?:\/\/[^\s]+)/i) || text.match(/(https?:\/\/[^\s]+)/i);
+  if(!m)return {url:"",label:""};
+  const url=m[1].replace(/[、。,.)）]+$/,"");
+  let label="掲載元を見る";
+  try{
+    const host=new URL(url).hostname.replace(/^www\./,"");
+    const names={
+      "baitoru.com":"バイトル",
+      "townwork.net":"タウンワーク",
+      "indeed.com":"Indeed",
+      "jp.indeed.com":"Indeed",
+      "engage.net":"engage",
+      "froma.com":"フロム・エー",
+      "求人ボックス.com":"求人ボックス"
+    };
+    label=names[host]||host;
+  }catch{}
+  return {url,label};
+}
+
+function cleanDescription(v){
+  let s=String(v||"")
+    .replace(/情報元[：:]\s*https?:\/\/[^\s]+/gi,"")
+    .replace(/https?:\/\/[^\s]+/gi,"")
+    .replace(/\s+/g," ")
+    .trim();
+
+  // Avoid showing search-result boilerplate as a wall of text.
+  s=s.replace(/^(一覧\s*[・·]\s*)/,"").trim();
+
+  if(s.length>150)s=s.slice(0,150)+"…";
+  return s;
+}
+
+function areaFromText(j){
+  const text=[j.shop_name,j.description].join(" ");
+  const m=text.match(/熊本市|八代市|人吉市|荒尾市|水俣市|玉名市|山鹿市|菊池市|宇土市|上天草市|宇城市|阿蘇市|天草市|合志市|氷川町|大津町|菊陽町|益城町|御船町|芦北町|苓北町/);
+  return m?m[0]:"熊本県";
+}
+
+function normalizeSalary(v){
+  const s=String(v||"").trim();
+  if(!s)return "";
+  return s
+    .replace(/^給与\s*/,"")
+    .replace(/^給料\s*/,"")
+    .replace(/\s+/g," ");
+}
+
+function renderJob(j){
+  const shop=cleanShopName(j.shop_name);
+  const title=cleanJobTitle(j.title);
+  const salary=normalizeSalary(j.salary);
+  const employment=String(j.employment_type||"").trim();
+  const hours=String(j.hours||"").trim();
+  const desc=cleanDescription(j.description);
+  const source=sourceInfo(j.description);
+  const area=areaFromText(j);
+
+  const detailHref=j.shop_slug
+    ? `shop.html?slug=${encodeURIComponent(j.shop_slug)}`
+    : "bars.html";
+
+  return `<article class="public-job-card">
+    <div class="public-job-card-top">
+      <span class="public-job-type">${esc(title)}</span>
+      ${source.url?`<span class="public-job-source-badge">掲載元あり</span>`:""}
+    </div>
+
+    <h3 class="public-job-shop">${esc(shop)}</h3>
+
+    ${salary?`
+    <div class="public-job-salary">
+      <small>給与</small>
+      <strong>${esc(salary)}</strong>
+    </div>`:""}
+
+    <div class="public-job-tags">
+      ${area?`<span>${esc(area)}</span>`:""}
+      ${employment?`<span>${esc(employment)}</span>`:""}
+      ${hours?`<span>${esc(hours)}</span>`:""}
+    </div>
+
+    ${desc?`<p class="public-job-description">${esc(desc)}</p>`:""}
+
+    <div class="public-job-actions">
+      ${source.url
+        ? `<a class="public-job-primary" href="${esc(source.url)}" target="_blank" rel="noopener">求人詳細を見る <i>↗</i></a>`
+        : `<a class="public-job-primary" href="${detailHref}">店舗を見る <i>›</i></a>`
+      }
+      ${j.shop_slug?`<a class="public-job-secondary" href="${detailHref}">店舗情報</a>`:""}
+    </div>
+
+    ${source.url?`<small class="public-job-source">情報元：${esc(source.label)}</small>`:""}
+  </article>`;
+}
+
+async function loadJobs(){
+  try{
+    const r=await fetch("/api/jobs",{cache:"no-store"});
+    const d=await r.json();
+    if(!r.ok||!d.ok)throw new Error("LOAD_FAILED");
+
+    const list=d.jobs||[];
+    $("jobCount").textContent=`${list.length}件`;
+
+    if(!list.length){
+      $("jobs").innerHTML="";
+      $("jobsEmpty").hidden=false;
+      return;
+    }
+
+    $("jobs").innerHTML=list.map(renderJob).join("");
+  }catch(e){
+    $("jobCount").textContent="0件";
+    $("jobs").innerHTML='<div class="public-empty"><b>求人情報を読み込めませんでした。</b><span>時間をおいてもう一度お試しください。</span></div>';
+  }
+}
+loadJobs();
+</script>
+</body>
+</html>

@@ -2893,3 +2893,204 @@ a.directory-card:hover{
   .public-footer{padding-bottom:25px}
   .public-bottom-nav{display:grid}
 }
+
+
+/* ============================================================
+   KUMAMOTO BAR NAVI ver1.12 — JOBS SMART DISPLAY
+   ============================================================ */
+.public-jobs-page{
+  min-height:100vh;
+}
+.public-jobs-hero{
+  padding:52px 0 42px;
+  border-bottom:1px solid #202832;
+  background:
+    radial-gradient(circle at 82% 10%,rgba(228,187,85,.08),transparent 31%),
+    radial-gradient(circle at 12% 24%,rgba(27,71,108,.16),transparent 34%),
+    #080c11;
+}
+.public-jobs-hero h1{
+  margin:0 0 10px;
+  font-size:clamp(36px,6vw,54px);
+  letter-spacing:-.045em;
+}
+.public-jobs-hero>div>p:not(.public-kicker){
+  margin:0;
+  color:#98a2ad;
+  font-size:12px;
+}
+.public-jobs-section{
+  padding-top:46px;
+}
+.public-jobs-head{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:16px;
+  margin-bottom:18px;
+}
+.public-jobs-head h2{
+  margin:0;
+  font-size:28px;
+}
+.public-job-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:14px;
+}
+.public-job-card{
+  min-width:0;
+  padding:18px;
+  border:1px solid #2d3742;
+  border-radius:17px;
+  background:linear-gradient(180deg,#101720,#0b1118);
+}
+.public-job-card-top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.public-job-type{
+  display:inline-flex;
+  align-items:center;
+  min-height:26px;
+  padding:0 9px;
+  border-radius:999px;
+  background:rgba(228,187,85,.10);
+  border:1px solid #665323;
+  color:#e5bd58;
+  font-size:9px;
+  font-weight:900;
+}
+.public-job-source-badge{
+  color:#7d8792;
+  font-size:8px;
+}
+.public-job-shop{
+  margin:14px 0 0;
+  max-width:100%;
+  color:#f5f6f7;
+  font-size:20px;
+  line-height:1.42;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+.public-job-salary{
+  margin-top:15px;
+  padding:13px 14px;
+  border-radius:13px;
+  background:#090e14;
+}
+.public-job-salary small{
+  display:block;
+  color:#78838e;
+  font-size:8px;
+  font-weight:800;
+}
+.public-job-salary strong{
+  display:block;
+  margin-top:3px;
+  color:#fff;
+  font-size:25px;
+  letter-spacing:-.02em;
+}
+.public-job-tags{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  margin-top:12px;
+}
+.public-job-tags span{
+  max-width:100%;
+  padding:5px 8px;
+  border-radius:999px;
+  background:#17212d;
+  color:#b9c3ce;
+  font-size:9px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.public-job-description{
+  display:-webkit-box;
+  -webkit-line-clamp:3;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+  margin:13px 0 0;
+  color:#aab3bd;
+  font-size:11px;
+  line-height:1.75;
+}
+.public-job-actions{
+  display:flex;
+  gap:8px;
+  margin-top:16px;
+}
+.public-job-primary,
+.public-job-secondary{
+  min-height:42px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  border-radius:10px;
+  font-size:10px;
+  font-weight:900;
+}
+.public-job-primary{
+  flex:1;
+  background:var(--kbn-gold);
+  color:#111!important;
+}
+.public-job-primary i{
+  font-style:normal;
+}
+.public-job-secondary{
+  min-width:92px;
+  padding:0 11px;
+  border:1px solid #3b4652;
+  color:#d5dbe1;
+}
+.public-job-source{
+  display:block;
+  margin-top:9px;
+  color:#69737d;
+  font-size:8px;
+}
+.public-jobs-owner-cta{
+  padding-top:0;
+}
+
+@media(max-width:760px){
+  .public-jobs-hero{
+    padding:34px 0 28px;
+  }
+  .public-jobs-hero h1{
+    font-size:36px;
+  }
+  .public-jobs-section{
+    padding-top:34px;
+  }
+  .public-job-grid{
+    grid-template-columns:1fr;
+    gap:10px;
+  }
+  .public-job-card{
+    padding:15px;
+    border-radius:15px;
+  }
+  .public-job-shop{
+    font-size:18px;
+  }
+  .public-job-salary strong{
+    font-size:24px;
+  }
+  .public-job-actions{
+    display:grid;
+    grid-template-columns:1fr auto;
+  }
+  .public-job-primary{
+    min-width:0;
+  }
+}
