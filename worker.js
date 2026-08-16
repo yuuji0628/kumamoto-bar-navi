@@ -1218,9 +1218,146 @@ function clearAdminCookie(){
   return `${ADMIN_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
 }
 
+
+const KBN_LOCAL_SEO_AREAS={
+  "kumamoto-city":"熊本市",
+  "yatsushiro":"八代市",
+  "hitoyoshi":"人吉市",
+  "arao":"荒尾市",
+  "minamata":"水俣市",
+  "tamana":"玉名市",
+  "yamaga":"山鹿市",
+  "kikuchi":"菊池市",
+  "uto":"宇土市",
+  "kamiamakusa":"上天草市",
+  "uki":"宇城市",
+  "aso":"阿蘇市",
+  "amakusa":"天草市",
+  "koshi":"合志市",
+  "misato":"美里町",
+  "gyokuto":"玉東町",
+  "nankan":"南関町",
+  "nagasu":"長洲町",
+  "nagomi":"和水町",
+  "ozu":"大津町",
+  "kikuyo":"菊陽町",
+  "minamioguni":"南小国町",
+  "oguni":"小国町",
+  "ubuyama":"産山村",
+  "takamori":"高森町",
+  "nishihara":"西原村",
+  "minamiaso":"南阿蘇村",
+  "mifune":"御船町",
+  "kashima":"嘉島町",
+  "mashiki":"益城町",
+  "kosa":"甲佐町",
+  "yamato":"山都町",
+  "hikawa":"氷川町",
+  "ashikita":"芦北町",
+  "tsunagi":"津奈木町",
+  "nishiki":"錦町",
+  "taragi":"多良木町",
+  "yunomae":"湯前町",
+  "mizukami":"水上村",
+  "sagara":"相良村",
+  "itsuki":"五木村",
+  "yamae":"山江村",
+  "kuma":"球磨村",
+  "asagiri":"あさぎり町",
+  "reihoku":"苓北町"
+};
+
+function kbnSeoEsc(v){
+  return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function kbnCleanShopName(v){
+  return String(v||"").replace(/^【KBN独自掲載】/,"")
+    .replace(/\s*[（(]\s*@[A-Za-z0-9._]+\s*[）)]\s*$/,"")
+    .replace(/\s+@[A-Za-z0-9._]+\s*$/,"").trim();
+}
+function kbnBudget(s){
+  const a=Number(s?.budget_min||0), b=Number(s?.budget_max||0);
+  if(a&&b)return `¥${a.toLocaleString()}〜¥${b.toLocaleString()}`;
+  if(a)return `¥${a.toLocaleString()}〜`;
+  if(b)return `〜¥${b.toLocaleString()}`;
+  return "";
+}
+async function renderLocalSeoAreaPage(env,slug){
+  const area=KBN_LOCAL_SEO_AREAS[slug];
+  if(!area)return null;
+  let shops=[];
+  try{
+    const r=await env.DB.prepare(`
+      SELECT slug,name,area,address,hours,genre,features,budget_min,budget_max,image_url,listing_status,is_recruiting
+      FROM shops
+      WHERE is_published=1 AND area=?
+      ORDER BY COALESCE(is_featured,0) DESC, COALESCE(sort_order,100) ASC, updated_at DESC
+      LIMIT 100
+    `).bind(area).all();
+    shops=r.results||[];
+  }catch(e){ console.error("local seo area query",e); }
+
+  const canonical=`https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/area/${slug}`;
+  const title=`${area}のBAR・バー一覧｜料金・営業時間・求人情報｜KUMAMOTO BAR NAVI`;
+  const description=`${area}のBAR・バーを探すならKUMAMOTO BAR NAVI。${shops.length?`現在${shops.length}店舗を掲載。`:""}料金、営業時間、ジャンル、特徴、求人情報を確認できます。`;
+
+  const cards=shops.map(s=>{
+    const name=kbnCleanShopName(s.name)||"BAR";
+    const budget=kbnBudget(s);
+    return `<article class="local-seo-card">
+      <a href="/shop.html?slug=${encodeURIComponent(s.slug||"")}">
+        <div class="local-seo-img">${s.image_url?`<img src="${kbnSeoEsc(s.image_url)}" alt="${kbnSeoEsc(name)} ${kbnSeoEsc(area)} BAR" loading="lazy">`:`<img src="/default-bar.svg" alt="" loading="lazy">`}</div>
+        <div class="local-seo-body">
+          <div class="local-seo-meta"><span>${kbnSeoEsc(s.genre||"BAR")}</span>${s.listing_status==="provisional"?"<small>KBN独自掲載</small>":""}</div>
+          <h2>${kbnSeoEsc(name)}</h2>
+          ${s.address?`<p>${kbnSeoEsc(s.address)}</p>`:""}
+          <div class="local-seo-facts">
+            ${s.hours?`<span><small>営業時間</small><b>${kbnSeoEsc(s.hours)}</b></span>`:""}
+            ${budget?`<span><small>料金目安</small><b>${kbnSeoEsc(budget)}</b></span>`:""}
+          </div>
+          <div class="local-seo-bottom">${s.is_recruiting?`<em>求人あり</em>`:""}<b>店舗詳細を見る →</b></div>
+        </div>
+      </a>
+    </article>`;
+  }).join("");
+
+  const faq=[
+    [`${area}のBARはどうやって探せますか？`,`このページで${area}に掲載されているBARを一覧で確認できます。`],
+    [`${area}のBARの料金や営業時間は確認できますか？`,`各店舗ページで公開されている料金目安、営業時間、住所などを掲載しています。`],
+    [`${area}のBAR求人も探せますか？`,`求人情報が登録されている店舗はKUMAMOTO BAR NAVIの求人ページから確認できます。`]
+  ];
+  const itemList=shops.slice(0,50).map((s,i)=>({"@type":"ListItem","position":i+1,"name":kbnCleanShopName(s.name),"url":`https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/shop.html?slug=${encodeURIComponent(s.slug||"")}`}));
+  const jsonLd={"@context":"https://schema.org","@graph":[
+    {"@type":"CollectionPage","name":`${area}のBAR・バー一覧`,"url":canonical,"description":description},
+    {"@type":"ItemList","name":`${area}のBAR一覧`,"numberOfItems":shops.length,"itemListElement":itemList},
+    {"@type":"FAQPage","mainEntity":faq.map(x=>({"@type":"Question","name":x[0],"acceptedAnswer":{"@type":"Answer","text":x[1]}}))}
+  ]};
+
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>${kbnSeoEsc(title)}</title><meta name="description" content="${kbnSeoEsc(description)}"><link rel="canonical" href="${canonical}">
+<meta property="og:type" content="website"><meta property="og:title" content="${kbnSeoEsc(title)}"><meta property="og:description" content="${kbnSeoEsc(description)}"><meta property="og:url" content="${canonical}">
+<meta name="robots" content="index,follow,max-image-preview:large"><link rel="stylesheet" href="/style.css?v=115">
+<script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g,"\\u003c")}</script></head>
+<body class="public-v109 local-seo-page">
+<header class="public-header"><div class="container public-header-inner"><a class="public-brand" href="/"><img src="/logo.png" alt="KUMAMOTO BAR NAVI"><span><b>KUMAMOTO</b><strong>BAR NAVI</strong><small>BAR & JOB INFORMATION</small></span></a><nav class="public-desktop-nav"><a href="/bars.html">BARを探す</a><a href="/areas.html" class="active">エリア</a><a href="/jobs.html">求人</a><a href="/column.html">コラム</a></nav><a class="public-header-cta" href="/bars.html">BARを探す</a></div></header>
+<main><section class="local-seo-hero"><div class="container"><nav class="local-seo-breadcrumb"><a href="/">ホーム</a><span>›</span><a href="/areas.html">エリア</a><span>›</span><b>${kbnSeoEsc(area)}</b></nav><p class="public-kicker">KUMAMOTO AREA GUIDE</p><h1>${kbnSeoEsc(area)}のBAR・バー</h1><p>${kbnSeoEsc(area)}で今夜行きたいBARを探せます。営業時間・料金・ジャンルを比較して自分に合う一軒を見つけてください。</p><div class="local-seo-count"><strong>${shops.length}</strong><span>店舗掲載中</span></div></div></section>
+<section class="local-seo-list"><div class="container"><div class="local-seo-head"><div><p class="public-kicker">BAR LIST</p><h2>${kbnSeoEsc(area)}のBAR一覧</h2></div><a href="/bars.html?area=${encodeURIComponent(area)}">絞り込み検索 →</a></div>${shops.length?`<div class="local-seo-grid">${cards}</div>`:`<div class="local-seo-empty"><h2>${kbnSeoEsc(area)}の掲載店舗を準備中です</h2><p>店舗情報を順次追加しています。</p></div>`}</div></section>
+<section class="local-seo-guide"><div class="container"><p class="public-kicker">AREA GUIDE</p><h2>${kbnSeoEsc(area)}でBARを探す</h2><p>${kbnSeoEsc(area)}のBAR選びでは、営業時間や料金だけでなく、ダーツ・カラオケ・ワイン・シーシャなど店舗ごとの特徴を比べるのがおすすめです。</p></div></section>
+<section class="local-seo-faq"><div class="container"><p class="public-kicker">FAQ</p><h2>${kbnSeoEsc(area)}のBAR探し よくある質問</h2><div>${faq.map(x=>`<details><summary>${kbnSeoEsc(x[0])}</summary><p>${kbnSeoEsc(x[1])}</p></details>`).join("")}</div></div></section>
+</main><nav class="public-bottom-nav"><a href="/"><span>⌂</span><b>ホーム</b></a><a href="/bars.html"><span>⌕</span><b>BARを探す</b></a><a href="/jobs.html"><span>▣</span><b>求人</b></a><a href="/listing-form.html"><span>＋</span><b>店舗掲載</b></a></nav></body></html>`;
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url=new URL(request.url);
+
+    const localSeoAreaMatch=url.pathname.match(/^\/area\/([a-z0-9-]+)\/?$/);
+    if(localSeoAreaMatch && request.method==="GET"){
+      const html=await renderLocalSeoAreaPage(env,localSeoAreaMatch[1]);
+      if(!html)return new Response("Not Found",{status:404});
+      return new Response(html,{headers:{"content-type":"text/html; charset=utf-8","cache-control":"public, max-age=900"}});
+    }
+
 
     // ---------- SEO endpoints ----------
     if(url.pathname==="/robots.txt" && request.method==="GET"){
@@ -1251,7 +1388,53 @@ export default {
         {loc:`${base}/bars.html`,priority:"0.9",freq:"daily"},
         {loc:`${base}/jobs.html`,priority:"0.8",freq:"daily"},
         {loc:`${base}/column.html`,priority:"0.6",freq:"weekly"},
-        {loc:`${base}/areas.html`,priority:"0.7",freq:"weekly"},
+        {loc:`${base}/areas.html`,priority:"0.8",freq:"weekly"},
+        {loc:`${base}/area/kumamoto-city`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/yatsushiro`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/hitoyoshi`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/arao`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/minamata`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/tamana`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/yamaga`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/kikuchi`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/uto`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/kamiamakusa`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/uki`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/aso`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/amakusa`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/koshi`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/misato`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/gyokuto`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/nankan`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/nagasu`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/nagomi`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/ozu`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/kikuyo`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/minamioguni`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/oguni`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/ubuyama`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/takamori`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/nishihara`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/minamiaso`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/mifune`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/kashima`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/mashiki`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/kosa`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/yamato`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/hikawa`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/ashikita`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/tsunagi`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/nishiki`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/taragi`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/yunomae`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/mizukami`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/sagara`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/itsuki`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/yamae`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/kuma`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/asagiri`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/area/reihoku`,priority:"0.8",freq:"daily"},
+
         {loc:`${base}/listing-form.html`,priority:"0.6",freq:"monthly"},
         {loc:`${base}/about.html`,priority:"0.5",freq:"monthly"},
         {loc:`${base}/faq.html`,priority:"0.5",freq:"monthly"},
