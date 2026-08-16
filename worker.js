@@ -1509,7 +1509,7 @@ async function renderLocalSeoAreaPage(env,slug){
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>${kbnSeoEsc(title)}</title><meta name="description" content="${kbnSeoEsc(description)}"><link rel="canonical" href="${canonical}">
 <meta property="og:type" content="website"><meta property="og:title" content="${kbnSeoEsc(title)}"><meta property="og:description" content="${kbnSeoEsc(description)}"><meta property="og:url" content="${canonical}">
-<meta name="robots" content="index,follow,max-image-preview:large"><link rel="stylesheet" href="/style.css?v=116">
+<meta name="robots" content="index,follow,max-image-preview:large"><link rel="stylesheet" href="/style.css?v=118">
 <script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g,"\\u003c")}</script></head>
 <body class="public-v109 local-seo-page">
 <header class="public-header"><div class="container public-header-inner"><a class="public-brand" href="/"><img src="/logo.png" alt="KUMAMOTO BAR NAVI"><span><b>KUMAMOTO</b><strong>BAR NAVI</strong><small>BAR & JOB INFORMATION</small></span></a><nav class="public-desktop-nav"><a href="/bars.html">BARを探す</a><a href="/areas.html" class="active">エリア</a><a href="/jobs.html">求人</a><a href="/column.html">コラム</a></nav><a class="public-header-cta" href="/bars.html">BARを探す</a></div></header>
