@@ -504,12 +504,22 @@
 }
 </style>
 
+
+<style>
+.lead-follow-filter-note{
+  display:block;
+  margin-top:6px;
+  color:#8fd8a0;
+  line-height:1.45;
+}
+</style>
+
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
-<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN v98</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><div class="admin-security-badge">🔐 管理者ログイン</div></section>
+<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN v99</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><div class="admin-security-badge">🔐 管理者ログイン</div></section>
 
 <div class="admin-login-bar">
-  <span>🔐 管理者ログイン中 <small id="authStatusText">v98</small></span>
+  <span>🔐 管理者ログイン中 <small id="authStatusText">v99</small></span>
   <button type="button" id="adminLogoutBtn">ログアウト</button>
 </div>
 
@@ -556,7 +566,7 @@
   </div>
 
 <div id="buttonHealthNote" style="margin-top:10px;color:#8e97a2;font-size:.72rem">
-  v98：SerpApiへ変更（管理画面内カード検索）
+  v99：フォロー済み自動除外・営業DM強化
 </div>
 </section>
 
@@ -668,7 +678,7 @@
       <button type="button" id="leadSearchBtn">検索する</button>
     </div>
 
-    <small id="leadSearchConfigNote">検索API設定を確認中...</small>
+    <small id="leadSearchConfigNote">検索API設定を確認中...</small><small class="lead-follow-filter-note">✓ フォロー済みアカウントは検索結果から自動除外します。</small>
     <div id="leadSearchStatus" class="lead-search-status"></div>
   </div>
 <div class="lead-results-card">
@@ -2543,7 +2553,18 @@ window.searchLeadsInAdmin=async function({append=false}={}){
       `/api/admin/leads/search?area=${encodeURIComponent(area)}&type=${encodeURIComponent(type)}&start=${start}`
     );
 
-    const rows=Array.isArray(d.leads)?d.leads:[];
+    const rowsRaw=Array.isArray(d.leads)?d.leads:[];
+    const followedHandles=new Set(
+      loadLeadData()
+        .filter(x=>x.followed)
+        .map(x=>normalizeLeadInstagram(x.instagram).toLowerCase())
+        .filter(Boolean)
+    );
+
+    const rows=rowsRaw.filter(x=>{
+      const h=normalizeLeadInstagram(x.handle||x.instagram||"").toLowerCase();
+      return h && !followedHandles.has(h);
+    });
 
     if(!append && results)results.innerHTML="";
 
@@ -2599,7 +2620,10 @@ window.searchLeadsInAdmin=async function({append=false}={}){
     }
 
     if(status){
-      status.textContent=`${rows.length}件の候補を表示しました。`;
+      const skipped=Math.max(0,rowsRaw.length-rows.length);
+      status.textContent=skipped
+        ? `${rows.length}件表示・フォロー済み${skipped}件を除外しました。`
+        : `${rows.length}件の候補を表示しました。`;
     }
   }catch(e){
     console.error("lead in-admin search failed",e);
@@ -2802,31 +2826,53 @@ function buildLeadDmText(){
   const name=String($("leadName")?.value||"").trim()||"店舗様";
   const area=String($("leadArea")?.value||"").trim();
   const insta=parseInstagramInput($("leadInstagram")?.value||"");
+  const searchType=$("leadSearchType")?.value||"bar";
+
+  const typeLabel={
+    bar:"BAR",
+    darts:"ダーツバー",
+    karaoke:"カラオケバー",
+    snack:"スナック"
+  }[searchType]||"BAR";
 
   const lines=[
     `${name} 様`,
+    insta.handle?`@${insta.handle}`:"",
     "",
-    "突然のご連絡失礼いたします。",
-    "熊本県内のBAR情報を紹介している「KUMAMOTO BAR NAVI」です。",
+    "突然のDM失礼いたします。",
+    "熊本県内のBAR・夜のお店を紹介している「KUMAMOTO BAR NAVI」です🍸",
     "",
-    area?`${area}周辺のBARを探している中で、Instagramを拝見しご連絡しました。`:"Instagramを拝見し、ご連絡しました。",
+    area
+      ? `${area}周辺の${typeLabel}を探している中で、${name}様のInstagramを拝見し、ぜひ掲載をご案内したくご連絡しました。`
+      : `${name}様のInstagramを拝見し、ぜひKUMAMOTO BAR NAVIでご紹介したくご連絡しました。`,
     "",
-    "現在、熊本県内のBAR・ダーツバー・カラオケバーなどを掲載しています。",
-    "店舗様の掲載も無料でご案内できます。",
+    "KUMAMOTO BAR NAVIでは、熊本で「今夜どこに行こう？」とお店を探している方に向けて、",
+    "店舗情報・営業時間・特徴・Instagram・求人情報などをまとめて掲載しています。",
     "",
-    "掲載後は、営業時間・写真・求人情報などを店舗様専用ページから変更申請できます。",
+    "現在、店舗様の掲載は無料でご案内しています。",
     "",
-    "もしご興味がありましたら、このDMへご返信いただければご案内いたします。",
+    "【掲載するとできること】",
+    "・店舗紹介ページの掲載",
+    "・Instagramへの導線掲載",
+    "・営業時間／定休日／料金帯／設備などの掲載",
+    "・求人情報の掲載",
+    "・店舗様専用URLの発行",
+    "・掲載後も店舗様側から写真や店舗情報の変更申請が可能",
+    "",
+    "掲載時には、KUMAMOTO BAR NAVIのInstagramでも",
+    "「新しく掲載しました！」という形で店舗様をご紹介する予定です📣",
+    "",
+    "掲載をご希望でしたら、このDMに「掲載希望」とご返信いただくだけで大丈夫です。",
+    "必要な情報はこちらから分かりやすくご案内いたします。",
+    "",
+    "熊本のBARをもっと見つけやすく、もっと盛り上げていければと思っています🔥",
+    `${name}様もぜひ掲載させていただけるとうれしいです。`,
     "",
     "KUMAMOTO BAR NAVI",
     "https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev"
   ];
 
-  if(insta.handle){
-    lines.splice(1,0,`@${insta.handle}`);
-  }
-
-  return lines.join("\n");
+  return lines.filter((x,i)=>!(i===1 && !x)).join("\n");
 }
 
 function syncLeadInstagramInput(){
