@@ -6,7 +6,13 @@
   <meta name="description" content="熊本のBAR店舗情報｜KUMAMOTO BAR NAVI">
   <meta name="theme-color" content="#080b10">
   <title>店舗詳細｜KUMAMOTO BAR NAVI</title>
-  <link rel="stylesheet" href="style.css?v=110">
+  <link rel="stylesheet" href="style.css?v=114">
+<link id="dynamicCanonical" rel="canonical" href="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/shop.html">
+<meta id="dynamicOgTitle" property="og:title" content="店舗詳細｜KUMAMOTO BAR NAVI">
+<meta id="dynamicOgDescription" property="og:description" content="熊本のBAR店舗情報">
+<meta id="dynamicOgUrl" property="og:url" content="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/shop.html">
+<meta property="og:type" content="website">
+<script id="shopJsonLd" type="application/ld+json">{}</script>
 </head>
 <body class="public-v109">
 
@@ -81,6 +87,55 @@ async function track(action){
     });
   }catch{}
 }
+
+function setMeta(selector,content){
+  const el=document.querySelector(selector);
+  if(el && content)el.setAttribute("content",content);
+}
+function updateShopSeo(s,name,desc){
+  const canonical=`https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/shop.html?slug=${encodeURIComponent(s.slug||slug||"")}`;
+  const title=`${name}｜${normalizeArea(s.area)||"熊本"}のBAR｜KUMAMOTO BAR NAVI`;
+  const description=[
+    `${normalizeArea(s.area)||"熊本"}の${s.genre||"BAR"}「${name}」`,
+    s.hours?`営業時間 ${s.hours}`:"",
+    (s.budget_min||s.budget_max)?`料金目安 ${budgetText(s)}`:"",
+    desc?desc.slice(0,80):""
+  ].filter(Boolean).join("。").slice(0,155);
+
+  document.title=title;
+
+  const md=document.querySelector('meta[name="description"]');
+  if(md)md.setAttribute("content",description);
+
+  const canonicalEl=document.getElementById("dynamicCanonical");
+  if(canonicalEl)canonicalEl.setAttribute("href",canonical);
+
+  setMeta("#dynamicOgTitle",title);
+  setMeta("#dynamicOgDescription",description);
+  setMeta("#dynamicOgUrl",canonical);
+
+  const ld=document.getElementById("shopJsonLd");
+  if(ld){
+    const data={
+      "@context":"https://schema.org",
+      "@type":"BarOrPub",
+      "name":name,
+      "url":canonical
+    };
+    if(s.address)data.address={
+      "@type":"PostalAddress",
+      "streetAddress":s.address,
+      "addressRegion":"熊本県",
+      "addressCountry":"JP"
+    };
+    if(s.phone)data.telephone=s.phone;
+    if(s.hours)data.openingHours=s.hours;
+    if(s.image_url)data.image=s.image_url;
+    if(desc)data.description=desc.slice(0,500);
+    ld.textContent=JSON.stringify(data);
+  }
+}
+
 async function load(){
   const box=document.getElementById("shopDetail");
   if(!slug){box.innerHTML='<div class="public-empty"><b>店舗が指定されていません。</b></div>';return;}
@@ -101,6 +156,8 @@ async function load(){
     const mapUrl=s.address?`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.address)}`:"";
     const insta=normalizeInstagramUrl(s.instagram);
     const desc=String(s.description||"").replace(/※本ページ[\s\S]*/,"").trim();
+
+    updateShopSeo(s,name,desc);
 
     box.innerHTML=`
       <article class="public-shop-layout">

@@ -1222,6 +1222,91 @@ export default {
   async fetch(request, env, ctx) {
     const url=new URL(request.url);
 
+    // ---------- SEO endpoints ----------
+    if(url.pathname==="/robots.txt" && request.method==="GET"){
+      const body=[
+        "User-agent: *",
+        "Allow: /",
+        "Disallow: /admin",
+        "Disallow: /admin-login",
+        "Disallow: /owner.html",
+        "Disallow: /owner-portal.html",
+        "Disallow: /db-status.html",
+        "",
+        "Sitemap: https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/sitemap.xml"
+      ].join("\n");
+
+      return new Response(body,{
+        headers:{
+          "content-type":"text/plain; charset=utf-8",
+          "cache-control":"public, max-age=3600"
+        }
+      });
+    }
+
+    if(url.pathname==="/sitemap.xml" && request.method==="GET"){
+      const base="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev";
+      const urls=[
+        {loc:`${base}/`,priority:"1.0",freq:"daily"},
+        {loc:`${base}/bars.html`,priority:"0.9",freq:"daily"},
+        {loc:`${base}/jobs.html`,priority:"0.8",freq:"daily"},
+        {loc:`${base}/column.html`,priority:"0.6",freq:"weekly"},
+        {loc:`${base}/areas.html`,priority:"0.7",freq:"weekly"},
+        {loc:`${base}/listing-form.html`,priority:"0.6",freq:"monthly"},
+        {loc:`${base}/about.html`,priority:"0.5",freq:"monthly"},
+        {loc:`${base}/faq.html`,priority:"0.5",freq:"monthly"},
+        {loc:`${base}/contact.html`,priority:"0.4",freq:"monthly"}
+      ];
+
+      if(env.DB){
+        try{
+          const r=await env.DB.prepare(`
+            SELECT slug,updated_at
+            FROM shops
+            WHERE is_published=1
+            ORDER BY updated_at DESC
+          `).all();
+
+          for(const s of (r.results||[])){
+            if(!s.slug)continue;
+            urls.push({
+              loc:`${base}/shop.html?slug=${encodeURIComponent(s.slug)}`,
+              lastmod:s.updated_at||"",
+              priority:"0.8",
+              freq:"weekly"
+            });
+          }
+        }catch(e){
+          console.error("sitemap generation error",e);
+        }
+      }
+
+      const escXml=v=>String(v||"")
+        .replace(/&/g,"&amp;")
+        .replace(/</g,"&lt;")
+        .replace(/>/g,"&gt;")
+        .replace(/"/g,"&quot;")
+        .replace(/'/g,"&apos;");
+
+      const xml=`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls.map(x=>`  <url>
+    <loc>${escXml(x.loc)}</loc>${x.lastmod?`
+    <lastmod>${escXml(String(x.lastmod).replace(" ","T"))}</lastmod>`:""}
+    <changefreq>${x.freq}</changefreq>
+    <priority>${x.priority}</priority>
+  </url>`).join("\n")}
+</urlset>`;
+
+      return new Response(xml,{
+        headers:{
+          "content-type":"application/xml; charset=utf-8",
+          "cache-control":"public, max-age=1800"
+        }
+      });
+    }
+
+
     if(url.pathname==="/admin-login"){
       if(await validAdminRequest(request,env)){
         return Response.redirect(new URL("/admin.html?v=74",request.url).toString(),302);
