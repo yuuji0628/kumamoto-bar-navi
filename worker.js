@@ -361,7 +361,96 @@ function likelyBar(x){
   return !bad.some(w=>s.includes(w)) && good.some(w=>s.includes(w));
 }
 
-async function autoDiscover(env,request,maxListings=10,pairLimit=4){
+
+function extractPriceInfo(text){
+  const s=String(text||"").replace(/,/g,"");
+  const nums=[];
+
+  const patterns=[
+    /(?:予算|料金|price|￥|¥)\s*[:：]?\s*([0-9]{3,6})\s*(?:円)?\s*(?:[〜~\-–—]\s*([0-9]{3,6})\s*円?)?/gi,
+    /([0-9]{3,6})\s*円\s*(?:[〜~\-–—]\s*([0-9]{3,6})\s*円)?/g,
+    /([0-9]{3,6})\s*(?:円)?\s*(?:〜|~|-)\s*([0-9]{3,6})\s*円/g
+  ];
+
+  for(const p of patterns){
+    let m;
+    while((m=p.exec(s))){
+      const a=Number(m[1]);
+      const b=m[2]?Number(m[2]):null;
+      if(a>=300 && a<=100000)nums.push(a);
+      if(b && b>=300 && b<=100000)nums.push(b);
+    }
+  }
+
+  if(!nums.length)return {min:null,max:null};
+  nums.sort((a,b)=>a-b);
+  return {min:nums[0],max:nums.length>1?nums[nums.length-1]:nums[0]};
+}
+
+function extractHoursInfo(text){
+  const s=String(text||"");
+  const patterns=[
+    /(?:営業時間|open|hours?)\s*[:：]?\s*([0-2]?\d[:：]\d{2}\s*(?:[〜~\-–—]|から)\s*(?:[0-2]?\d[:：]\d{2}|LAST))/i,
+    /([0-2]?\d[:：]\d{2}\s*(?:[〜~\-–—]|から)\s*(?:[0-2]?\d[:：]\d{2}|LAST))/i,
+    /([0-2]?\d時(?:\d{1,2}分)?\s*(?:[〜~\-–—]|から)\s*(?:[0-2]?\d時(?:\d{1,2}分)?|LAST))/i
+  ];
+  for(const p of patterns){
+    const m=s.match(p);
+    if(m)return String(m[1]).replace(/：/g,":").trim();
+  }
+  return "";
+}
+
+function extractHolidayInfo(text){
+  const s=String(text||"");
+  const patterns=[
+    /(?:定休日|店休日|休み|holiday)\s*[:：]?\s*([^\s、。|｜／/]{1,20}(?:曜日|曜|不定休|なし|無休)?)/i,
+    /(月|火|水|木|金|土|日)曜日\s*(?:定休|休み)/,
+    /(不定休|年中無休|無休)/
+  ];
+  for(const p of patterns){
+    const m=s.match(p);
+    if(!m)continue;
+    if(m[1] && /^(月|火|水|木|金|土|日)$/.test(m[1]))return `${m[1]}曜日`;
+    return String(m[1]||m[0]).replace(/定休|休み/g,"").trim();
+  }
+  return "";
+}
+
+function extractFeaturesInfo(text){
+  const s=String(text||"").toLowerCase();
+  const features=[];
+  const dict=[
+    ["ダーツ",["ダーツ","darts"]],
+    ["カラオケ",["カラオケ","karaoke"]],
+    ["飲み放題",["飲み放題","all you can drink"]],
+    ["シーシャ",["シーシャ","shisha"]],
+    ["個室",["個室","private room"]],
+    ["カウンター",["カウンター","counter"]],
+    ["貸切",["貸切"]],
+    ["スポーツ観戦",["スポーツ観戦","sports bar"]],
+    ["ワイン",["ワイン","wine"]],
+    ["カクテル",["カクテル","cocktail"]]
+  ];
+  for(const [label,keys] of dict){
+    if(keys.some(k=>s.includes(k.toLowerCase())))features.push(label);
+  }
+  return features.join("、");
+}
+
+function extractPublicMetadata(lead){
+  const text=`${lead.title||""} ${lead.snippet||""}`;
+  const price=extractPriceInfo(text);
+  return {
+    budget_min:price.min,
+    budget_max:price.max,
+    hours:extractHoursInfo(text),
+    holiday:extractHolidayInfo(text),
+    features:extractFeaturesInfo(text)
+  };
+}
+
+async function autoDiscover(env,request,maxListings=10,pairLimit=6,perPairLimit=2){
   await ensureLeadDiscoveryTables(env);
   const listedR=await env.DB.prepare("SELECT instagram FROM shops WHERE instagram IS NOT NULL AND instagram<>''").all();
   const listed=new Set((listedR.results||[]).map(x=>kbnHandle(x.instagram)).filter(Boolean));
@@ -375,14 +464,24 @@ async function autoDiscover(env,request,maxListings=10,pairLimit=4){
     searched.push({area:pair.area,type:pair.label,ok:!!d.ok,found:(d.leads||[]).length});
     await env.DB.prepare("INSERT INTO lead_discovery_runs(area,lead_type,searched_at) VALUES(?,?,CURRENT_TIMESTAMP)").bind(pair.area,pair.type).run();
     if(!d.ok)continue;
+
+    let pairCreated=0;
+
     for(const lead of (d.leads||[])){
+      if(pairCreated>=perPairLimit)break;
       if(created.length>=maxListings)break;
       const h=kbnHandle(lead.handle);
       if(!h || listed.has(h) || seen.has(h) || !likelyBar(lead))continue;
       const name=t(lead.title||h,150)||h;
       const area=t(lead.area||pair.area,80)||pair.area;
       const genre=t(lead.type||pair.label,120)||pair.label;
-      const desc=t(lead.snippet,2000) + "\n\n※本ページは公開情報をもとに仮掲載しています。掲載内容の修正・削除をご希望の場合は店舗様専用ページよりご連絡ください。";
+      const meta=extractPublicMetadata(lead);
+
+      const descBase=t(lead.snippet,2000);
+      const desc=(descBase?descBase+"\n\n":"")+
+        "※本ページは、公開されている情報をもとにKUMAMOTO BAR NAVIが独自に掲載しています。"+
+        "掲載内容の修正・削除をご希望の場合は店舗様専用ページよりご連絡ください。";
+
       const slug=slugify(name);
       const ins=await env.DB.prepare(`
         INSERT INTO shops(
@@ -390,8 +489,11 @@ async function autoDiscover(env,request,maxListings=10,pairLimit=4){
           budget_min,budget_max,seats,phone,is_recruiting,is_published,image_url,image_key,
           is_featured,is_new,sort_order,listing_status,published_at
         ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'provisional',CURRENT_TIMESTAMP)
-      `).bind(slug,name,"",area,"","","",`https://www.instagram.com/${h}/`,genre,"",desc,
-        null,null,null,"",0,1,"","",0,1,100).run();
+      `).bind(
+        slug,name,"",area,"",meta.hours,meta.holiday,
+        `https://www.instagram.com/${h}/`,genre,meta.features,desc,
+        meta.budget_min,meta.budget_max,null,"",0,1,"","",0,1,100
+      ).run();
       const id=Number(ins.meta?.last_row_id||0);
       const token=ownerToken(), hash=await sha256hex(token);
       await env.DB.prepare("UPDATE shops SET owner_token_hash=?,owner_token_created_at=CURRENT_TIMESTAMP WHERE id=?").bind(hash,id).run();
@@ -401,7 +503,20 @@ async function autoDiscover(env,request,maxListings=10,pairLimit=4){
       `).bind(h,area,pair.type).run();
       listed.add(h);seen.add(h);
       const origin=new URL(request.url).origin;
-      created.push({shop_id:id,name,handle:h,area,genre,public_url:`${origin}/shop.html?slug=${encodeURIComponent(slug)}`});
+      created.push({
+        shop_id:id,
+        name,
+        handle:h,
+        area,
+        genre,
+        hours:meta.hours,
+        holiday:meta.holiday,
+        budget_min:meta.budget_min,
+        budget_max:meta.budget_max,
+        public_url:`${origin}/shop.html?slug=${encodeURIComponent(slug)}`
+      });
+
+      pairCreated++;
     }
   }
   return {ok:true,created,searched};
@@ -433,7 +548,7 @@ function publicShopRow(s){
     ...s,
     listing_status:provisional?"provisional":"published",
     is_provisional:provisional?1:0,
-    name:provisional?`【仮掲載】${s.name}`:s.name
+    name:provisional?`【KBN独自掲載】${s.name}`:s.name
   };
 }
 
@@ -454,7 +569,7 @@ function shopPayload(x){
 }
 
 
-const LOGIN_HTML="<!doctype html>\n<html lang=\"ja\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\">\n<title>KBN ADMIN LOGIN</title>\n<style>\n:root{color-scheme:dark}\n*{box-sizing:border-box}\nbody{margin:0;min-height:100vh;display:grid;place-items:center;background:#080d13;color:#f4f6f8;font-family:-apple-system,BlinkMacSystemFont,\"Hiragino Sans\",\"Yu Gothic\",sans-serif;padding:22px}\n.card{width:min(440px,100%);padding:28px;border:1px solid #36404c;border-radius:20px;background:#101720;box-shadow:0 20px 70px rgba(0,0,0,.35)}\n.eyebrow{color:#e8be55;letter-spacing:.18em;font-weight:800;font-size:.78rem}\nh1{font-size:2rem;margin:.35rem 0 .7rem}\np{color:#aeb5bf;line-height:1.7}\nlabel{display:block;margin:18px 0 7px;color:#d9dde2;font-weight:700}\ninput{width:100%;min-height:52px;padding:0 14px;border-radius:12px;border:1px solid #3b4653;background:#0a1017;color:#fff;font-size:1rem}\nbutton{width:100%;min-height:54px;margin-top:20px;border:0;border-radius:12px;background:#efc45a;color:#111;font-weight:900;font-size:1rem}\n#error{color:#ff9a9a;min-height:1.4em;margin-top:12px}\n.note{font-size:.78rem;margin-top:16px}\n</style>\n</head>\n<body>\n<form class=\"card\" id=\"loginForm\">\n  <div class=\"eyebrow\">KBN ADMIN v103</div>\n  <h1>運営管理ログイン</h1>\n  <p>管理者用のメールアドレスとパスワードを入力してください。</p>\n  <label for=\"email\">メールアドレス</label>\n  <input id=\"email\" type=\"email\" autocomplete=\"username\" required>\n  <label for=\"password\">パスワード</label>\n  <input id=\"password\" type=\"password\" autocomplete=\"current-password\" required>\n  <button type=\"submit\">ログイン</button>\n  <div id=\"error\"></div>\n  <p class=\"note\">この端末では30日間ログイン状態を保持します。</p>\n</form>\n\n<script>\nconst form=document.getElementById(\"loginForm\");\nconst error=document.getElementById(\"error\");\n\nform.addEventListener(\"submit\",async ev=>{\n  ev.preventDefault();\n  error.textContent=\"ログイン中...\";\n\n  const email=document.getElementById(\"email\").value.trim();\n  const password=document.getElementById(\"password\").value;\n\n  try{\n    const r=await fetch(\"/api/admin/login\",{\n      method:\"POST\",\n      credentials:\"include\",\n      cache:\"no-store\",\n      headers:{\"Content-Type\":\"application/json\"},\n      body:JSON.stringify({email,password})\n    });\n\n    const ct=r.headers.get(\"content-type\")||\"\";\n    if(!ct.includes(\"application/json\")){\n      const text=await r.text();\n      throw new Error(\"NON_JSON_RESPONSE: \"+text.slice(0,80));\n    }\n\n    const d=await r.json();\n\n    if(!r.ok || !d.ok){\n      if(d.error===\"INVALID_CREDENTIALS\"){\n        throw new Error(\"INVALID_CREDENTIALS\");\n      }\n      if(d.error===\"ADMIN_AUTH_NOT_CONFIGURED\"){\n        throw new Error(\"設定不足: \"+(d.missing||[]).join(\", \"));\n      }\n      throw new Error(d.message||d.error||(\"HTTP_\"+r.status));\n    }\n\n    if(!d.token){\n      throw new Error(\"TOKEN_NOT_RETURNED\");\n    }\n\n    localStorage.setItem(\"kbn_admin_token\",d.token);\n    localStorage.setItem(\"kbn_admin_logged_in_at\",String(Date.now()));\n\n    location.replace(\"/admin.html?v=103\");\n  }catch(err){\n    console.error(err);\n\n    if(err.message===\"INVALID_CREDENTIALS\"){\n      error.textContent=\"メールアドレスまたはパスワードが違います。\";\n    }else{\n      error.textContent=\"ログインできませんでした: \"+err.message;\n    }\n  }\n});\n</script>\n\n</body></html>";
+const LOGIN_HTML="<!doctype html>\n<html lang=\"ja\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\">\n<title>KBN ADMIN LOGIN</title>\n<style>\n:root{color-scheme:dark}\n*{box-sizing:border-box}\nbody{margin:0;min-height:100vh;display:grid;place-items:center;background:#080d13;color:#f4f6f8;font-family:-apple-system,BlinkMacSystemFont,\"Hiragino Sans\",\"Yu Gothic\",sans-serif;padding:22px}\n.card{width:min(440px,100%);padding:28px;border:1px solid #36404c;border-radius:20px;background:#101720;box-shadow:0 20px 70px rgba(0,0,0,.35)}\n.eyebrow{color:#e8be55;letter-spacing:.18em;font-weight:800;font-size:.78rem}\nh1{font-size:2rem;margin:.35rem 0 .7rem}\np{color:#aeb5bf;line-height:1.7}\nlabel{display:block;margin:18px 0 7px;color:#d9dde2;font-weight:700}\ninput{width:100%;min-height:52px;padding:0 14px;border-radius:12px;border:1px solid #3b4653;background:#0a1017;color:#fff;font-size:1rem}\nbutton{width:100%;min-height:54px;margin-top:20px;border:0;border-radius:12px;background:#efc45a;color:#111;font-weight:900;font-size:1rem}\n#error{color:#ff9a9a;min-height:1.4em;margin-top:12px}\n.note{font-size:.78rem;margin-top:16px}\n</style>\n</head>\n<body>\n<form class=\"card\" id=\"loginForm\">\n  <div class=\"eyebrow\">KBN ADMIN ver1.04</div>\n  <h1>運営管理ログイン</h1>\n  <p>管理者用のメールアドレスとパスワードを入力してください。</p>\n  <label for=\"email\">メールアドレス</label>\n  <input id=\"email\" type=\"email\" autocomplete=\"username\" required>\n  <label for=\"password\">パスワード</label>\n  <input id=\"password\" type=\"password\" autocomplete=\"current-password\" required>\n  <button type=\"submit\">ログイン</button>\n  <div id=\"error\"></div>\n  <p class=\"note\">この端末では30日間ログイン状態を保持します。</p>\n</form>\n\n<script>\nconst form=document.getElementById(\"loginForm\");\nconst error=document.getElementById(\"error\");\n\nform.addEventListener(\"submit\",async ev=>{\n  ev.preventDefault();\n  error.textContent=\"ログイン中...\";\n\n  const email=document.getElementById(\"email\").value.trim();\n  const password=document.getElementById(\"password\").value;\n\n  try{\n    const r=await fetch(\"/api/admin/login\",{\n      method:\"POST\",\n      credentials:\"include\",\n      cache:\"no-store\",\n      headers:{\"Content-Type\":\"application/json\"},\n      body:JSON.stringify({email,password})\n    });\n\n    const ct=r.headers.get(\"content-type\")||\"\";\n    if(!ct.includes(\"application/json\")){\n      const text=await r.text();\n      throw new Error(\"NON_JSON_RESPONSE: \"+text.slice(0,80));\n    }\n\n    const d=await r.json();\n\n    if(!r.ok || !d.ok){\n      if(d.error===\"INVALID_CREDENTIALS\"){\n        throw new Error(\"INVALID_CREDENTIALS\");\n      }\n      if(d.error===\"ADMIN_AUTH_NOT_CONFIGURED\"){\n        throw new Error(\"設定不足: \"+(d.missing||[]).join(\", \"));\n      }\n      throw new Error(d.message||d.error||(\"HTTP_\"+r.status));\n    }\n\n    if(!d.token){\n      throw new Error(\"TOKEN_NOT_RETURNED\");\n    }\n\n    localStorage.setItem(\"kbn_admin_token\",d.token);\n    localStorage.setItem(\"kbn_admin_logged_in_at\",String(Date.now()));\n\n    location.replace(\"/admin.html?v=104\");\n  }catch(err){\n    console.error(err);\n\n    if(err.message===\"INVALID_CREDENTIALS\"){\n      error.textContent=\"メールアドレスまたはパスワードが違います。\";\n    }else{\n      error.textContent=\"ログインできませんでした: \"+err.message;\n    }\n  }\n});\n</script>\n\n</body></html>";
 const ADMIN_COOKIE="kbn_admin_session";
 const ADMIN_SESSION_DAYS=30;
 
@@ -944,10 +1059,11 @@ export default {
             if(url.pathname==="/api/admin/leads/auto-discover" && request.method==="POST"){
         let x={}; try{x=await request.json()}catch{}
         const max=Math.max(1,Math.min(Number(x.max_listings)||10,20));
-        const pairs=Math.max(1,Math.min(Number(x.pair_limit)||4,8));
+        const pairs=Math.max(1,Math.min(Number(x.pair_limit)||6,10));
+        const perPair=Math.max(1,Math.min(Number(x.per_pair_limit)||2,3));
 
         try{
-          const result=await autoDiscover(env,request,max,pairs);
+          const result=await autoDiscover(env,request,max,pairs,perPair);
           return json(result,{headers:{"Cache-Control":"no-store"}});
         }catch(e){
           console.error("auto-discover failed",e);
@@ -1026,8 +1142,8 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
         }
 
         const description=snippet
-          ? `${snippet}\n\n※本ページは公開情報をもとに仮掲載しています。掲載内容の修正・削除をご希望の場合は店舗様専用ページよりご連絡ください。`
-          : "※本ページは公開情報をもとに仮掲載しています。掲載内容の修正・削除をご希望の場合は店舗様専用ページよりご連絡ください。";
+          ? `${snippet}\n\n※本ページは、公開されている情報をもとにKUMAMOTO BAR NAVIが独自に掲載しています。掲載内容の修正・削除をご希望の場合は店舗様専用ページよりご連絡ください。`
+          : "※本ページは、公開されている情報をもとにKUMAMOTO BAR NAVIが独自に掲載しています。掲載内容の修正・削除をご希望の場合は店舗様専用ページよりご連絡ください。";
 
         const slug=slugify(name);
 
