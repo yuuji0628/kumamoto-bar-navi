@@ -204,6 +204,279 @@ function extractInstagramHandleFromUrl(value){
   }
 }
 
+
+async function serpApiGoogleSearch(env,{q,start=0,num=10}){
+  const cfg=leadSearchConfig(env);
+  if(!cfg.apiKey){
+    return {ok:false,configured:false,error:"SERPAPI_NOT_CONFIGURED",results:[]};
+  }
+
+  const u=new URL("https://serpapi.com/search.json");
+  u.searchParams.set("engine","google");
+  u.searchParams.set("q",String(q||""));
+  u.searchParams.set("google_domain","google.co.jp");
+  u.searchParams.set("gl","jp");
+  u.searchParams.set("hl","ja");
+  u.searchParams.set("num",String(Math.max(1,Math.min(Number(num)||10,10))));
+  u.searchParams.set("start",String(Math.max(0,Number(start)||0)));
+  u.searchParams.set("api_key",cfg.apiKey);
+
+  const r=await fetch(u.toString(),{headers:{"Accept":"application/json"}});
+  const text=await r.text();
+  let d={};
+  try{d=text?JSON.parse(text):{}}catch{d={raw:text}}
+
+  if(!r.ok || d?.error){
+    return {
+      ok:false,
+      configured:true,
+      error:d?.error||d?.message||`SEARCH_HTTP_${r.status}`,
+      results:[]
+    };
+  }
+
+  return {
+    ok:true,
+    configured:true,
+    results:Array.isArray(d?.organic_results)?d.organic_results:[]
+  };
+}
+
+function normalizeJobText(v){
+  return String(v||"")
+    .replace(/[，,]/g,"")
+    .replace(/\s+/g," ")
+    .trim();
+}
+
+function likelyJobPosting(item){
+  const text=normalizeJobText(`${item?.title||""} ${item?.snippet||""}`).toLowerCase();
+
+  const good=[
+    "求人","募集","スタッフ募集","アルバイト","バイト","採用",
+    "バーテンダー","ホールスタッフ","正社員","パート","時給","月給",
+    "staff wanted","hiring","recruit"
+  ];
+
+  const bad=[
+    "求人情報まとめ","求人検索結果","転職サイト","求人サイトの口コミ",
+    "閉店","募集終了","採用終了","応募終了"
+  ];
+
+  if(bad.some(x=>text.includes(x.toLowerCase())))return false;
+  return good.some(x=>text.includes(x.toLowerCase()));
+}
+
+function extractJobEmployment(text){
+  const s=normalizeJobText(text);
+  if(/正社員|社員募集/.test(s))return "正社員";
+  if(/アルバイト|バイト/.test(s))return "アルバイト";
+  if(/パート/.test(s))return "パート";
+  if(/業務委託/.test(s))return "業務委託";
+  if(/契約社員/.test(s))return "契約社員";
+  return "";
+}
+
+function extractJobSalary(text){
+  const s=normalizeJobText(text);
+
+  const patterns=[
+    /(?:時給)\s*[¥￥]?\s*([0-9]{3,6})(?:\s*[〜～~\-]\s*[¥￥]?\s*([0-9]{3,6}))?\s*円?/i,
+    /(?:日給)\s*[¥￥]?\s*([0-9]{3,6})(?:\s*[〜～~\-]\s*[¥￥]?\s*([0-9]{3,6}))?\s*円?/i,
+    /(?:月給)\s*[¥￥]?\s*([0-9]{4,7})(?:\s*[〜～~\-]\s*[¥￥]?\s*([0-9]{4,7}))?\s*円?/i,
+    /(?:給与|給料)\s*[:：]?\s*[¥￥]?\s*([0-9]{3,7})(?:\s*[〜～~\-]\s*[¥￥]?\s*([0-9]{3,7}))?\s*円?/i
+  ];
+
+  for(const p of patterns){
+    const m=s.match(p);
+    if(!m)continue;
+
+    const label=m[0].match(/時給|日給|月給|給与|給料/)?.[0]||"給与";
+    const a=Number(m[1]);
+    const b=m[2]?Number(m[2]):null;
+    if(!Number.isFinite(a))continue;
+
+    return b && Number.isFinite(b)
+      ? `${label} ${a.toLocaleString()}〜${b.toLocaleString()}円`
+      : `${label} ${a.toLocaleString()}円`;
+  }
+
+  const yen=s.match(/[¥￥]\s*([0-9]{3,7})\s*(?:円)?/);
+  if(yen)return `給与 ${Number(yen[1]).toLocaleString()}円`;
+
+  return "";
+}
+
+function extractJobHours(text){
+  const s=normalizeJobText(text);
+  const patterns=[
+    /(?:勤務時間|時間|シフト)\s*[:：]?\s*([0-2]?\d[:：]\d{2}\s*(?:[〜～~\-–—]|から)\s*(?:[0-2]?\d[:：]\d{2}|LAST))/i,
+    /([0-2]?\d[:：]\d{2}\s*(?:[〜～~\-–—]|から)\s*(?:[0-2]?\d[:：]\d{2}|LAST))/i,
+    /([0-2]?\d時(?:\d{1,2}分)?\s*(?:[〜～~\-–—]|から)\s*(?:[0-2]?\d時(?:\d{1,2}分)?|LAST))/i
+  ];
+  for(const p of patterns){
+    const m=s.match(p);
+    if(m)return String(m[1]).replace(/：/g,":").trim();
+  }
+  return "";
+}
+
+function extractJobTitle(text,shopName){
+  const s=normalizeJobText(text);
+  if(/バーテンダー/.test(s))return "バーテンダー募集";
+  if(/ホールスタッフ|ホール/.test(s))return "ホールスタッフ募集";
+  if(/スタッフ募集|スタッフ/.test(s))return "スタッフ募集";
+  if(/アルバイト|バイト/.test(s))return "アルバイト募集";
+  return `${String(shopName||"店舗").replace(/^【KBN独自掲載】/,"").trim()} スタッフ募集`;
+}
+
+function extractJobFeatures(text){
+  const s=normalizeJobText(text);
+  const labels=[];
+  const pairs=[
+    ["未経験歓迎",["未経験歓迎","未経験ok","未経験可"]],
+    ["週1日〜",["週1","週１"]],
+    ["週2日〜",["週2","週２"]],
+    ["WワークOK",["wワーク","副業ok","副業可"]],
+    ["髪型自由",["髪型自由"]],
+    ["ネイルOK",["ネイルok","ネイル可"]],
+    ["服装自由",["服装自由"]],
+    ["交通費",["交通費"]],
+    ["まかない",["まかない","賄い"]]
+  ];
+  const lower=s.toLowerCase();
+  for(const [label,keys] of pairs){
+    if(keys.some(k=>lower.includes(k.toLowerCase())))labels.push(label);
+  }
+  return labels.join("、");
+}
+
+function jobCandidateFromResult(item,shop){
+  const title=t(item?.title,500)||"";
+  const snippet=t(item?.snippet,3000)||"";
+  const text=`${title} ${snippet}`;
+
+  return {
+    shop_id:Number(shop.id),
+    shop_name:t(shop.name,180),
+    title:extractJobTitle(text,shop.name),
+    employment_type:extractJobEmployment(text),
+    salary:extractJobSalary(text),
+    hours:extractJobHours(text),
+    features:extractJobFeatures(text),
+    description:snippet,
+    source_title:title,
+    source_url:t(item?.link,2000),
+    source_snippet:snippet
+  };
+}
+
+async function ensureJobCandidatesTable(env){
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS job_candidates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      shop_id INTEGER NOT NULL,
+      shop_name TEXT,
+      title TEXT,
+      employment_type TEXT,
+      salary TEXT,
+      hours TEXT,
+      features TEXT,
+      description TEXT,
+      source_title TEXT,
+      source_url TEXT,
+      source_snippet TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      reviewed_at TEXT
+    )
+  `).run();
+
+  await env.DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_job_candidates_status
+    ON job_candidates(status, created_at)
+  `).run();
+}
+
+async function searchJobCandidatesForShops(env,{limit=5}={}){
+  await ensureJobCandidatesTable(env);
+
+  const max=Math.max(1,Math.min(Number(limit)||5,10));
+
+  const r=await env.DB.prepare(`
+    SELECT id,name,area,instagram,genre
+    FROM shops
+    WHERE is_published=1
+    ORDER BY updated_at ASC,id ASC
+    LIMIT ?
+  `).bind(max).all();
+
+  const shops=r.results||[];
+  const created=[];
+  const noHit=[];
+  const failed=[];
+
+  for(const shop of shops){
+    try{
+      const cleanName=String(shop.name||"").replace(/^【KBN独自掲載】/,"").replace(/\s*[（(]\s*@[A-Za-z0-9._]+\s*[）)]\s*$/,"").trim();
+      const q=`"${cleanName}" ${shop.area||"熊本"} 求人 スタッフ募集 アルバイト バーテンダー`;
+
+      const sr=await serpApiGoogleSearch(env,{q,num:10});
+
+      if(!sr.ok){
+        failed.push({shop_id:shop.id,shop_name:shop.name,reason:sr.error||"SEARCH_FAILED"});
+        continue;
+      }
+
+      const candidates=(sr.results||[]).filter(likelyJobPosting).slice(0,2);
+
+      if(!candidates.length){
+        noHit.push({shop_id:shop.id,shop_name:shop.name});
+        continue;
+      }
+
+      let made=0;
+      for(const item of candidates){
+        const c=jobCandidateFromResult(item,shop);
+        if(!c.source_url)continue;
+
+        const exists=await env.DB.prepare(`
+          SELECT id FROM job_candidates
+          WHERE shop_id=? AND source_url=? AND status IN ('pending','drafted','published')
+          LIMIT 1
+        `).bind(shop.id,c.source_url).first();
+
+        if(exists)continue;
+
+        const ir=await env.DB.prepare(`
+          INSERT INTO job_candidates (
+            shop_id,shop_name,title,employment_type,salary,hours,features,description,
+            source_title,source_url,source_snippet,status
+          )
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,'pending')
+        `).bind(
+          c.shop_id,c.shop_name,c.title,c.employment_type,c.salary,c.hours,c.features,c.description,
+          c.source_title,c.source_url,c.source_snippet
+        ).run();
+
+        created.push({...c,id:ir.meta?.last_row_id});
+        made++;
+      }
+
+      if(!made)noHit.push({shop_id:shop.id,shop_name:shop.name,reason:"DUPLICATE_ONLY"});
+
+    }catch(e){
+      failed.push({
+        shop_id:shop.id,
+        shop_name:shop.name,
+        reason:String(e?.message||e||"UNKNOWN_ERROR").slice(0,300)
+      });
+    }
+  }
+
+  return {ok:true,checked:shops.length,created,noHit,failed};
+}
+
 async function searchInstagramLeads(env,{area,type,start=1}){
   const cfg=leadSearchConfig(env);
 
@@ -754,7 +1027,7 @@ function shopPayload(x){
 }
 
 
-const LOGIN_HTML="<!doctype html>\n<html lang=\"ja\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\">\n<title>KBN ADMIN LOGIN</title>\n<style>\n:root{color-scheme:dark}\n*{box-sizing:border-box}\nbody{margin:0;min-height:100vh;display:grid;place-items:center;background:#080d13;color:#f4f6f8;font-family:-apple-system,BlinkMacSystemFont,\"Hiragino Sans\",\"Yu Gothic\",sans-serif;padding:22px}\n.card{width:min(440px,100%);padding:28px;border:1px solid #36404c;border-radius:20px;background:#101720;box-shadow:0 20px 70px rgba(0,0,0,.35)}\n.eyebrow{color:#e8be55;letter-spacing:.18em;font-weight:800;font-size:.78rem}\nh1{font-size:2rem;margin:.35rem 0 .7rem}\np{color:#aeb5bf;line-height:1.7}\nlabel{display:block;margin:18px 0 7px;color:#d9dde2;font-weight:700}\ninput{width:100%;min-height:52px;padding:0 14px;border-radius:12px;border:1px solid #3b4653;background:#0a1017;color:#fff;font-size:1rem}\nbutton{width:100%;min-height:54px;margin-top:20px;border:0;border-radius:12px;background:#efc45a;color:#111;font-weight:900;font-size:1rem}\n#error{color:#ff9a9a;min-height:1.4em;margin-top:12px}\n.note{font-size:.78rem;margin-top:16px}\n</style>\n</head>\n<body>\n<form class=\"card\" id=\"loginForm\">\n  <div class=\"eyebrow\">KBN ADMIN ver1.08</div>\n  <h1>運営管理ログイン</h1>\n  <p>管理者用のメールアドレスとパスワードを入力してください。</p>\n  <label for=\"email\">メールアドレス</label>\n  <input id=\"email\" type=\"email\" autocomplete=\"username\" required>\n  <label for=\"password\">パスワード</label>\n  <input id=\"password\" type=\"password\" autocomplete=\"current-password\" required>\n  <button type=\"submit\">ログイン</button>\n  <div id=\"error\"></div>\n  <p class=\"note\">この端末では30日間ログイン状態を保持します。</p>\n</form>\n\n<script>\nconst form=document.getElementById(\"loginForm\");\nconst error=document.getElementById(\"error\");\n\nform.addEventListener(\"submit\",async ev=>{\n  ev.preventDefault();\n  error.textContent=\"ログイン中...\";\n\n  const email=document.getElementById(\"email\").value.trim();\n  const password=document.getElementById(\"password\").value;\n\n  try{\n    const r=await fetch(\"/api/admin/login\",{\n      method:\"POST\",\n      credentials:\"include\",\n      cache:\"no-store\",\n      headers:{\"Content-Type\":\"application/json\"},\n      body:JSON.stringify({email,password})\n    });\n\n    const ct=r.headers.get(\"content-type\")||\"\";\n    if(!ct.includes(\"application/json\")){\n      const text=await r.text();\n      throw new Error(\"NON_JSON_RESPONSE: \"+text.slice(0,80));\n    }\n\n    const d=await r.json();\n\n    if(!r.ok || !d.ok){\n      if(d.error===\"INVALID_CREDENTIALS\"){\n        throw new Error(\"INVALID_CREDENTIALS\");\n      }\n      if(d.error===\"ADMIN_AUTH_NOT_CONFIGURED\"){\n        throw new Error(\"設定不足: \"+(d.missing||[]).join(\", \"));\n      }\n      throw new Error(d.message||d.error||(\"HTTP_\"+r.status));\n    }\n\n    if(!d.token){\n      throw new Error(\"TOKEN_NOT_RETURNED\");\n    }\n\n    localStorage.setItem(\"kbn_admin_token\",d.token);\n    localStorage.setItem(\"kbn_admin_logged_in_at\",String(Date.now()));\n\n    location.replace(\"/admin.html?v=108\");\n  }catch(err){\n    console.error(err);\n\n    if(err.message===\"INVALID_CREDENTIALS\"){\n      error.textContent=\"メールアドレスまたはパスワードが違います。\";\n    }else{\n      error.textContent=\"ログインできませんでした: \"+err.message;\n    }\n  }\n});\n</script>\n\n</body></html>";
+const LOGIN_HTML="<!doctype html>\n<html lang=\"ja\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\">\n<title>KBN ADMIN LOGIN</title>\n<style>\n:root{color-scheme:dark}\n*{box-sizing:border-box}\nbody{margin:0;min-height:100vh;display:grid;place-items:center;background:#080d13;color:#f4f6f8;font-family:-apple-system,BlinkMacSystemFont,\"Hiragino Sans\",\"Yu Gothic\",sans-serif;padding:22px}\n.card{width:min(440px,100%);padding:28px;border:1px solid #36404c;border-radius:20px;background:#101720;box-shadow:0 20px 70px rgba(0,0,0,.35)}\n.eyebrow{color:#e8be55;letter-spacing:.18em;font-weight:800;font-size:.78rem}\nh1{font-size:2rem;margin:.35rem 0 .7rem}\np{color:#aeb5bf;line-height:1.7}\nlabel{display:block;margin:18px 0 7px;color:#d9dde2;font-weight:700}\ninput{width:100%;min-height:52px;padding:0 14px;border-radius:12px;border:1px solid #3b4653;background:#0a1017;color:#fff;font-size:1rem}\nbutton{width:100%;min-height:54px;margin-top:20px;border:0;border-radius:12px;background:#efc45a;color:#111;font-weight:900;font-size:1rem}\n#error{color:#ff9a9a;min-height:1.4em;margin-top:12px}\n.note{font-size:.78rem;margin-top:16px}\n</style>\n</head>\n<body>\n<form class=\"card\" id=\"loginForm\">\n  <div class=\"eyebrow\">KBN ADMIN ver1.11</div>\n  <h1>運営管理ログイン</h1>\n  <p>管理者用のメールアドレスとパスワードを入力してください。</p>\n  <label for=\"email\">メールアドレス</label>\n  <input id=\"email\" type=\"email\" autocomplete=\"username\" required>\n  <label for=\"password\">パスワード</label>\n  <input id=\"password\" type=\"password\" autocomplete=\"current-password\" required>\n  <button type=\"submit\">ログイン</button>\n  <div id=\"error\"></div>\n  <p class=\"note\">この端末では30日間ログイン状態を保持します。</p>\n</form>\n\n<script>\nconst form=document.getElementById(\"loginForm\");\nconst error=document.getElementById(\"error\");\n\nform.addEventListener(\"submit\",async ev=>{\n  ev.preventDefault();\n  error.textContent=\"ログイン中...\";\n\n  const email=document.getElementById(\"email\").value.trim();\n  const password=document.getElementById(\"password\").value;\n\n  try{\n    const r=await fetch(\"/api/admin/login\",{\n      method:\"POST\",\n      credentials:\"include\",\n      cache:\"no-store\",\n      headers:{\"Content-Type\":\"application/json\"},\n      body:JSON.stringify({email,password})\n    });\n\n    const ct=r.headers.get(\"content-type\")||\"\";\n    if(!ct.includes(\"application/json\")){\n      const text=await r.text();\n      throw new Error(\"NON_JSON_RESPONSE: \"+text.slice(0,80));\n    }\n\n    const d=await r.json();\n\n    if(!r.ok || !d.ok){\n      if(d.error===\"INVALID_CREDENTIALS\"){\n        throw new Error(\"INVALID_CREDENTIALS\");\n      }\n      if(d.error===\"ADMIN_AUTH_NOT_CONFIGURED\"){\n        throw new Error(\"設定不足: \"+(d.missing||[]).join(\", \"));\n      }\n      throw new Error(d.message||d.error||(\"HTTP_\"+r.status));\n    }\n\n    if(!d.token){\n      throw new Error(\"TOKEN_NOT_RETURNED\");\n    }\n\n    localStorage.setItem(\"kbn_admin_token\",d.token);\n    localStorage.setItem(\"kbn_admin_logged_in_at\",String(Date.now()));\n\n    location.replace(\"/admin.html?v=111\");\n  }catch(err){\n    console.error(err);\n\n    if(err.message===\"INVALID_CREDENTIALS\"){\n      error.textContent=\"メールアドレスまたはパスワードが違います。\";\n    }else{\n      error.textContent=\"ログインできませんでした: \"+err.message;\n    }\n  }\n});\n</script>\n\n</body></html>";
 const ADMIN_COOKIE="kbn_admin_session";
 const ADMIN_SESSION_DAYS=30;
 
@@ -1603,6 +1876,87 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
         const key=`shops/${Date.now()}-${crypto.randomUUID()}.${ext}`;
         await env.IMAGES.put(key,file.stream(),{httpMetadata:{contentType:file.type||"application/octet-stream"}});
         return json({ok:true,key,url:`/media/${encodeURIComponent(key)}`});
+      }
+
+
+      if(url.pathname==="/api/admin/job-candidates" && request.method==="GET"){
+        await ensureJobCandidatesTable(env);
+        const r=await env.DB.prepare(`
+          SELECT jc.*,shops.slug AS shop_slug
+          FROM job_candidates jc
+          LEFT JOIN shops ON shops.id=jc.shop_id
+          WHERE jc.status='pending'
+          ORDER BY jc.id DESC
+          LIMIT 100
+        `).all();
+        return json({ok:true,candidates:r.results||[]});
+      }
+
+      if(url.pathname==="/api/admin/job-candidates/search" && request.method==="POST"){
+        let x={};
+        try{x=await request.json()}catch{}
+        try{
+          const result=await searchJobCandidatesForShops(env,{
+            limit:Math.max(1,Math.min(Number(x.limit)||5,10))
+          });
+          return json(result,{headers:{"Cache-Control":"no-store"}});
+        }catch(e){
+          return json({
+            ok:false,
+            error:"JOB_SEARCH_FAILED",
+            message:String(e?.message||e||"UNKNOWN_ERROR").slice(0,500)
+          },{status:500});
+        }
+      }
+
+      const jca=url.pathname.match(/^\/api\/admin\/job-candidates\/(\d+)\/draft$/);
+      if(jca && request.method==="POST"){
+        await ensureJobCandidatesTable(env);
+        const id=Number(jca[1]);
+        const c=await env.DB.prepare(`
+          SELECT * FROM job_candidates WHERE id=? AND status='pending' LIMIT 1
+        `).bind(id).first();
+
+        if(!c)return json({ok:false,error:"NOT_FOUND"},{status:404});
+
+        const r=await env.DB.prepare(`
+          INSERT INTO jobs (
+            shop_id,title,employment_type,salary,hours,description,contact,is_published,sort_order
+          )
+          VALUES (?,?,?,?,?,?,?,0,100)
+        `).bind(
+          c.shop_id,
+          t(c.title,180)||"スタッフ募集",
+          t(c.employment_type,120),
+          t(c.salary,180),
+          t(c.hours,180),
+          t([
+            c.description||"",
+            c.features?`特徴：${c.features}`:"",
+            c.source_url?`情報元：${c.source_url}`:""
+          ].filter(Boolean).join("\n\n"),5000),
+          ""
+        ).run();
+
+        await env.DB.prepare(`
+          UPDATE job_candidates
+          SET status='drafted',reviewed_at=CURRENT_TIMESTAMP
+          WHERE id=?
+        `).bind(id).run();
+
+        return json({ok:true,job_id:r.meta?.last_row_id});
+      }
+
+      const jcr=url.pathname.match(/^\/api\/admin\/job-candidates\/(\d+)\/reject$/);
+      if(jcr && request.method==="POST"){
+        await ensureJobCandidatesTable(env);
+        const id=Number(jcr[1]);
+        await env.DB.prepare(`
+          UPDATE job_candidates
+          SET status='rejected',reviewed_at=CURRENT_TIMESTAMP
+          WHERE id=?
+        `).bind(id).run();
+        return json({ok:true});
       }
 
       if(url.pathname==="/api/admin/jobs" && request.method==="GET"){
