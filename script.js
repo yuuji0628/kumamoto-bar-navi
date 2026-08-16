@@ -1,10 +1,24 @@
 const escHtml=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 
 function kbnCleanName(v){
-  return String(v||"").replace(/^【KBN独自掲載】/,"").trim();
+  return String(v||"")
+    .replace(/^【KBN独自掲載】/,"")
+    .replace(/\s*[（(]\s*@[A-Za-z0-9._]+\s*[）)]\s*$/,"")
+    .replace(/\s+@[A-Za-z0-9._]+\s*$/,"")
+    .trim();
 }
 function kbnIsEditorial(s){
   return String(s?.listing_status||"")==="provisional" || /^【KBN独自掲載】/.test(String(s?.name||""));
+}
+function kbnNormalizeArea(v){
+  const s=String(v||"").trim();
+  const aliases={
+    "八代郡氷川町":"氷川町","葦北郡芦北町":"芦北町","葦北郡津奈木町":"津奈木町",
+    "下益城郡美里町":"美里町","天草郡苓北町":"苓北町"
+  };
+  if(aliases[s])return aliases[s];
+  if(/^熊本市.+区$/.test(s))return "熊本市";
+  return s;
 }
 function kbnTokens(v){
   return String(v||"").split(/[、,／/・\s]+/).map(x=>x.trim()).filter(Boolean);
@@ -33,7 +47,7 @@ function kbnCard(s){
       </div>
       <h3>${escHtml(name)}</h3>
       <div class="public-card-tags">
-        ${s.area?`<span>${escHtml(s.area)}</span>`:""}
+        ${s.area?`<span>${escHtml(kbnNormalizeArea(s.area))}</span>`:""}
         ${s.genre?`<span>${escHtml(s.genre)}</span>`:""}
         ${features.map(x=>`<span>${escHtml(x)}</span>`).join("")}
       </div>
@@ -69,7 +83,7 @@ async function loadHomeShops(){
         const name=kbnCleanName(s.name);
         return `<a href="shop.html?slug=${encodeURIComponent(s.slug)}" class="public-latest-item">
           <div>
-            <small>${escHtml(s.area||"熊本県")} ${s.genre?`/ ${escHtml(s.genre)}`:""}</small>
+            <small>${escHtml(kbnNormalizeArea(s.area)||"熊本県")} ${s.genre?`/ ${escHtml(s.genre)}`:""}</small>
             <b>${escHtml(name)}</b>
           </div>
           <span>${kbnIsEditorial(s)?'<em>KBN独自掲載</em>':""} ›</span>

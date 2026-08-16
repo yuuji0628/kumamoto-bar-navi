@@ -6,7 +6,7 @@
   <meta name="description" content="熊本のBAR店舗情報｜KUMAMOTO BAR NAVI">
   <meta name="theme-color" content="#080b10">
   <title>店舗詳細｜KUMAMOTO BAR NAVI</title>
-  <link rel="stylesheet" href="style.css?v=109">
+  <link rel="stylesheet" href="style.css?v=110">
 </head>
 <body class="public-v109">
 
@@ -38,8 +38,24 @@
 const esc=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 const slug=new URLSearchParams(location.search).get("slug");
 
-function cleanName(v){return String(v||"").replace(/^【KBN独自掲載】/,"").trim()}
+function cleanName(v){
+  return String(v||"")
+    .replace(/^【KBN独自掲載】/,"")
+    .replace(/\s*[（(]\s*@[A-Za-z0-9._]+\s*[）)]\s*$/,"")
+    .replace(/\s+@[A-Za-z0-9._]+\s*$/,"")
+    .trim();
+}
 function isEditorial(s){return String(s.listing_status||"")==="provisional" || /^【KBN独自掲載】/.test(String(s.name||""))}
+function normalizeArea(v){
+  const s=String(v||"").trim();
+  const aliases={
+    "八代郡氷川町":"氷川町","葦北郡芦北町":"芦北町","葦北郡津奈木町":"津奈木町",
+    "下益城郡美里町":"美里町","天草郡苓北町":"苓北町"
+  };
+  if(aliases[s])return aliases[s];
+  if(/^熊本市.+区$/.test(s))return "熊本市";
+  return s;
+}
 function tokens(v){return String(v||"").split(/[、,／/・\s]+/).map(x=>x.trim()).filter(Boolean)}
 function normalizeInstagramUrl(value){
   let v=String(value||"").trim();
@@ -100,7 +116,7 @@ async function load(){
             ${editorial?'<span class="public-editorial-badge">KBN独自掲載</span>':""}
             ${s.is_new?'<span class="public-new-badge">NEW</span>':""}
           </div>
-          <p class="public-shop-location">${esc([s.area,s.genre].filter(Boolean).join(" / "))}</p>
+          <p class="public-shop-location">${esc([normalizeArea(s.area),s.genre].filter(Boolean).join(" / "))}</p>
           <h1>${esc(name)}</h1>
 
           <div class="public-shop-tags">
@@ -128,7 +144,7 @@ async function load(){
             <div class="public-shop-info-head"><p class="public-kicker">INFORMATION</p><h2>店舗情報</h2></div>
             <dl>
               <div><dt>店名</dt><dd>${esc(name)}</dd></div>
-              ${s.area?`<div><dt>エリア</dt><dd>${esc(s.area)}</dd></div>`:""}
+              ${s.area?`<div><dt>エリア</dt><dd>${esc(normalizeArea(s.area))}</dd></div>`:""}
               ${s.genre?`<div><dt>ジャンル</dt><dd>${esc(s.genre)}</dd></div>`:""}
               ${s.address?`<div><dt>住所</dt><dd>${esc(s.address)}</dd></div>`:""}
               ${s.hours?`<div><dt>営業時間</dt><dd>${esc(s.hours)}</dd></div>`:""}

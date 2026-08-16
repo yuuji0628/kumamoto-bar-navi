@@ -6,7 +6,7 @@
   <meta name="description" content="熊本県内のBAR一覧｜KUMAMOTO BAR NAVI">
   <meta name="theme-color" content="#080b10">
   <title>BARを探す｜KUMAMOTO BAR NAVI</title>
-  <link rel="stylesheet" href="style.css?v=109">
+  <link rel="stylesheet" href="style.css?v=110">
 </head>
 <body class="public-v109">
 
@@ -87,7 +87,11 @@ const $=id=>document.getElementById(id);
 const esc=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 
 function cleanName(s){
-  return String(s||"").replace(/^【KBN独自掲載】/,"").trim();
+  return String(s||"")
+    .replace(/^【KBN独自掲載】/,"")
+    .replace(/\s*[（(]\s*@[A-Za-z0-9._]+\s*[）)]\s*$/,"")
+    .replace(/\s+@[A-Za-z0-9._]+\s*$/,"")
+    .trim();
 }
 function isEditorial(s){
   return String(s.listing_status||"")==="provisional" || /^【KBN独自掲載】/.test(String(s.name||""));
@@ -95,10 +99,26 @@ function isEditorial(s){
 function featureTokens(v){
   return String(v||"").split(/[、,／/・\s]+/).map(x=>x.trim()).filter(Boolean);
 }
+const KBN_AREAS=["熊本市","八代市","人吉市","荒尾市","水俣市","玉名市","山鹿市","菊池市","宇土市","上天草市","宇城市","阿蘇市","天草市","合志市","美里町","玉東町","南関町","長洲町","和水町","大津町","菊陽町","南小国町","小国町","産山村","高森町","西原村","南阿蘇村","御船町","嘉島町","益城町","甲佐町","山都町","氷川町","芦北町","津奈木町","錦町","多良木町","湯前町","水上村","相良村","五木村","山江村","球磨村","あさぎり町","苓北町"];
+const KBN_AREA_ALIASES={
+  "熊本市中央区":"熊本市","熊本市東区":"熊本市","熊本市西区":"熊本市","熊本市南区":"熊本市","熊本市北区":"熊本市",
+  "八代郡氷川町":"氷川町","葦北郡芦北町":"芦北町","葦北郡津奈木町":"津奈木町",
+  "上益城郡御船町":"御船町","上益城郡嘉島町":"嘉島町","上益城郡益城町":"益城町","上益城郡甲佐町":"甲佐町","上益城郡山都町":"山都町",
+  "菊池郡大津町":"大津町","菊池郡菊陽町":"菊陽町",
+  "玉名郡玉東町":"玉東町","玉名郡南関町":"南関町","玉名郡長洲町":"長洲町","玉名郡和水町":"和水町",
+  "阿蘇郡南小国町":"南小国町","阿蘇郡小国町":"小国町","阿蘇郡産山村":"産山村","阿蘇郡高森町":"高森町","阿蘇郡西原村":"西原村","阿蘇郡南阿蘇村":"南阿蘇村",
+  "下益城郡美里町":"美里町","天草郡苓北町":"苓北町",
+  "球磨郡錦町":"錦町","球磨郡多良木町":"多良木町","球磨郡湯前町":"湯前町","球磨郡水上村":"水上村","球磨郡相良村":"相良村","球磨郡五木村":"五木村","球磨郡山江村":"山江村","球磨郡球磨村":"球磨村","球磨郡あさぎり町":"あさぎり町"
+};
+function normalizeArea(v){
+  const s=String(v||"").trim();
+  if(KBN_AREA_ALIASES[s])return KBN_AREA_ALIASES[s];
+  for(const a of KBN_AREAS)if(s.includes(a))return a;
+  return s;
+}
 function fillFilters(){
-  const areas=[...new Set(allShops.map(s=>s.area).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"ja"));
   const genres=[...new Set(allShops.map(s=>s.genre).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"ja"));
-  $("areaFilter").innerHTML='<option value="">熊本県内すべて</option>'+areas.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join("");
+  $("areaFilter").innerHTML='<option value="">熊本県内すべて</option>'+KBN_AREAS.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join("");
   $("genreFilter").innerHTML='<option value="">すべてのジャンル</option>'+genres.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join("");
 }
 function money(s){
@@ -132,7 +152,7 @@ function render(list){
         </div>
         <h3>${esc(name)}</h3>
         <div class="public-card-tags">
-          ${s.area?`<span>${esc(s.area)}</span>`:""}
+          ${s.area?`<span>${esc(normalizeArea(s.area))}</span>`:""}
           ${s.genre?`<span>${esc(s.genre)}</span>`:""}
           ${features.map(x=>`<span>${esc(x)}</span>`).join("")}
         </div>
@@ -152,8 +172,8 @@ function filter(){
   const q=$("keyword").value.trim().toLowerCase();
 
   const filtered=allShops.filter(s=>{
-    const text=[cleanName(s.name),s.address,s.features,s.description,s.genre,s.area,s.hours].join(" ").toLowerCase();
-    return (!area||s.area===area)&&(!genre||String(s.genre||"").includes(genre))&&(!q||text.includes(q));
+    const text=[cleanName(s.name),s.address,s.features,s.description,s.genre,normalizeArea(s.area),s.hours].join(" ").toLowerCase();
+    return (!area||normalizeArea(s.area)===area)&&(!genre||String(s.genre||"").includes(genre))&&(!q||text.includes(q));
   });
   render(filtered);
   const url=new URL(location.href);
