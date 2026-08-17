@@ -78,11 +78,7 @@ async function loadHomeShops(){
     }
 
     if(latestBox){
-      const latest=[...shops].sort((a,b)=>{
-        const ad=Date.parse(a.updated_at||a.published_at||a.created_at||0)||0;
-        const bd=Date.parse(b.updated_at||b.published_at||b.created_at||0)||0;
-        return bd-ad || Number(b.id||0)-Number(a.id||0);
-      }).slice(0,5);
+      const latest=[...shops].sort((a,b)=>Number(b.id||0)-Number(a.id||0)).slice(0,5);
       latestBox.innerHTML=latest.length?latest.map(s=>{
         const name=kbnCleanName(s.name);
         return `<a href="shop.html?slug=${encodeURIComponent(s.slug)}" class="public-latest-item">
@@ -122,39 +118,77 @@ async function loadHomeNews(){
     const d=await r.json();
     if(!r.ok||!d.ok)throw new Error();
 
-    const items=(d.news||[]).slice(0,4);
-    if(countEl)countEl.textContent=`${items.length}件`;
-
-    if(!items.length){
-      box.innerHTML='<div class="public-empty"><b>現在、お知らせはありません。</b></div>';
-      return;
-    }
+    // NEWSは最大8件取得。スマホでは最初の3件を表示し、件数バッジで開閉する。
+    const items=(d.news||[]).slice(0,8);
+    let expanded=false;
 
     const href=x=>x.slug?`shop.html?slug=${encodeURIComponent(x.slug)}`:"bars.html";
     const title=x=>`${kbnCleanName(x.name||"店舗")} を正式掲載しました`;
 
-    box.innerHTML=`<div class="public-news-equal-grid-v120">${items.map((x,i)=>{
-      const date=fmt(x.date||x.published_at||x.created_at);
-      const name=kbnCleanName(x.name||"店舗");
+    const render=()=>{
+      const visible=expanded?items:items.slice(0,3);
+      box.innerHTML=`<div class="public-news-equal-grid-v120">${visible.map((x,i)=>{
+        const date=fmt(x.date||x.published_at||x.created_at);
+        const name=kbnCleanName(x.name||"店舗");
 
-      return `<a href="${href(x)}" class="public-news-equal-card-v120${i===0?" is-latest":""}">
-        <div class="public-news-equal-date-v120">
-          <time>${escHtml(date.short)}</time>
-        </div>
-
-        <div class="public-news-equal-body-v120">
-          <div class="public-news-equal-badges-v120">
-            ${i===0?'<span class="news-new-v120">NEW</span>':""}
-            <span class="news-official-v120">正式掲載</span>
+        return `<a href="${href(x)}" class="public-news-equal-card-v120${i===0?" is-latest":""}">
+          <div class="public-news-equal-date-v120">
+            <time>${escHtml(date.short)}</time>
           </div>
 
-          <b>${escHtml(title(x))}</b>
-          <small>${escHtml(name)}の店舗ページを公開しました。</small>
-        </div>
+          <div class="public-news-equal-body-v120">
+            <div class="public-news-equal-badges-v120">
+              ${i===0?'<span class="news-new-v120">NEW</span>':""}
+              <span class="news-official-v120">正式掲載</span>
+            </div>
 
-        <div class="public-news-equal-arrow-v120">›</div>
-      </a>`;
-    }).join("")}</div>`;
+            <b>${escHtml(title(x))}</b>
+            <small>${escHtml(name)}の店舗ページを公開しました。</small>
+          </div>
+
+          <div class="public-news-equal-arrow-v120">›</div>
+        </a>`;
+      }).join("")}</div>`;
+
+      if(countEl){
+        countEl.textContent=items.length>3
+          ? `${items.length}件 ${expanded?"▲":"▼"}`
+          : `${items.length}件`;
+        countEl.style.cursor=items.length>3?"pointer":"default";
+        countEl.style.userSelect="none";
+        countEl.setAttribute("role",items.length>3?"button":"status");
+        countEl.setAttribute("tabindex",items.length>3?"0":"-1");
+        countEl.setAttribute("aria-expanded",String(expanded));
+        countEl.setAttribute("aria-label",items.length>3
+          ? (expanded?"お知らせを3件表示に戻す":"お知らせをすべて表示する")
+          : `お知らせ${items.length}件`);
+      }
+    };
+
+    if(!items.length){
+      if(countEl)countEl.textContent="0件";
+      box.innerHTML='<div class="public-empty"><b>現在、お知らせはありません。</b></div>';
+      return;
+    }
+
+    render();
+
+    if(countEl && items.length>3){
+      const toggle=()=>{
+        expanded=!expanded;
+        render();
+        if(expanded){
+          setTimeout(()=>box.scrollIntoView({behavior:"smooth",block:"nearest"}),50);
+        }
+      };
+      countEl.onclick=toggle;
+      countEl.onkeydown=e=>{
+        if(e.key==="Enter"||e.key===" "){
+          e.preventDefault();
+          toggle();
+        }
+      };
+    }
   }catch{
     if(countEl)countEl.textContent="0件";
     box.innerHTML='<div class="public-empty"><b>お知らせを読み込めませんでした。</b></div>';
