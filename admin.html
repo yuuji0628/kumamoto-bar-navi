@@ -2055,10 +2055,13 @@ window.loadKbnGithubStatus=async function(){
     const d=await api("/api/admin/github/status");
     repo.textContent=`${d.owner||"yuuji0628"}/${d.repo||"kumamoto-bar-navi"} (${d.branch||"main"})`;
     const files=d.editable_files||kbnGithubFallbackFiles;
-    $("kbnGithubFiles").innerHTML=files.map(path=>`<button type="button" class="kbn-github-file" data-kbn-gh-file="${esc(path)}">${esc(path)}</button>`).join("");
-    document.querySelectorAll("[data-kbn-gh-file]").forEach(btn=>{
-      btn.onclick=()=>loadKbnGithubFile(btn.dataset.kbnGhFile);
-    });
+    const githubFilesEl=$("kbnGithubFiles");
+    if(githubFilesEl){
+      githubFilesEl.innerHTML=files.map(path=>`<button type="button" class="kbn-github-file" data-kbn-gh-file="${esc(path)}">${esc(path)}</button>`).join("");
+      document.querySelectorAll("[data-kbn-gh-file]").forEach(btn=>{
+        btn.onclick=()=>loadKbnGithubFile(btn.dataset.kbnGhFile);
+      });
+    }
 
     if(d.configured&&d.connected){
       dot.className="kbn-github-dot ok";
