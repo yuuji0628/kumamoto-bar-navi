@@ -1553,7 +1553,7 @@ async function renderLocalSeoAreaPage(env,slug){
       <a href="/shop.html?slug=${encodeURIComponent(s.slug||"")}">
         <div class="local-seo-img">${s.image_url?`<img src="${kbnSeoEsc(s.image_url)}" alt="${kbnSeoEsc(name)} ${kbnSeoEsc(area)} BAR" loading="lazy">`:`<img src="/default-bar.svg" alt="" loading="lazy">`}</div>
         <div class="local-seo-body">
-          <div class="local-seo-meta"><span>${kbnSeoEsc(s.genre||"BAR")}</span>${s.listing_status==="provisional"?"<small>KBN独自掲載</small>":"<small>✓ KBN正式掲載店</small>"}</div>
+          <div class="local-seo-meta"><span>${kbnSeoEsc(s.genre||"BAR")}</span>${s.listing_status==="provisional"?"<small>KBN独自掲載</small>":""}</div>
           <h2>${kbnSeoEsc(name)}</h2>
           ${s.address?`<p>${kbnSeoEsc(s.address)}</p>`:""}
           <div class="local-seo-facts">
@@ -1716,39 +1716,14 @@ export default {
         .replace(/"/g,"&quot;")
         .replace(/'/g,"&apos;");
 
-      const sitemapDate=v=>{
-        const raw=String(v||"").trim();
-        if(!raw)return "";
-
-        // Google sitemap の lastmod は W3C Datetime 形式に限定。
-        // DB の日時形式に左右されないよう、確実な YYYY-MM-DD のみを出力する。
-        const m=raw.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
-        if(m){
-          const y=m[1];
-          const mo=String(m[2]).padStart(2,"0");
-          const d=String(m[3]).padStart(2,"0");
-          const iso=`${y}-${mo}-${d}`;
-          const dt=new Date(`${iso}T00:00:00Z`);
-          if(!Number.isNaN(dt.getTime()) && dt.toISOString().slice(0,10)===iso)return iso;
-        }
-
-        const dt=new Date(raw);
-        if(!Number.isNaN(dt.getTime()))return dt.toISOString().slice(0,10);
-
-        return "";
-      };
-
       const xml=`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls.map(x=>{
-  const lastmod=sitemapDate(x.lastmod);
-  return `  <url>
-    <loc>${escXml(x.loc)}</loc>${lastmod?`
-    <lastmod>${escXml(lastmod)}</lastmod>`:""}
+${urls.map(x=>`  <url>
+    <loc>${escXml(x.loc)}</loc>${x.lastmod?`
+    <lastmod>${escXml(String(x.lastmod).replace(" ","T"))}</lastmod>`:""}
     <changefreq>${x.freq}</changefreq>
     <priority>${x.priority}</priority>
-  </url>`;
-}).join("\n")}
+  </url>`).join("\n")}
 </urlset>`;
 
       return new Response(xml,{
