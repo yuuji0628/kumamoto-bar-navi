@@ -1806,7 +1806,7 @@ ${urls.map(x=>`  <url>
     if(url.pathname==="/api/shops" && request.method==="GET"){
       const r=await env.DB.prepare(`
         SELECT * FROM shops WHERE is_published=1
-        ORDER BY is_featured DESC, sort_order ASC, COALESCE(published_at,created_at) DESC, id DESC
+        ORDER BY is_featured DESC, COALESCE(updated_at,published_at,created_at) DESC, sort_order ASC, id DESC
       `).all();
       return json({ok:true,shops:(r.results||[]).map(publicShopRow)});
     }
@@ -1841,17 +1841,17 @@ ${urls.map(x=>`  <url>
 
     if(url.pathname==="/api/news" && request.method==="GET"){
       const {results}=await env.DB.prepare(`
-        SELECT name, slug, published_at, created_at, is_new
+        SELECT name, slug, published_at, updated_at, created_at, is_new
         FROM shops
         WHERE is_published=1 AND is_new=1 AND COALESCE(listing_status,'published')='published'
-        ORDER BY COALESCE(published_at,created_at) DESC
+        ORDER BY COALESCE(updated_at,published_at,created_at) DESC, id DESC
         LIMIT 8
       `).all();
       return json({ok:true,news:(results||[]).map(s=>({
         type:"shop",
         name:s.name,
         slug:s.slug,
-        date:s.published_at||s.created_at
+        date:s.updated_at||s.published_at||s.created_at
       }))});
     }
 
@@ -2645,12 +2645,16 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
           UPDATE shops SET slug=?,name=?,name_kana=?,area=?,address=?,hours=?,holiday=?,instagram=?,genre=?,features=?,
           description=?,budget_min=?,budget_max=?,seats=?,phone=?,is_recruiting=?,is_published=?,image_url=?,image_key=?,
           is_featured=?,is_new=?,sort_order=?,listing_status=?,
-          published_at=CASE WHEN ?=1 AND published_at IS NULL THEN CURRENT_TIMESTAMP ELSE published_at END,
+          published_at=CASE
+            WHEN ?='provisional' AND ?='published' THEN CURRENT_TIMESTAMP
+            WHEN ?=1 AND published_at IS NULL THEN CURRENT_TIMESTAMP
+            ELSE published_at
+          END,
           updated_at=CURRENT_TIMESTAMP WHERE id=?
         `).bind(
           s.slug,s.name,s.name_kana,s.area,s.address,s.hours,s.holiday,s.instagram,s.genre,s.features,
           s.description,s.budget_min,s.budget_max,s.seats,s.phone,s.is_recruiting,s.is_published,s.image_url,s.image_key,
-          s.is_featured,s.is_new,s.sort_order,s.listing_status,s.is_published,id
+          s.is_featured,s.is_new,s.sort_order,s.listing_status,ex.listing_status,s.listing_status,s.is_published,id
         ).run();
         return json({ok:true});
       }
