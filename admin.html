@@ -3675,9 +3675,9 @@ async function renderInstaPost(shop,{forceNoImage=false}={}){
     ctx.fillStyle=white;
     const family="-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans','Yu Gothic',sans-serif";
     const maxWidth=405;
-    const maxLines=5;
-    let descFont=21;
-    let lineHeight=27;
+    const maxLines=8;
+    let descFont=20;
+    let lineHeight=25;
 
     const countWrappedLines=(fontSize)=>{
       ctx.font=`500 ${fontSize}px ${family}`;
@@ -3695,17 +3695,17 @@ async function renderInstaPost(shop,{forceNoImage=false}={}){
       return lines;
     };
 
-    // 全文が5行に入るまで段階的に縮小（最小14px）
-    while(descFont>14 && countWrappedLines(descFont)>maxLines){
+    // 全文が8行に入るまで段階的に縮小（最小11px）
+    while(descFont>11 && countWrappedLines(descFont)>maxLines){
       descFont--;
     }
-    lineHeight=Math.max(20,Math.round(descFont*1.32));
+    lineHeight=Math.max(15,Math.round(descFont*1.28));
     ctx.font=`500 ${descFont}px ${family}`;
-    wrapCanvasText(ctx,desc,64,615,maxWidth,lineHeight,maxLines);
+    wrapCanvasText(ctx,desc,64,605,maxWidth,lineHeight,maxLines);
   }
 
   // information panel
-  const panelY=735;
+  const panelY=755;
   drawRoundedRect(ctx,44,panelY,992,190,22,"rgba(8,13,18,.86)","rgba(255,255,255,.16)");
 
   const info=[
