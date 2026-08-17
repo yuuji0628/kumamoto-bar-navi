@@ -52,6 +52,7 @@ function cleanName(v){
     .trim();
 }
 function isEditorial(s){return String(s.listing_status||"")==="provisional" || /^【KBN独自掲載】/.test(String(s.name||""))}
+function isOfficial(s){return !isEditorial(s) && String(s.listing_status||"published")==="published"}
 function normalizeArea(v){
   const s=String(v||"").trim();
   const aliases={
@@ -146,6 +147,7 @@ async function load(){
     const s=d.shop;
     const name=cleanName(s.name);
     const editorial=isEditorial(s);
+    const official=isOfficial(s);
     document.title=`${name}｜KUMAMOTO BAR NAVI`;
 
     const gallery=[s.image_url,...(d.images||[]).map(x=>x.image_url)].filter(Boolean);
@@ -170,7 +172,7 @@ async function load(){
 
         <section class="public-shop-summary">
           <div class="public-shop-badges">
-            ${editorial?'<span class="public-editorial-badge">KBN独自掲載</span>':""}
+            ${editorial?'<span class="public-editorial-badge">KBN独自掲載</span>':(official?'<span class="public-official-badge">✓ KBN正式掲載店</span>':"")}
             ${s.is_new?'<span class="public-new-badge">NEW</span>':""}
           </div>
           <p class="public-shop-location">${esc([normalizeArea(s.area),s.genre].filter(Boolean).join(" / "))}</p>
@@ -211,6 +213,12 @@ async function load(){
               ${s.phone?`<div><dt>電話番号</dt><dd><a href="tel:${esc(s.phone)}">${esc(s.phone)}</a></dd></div>`:""}
             </dl>
           </div>
+
+          ${official?`
+          <div class="public-official-note">
+            <div class="public-official-note-mark">✓</div>
+            <div><b>KBN正式掲載店</b><p>店舗様からの掲載申込み・確認を経て、KUMAMOTO BAR NAVIに正式掲載されている店舗です。</p></div>
+          </div>`:""}
 
           ${editorial?`
           <div class="public-editorial-note">
