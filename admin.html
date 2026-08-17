@@ -1309,6 +1309,66 @@
 
 </style>
 
+
+<style>
+/* File upload site updater */
+.file-upload-updater{
+  display:grid;gap:14px
+}
+.file-drop{
+  position:relative;
+  padding:28px 18px;
+  border:2px dashed #4a5663;
+  border-radius:16px;
+  background:#0a1118;
+  text-align:center;
+  transition:.2s ease
+}
+.file-drop.dragover{
+  border-color:#e6bd55;
+  background:rgba(230,189,85,.06)
+}
+.file-drop input[type=file]{
+  position:absolute;inset:0;width:100%;height:100%;
+  opacity:0;cursor:pointer
+}
+.file-drop strong{display:block;color:#f1c75b;font-size:1rem;margin-bottom:6px}
+.file-drop span{display:block;color:#9fa8b3;font-size:.78rem;line-height:1.6}
+.upload-file-list{display:grid;gap:8px}
+.upload-file-item{
+  display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;
+  padding:11px 12px;border:1px solid #35404c;border-radius:12px;background:#0b1219
+}
+.upload-file-item b{display:block;color:#fff;font-size:.86rem}
+.upload-file-item small{display:block;color:#8f99a4;margin-top:3px}
+.upload-status{
+  min-width:90px;text-align:right;font-size:.74rem;font-weight:800;color:#9aa4ae
+}
+.upload-status.ok{color:#7ed49a}.upload-status.ng{color:#ff9e9e}.upload-status.work{color:#f1c75b}
+.upload-actions{display:flex;gap:8px;flex-wrap:wrap}
+.upload-actions button{min-height:44px}
+.upload-confirm{
+  padding:12px;border:1px solid #655324;border-radius:12px;background:rgba(230,189,85,.04)
+}
+.upload-confirm input{
+  width:100%;margin-top:7px;padding:11px;border:1px solid #51451f;border-radius:10px;
+  background:#080e14;color:#fff
+}
+.upload-result{
+  display:none;padding:12px;border:1px solid #365544;border-radius:12px;
+  background:rgba(80,150,100,.05);color:#90d9aa;font-size:.78rem;line-height:1.65
+}
+.upload-note{
+  padding:11px 12px;border:1px solid #35404c;border-radius:12px;background:#0b1219;
+  color:#aeb6c0;font-size:.76rem;line-height:1.65
+}
+@media(max-width:650px){
+  .upload-file-item{grid-template-columns:1fr}
+  .upload-status{text-align:left}
+  .upload-actions{display:grid;grid-template-columns:1fr}
+}
+</style>
+
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
 <section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.22</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><div class="admin-security-badge">🔐 管理者ログイン</div></section>
@@ -1329,6 +1389,7 @@
       <button data-tab="jobs">求人</button>
       <button data-tab="ownerreq">店舗申請 <span id="ownerReqTabBadge" class="tab-notify-badge" hidden>0</span></button>
       <button data-tab="analytics">アクセス</button>
+      <button data-tab="sitesettings">サイト設定</button>
       <button data-tab="siteupdate">サイト更新</button>
     </div>
   </details>
@@ -1744,19 +1805,57 @@
 </section>
 
 
+
+<section id="tab-sitesettings" class="admin-block" hidden>
+  <div class="admin-block-head">
+    <div>
+      <p class="eyebrow">NO-CODE SITE SETTINGS</p>
+      <h2>サイト設定</h2>
+      <p>コードを触らず、公開トップページの主要文言を変更できます。</p>
+    </div>
+    <button id="reloadSiteSettings" class="admin-secondary-btn" type="button">再読み込み</button>
+  </div>
+
+  <div class="kbn-github-help" style="margin-bottom:14px">
+    ここで保存した内容はD1へ保存され、公開サイトに反映されます。空欄の項目は現在のサイト文言をそのまま使います。
+  </div>
+
+  <div class="form-grid">
+    <label>トップ見出し
+      <input id="siteHeroTitle" placeholder="例：熊本の夜を、もっと楽しく。">
+    </label>
+    <label>トップ説明文
+      <textarea id="siteHeroSubtitle" rows="3" placeholder="トップ見出しの下に表示する説明"></textarea>
+    </label>
+    <label>お知らせタイトル
+      <input id="siteNoticeTitle" placeholder="例：お知らせ">
+    </label>
+    <label>お知らせ本文
+      <textarea id="siteNoticeText" rows="4" placeholder="最新のお知らせ"></textarea>
+    </label>
+    <label>店舗向けCTAタイトル
+      <input id="siteCtaTitle" placeholder="例：掲載店舗募集中">
+    </label>
+    <label>店舗向けCTA本文
+      <textarea id="siteCtaText" rows="4" placeholder="店舗様向けの案内文"></textarea>
+    </label>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+    <button id="saveSiteSettings" class="btn-gold" type="button">サイト設定を保存</button>
+    <a href="/" target="_blank" class="admin-secondary-btn" style="text-decoration:none">公開サイトを確認</a>
+  </div>
+  <p id="siteSettingsMsg" class="muted" style="margin-top:10px"></p>
+</section>
+
+
 <section id="tab-siteupdate" class="admin-block" hidden>
   <div class="admin-block-head">
     <div>
       <p class="eyebrow">SITE UPDATE</p>
       <h2>サイト更新</h2>
-      <p>GitHubのサイト本体ファイルを管理画面から直接編集・反映します。</p>
+      <p>コードを書かず、完成したファイルをアップロードしてGitHubへ反映します。</p>
     </div>
-    <button id="kbnGithubReload" class="admin-secondary-btn" type="button">再読み込み</button>
-  </div>
-
-  <div class="kbn-github-help">
-    HTML / CSS / JavaScriptなどサイト本体の変更専用です。店舗情報は今までどおり店舗管理から更新してください。<br>
-    保存するとGitHubへコミットされ、現在のCloudflare Git連携で自動デプロイが始まります。
+    <button id="kbnGithubReload" class="admin-secondary-btn" type="button">接続確認</button>
   </div>
 
   <div class="kbn-github-status">
@@ -1766,58 +1865,39 @@
   </div>
 
   <div id="kbnGithubSetupHelp" class="kbn-github-help" hidden>
-    Cloudflare WorkerのSecretに <b>GITHUB_TOKEN</b> を登録してください。トークンは管理画面やHTMLへ表示しません。
+    Cloudflare WorkerのSecretに <b>GITHUB_TOKEN</b> を登録してください。
   </div>
 
-  <div class="kbn-github-layout">
-    <aside>
-      <h3 style="margin-top:0">ファイル</h3>
-      <div id="kbnGithubFiles" class="kbn-github-files"></div>
-    </aside>
-
-    <div>
-      <div class="admin-block-head">
-        <div>
-          <h3 id="kbnGithubFileTitle">ファイルを選択</h3>
-          <p id="kbnGithubFileMeta"></p>
-        </div>
-      </div>
-
-      <textarea id="kbnGithubEditor" class="kbn-code-editor" spellcheck="false" placeholder="左から編集するファイルを選択してください"></textarea>
-
-      <div class="kbn-github-tools">
-        <button id="kbnGithubDiffBtn" type="button">変更差分をプレビュー</button>
-        <button id="kbnGithubResetBtn" type="button">編集中の変更を戻す</button>
-      </div>
-      <div id="kbnGithubDiffPanel" class="kbn-diff-panel">
-        <div id="kbnGithubDiffSummary" class="kbn-diff-summary"></div>
-        <pre id="kbnGithubDiffCode" class="kbn-diff-code"></pre>
-      </div>
-
-      <div class="kbn-history">
-        <div class="kbn-history-head">
-          <h4>変更前バックアップ・履歴</h4>
-          <button id="kbnGithubHistoryReload" type="button">履歴を読み込み</button>
-        </div>
-        <p class="kbn-backup-note">GitHubへ反映するたび、変更前の内容はコミット履歴に残ります。過去版の確認とワンクリック復元ができます。</p>
-        <div id="kbnGithubHistoryList" class="kbn-history-list"><p class="muted">ファイルを選択すると履歴を確認できます。</p></div>
-      </div>
-
-      <div class="kbn-github-formrow">
-        <input id="kbnGithubMessage" placeholder="コミットメッセージ（例：管理画面からトップページ修正）">
-        <button id="kbnGithubCommit" class="btn-gold" type="button">GitHubへ反映</button>
-      </div>
-
-      <div class="kbn-github-confirm">
-        <p>誤操作防止のため、反映前に <b style="color:#e8be55">GITHUBへ反映</b> と入力してください。</p>
-        <input id="kbnGithubConfirm" placeholder="GITHUBへ反映">
-        <p>保存後はGitHubのコミット履歴に残ります。</p>
-      </div>
-
-      <div id="kbnGithubResult" class="kbn-github-result"></div>
+  <div class="file-upload-updater">
+    <div class="upload-note">
+      <b>使い方：</b>こちらで作成した更新用ファイルを選ぶだけです。<br>
+      ファイル名と同じGitHub上のファイルを自動で探して上書きします。複数ファイルをまとめて選択できます。
     </div>
+
+    <div id="kbnFileDrop" class="file-drop">
+      <input id="kbnUploadFiles" type="file" multiple>
+      <strong>更新ファイルを選択</strong>
+      <span>タップしてファイルを選ぶ / PCではドラッグ＆ドロップも可能</span>
+    </div>
+
+    <div id="kbnUploadList" class="upload-file-list">
+      <div class="upload-note">まだファイルが選択されていません。</div>
+    </div>
+
+    <div class="upload-confirm">
+      誤操作防止のため、反映前に <b style="color:#e6bd55">GITHUBへ反映</b> と入力してください。
+      <input id="kbnUploadConfirm" placeholder="GITHUBへ反映">
+    </div>
+
+    <div class="upload-actions">
+      <button id="kbnUploadStart" class="btn-gold" type="button">選択したファイルを反映</button>
+      <button id="kbnUploadClear" class="admin-secondary-btn" type="button">選択をクリア</button>
+    </div>
+
+    <div id="kbnUploadResult" class="upload-result"></div>
   </div>
 </section>
+
 
 <section id="tab-analytics" class="admin-block" hidden>
 <div class="admin-block-head"><div><p class="eyebrow">ANALYTICS</p><h2>店舗アクセス集計</h2></div><button id="reloadAnalytics" class="admin-secondary-btn" type="button">再読み込み</button></div>
@@ -2111,7 +2191,6 @@ async function restoreKbnGithubVersion(targetSha){
   }
 }
 
-$("kbnGithubReload")?.addEventListener("click",()=>window.loadKbnGithubStatus());
 $("kbnGithubDiffBtn")?.addEventListener("click",showKbnGithubDiff);
 $("kbnGithubHistoryReload")?.addEventListener("click",loadKbnGithubHistory);
 $("kbnGithubResetBtn")?.addEventListener("click",()=>{
@@ -5359,6 +5438,141 @@ document.addEventListener("click",e=>{
   if(btn){
     e.preventDefault();
     window.repairExistingIndependentAreas?.();
+  }
+});
+
+
+async function loadNoCodeSiteSettings(){
+  const msg=$("siteSettingsMsg");
+  try{
+    const d=await api("/api/admin/site-settings");
+    const s=d.settings||{};
+    $("siteHeroTitle").value=s.hero_title||"";
+    $("siteHeroSubtitle").value=s.hero_subtitle||"";
+    $("siteNoticeTitle").value=s.notice_title||"";
+    $("siteNoticeText").value=s.notice_text||"";
+    $("siteCtaTitle").value=s.cta_title||"";
+    $("siteCtaText").value=s.cta_text||"";
+    if(msg)msg.textContent="最新の設定を読み込みました。";
+  }catch(e){
+    if(msg)msg.textContent="設定の読み込みに失敗しました。";
+  }
+}
+$("reloadSiteSettings")?.addEventListener("click",loadNoCodeSiteSettings);
+$("saveSiteSettings")?.addEventListener("click",async()=>{
+  const btn=$("saveSiteSettings"),msg=$("siteSettingsMsg");
+  btn.disabled=true; btn.textContent="保存中...";
+  try{
+    await api("/api/admin/site-settings",{
+      method:"PUT",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        hero_title:$("siteHeroTitle").value,
+        hero_subtitle:$("siteHeroSubtitle").value,
+        notice_title:$("siteNoticeTitle").value,
+        notice_text:$("siteNoticeText").value,
+        cta_title:$("siteCtaTitle").value,
+        cta_text:$("siteCtaText").value
+      })
+    });
+    msg.textContent="✅ 保存しました。公開サイトを再読み込みすると反映されます。";
+  }catch(e){
+    msg.textContent="保存に失敗しました: "+(e?.message||"UNKNOWN_ERROR");
+  }finally{
+    btn.disabled=false;btn.textContent="サイト設定を保存";
+  }
+});
+loadNoCodeSiteSettings();
+
+
+
+let kbnSelectedFiles=[];
+
+function kbnFormatBytes(n){
+  const v=Number(n||0);
+  if(v<1024)return v+" B";
+  if(v<1024*1024)return (v/1024).toFixed(1)+" KB";
+  return (v/1024/1024).toFixed(1)+" MB";
+}
+function kbnRenderUploadList(){
+  const box=$("kbnUploadList");
+  if(!box)return;
+  if(!kbnSelectedFiles.length){
+    box.innerHTML='<div class="upload-note">まだファイルが選択されていません。</div>';
+    return;
+  }
+  box.innerHTML=kbnSelectedFiles.map((f,i)=>`
+    <div class="upload-file-item" data-upload-index="${i}">
+      <div><b>${esc(f.name)}</b><small>${kbnFormatBytes(f.size)}</small></div>
+      <div class="upload-status" id="kbnUploadStatus-${i}">待機中</div>
+    </div>
+  `).join("");
+}
+function kbnSetFiles(list){
+  kbnSelectedFiles=[...list];
+  kbnRenderUploadList();
+  $("kbnUploadResult").style.display="none";
+}
+$("kbnUploadFiles")?.addEventListener("change",e=>kbnSetFiles(e.target.files||[]));
+$("kbnUploadClear")?.addEventListener("click",()=>{
+  kbnSelectedFiles=[];
+  $("kbnUploadFiles").value="";
+  $("kbnUploadConfirm").value="";
+  kbnRenderUploadList();
+});
+const kbnDrop=$("kbnFileDrop");
+kbnDrop?.addEventListener("dragover",e=>{e.preventDefault();kbnDrop.classList.add("dragover")});
+kbnDrop?.addEventListener("dragleave",()=>kbnDrop.classList.remove("dragover"));
+kbnDrop?.addEventListener("drop",e=>{
+  e.preventDefault();kbnDrop.classList.remove("dragover");
+  if(e.dataTransfer?.files?.length)kbnSetFiles(e.dataTransfer.files);
+});
+$("kbnGithubReload")?.addEventListener("click",()=>window.loadKbnGithubStatus());
+
+$("kbnUploadStart")?.addEventListener("click",async()=>{
+  if(!kbnSelectedFiles.length){alert("更新するファイルを選択してください。");return}
+  if($("kbnUploadConfirm").value.trim()!=="GITHUBへ反映"){
+    alert("確認欄に「GITHUBへ反映」と入力してください。");return
+  }
+  if(!confirm(`${kbnSelectedFiles.length}個のファイルをGitHubへ反映しますか？`))return;
+
+  const btn=$("kbnUploadStart"),result=$("kbnUploadResult");
+  btn.disabled=true;btn.textContent="反映中...";
+  result.style.display="none";
+
+  let ok=0,ng=0;
+  const details=[];
+  try{
+    for(let i=0;i<kbnSelectedFiles.length;i++){
+      const f=kbnSelectedFiles[i];
+      const st=$(`kbnUploadStatus-${i}`);
+      st.textContent="確認中...";st.className="upload-status work";
+      try{
+        const current=await api("/api/admin/github/file?path="+encodeURIComponent(f.name));
+        st.textContent="読込中...";
+        const content=await f.text();
+        st.textContent="反映中...";
+        const d=await api("/api/admin/github/file",{
+          method:"PUT",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({
+            path:f.name,
+            sha:current.sha,
+            content,
+            message:`admin upload: update ${f.name}`,
+            confirm:"GITHUBへ反映"
+          })
+        });
+        st.textContent="反映完了";st.className="upload-status ok";ok++;
+        details.push(`✅ ${f.name}`);
+      }catch(e){
+        st.textContent="失敗";st.className="upload-status ng";ng++;
+        details.push(`❌ ${f.name}: ${e?.message||"ERROR"}`);
+      }
+    }
+    result.style.display="block";
+    result.innerHTML=`反映完了：${ok}件 / 失敗：${ng}件<br>${details.map(esc).join("<br>")}<br><br>Cloudflareの自動デプロイが開始されます。`;
+  }finally{
+    btn.disabled=false;btn.textContent="選択したファイルを反映";
   }
 });
 
