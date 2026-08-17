@@ -35,6 +35,21 @@
 }
 </script>
 <link rel="canonical" href="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/">
+
+  <style>
+    /* Instagram card - inline to avoid stylesheet cache mismatch */
+    .public-instagram-section{padding:34px 0;background:#0d0d0f}
+    .public-instagram-card{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:28px 30px;border:1px solid rgba(255,255,255,.11);border-radius:22px;background:linear-gradient(135deg,rgba(255,255,255,.07),rgba(255,255,255,.025));box-shadow:0 18px 45px rgba(0,0,0,.22)}
+    .public-instagram-profile{display:flex;align-items:center;gap:18px;min-width:0}
+    .public-instagram-avatar{width:72px;height:72px;flex:0 0 72px;border-radius:50%;background:linear-gradient(135deg,#833ab4,#fd1d1d,#fcb045);padding:3px}
+    .public-instagram-avatar-inner{width:100%;height:100%;border-radius:50%;background:#111;display:grid;place-items:center;overflow:hidden}
+    .public-instagram-avatar img{width:100%;height:100%;object-fit:cover;display:block}
+    .public-instagram-copy h2{margin:3px 0 5px;font-size:clamp(20px,3vw,28px);color:#fff}
+    .public-instagram-copy p{margin:0;color:rgba(255,255,255,.68);line-height:1.7}
+    .public-instagram-handle{color:#fff;font-weight:800;letter-spacing:.02em}
+    .public-instagram-button{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:0 22px;border-radius:999px;text-decoration:none;font-weight:800;color:#fff;background:linear-gradient(90deg,#833ab4,#fd1d1d,#fcb045);box-shadow:0 10px 26px rgba(225,48,108,.22)}
+    @media(max-width:700px){.public-instagram-section{padding:22px 0}.public-instagram-card{align-items:stretch;flex-direction:column;padding:22px 18px}.public-instagram-avatar{width:62px;height:62px;flex-basis:62px}.public-instagram-button{width:100%}}
+  </style>
 </head>
 <body class="public-v109">
 
@@ -174,18 +189,21 @@
     </div>
   </section>
 
+
   <section class="public-instagram-section" aria-labelledby="instagramTitle">
     <div class="container">
       <div class="public-instagram-card">
         <div class="public-instagram-profile">
-          <div class="public-instagram-avatar"><img src="logo.png" alt="KUMAMOTO BAR NAVI"></div>
+          <div class="public-instagram-avatar">
+            <div class="public-instagram-avatar-inner"><img src="logo.png" alt="KUMAMOTO BAR NAVI"></div>
+          </div>
           <div class="public-instagram-copy">
             <p class="public-kicker">INSTAGRAM</p>
             <h2 id="instagramTitle">KUMAMOTO BAR NAVI 公式Instagram</h2>
             <p><span class="public-instagram-handle">@kumamoto_bar_navi</span><br>熊本のBAR・夜の情報を発信中。掲載店や新着情報もInstagramで紹介しています。</p>
           </div>
         </div>
-        <a class="public-instagram-button" href="https://www.instagram.com/kumamoto_bar_navi/" target="_blank" rel="noopener noreferrer" aria-label="KUMAMOTO BAR NAVIのInstagramを開く">Instagramをフォローする</a>
+        <a class="public-instagram-button" href="https://www.instagram.com/kumamoto_bar_navi/" target="_blank" rel="noopener noreferrer">Instagramをフォローする</a>
       </div>
     </div>
   </section>
