@@ -2110,6 +2110,45 @@ ${urls.map(x=>`  <url>
 
 
       // ---------- GitHub site update ----------
+
+      if(url.pathname==="/api/admin/deploy-status" && request.method==="GET"){
+        const accountId=String(env.CLOUDFLARE_ACCOUNT_ID||"").trim();
+        const apiToken=String(env.CLOUDFLARE_API_TOKEN||"").trim();
+        const workerName=String(env.CLOUDFLARE_WORKER_NAME||"").trim();
+        let workerTag=String(env.CLOUDFLARE_WORKER_TAG||"").trim();
+        if(!accountId || !apiToken || !workerName){
+          return json({ok:true,configured:false,missing:[!accountId&&"CLOUDFLARE_ACCOUNT_ID",!apiToken&&"CLOUDFLARE_API_TOKEN",!workerName&&"CLOUDFLARE_WORKER_NAME"].filter(Boolean)});
+        }
+        const headers={"Authorization":`Bearer ${apiToken}`,"Accept":"application/json"};
+        try{
+          if(!workerTag){
+            const sr=await fetch(`https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/workers/scripts`,{headers});
+            const sd=await sr.json();
+            if(!sr.ok || !sd?.success)throw new Error(sd?.errors?.[0]?.message||`WORKER_LIST_HTTP_${sr.status}`);
+            const match=(Array.isArray(sd.result)?sd.result:[]).find(x=>String(x?.id||"")===workerName);
+            workerTag=String(match?.tag||"");
+            if(!workerTag)throw new Error("CLOUDFLARE_WORKER_NOT_FOUND");
+          }
+          const br=await fetch(`https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/builds/workers/${encodeURIComponent(workerTag)}/builds`,{headers});
+          const bd=await br.json();
+          if(!br.ok || !bd?.success)throw new Error(bd?.errors?.[0]?.message||`BUILDS_HTTP_${br.status}`);
+          const raw=Array.isArray(bd.result)?bd.result:(Array.isArray(bd.result?.builds)?bd.result.builds:[]);
+          const builds=raw.slice(0,10).map(x=>({
+            build_uuid:x?.build_uuid||x?.id||"",
+            status:x?.status||x?.build_status||"unknown",
+            branch:x?.build_trigger_metadata?.branch||x?.branch||x?.trigger?.branch||"",
+            commit_hash:x?.build_trigger_metadata?.commit_hash||x?.commit_hash||"",
+            message:x?.build_trigger_metadata?.commit_message||x?.commit_message||x?.trigger?.trigger_name||"",
+            trigger:x?.trigger?.trigger_name||x?.build_trigger_source||"",
+            created_at:x?.created_at||x?.created_on||"",
+            updated_at:x?.updated_at||x?.completed_at||x?.modified_on||x?.created_at||""
+          })).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
+          return json({ok:true,configured:true,worker_name:workerName,worker_tag:workerTag,builds});
+        }catch(e){
+          return json({ok:false,configured:true,error:"CLOUDFLARE_BUILDS_FAILED",message:e?.message||"UNKNOWN_ERROR"},502);
+        }
+      }
+
       if(url.pathname==="/api/admin/github/status" && request.method==="GET"){
         const c=kbnGithubConfig(env);
         if(!c.token){
