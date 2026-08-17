@@ -192,6 +192,19 @@
 
 <style>
 #instaPostModal[hidden]{display:none!important}
+.shop-instagram-reopen{
+  border:1px solid #9d7a22!important;
+  background:#16130b!important;
+  color:#efc45a!important;
+  font-weight:800!important;
+}
+.shop-instagram-reopen:hover{background:#211b0d!important}
+@media(max-width:640px){
+  .admin-item-actions.compact-actions .shop-instagram-reopen{
+    width:100%;
+    min-height:42px;
+  }
+}
 #instaPostModal{
   position:fixed;
   inset:0;
@@ -2488,6 +2501,7 @@ function renderShopList(){
             <small>順:${s.sort_order} / ${s.is_published?'公開':'非公開'} / ${provisional?'KBN独自掲載':'正式掲載'} / 専用URL:${s.owner_token_hash?'発行済み':'未発行'}</small>
           </div>
           <div class="admin-item-actions compact-actions">
+            ${!provisional?`<button type="button" onclick="reopenInstaDraft(${s.id})" class="shop-instagram-reopen">Instagram投稿を開く</button>`:""}
             <button onclick="editShop(${s.id})" class="shop-edit-main">編集する</button>
             <details class="shop-more-menu">
               <summary>•••</summary>
@@ -3688,6 +3702,31 @@ window.createInstaPost=async function(shopId){
 };
 
 window.closeInstaPost=function(){
+  // 閉じる前に現在の投稿文・DMを店舗ごとに保存。
+  // 店舗一覧の「Instagram投稿を開く」から何度でも再表示できる。
+  try{
+    const shopId=Number(currentInstaShop?.id||0);
+    if(shopId){
+      const prevRaw=localStorage.getItem(`kbn_insta_post_${shopId}`);
+      let prev={};
+      try{ prev=prevRaw?JSON.parse(prevRaw):{}; }catch(e){}
+      localStorage.setItem(
+        `kbn_insta_post_${shopId}`,
+        JSON.stringify({
+          ...prev,
+          shop_id:shopId,
+          shop_name:currentInstaShop?.name||prev.shop_name||"",
+          caption:$("instaPostCaption")?.value||prev.caption||"",
+          share_dm:$("instaShareDmText")?.value||prev.share_dm||"",
+          generated_at:prev.generated_at||new Date().toISOString(),
+          saved_at:new Date().toISOString()
+        })
+      );
+    }
+  }catch(e){
+    console.warn("Instagram draft save on close failed",e);
+  }
+
   const modal=$("instaPostModal");
   if(modal){
     modal.hidden=true;
