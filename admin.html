@@ -2163,7 +2163,16 @@
 
 
 
-const deployMonitorState={timer:null,loading:false};
+const deployMonitorState={timer:null,loading:false,lastState:"idle"};
+function scheduleDeployMonitor(state=deployMonitorState.lastState){
+  if(deployMonitorState.timer){clearTimeout(deployMonitorState.timer);deployMonitorState.timer=null;}
+  deployMonitorState.lastState=state||"idle";
+  const delay=deployMonitorState.lastState==="running"?3000:30000;
+  deployMonitorState.timer=setTimeout(()=>{
+    if(document.visibilityState!=="hidden")loadDeployStatus();
+    else scheduleDeployMonitor(deployMonitorState.lastState);
+  },delay);
+}
 function deployStatusClass(v){
   const s=String(v||"").toLowerCase();
   if(["success","succeeded","complete","completed","deployed"].some(x=>s.includes(x)))return "success";
@@ -2194,6 +2203,7 @@ async function loadDeployStatus(){
     }
     if(note)note.hidden=true;
     const rows=Array.isArray(d?.builds)?d.builds:[];const latest=rows[0]||{};const cls=deployStatusClass(latest.status);
+    deployMonitorState.lastState=cls;
     if(box)box.dataset.state=cls;if(status)status.textContent=rows.length?deployStatusLabel(latest.status):"ビルド履歴なし";
     const latestMeta=rows.length?`${latest.branch||"branch不明"} ・ ${shortCommit(latest.commit_hash)}${latest.message?" ・ "+latest.message:""}`:"Cloudflareからビルド履歴が返りませんでした。";
     const latestAgo=deployAgo(latest.updated_at||latest.created_at);
@@ -2203,11 +2213,25 @@ async function loadDeployStatus(){
     if(summaryTime)summaryTime.textContent=latestAgo;
     if($("deployProjectName"))$("deployProjectName").textContent=d.worker_name||"KUMAMOTO BAR NAVI";
     if(hist)hist.innerHTML=rows.slice(0,5).map(x=>{const c=deployStatusClass(x.status);return `<div class="deploy-row"><span class="deploy-badge ${c}">${deployStatusLabel(x.status)}</span><div><b>${esc(x.branch||"—")} ・ ${esc(shortCommit(x.commit_hash))}</b><small>${esc(x.message||x.trigger||"")}</small></div><time>${esc(deployAgo(x.updated_at||x.created_at))}</time></div>`}).join("");
-  }catch(e){if(box)box.dataset.state="failed";if(status)status.textContent="ビルド状況を取得できません";if(meta)meta.textContent=e?.message||"UNKNOWN_ERROR";if(time)time.textContent="";if(summaryMeta)summaryMeta.textContent="取得エラー";if(summaryTime)summaryTime.textContent="";}
-  finally{deployMonitorState.loading=false;if(btn)btn.disabled=false;}
+  }catch(e){deployMonitorState.lastState="idle";if(box)box.dataset.state="failed";if(status)status.textContent="ビルド状況を取得できません";if(meta)meta.textContent=e?.message||"UNKNOWN_ERROR";if(time)time.textContent="";if(summaryMeta)summaryMeta.textContent="取得エラー";if(summaryTime)summaryTime.textContent="";}
+  finally{
+    deployMonitorState.loading=false;
+    if(btn)btn.disabled=false;
+    scheduleDeployMonitor(deployMonitorState.lastState);
+  }
 }
 window.loadDeployStatus=loadDeployStatus;
-document.addEventListener("DOMContentLoaded",()=>{const b=$("deployRefreshBtn");if(b)b.addEventListener("click",loadDeployStatus);setTimeout(loadDeployStatus,500);deployMonitorState.timer=setInterval(loadDeployStatus,20000);});
+document.addEventListener("DOMContentLoaded",()=>{
+  const b=$("deployRefreshBtn");
+  if(b)b.addEventListener("click",()=>{if(deployMonitorState.timer)clearTimeout(deployMonitorState.timer);loadDeployStatus();});
+  setTimeout(loadDeployStatus,500);
+});
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="visible"){
+    if(deployMonitorState.timer)clearTimeout(deployMonitorState.timer);
+    setTimeout(loadDeployStatus,250);
+  }
+});
 
 async function verifyAdminLogin(){
   const token=localStorage.getItem("kbn_admin_token")||"";
