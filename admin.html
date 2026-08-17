@@ -4279,8 +4279,8 @@ window.openStoreInstagramDm=async function(){
       : `@${handle} 宛てのDMを開きます`;
   }
 
-  // Instagram Webの新規DM作成画面。iPhoneではInstagramアプリへ遷移する場合があります。
-  const dmUrl=`https://www.instagram.com/direct/new/?username=${encodeURIComponent(handle)}`;
+  // Meta公式のig.me DMリンクを使用。対応環境では対象アカウントとのDM画面を直接開く。
+  const dmUrl=`https://ig.me/m/${encodeURIComponent(handle)}`;
   const win=window.open(dmUrl,"_blank");
   if(!win){
     // ポップアップが抑止された場合は同じタブで開く。
