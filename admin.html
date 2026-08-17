@@ -1286,14 +1286,35 @@
   .kbn-github-formrow{grid-template-columns:1fr}
 }
 
+/* ver1.22 backup / diff / restore */
+.kbn-github-tools{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.kbn-github-tools button{border:1px solid #3d4956;border-radius:10px;background:#0a121a;color:#d4dbe1;padding:10px 12px;font-weight:800}
+.kbn-github-tools button:hover{border-color:#b89442;color:#f0c75c}
+.kbn-diff-panel{display:none;margin:10px 0;padding:12px;border:1px solid #394653;border-radius:12px;background:#070c12}
+.kbn-diff-panel.show{display:block}
+.kbn-diff-summary{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px;color:#b8c1ca;font-size:.78rem}
+.kbn-diff-code{max-height:360px;overflow:auto;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.55 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;color:#cbd3da}
+.kbn-diff-add{color:#7fe09b}.kbn-diff-del{color:#ee9191}.kbn-diff-ctx{color:#7d8792}
+.kbn-history{margin-top:14px;padding:12px;border:1px solid #34414d;border-radius:12px;background:#091018}
+.kbn-history-head{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:10px}
+.kbn-history-head h4{margin:0}.kbn-history-head button{border:1px solid #3d4956;border-radius:10px;background:#0c151e;color:#dfe4e8;padding:8px 10px;font-weight:800}
+.kbn-history-list{display:grid;gap:8px}
+.kbn-history-item{border:1px solid #2f3b47;border-radius:10px;padding:10px;background:#080e14}
+.kbn-history-meta{display:flex;gap:8px;flex-wrap:wrap;color:#8e99a4;font-size:.72rem}
+.kbn-history-msg{margin:5px 0 8px;color:#e0e4e7;font-size:.82rem;line-height:1.5}
+.kbn-history-actions{display:flex;gap:7px;flex-wrap:wrap}
+.kbn-history-actions button{border:1px solid #485462;border-radius:9px;background:#0e1720;color:#cfd7de;padding:7px 9px;font-size:.74rem;font-weight:800}
+.kbn-history-actions .restore{border-color:#8a6c2d;color:#f0c75c}
+.kbn-backup-note{margin:10px 0;color:#9ea8b1;font-size:.78rem;line-height:1.6}
+
 </style>
 
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
-<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.21</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><div class="admin-security-badge">🔐 管理者ログイン</div></section>
+<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.22</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><div class="admin-security-badge">🔐 管理者ログイン</div></section>
 
 <div class="admin-login-bar">
-  <span>🔐 管理者ログイン中 <small id="authStatusText">ver1.21</small></span>
+  <span>🔐 管理者ログイン中 <small id="authStatusText">ver1.22</small></span>
   <button type="button" id="adminLogoutBtn">ログアウト</button>
 </div>
 
@@ -1764,6 +1785,24 @@
 
       <textarea id="kbnGithubEditor" class="kbn-code-editor" spellcheck="false" placeholder="左から編集するファイルを選択してください"></textarea>
 
+      <div class="kbn-github-tools">
+        <button id="kbnGithubDiffBtn" type="button">変更差分をプレビュー</button>
+        <button id="kbnGithubResetBtn" type="button">編集中の変更を戻す</button>
+      </div>
+      <div id="kbnGithubDiffPanel" class="kbn-diff-panel">
+        <div id="kbnGithubDiffSummary" class="kbn-diff-summary"></div>
+        <pre id="kbnGithubDiffCode" class="kbn-diff-code"></pre>
+      </div>
+
+      <div class="kbn-history">
+        <div class="kbn-history-head">
+          <h4>変更前バックアップ・履歴</h4>
+          <button id="kbnGithubHistoryReload" type="button">履歴を読み込み</button>
+        </div>
+        <p class="kbn-backup-note">GitHubへ反映するたび、変更前の内容はコミット履歴に残ります。過去版の確認とワンクリック復元ができます。</p>
+        <div id="kbnGithubHistoryList" class="kbn-history-list"><p class="muted">ファイルを選択すると履歴を確認できます。</p></div>
+      </div>
+
       <div class="kbn-github-formrow">
         <input id="kbnGithubMessage" placeholder="コミットメッセージ（例：管理画面からトップページ修正）">
         <button id="kbnGithubCommit" class="btn-gold" type="button">GitHubへ反映</button>
@@ -1921,7 +1960,7 @@ document.querySelectorAll(".admin-tabs button").forEach(b=>b.onclick=async()=>{
 });
 
 
-let kbnGithubCurrent={path:"",sha:""};
+let kbnGithubCurrent={path:"",sha:"",originalContent:"",loadedRef:"main"};
 const kbnGithubFallbackFiles=["index.html","style.css","script.js","admin.html","worker.js","bars.html","shop.html","jobs.html","areas.html"];
 
 window.loadKbnGithubStatus=async function(){
@@ -1955,21 +1994,25 @@ window.loadKbnGithubStatus=async function(){
   }
 };
 
-async function loadKbnGithubFile(path){
+async function loadKbnGithubFile(path,ref=""){
   if(!path)return;
   $("kbnGithubFileTitle").textContent=path;
   $("kbnGithubFileMeta").textContent="読み込み中...";
   $("kbnGithubEditor").value="読み込み中...";
   try{
-    const d=await api("/api/admin/github/file?path="+encodeURIComponent(path));
-    kbnGithubCurrent={path:d.path,sha:d.sha};
-    $("kbnGithubEditor").value=d.content||"";
-    $("kbnGithubFileMeta").textContent=`${Number(d.size||0).toLocaleString()} bytes`;
+    const q="/api/admin/github/file?path="+encodeURIComponent(path)+(ref?"&ref="+encodeURIComponent(ref):"");
+    const d=await api(q);
+    const content=d.content||"";
+    kbnGithubCurrent={path:d.path,sha:d.sha,originalContent:content,loadedRef:d.ref||ref||"main"};
+    $("kbnGithubEditor").value=content;
+    $("kbnGithubFileMeta").textContent=`${Number(d.size||0).toLocaleString()} bytes${ref?` / ${String(ref).slice(0,12)} を表示中`:""}`;
     $("kbnGithubMessage").value=`admin: update ${path}`;
     $("kbnGithubConfirm").value="";
+    $("kbnGithubDiffPanel").classList.remove("show");
     document.querySelectorAll("[data-kbn-gh-file]").forEach(btn=>{
       btn.classList.toggle("active",btn.dataset.kbnGhFile===path);
     });
+    await loadKbnGithubHistory();
   }catch(e){
     $("kbnGithubEditor").value="";
     $("kbnGithubFileMeta").textContent="読み込み失敗";
@@ -1977,18 +2020,128 @@ async function loadKbnGithubFile(path){
   }
 }
 
+function kbnBuildSimpleDiff(before,after){
+  const a=String(before??"").split("\n");
+  const b=String(after??"").split("\n");
+  let head=0;
+  while(head<a.length&&head<b.length&&a[head]===b[head])head++;
+  let tail=0;
+  while(tail<a.length-head&&tail<b.length-head&&a[a.length-1-tail]===b[b.length-1-tail])tail++;
+
+  const removed=a.slice(head,a.length-tail);
+  const added=b.slice(head,b.length-tail);
+  const contextBefore=a.slice(Math.max(0,head-3),head);
+  const contextAfter=a.slice(a.length-tail,Math.min(a.length,a.length-tail+3));
+  const rows=[];
+  contextBefore.forEach((line,i)=>rows.push({t:"ctx",s:`  ${Math.max(1,head-contextBefore.length+i+1)} | ${line}`}));
+  removed.forEach((line,i)=>rows.push({t:"del",s:`- ${head+i+1} | ${line}`}));
+  added.forEach((line,i)=>rows.push({t:"add",s:`+ ${head+i+1} | ${line}`}));
+  contextAfter.forEach((line,i)=>rows.push({t:"ctx",s:`  ${a.length-tail+i+1} | ${line}`}));
+  return {rows,removed:removed.length,added:added.length,changed:removed.length>0||added.length>0};
+}
+
+function showKbnGithubDiff(){
+  if(!kbnGithubCurrent.path)return alert("先にファイルを選択してください。");
+  const diff=kbnBuildSimpleDiff(kbnGithubCurrent.originalContent,$("kbnGithubEditor").value);
+  const panel=$("kbnGithubDiffPanel");
+  panel.classList.add("show");
+  $("kbnGithubDiffSummary").innerHTML=diff.changed
+    ? `<span>削除・変更: <b class="kbn-diff-del">${diff.removed}</b> 行</span><span>追加・変更: <b class="kbn-diff-add">${diff.added}</b> 行</span>`
+    : `<span>変更はありません。</span>`;
+  $("kbnGithubDiffCode").innerHTML=diff.rows.map(r=>`<span class="kbn-diff-${r.t}">${esc(r.s)}</span>`).join("\n");
+}
+
+async function loadKbnGithubHistory(){
+  const list=$("kbnGithubHistoryList");
+  if(!kbnGithubCurrent.path){
+    list.innerHTML='<p class="muted">ファイルを選択すると履歴を確認できます。</p>';
+    return;
+  }
+  list.innerHTML='<p class="muted">履歴を読み込み中...</p>';
+  try{
+    const d=await api("/api/admin/github/history?path="+encodeURIComponent(kbnGithubCurrent.path));
+    const items=Array.isArray(d.commits)?d.commits:[];
+    list.innerHTML=items.length?items.map(x=>`
+      <div class="kbn-history-item">
+        <div class="kbn-history-meta">
+          <span>${esc(String(x.sha||"").slice(0,10))}</span>
+          <span>${esc(formatJST(x.date)||x.date||"")}</span>
+        </div>
+        <div class="kbn-history-msg">${esc(x.message||"(メッセージなし)")}</div>
+        <div class="kbn-history-actions">
+          <button type="button" data-kbn-preview-sha="${esc(x.sha)}">この版を表示</button>
+          <button type="button" class="restore" data-kbn-restore-sha="${esc(x.sha)}">この版に戻す</button>
+        </div>
+      </div>`).join(""):'<p class="muted">履歴はありません。</p>';
+
+    list.querySelectorAll("[data-kbn-preview-sha]").forEach(btn=>{
+      btn.onclick=()=>loadKbnGithubFile(kbnGithubCurrent.path,btn.dataset.kbnPreviewSha);
+    });
+    list.querySelectorAll("[data-kbn-restore-sha]").forEach(btn=>{
+      btn.onclick=()=>restoreKbnGithubVersion(btn.dataset.kbnRestoreSha);
+    });
+  }catch(e){
+    list.innerHTML=`<p class="muted">履歴を読み込めませんでした: ${esc(e?.message||"UNKNOWN_ERROR")}</p>`;
+  }
+}
+
+async function restoreKbnGithubVersion(targetSha){
+  const path=kbnGithubCurrent.path;
+  if(!path||!targetSha)return;
+  if(!confirm(`${path} を ${String(targetSha).slice(0,10)} の内容へ戻しますか？\n復元操作自体も新しいコミットとして残ります。`))return;
+
+  try{
+    // main の最新SHAを取り直して競合を避ける
+    const latest=await api("/api/admin/github/file?path="+encodeURIComponent(path));
+    const d=await api("/api/admin/github/restore",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        path,
+        target_sha:targetSha,
+        current_sha:latest.sha,
+        confirm:"この版に戻す"
+      })
+    });
+    $("kbnGithubResult").style.display="block";
+    $("kbnGithubResult").innerHTML=`✅ ${esc(path)} を過去版へ復元しました。<br>Commit: ${esc(String(d.commit_sha||"").slice(0,12))}`;
+    await loadKbnGithubFile(path);
+  }catch(e){
+    alert("復元できませんでした: "+(e?.message||"UNKNOWN_ERROR"));
+  }
+}
+
 $("kbnGithubReload")?.addEventListener("click",()=>window.loadKbnGithubStatus());
+$("kbnGithubDiffBtn")?.addEventListener("click",showKbnGithubDiff);
+$("kbnGithubHistoryReload")?.addEventListener("click",loadKbnGithubHistory);
+$("kbnGithubResetBtn")?.addEventListener("click",()=>{
+  if(!kbnGithubCurrent.path)return alert("先にファイルを選択してください。");
+  if($("kbnGithubEditor").value===kbnGithubCurrent.originalContent)return;
+  if(!confirm("編集中の変更を読み込み時点の内容へ戻しますか？"))return;
+  $("kbnGithubEditor").value=kbnGithubCurrent.originalContent;
+  $("kbnGithubDiffPanel").classList.remove("show");
+});
 
 $("kbnGithubCommit")?.addEventListener("click",async()=>{
   if(!kbnGithubCurrent.path||!kbnGithubCurrent.sha){
     alert("先にファイルを選択してください。");
     return;
   }
+  if(kbnGithubCurrent.loadedRef!=="main"){
+    alert("過去版を表示中です。そのまま反映せず「この版に戻す」を使ってください。");
+    return;
+  }
+  const currentContent=$("kbnGithubEditor").value;
+  if(currentContent===kbnGithubCurrent.originalContent){
+    alert("変更がありません。");
+    return;
+  }
   if($("kbnGithubConfirm").value.trim()!=="GITHUBへ反映"){
     alert("確認欄に「GITHUBへ反映」と入力してください。");
     return;
   }
-  if(!confirm(`${kbnGithubCurrent.path} をGitHubへ反映しますか？`))return;
+  showKbnGithubDiff();
+  if(!confirm(`${kbnGithubCurrent.path} をGitHubへ反映しますか？\n変更前の内容はGitHub履歴に自動保存されます。`))return;
 
   const btn=$("kbnGithubCommit");
   const result=$("kbnGithubResult");
@@ -2003,14 +2156,14 @@ $("kbnGithubCommit")?.addEventListener("click",async()=>{
       body:JSON.stringify({
         path:kbnGithubCurrent.path,
         sha:kbnGithubCurrent.sha,
-        content:$("kbnGithubEditor").value,
+        content:currentContent,
         message:$("kbnGithubMessage").value.trim()||`admin: update ${kbnGithubCurrent.path}`,
         confirm:$("kbnGithubConfirm").value.trim()
       })
     });
 
     result.style.display="block";
-    result.innerHTML=`✅ GitHubへ反映しました。<br>${esc(d.message||"Cloudflareが自動デプロイします。")}<br>Commit: ${esc(String(d.commit_sha||"").slice(0,12))}`;
+    result.innerHTML=`✅ GitHubへ反映しました。<br>変更前バックアップは履歴から復元できます。<br>${esc(d.message||"Cloudflareが自動デプロイします。")}<br>Commit: ${esc(String(d.commit_sha||"").slice(0,12))}`;
     await loadKbnGithubFile(kbnGithubCurrent.path);
   }catch(e){
     alert("GitHubへ反映できませんでした: "+(e?.message||"UNKNOWN_ERROR"));

@@ -2108,10 +2108,11 @@ ${urls.map(x=>`  <url>
         if(!KBN_GITHUB_EDITABLE_FILES.includes(path)){
           return json({ok:false,error:"FILE_NOT_ALLOWED"},{status:400});
         }
+        const ref=t(url.searchParams.get("ref"),100)||c.branch;
         try{
           const d=await kbnGithubApi(
             env,
-            `/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/${encodeURIComponent(path)}?ref=${encodeURIComponent(c.branch)}`
+            `/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/${encodeURIComponent(path)}?ref=${encodeURIComponent(ref)}`
           );
           if(Array.isArray(d)||d.type!=="file"){
             return json({ok:false,error:"NOT_A_FILE"},{status:400});
@@ -2122,7 +2123,8 @@ ${urls.map(x=>`  <url>
             sha:d.sha,
             size:d.size,
             content:kbnBase64ToUtf8(d.content||""),
-            html_url:d.html_url||""
+            html_url:d.html_url||"",
+            ref
           });
         }catch(e){
           return json({
@@ -2130,6 +2132,94 @@ ${urls.map(x=>`  <url>
             error:"GITHUB_READ_FAILED",
             detail:e.message
           },{status:e.status||502});
+        }
+      }
+
+      if(url.pathname==="/api/admin/github/history" && request.method==="GET"){
+        const c=kbnGithubConfig(env);
+        const path=t(url.searchParams.get("path"),180);
+        if(!KBN_GITHUB_EDITABLE_FILES.includes(path)){
+          return json({ok:false,error:"FILE_NOT_ALLOWED"},{status:400});
+        }
+        try{
+          const commits=await kbnGithubApi(
+            env,
+            `/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/commits?sha=${encodeURIComponent(c.branch)}&path=${encodeURIComponent(path)}&per_page=12`
+          );
+          return json({
+            ok:true,
+            path,
+            commits:(Array.isArray(commits)?commits:[]).map(x=>({
+              sha:x.sha||"",
+              message:x.commit?.message||"",
+              date:x.commit?.committer?.date||x.commit?.author?.date||"",
+              author:x.commit?.author?.name||x.author?.login||""
+            }))
+          });
+        }catch(e){
+          return json({ok:false,error:"GITHUB_HISTORY_FAILED",detail:e.message},{status:e.status||502});
+        }
+      }
+
+      if(url.pathname==="/api/admin/github/restore" && request.method==="POST"){
+        const c=kbnGithubConfig(env);
+        let x;
+        try{x=await request.json()}
+        catch{return json({ok:false,error:"INVALID_JSON"},{status:400})}
+
+        const path=t(x.path,180);
+        const targetSha=t(x.target_sha,100);
+        const currentSha=t(x.current_sha,100);
+        const confirmation=t(x.confirm,50);
+
+        if(!KBN_GITHUB_EDITABLE_FILES.includes(path)){
+          return json({ok:false,error:"FILE_NOT_ALLOWED"},{status:400});
+        }
+        if(!targetSha||!currentSha){
+          return json({ok:false,error:"SHA_REQUIRED"},{status:400});
+        }
+        if(confirmation!=="この版に戻す"){
+          return json({ok:false,error:"CONFIRM_REQUIRED"},{status:400});
+        }
+
+        try{
+          const old=await kbnGithubApi(
+            env,
+            `/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/${encodeURIComponent(path)}?ref=${encodeURIComponent(targetSha)}`
+          );
+          if(Array.isArray(old)||old.type!=="file"){
+            return json({ok:false,error:"NOT_A_FILE"},{status:400});
+          }
+          const content=kbnBase64ToUtf8(old.content||"");
+          if(content.length>900000){
+            return json({ok:false,error:"FILE_TOO_LARGE"},{status:413});
+          }
+
+          const result=await kbnGithubApi(
+            env,
+            `/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/${encodeURIComponent(path)}`,
+            {
+              method:"PUT",
+              headers:{"content-type":"application/json"},
+              body:JSON.stringify({
+                message:`admin: restore ${path} to ${targetSha.slice(0,10)}`,
+                content:kbnUtf8ToBase64(content),
+                sha:currentSha,
+                branch:c.branch
+              })
+            }
+          );
+
+          return json({
+            ok:true,
+            path,
+            restored_from:targetSha,
+            commit_sha:result.commit?.sha||"",
+            commit_url:result.commit?.html_url||"",
+            message:"過去版へ復元しました。復元操作もGitHub履歴に残っています。"
+          });
+        }catch(e){
+          return json({ok:false,error:"GITHUB_RESTORE_FAILED",detail:e.message},{status:e.status||502});
         }
       }
 
