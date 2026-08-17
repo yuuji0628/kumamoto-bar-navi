@@ -1471,30 +1471,31 @@
 .deploy-current{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:13px 15px}.deploy-current strong{display:block;color:#efc45a;font-size:1.08rem}.deploy-current p{margin:4px 0 0;color:#a8b0ba;font-size:.73rem;line-height:1.55}.deploy-time{color:#8f99a4;font-size:.7rem;white-space:nowrap}
 .deploy-history{display:grid;gap:0;border-top:1px solid #28333e}.deploy-row{display:grid;grid-template-columns:70px minmax(0,1fr) auto;gap:9px;align-items:center;padding:10px 15px;border-bottom:1px solid #202a34}.deploy-row:last-child{border-bottom:0}.deploy-badge{display:inline-flex;justify-content:center;padding:4px 7px;border:1px solid #46515d;border-radius:999px;color:#b8c0c8;font-size:.62rem;font-weight:900}.deploy-badge.running{border-color:#7c6429;color:#efc45a}.deploy-badge.success{border-color:#315943;color:#83dba4}.deploy-badge.failed{border-color:#663838;color:#ff9b9b}.deploy-row b{display:block;font-size:.75rem;color:#edf0f3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.deploy-row small{display:block;color:#89939e;font-size:.62rem;margin-top:2px}.deploy-row time{color:#89939e;font-size:.62rem;white-space:nowrap}.deploy-config{padding:12px 15px;color:#aeb6bf;font-size:.7rem;line-height:1.65}.deploy-config b{color:#efc45a}.deploy-config code{color:#e9edf1;background:#080d12;padding:2px 5px;border-radius:5px}
 @media(max-width:640px){.deploy-monitor-head{padding:12px}.deploy-current{grid-template-columns:1fr;padding:12px}.deploy-time{white-space:normal}.deploy-row{grid-template-columns:62px minmax(0,1fr);padding:9px 12px}.deploy-row time{grid-column:2}.deploy-monitor-title small{max-width:215px}}
+.deploy-monitor-compact{margin-top:12px}
+.deploy-monitor-summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 15px;cursor:pointer;user-select:none}
+.deploy-monitor-summary::-webkit-details-marker{display:none}
+.deploy-summary-status{display:flex;align-items:center;gap:9px;min-width:0}
+.deploy-summary-status strong{color:#efc45a;font-size:.82rem;white-space:nowrap}
+.deploy-monitor[data-state="success"] .deploy-summary-status strong{color:#83dba4}
+.deploy-monitor[data-state="failed"] .deploy-summary-status strong{color:#ff9b9b}
+.deploy-summary-chevron{color:#8f99a4;font-size:1rem;transition:transform .2s ease}
+.deploy-monitor[open] .deploy-summary-chevron{transform:rotate(180deg)}
+.deploy-monitor-detail{border-top:1px solid #2e3944}
+.deploy-detail-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 15px;color:#929ca7;font-size:.7rem}
+.deploy-monitor-compact .deploy-current{border-top:1px solid #202a34}
+.deploy-monitor-compact .deploy-current p{margin:0}
+@media(max-width:640px){.deploy-monitor-summary{padding:13px 12px}.deploy-summary-status strong{max-width:110px;overflow:hidden;text-overflow:ellipsis}.deploy-detail-toolbar{padding:10px 12px}}
 </style>
 
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
-<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.23</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><div class="admin-security-badge">🔐 管理者ログイン</div></section>
+<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.24</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><div class="admin-security-badge">🔐 管理者ログイン</div></section>
 
 <div class="admin-login-bar">
-  <span>🔐 管理者ログイン中 <small id="authStatusText">ver1.23</small></span>
+  <span>🔐 管理者ログイン中 <small id="authStatusText">ver1.24</small></span>
   <button type="button" id="adminLogoutBtn">ログアウト</button>
 </div>
 
-
-<section class="deploy-monitor" id="deployMonitor" data-state="idle" aria-live="polite">
-  <div class="deploy-monitor-head">
-    <div class="deploy-monitor-title"><span class="deploy-dot"></span><div><b>Cloudflare ビルド状況</b><small id="deployProjectName">KUMAMOTO BAR NAVI</small></div></div>
-    <button type="button" class="deploy-refresh" id="deployRefreshBtn">更新</button>
-  </div>
-  <div class="deploy-current">
-    <div><strong id="deployCurrentStatus">確認中…</strong><p id="deployCurrentMeta">最新ビルドを取得しています。</p></div>
-    <span class="deploy-time" id="deployCurrentTime"></span>
-  </div>
-  <div class="deploy-history" id="deployHistory"></div>
-  <div class="deploy-config" id="deployConfigNote" hidden></div>
-</section>
 
 <nav class="admin-tabs admin-tabs-v108">
   <button data-tab="shops" class="active">店舗</button>
@@ -1508,6 +1509,7 @@
       <button data-tab="analytics">アクセス</button>
       <button data-tab="sitesettings">サイト設定</button>
       <button data-tab="siteupdate">サイト更新</button>
+      <button data-tab="builds">ビルド状況</button>
     </div>
   </details>
 </nav>
@@ -1576,7 +1578,7 @@
   </div>
 
   <div id="buttonHealthNote" class="version-note">
-    ver1.18：自動開拓エリア判定修正
+    ver1.24：ビルド状況を「その他」へ移動
   </div>
 </section>
 
@@ -1922,6 +1924,45 @@
   <div id="leadList" class="lead-list"></div>
 </section>
 
+
+
+<section id="tab-builds" class="admin-block" hidden>
+  <div class="admin-block-head">
+    <div>
+      <p class="eyebrow">CLOUDFLARE BUILDS</p>
+      <h2>ビルド状況</h2>
+      <p>必要なときだけ最新のデプロイ状況と履歴を確認できます。</p>
+    </div>
+  </div>
+
+  <details class="deploy-monitor deploy-monitor-compact" id="deployMonitor" data-state="idle" aria-live="polite">
+    <summary class="deploy-monitor-summary">
+      <div class="deploy-monitor-title">
+        <span class="deploy-dot"></span>
+        <div>
+          <b>最新ビルド</b>
+          <small id="deployProjectName">KUMAMOTO BAR NAVI</small>
+        </div>
+      </div>
+      <div class="deploy-summary-status">
+        <strong id="deployCurrentStatus">確認中…</strong>
+        <span class="deploy-summary-chevron">⌄</span>
+      </div>
+    </summary>
+    <div class="deploy-monitor-detail">
+      <div class="deploy-detail-toolbar">
+        <span>Cloudflare ビルド履歴</span>
+        <button type="button" class="deploy-refresh" id="deployRefreshBtn">更新</button>
+      </div>
+      <div class="deploy-current">
+        <div><p id="deployCurrentMeta">最新ビルドを取得しています。</p></div>
+        <span class="deploy-time" id="deployCurrentTime"></span>
+      </div>
+      <div class="deploy-history" id="deployHistory"></div>
+      <div class="deploy-config" id="deployConfigNote" hidden></div>
+    </div>
+  </details>
+</section>
 
 
 <section id="tab-sitesettings" class="admin-block" hidden>
