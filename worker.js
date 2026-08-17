@@ -1716,14 +1716,39 @@ export default {
         .replace(/"/g,"&quot;")
         .replace(/'/g,"&apos;");
 
+      const sitemapDate=v=>{
+        const raw=String(v||"").trim();
+        if(!raw)return "";
+
+        // Google sitemap の lastmod は W3C Datetime 形式に限定。
+        // DB の日時形式に左右されないよう、確実な YYYY-MM-DD のみを出力する。
+        const m=raw.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
+        if(m){
+          const y=m[1];
+          const mo=String(m[2]).padStart(2,"0");
+          const d=String(m[3]).padStart(2,"0");
+          const iso=`${y}-${mo}-${d}`;
+          const dt=new Date(`${iso}T00:00:00Z`);
+          if(!Number.isNaN(dt.getTime()) && dt.toISOString().slice(0,10)===iso)return iso;
+        }
+
+        const dt=new Date(raw);
+        if(!Number.isNaN(dt.getTime()))return dt.toISOString().slice(0,10);
+
+        return "";
+      };
+
       const xml=`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls.map(x=>`  <url>
-    <loc>${escXml(x.loc)}</loc>${x.lastmod?`
-    <lastmod>${escXml(String(x.lastmod).replace(" ","T"))}</lastmod>`:""}
+${urls.map(x=>{
+  const lastmod=sitemapDate(x.lastmod);
+  return `  <url>
+    <loc>${escXml(x.loc)}</loc>${lastmod?`
+    <lastmod>${escXml(lastmod)}</lastmod>`:""}
     <changefreq>${x.freq}</changefreq>
     <priority>${x.priority}</priority>
-  </url>`).join("\n")}
+  </url>`;
+}).join("\n")}
 </urlset>`;
 
       return new Response(xml,{
