@@ -3204,6 +3204,98 @@ function drawAutoBackground(ctx,shop){
   }
 }
 
+
+function svgXmlEscape(value){
+  return String(value??"")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&apos;");
+}
+
+function svgTextLines(value,maxChars=20,maxLines=3){
+  const text=String(value||"").replace(/\s+/g," ").trim();
+  if(!text)return [];
+  const chars=Array.from(text);
+  const lines=[];
+  for(let i=0;i<chars.length && lines.length<maxLines;i+=maxChars){
+    let line=chars.slice(i,i+maxChars).join("");
+    if(i+maxChars<chars.length && lines.length===maxLines-1)line=line.replace(/.$/,"…");
+    lines.push(line);
+  }
+  return lines;
+}
+
+function buildInstaSvgDataUrl(shop){
+  const name=svgXmlEscape(shop?.name||"NEW BAR");
+  const area=svgXmlEscape(shop?.area||"熊本");
+  const genre=svgXmlEscape(shop?.genre||"BAR");
+  const hours=svgXmlEscape(shop?.hours||"店舗情報をご確認ください");
+  const holiday=svgXmlEscape(shop?.holiday||"店舗情報をご確認ください");
+  const handle=svgXmlEscape(cleanInstagramHandle(shop?.instagram||""));
+  const descLines=svgTextLines(shop?.description||"",24,4);
+  const descSvg=descLines.map((line,i)=>`<text x="70" y="${610+i*42}" class="desc">${svgXmlEscape(line)}</text>`).join("");
+  const initial=svgXmlEscape(String(shop?.name||"BAR").replace(/\s+/g,"").slice(0,2).toUpperCase());
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080" viewBox="0 0 1080 1080">
+    <defs>
+      <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#05080d"/><stop offset=".5" stop-color="#0b1118"/><stop offset="1" stop-color="#030507"/></linearGradient>
+      <linearGradient id="pic" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#1a232e"/><stop offset="1" stop-color="#080c11"/></linearGradient>
+      <style>
+        text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans','Yu Gothic',sans-serif}
+        .white{fill:#f7f8fa}.gold{fill:#f1c75b}.muted{fill:#c0c7cf}.desc{fill:#f7f8fa;font-size:27px;font-weight:500}
+      </style>
+    </defs>
+    <rect width="1080" height="1080" fill="url(#bg)"/>
+    <circle cx="92" cy="92" r="52" fill="none" stroke="#d9ad45" stroke-width="5"/>
+    <text x="92" y="102" text-anchor="middle" class="gold" font-size="28" font-weight="900">KBN</text>
+    <text x="170" y="72" class="gold" font-size="31" font-weight="800">KUMAMOTO BAR NAVI</text>
+    <text x="170" y="110" class="muted" font-size="22">熊本の夜をもっと楽しく、もっとおいしく。</text>
+    <rect x="44" y="145" width="992" height="58" rx="8" fill="#d9ad45"/>
+    <text x="540" y="183" text-anchor="middle" fill="#111" font-size="26" font-weight="800">KUMAMOTO BAR NAVI に新店掲載！</text>
+
+    <text x="64" y="282" class="gold" font-size="54" font-style="italic" font-weight="800">New!</text>
+    <text x="64" y="345" class="white" font-size="28" font-weight="800">BAR</text>
+    <text x="64" y="415" class="white" font-size="50" font-weight="900">${name}</text>
+    <rect x="64" y="450" width="190" height="48" rx="24" fill="#152233"/><text x="159" y="482" text-anchor="middle" class="white" font-size="22" font-weight="700">${area}</text>
+    <rect x="270" y="450" width="205" height="48" rx="24" fill="#152233"/><text x="372" y="482" text-anchor="middle" class="white" font-size="22" font-weight="700">${genre}</text>
+    ${descSvg}
+
+    <rect x="535" y="245" width="485" height="460" rx="22" fill="url(#pic)" stroke="#d9ad45" stroke-opacity=".45"/>
+    <text x="777" y="475" text-anchor="middle" fill="#d9ad45" fill-opacity=".18" font-size="205" font-weight="900">${initial}</text>
+    <text x="777" y="600" text-anchor="middle" class="gold" font-size="30" font-weight="700">KUMAMOTO NIGHT BAR</text>
+
+    <rect x="44" y="745" width="992" height="185" rx="22" fill="#080d12" stroke="#ffffff" stroke-opacity=".16"/>
+    <text x="70" y="790" class="gold" font-size="23" font-weight="700">エリア</text><text x="70" y="828" class="white" font-size="26" font-weight="700">${area}</text>
+    <text x="310" y="790" class="gold" font-size="23" font-weight="700">営業時間</text><text x="310" y="828" class="white" font-size="24" font-weight="700">${hours}</text>
+    <text x="650" y="790" class="gold" font-size="23" font-weight="700">定休日</text><text x="650" y="828" class="white" font-size="24" font-weight="700">${holiday}</text>
+    <text x="70" y="890" class="muted" font-size="24">${genre}</text>
+
+    <text x="60" y="992" class="gold" font-size="28" font-weight="800">熊本のBAR探しは KUMAMOTO BAR NAVIで！</text>
+    ${handle?`<text x="60" y="1035" class="muted" font-size="21" font-weight="600">@${handle}</text>`:""}
+  </svg>`;
+  return "data:image/svg+xml;charset=utf-8,"+encodeURIComponent(svg);
+}
+
+function applySvgPreviewFallback(shop,message="iPhone向け互換プレビューを生成しました"){
+  const dataUrl=buildInstaSvgDataUrl(shop);
+  instaRenderState.rendering=false;
+  instaRenderState.ready=true;
+  instaRenderState.lastDataUrl=dataUrl;
+  instaRenderState.lastShopId=Number(shop?.id||0);
+  const wrap=$("instaPostCanvas")?.closest?.(".insta-preview-wrap");
+  if(wrap)wrap.dataset.rendering="0";
+  const status=$("instaPreviewStatus");
+  if(status){status.textContent=message;status.dataset.state="ok";}
+  const readyNote=$("instaPreviewReadyNote");
+  if(readyNote)readyNote.classList.add("show");
+  setInstaPreviewButtonsDisabled(false);
+  const box=$("instaFullPreview");
+  const img=$("instaFullPreviewImg");
+  if(box&&img){img.src=dataUrl;box.hidden=false;box.style.display="block";box.dataset.ready="1";}
+  return true;
+}
+
 async function renderInstaPost(shop,{forceNoImage=false}={}){
   const canvas=$("instaPostCanvas");
   const status=$("instaPreviewStatus");
@@ -3466,7 +3558,12 @@ async function renderInstaPost(shop,{forceNoImage=false}={}){
   try{
     dataUrl=canvas.toDataURL("image/png");
   }catch(e){
-    console.warn("canvas dataURL generation failed",e);
+    console.warn("canvas dataURL generation failed; using SVG fallback",e);
+    return applySvgPreviewFallback(shop);
+  }
+
+  if(!dataUrl){
+    return applySvgPreviewFallback(shop);
   }
 
   instaRenderState.rendering=false;
@@ -3690,11 +3787,7 @@ window.createInstaPost=async function(shopId){
       if(wrap)wrap.dataset.rendering="0";
       console.error("renderInstaPost fallback failed",fallbackError);
 
-      const status=$("instaPreviewStatus");
-      if(status){
-        status.textContent="画像生成に失敗しました。ページを再読み込みしてもう一度お試しください。";
-        status.dataset.state="error";
-      }
+      applySvgPreviewFallback(shop,"iPhone向け互換モードでプレビューを生成しました");
     }
   }
 
@@ -3867,11 +3960,8 @@ window.refreshInstaPreview=async function(){
     const wrap=$("instaPostCanvas")?.closest?.(".insta-preview-wrap");
     if(wrap)wrap.dataset.rendering="0";
     console.error("preview refresh failed",firstError||e,e);
-    if(status){
-      status.textContent="プレビュー生成に失敗しました。ページを再読み込みしてもう一度お試しください";
-      status.dataset.state="error";
-    }
-    // Safariで操作を止めるモーダルalertは出さず、画面内に状態を表示する。
+    applySvgPreviewFallback(currentInstaShop,"iPhone向け互換モードでプレビューを生成しました");
+    // SafariではCanvasが使えない場合もSVG互換プレビューへ自動切替する。
   }
 };
 
