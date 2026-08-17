@@ -3669,13 +3669,39 @@ async function renderInstaPost(shop,{forceNoImage=false}={}){
     if(cx>420){cx=64;cy+=58;}
   }
 
-  // description
+  // description: 店舗ごとの文章量に合わせて自動縮小し、途中で切れないようにする
   let desc=String(shop?.description||"").trim().replace(/\s+/g," ");
   if(desc){
     ctx.fillStyle=white;
-    const descFont=desc.length>90?19:(desc.length>65?20:22);
-    ctx.font=`500 ${descFont}px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif`;
-    wrapCanvasText(ctx,desc,64,615,405,27,4);
+    const family="-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans','Yu Gothic',sans-serif";
+    const maxWidth=405;
+    const maxLines=5;
+    let descFont=21;
+    let lineHeight=27;
+
+    const countWrappedLines=(fontSize)=>{
+      ctx.font=`500 ${fontSize}px ${family}`;
+      let line="";
+      let lines=1;
+      for(const ch of Array.from(desc)){
+        const test=line+ch;
+        if(ctx.measureText(test).width>maxWidth && line){
+          lines++;
+          line=ch;
+        }else{
+          line=test;
+        }
+      }
+      return lines;
+    };
+
+    // 全文が5行に入るまで段階的に縮小（最小14px）
+    while(descFont>14 && countWrappedLines(descFont)>maxLines){
+      descFont--;
+    }
+    lineHeight=Math.max(20,Math.round(descFont*1.32));
+    ctx.font=`500 ${descFont}px ${family}`;
+    wrapCanvasText(ctx,desc,64,615,maxWidth,lineHeight,maxLines);
   }
 
   // information panel
