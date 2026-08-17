@@ -79,8 +79,8 @@ async function loadHomeShops(){
 
     if(latestBox){
       const latest=[...shops].sort((a,b)=>{
-        const ad=Date.parse(a.published_at||a.updated_at||a.created_at||0)||0;
-        const bd=Date.parse(b.published_at||b.updated_at||b.created_at||0)||0;
+        const ad=Date.parse(a.updated_at||a.published_at||a.created_at||0)||0;
+        const bd=Date.parse(b.updated_at||b.published_at||b.created_at||0)||0;
         return bd-ad || Number(b.id||0)-Number(a.id||0);
       }).slice(0,5);
       latestBox.innerHTML=latest.length?latest.map(s=>{
