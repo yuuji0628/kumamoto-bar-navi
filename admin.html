@@ -2143,7 +2143,7 @@
       <button type="button" id="instaPreviewOpenBtn" onclick="openInstaImagePreview()" disabled>画像だけ表示</button>
       <button type="button" id="instaImageSaveBtn" onclick="downloadInstaImage()" disabled>画像を保存</button>
       <button type="button" onclick="copyInstaCaption()">投稿文をコピー</button>
-      <button type="button" onclick="openInstagram()">Instagramを開く</button>
+      <button type="button" onclick="openInstagram()">Instagramに投稿</button>
     </div>
     <div id="instaSaveStatus" class="insta-save-status"></div>
 
@@ -4005,88 +4005,126 @@ window.closeInstaPost=function(){
   resetInstaRenderState();
 };
 
-function canvasToBlob(canvas,type="image/png",quality=1){
+function dataUrlToBlob(dataUrl){
+  const parts=String(dataUrl||"").split(",",2);
+  if(parts.length!==2)throw new Error("INVALID_DATA_URL");
+  const meta=parts[0];
+  const body=parts[1];
+  const mime=(meta.match(/^data:([^;,]+)/)||[])[1]||"application/octet-stream";
+  const isBase64=/;base64/i.test(meta);
+  let bytes;
+  if(isBase64){
+    const bin=atob(body);
+    bytes=new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+  }else{
+    bytes=new TextEncoder().encode(decodeURIComponent(body));
+  }
+  return new Blob([bytes],{type:mime});
+}
+
+function imageFromDataUrl(dataUrl){
   return new Promise((resolve,reject)=>{
-    try{
-      canvas.toBlob(blob=>{
-        if(blob)resolve(blob);
-        else reject(new Error("BLOB_CREATE_FAILED"));
-      },type,quality);
-    }catch(e){
-      reject(e);
-    }
+    const img=new Image();
+    img.onload=()=>resolve(img);
+    img.onerror=()=>reject(new Error("IMAGE_DECODE_FAILED"));
+    img.src=dataUrl;
   });
 }
 
-window.downloadInstaImage=async function(){
-  const canvas=$("instaPostCanvas");
+async function getInstaPngBlob(){
+  const dataUrl=instaRenderState.lastDataUrl||"";
+  if(!dataUrl)throw new Error("IMAGE_NOT_READY");
+
+  if(/^data:image\/png(?:;|,)/i.test(dataUrl)){
+    return dataUrlToBlob(dataUrl);
+  }
+
+  if(/^data:image\/jpe?g(?:;|,)/i.test(dataUrl)){
+    return dataUrlToBlob(dataUrl);
+  }
+
+  // SVG互換プレビューなどは、共有前にPNGへ変換する。
+  const img=await imageFromDataUrl(dataUrl);
+  const c=document.createElement("canvas");
+  c.width=1080;c.height=1080;
+  const ctx=c.getContext("2d");
+  if(!ctx)throw new Error("CANVAS_UNAVAILABLE");
+  ctx.drawImage(img,0,0,1080,1080);
+  const pngUrl=c.toDataURL("image/png",1);
+  return dataUrlToBlob(pngUrl);
+}
+
+function instaFilename(){
+  const slug=(currentInstaShop?.slug||currentInstaShop?.name||"shop")
+    .replace(/[^\w\-]+/g,"-")
+    .replace(/^-+|-+$/g,"") || "shop";
+  return `kbn-${slug}-instagram.png`;
+}
+
+async function shareInstaFile({forInstagram=false}={}){
   const status=$("instaSaveStatus");
-  if(!canvas)return;
+  const blob=await getInstaPngBlob();
+  const file=new File([blob],instaFilename(),{type:"image/png"});
+
+  if(navigator.canShare && navigator.canShare({files:[file]}) && navigator.share){
+    if(forInstagram){
+      const caption=$("instaPostCaption")?.value||"";
+      if(caption)await copyTextSafe(caption);
+      if(status)status.textContent="共有先からInstagramを選んでください。投稿文はコピー済みです";
+    }else if(status){
+      status.textContent="共有メニューから「画像を保存」を選んでください";
+    }
+    await navigator.share({
+      files:[file],
+      title:"KUMAMOTO BAR NAVI Instagram画像"
+    });
+    return true;
+  }
+  return false;
+}
+
+window.downloadInstaImage=async function(){
+  const status=$("instaSaveStatus");
 
   if(instaRenderState.rendering){
     alert("画像を生成中です。完了するまで少しお待ちください。");
     return;
   }
-
   if(!instaRenderState.ready || !instaRenderState.lastDataUrl){
     alert("まだ画像が完成していません。「プレビュー再生成」を押してから保存してください。");
     return;
   }
 
-  const slug=(currentInstaShop?.slug||currentInstaShop?.name||"shop")
-    .replace(/[^\w\-]+/g,"-")
-    .replace(/^-+|-+$/g,"") || "shop";
-
-  const filename=`kbn-${slug}-instagram.png`;
-
   try{
-    if(status)status.textContent="PNGを作成中...";
+    if(status)status.textContent="画像を準備中...";
+    const shared=await shareInstaFile({forInstagram:false});
+    if(shared)return;
 
-    const blob=await canvasToBlob(canvas,"image/png",1);
-    const file=new File([blob],filename,{type:"image/png"});
-
-    if(navigator.canShare && navigator.canShare({files:[file]}) && navigator.share){
-      try{
-        if(status)status.textContent="共有メニューを開きます";
-        await navigator.share({
-          files:[file],
-          title:"KUMAMOTO BAR NAVI Instagram画像"
-        });
-        if(status)status.textContent="共有メニューから「画像を保存」を選択してください";
-        return;
-      }catch(e){
-        if(e?.name!=="AbortError"){
-          console.warn("share failed; showing inline preview",e);
-        }
-      }
-    }
-
-    // iPhone Safari fallback: do not open popup.
-    // Show the PNG inline and let the user long-press/save.
+    // 共有APIがないブラウザでは完成画像を表示して長押し保存。
     const box=$("instaFullPreview");
     const img=$("instaFullPreviewImg");
-
     if(box&&img){
       img.src=instaRenderState.lastDataUrl;
       box.hidden=false;
       box.style.display="block";
-      if(status)status.textContent="画像を表示しました。長押しして「写真に保存」を選べます";
+      if(status)status.textContent="画像を表示しました。長押しして保存してください";
       setTimeout(()=>box.scrollIntoView({behavior:"smooth",block:"start"}),50);
       return;
     }
 
-    // Last fallback for desktop browsers
+    const blob=await getInstaPngBlob();
     const url=URL.createObjectURL(blob);
     const a=document.createElement("a");
-    a.href=url;
-    a.download=filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    a.href=url;a.download=instaFilename();
+    document.body.appendChild(a);a.click();a.remove();
     setTimeout(()=>URL.revokeObjectURL(url),60000);
-
     if(status)status.textContent="画像を保存しました";
   }catch(e){
+    if(e?.name==="AbortError"){
+      if(status)status.textContent="保存をキャンセルしました";
+      return;
+    }
     console.error("Instagram image save failed",e);
     if(status)status.textContent="画像保存に失敗しました";
     alert("画像を保存できませんでした: "+(e?.message||"UNKNOWN_ERROR"));
@@ -4203,8 +4241,31 @@ window.copyInstaCaption=async function(){
   else prompt("この投稿文をコピーしてください。",text);
 };
 
-window.openInstagram=function(){
-  window.open("https://www.instagram.com/","_blank");
+window.openInstagram=async function(){
+  const status=$("instaSaveStatus");
+  if(instaRenderState.rendering){
+    alert("画像を生成中です。完了するまで少しお待ちください。");
+    return;
+  }
+  if(!instaRenderState.ready || !instaRenderState.lastDataUrl){
+    alert("まだ画像が完成していません。「プレビュー再生成」を押してからお試しください。");
+    return;
+  }
+  try{
+    const shared=await shareInstaFile({forInstagram:true});
+    if(shared)return;
+    const caption=$("instaPostCaption")?.value||"";
+    if(caption)await copyTextSafe(caption);
+    if(status)status.textContent="Instagramを開きます。投稿文はコピー済みです";
+    window.open("https://www.instagram.com/","_blank");
+  }catch(e){
+    if(e?.name==="AbortError"){
+      if(status)status.textContent="投稿をキャンセルしました";
+      return;
+    }
+    console.error("Instagram share failed",e);
+    alert("Instagramへの共有を開始できませんでした: "+(e?.message||"UNKNOWN_ERROR"));
+  }
 };
 
 
