@@ -184,6 +184,78 @@ const slugify=v=>String(v||"").normalize("NFKC").toLowerCase().replace(/&/g,"-an
 const hasAccess=req=>Boolean(req.headers.get("Cf-Access-Authenticated-User-Email")||req.headers.get("Cf-Access-Jwt-Assertion"));
 
 
+
+const KBN_GITHUB_EDITABLE_FILES = [
+  "index.html",
+  "style.css",
+  "script.js",
+  "admin.html",
+  "worker.js",
+  "bars.html",
+  "shop.html",
+  "jobs.html",
+  "areas.html"
+];
+
+function kbnGithubConfig(env){
+  return {
+    owner: t(env.GITHUB_OWNER || "yuuji0628", 100),
+    repo: t(env.GITHUB_REPO || "kumamoto-bar-navi", 120),
+    branch: t(env.GITHUB_BRANCH || "main", 100),
+    token: String(env.GITHUB_TOKEN || "").trim()
+  };
+}
+
+function kbnGithubHeaders(token){
+  return {
+    "Accept":"application/vnd.github+json",
+    "Authorization":`Bearer ${token}`,
+    "X-GitHub-Api-Version":"2022-11-28",
+    "User-Agent":"KUMAMOTO-BAR-NAVI-ADMIN"
+  };
+}
+
+function kbnUtf8ToBase64(value){
+  const bytes=new TextEncoder().encode(String(value ?? ""));
+  let bin="";
+  const size=0x8000;
+  for(let i=0;i<bytes.length;i+=size){
+    bin+=String.fromCharCode(...bytes.subarray(i,i+size));
+  }
+  return btoa(bin);
+}
+
+function kbnBase64ToUtf8(value){
+  const bin=atob(String(value||"").replace(/\n/g,""));
+  const bytes=Uint8Array.from(bin,c=>c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+async function kbnGithubApi(env,path,init={}){
+  const c=kbnGithubConfig(env);
+  if(!c.token){
+    const e=new Error("GITHUB_TOKEN_MISSING");
+    e.status=503;
+    throw e;
+  }
+  const r=await fetch(`https://api.github.com${path}`,{
+    ...init,
+    headers:{
+      ...kbnGithubHeaders(c.token),
+      ...(init.headers||{})
+    }
+  });
+  const raw=await r.text();
+  let data={};
+  try{data=raw?JSON.parse(raw):{}}catch{data={message:raw}}
+  if(!r.ok){
+    const e=new Error(data?.message||`GITHUB_HTTP_${r.status}`);
+    e.status=r.status;
+    throw e;
+  }
+  return data;
+}
+
 function escHtml(v){
   return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
@@ -1984,6 +2056,141 @@ ${urls.map(x=>`  <url>
 
     if(url.pathname.startsWith("/api/admin/") && !["/api/admin/login","/api/admin/logout","/api/admin/status"].includes(url.pathname)){
       if(!(await validAdminRequest(request,env))) return json({ok:false,error:"ADMIN_AUTH_REQUIRED"},{status:401});
+
+
+
+      // ---------- GitHub site update ----------
+      if(url.pathname==="/api/admin/github/status" && request.method==="GET"){
+        const c=kbnGithubConfig(env);
+        if(!c.token){
+          return json({
+            ok:true,
+            configured:false,
+            connected:false,
+            owner:c.owner,
+            repo:c.repo,
+            branch:c.branch,
+            editable_files:KBN_GITHUB_EDITABLE_FILES
+          });
+        }
+        try{
+          const repo=await kbnGithubApi(
+            env,
+            `/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}`
+          );
+          return json({
+            ok:true,
+            configured:true,
+            connected:true,
+            owner:c.owner,
+            repo:c.repo,
+            branch:c.branch,
+            repo_url:repo.html_url||"",
+            editable_files:KBN_GITHUB_EDITABLE_FILES
+          });
+        }catch(e){
+          return json({
+            ok:true,
+            configured:true,
+            connected:false,
+            owner:c.owner,
+            repo:c.repo,
+            branch:c.branch,
+            error:e.message,
+            editable_files:KBN_GITHUB_EDITABLE_FILES
+          });
+        }
+      }
+
+      if(url.pathname==="/api/admin/github/file" && request.method==="GET"){
+        const c=kbnGithubConfig(env);
+        const path=t(url.searchParams.get("path"),180);
+        if(!KBN_GITHUB_EDITABLE_FILES.includes(path)){
+          return json({ok:false,error:"FILE_NOT_ALLOWED"},{status:400});
+        }
+        try{
+          const d=await kbnGithubApi(
+            env,
+            `/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/${encodeURIComponent(path)}?ref=${encodeURIComponent(c.branch)}`
+          );
+          if(Array.isArray(d)||d.type!=="file"){
+            return json({ok:false,error:"NOT_A_FILE"},{status:400});
+          }
+          return json({
+            ok:true,
+            path,
+            sha:d.sha,
+            size:d.size,
+            content:kbnBase64ToUtf8(d.content||""),
+            html_url:d.html_url||""
+          });
+        }catch(e){
+          return json({
+            ok:false,
+            error:"GITHUB_READ_FAILED",
+            detail:e.message
+          },{status:e.status||502});
+        }
+      }
+
+      if(url.pathname==="/api/admin/github/file" && request.method==="PUT"){
+        const c=kbnGithubConfig(env);
+        let x;
+        try{x=await request.json()}
+        catch{return json({ok:false,error:"INVALID_JSON"},{status:400})}
+
+        const path=t(x.path,180);
+        const sha=t(x.sha,100);
+        const content=String(x.content??"");
+        const message=t(x.message,180)||`admin: update ${path}`;
+        const confirmation=t(x.confirm,50);
+
+        if(!KBN_GITHUB_EDITABLE_FILES.includes(path)){
+          return json({ok:false,error:"FILE_NOT_ALLOWED"},{status:400});
+        }
+        if(confirmation!=="GITHUBへ反映"){
+          return json({ok:false,error:"CONFIRM_REQUIRED"},{status:400});
+        }
+        if(!sha){
+          return json({ok:false,error:"SHA_REQUIRED"},{status:400});
+        }
+        if(content.length>900000){
+          return json({ok:false,error:"FILE_TOO_LARGE"},{status:413});
+        }
+
+        try{
+          const result=await kbnGithubApi(
+            env,
+            `/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/${encodeURIComponent(path)}`,
+            {
+              method:"PUT",
+              headers:{"content-type":"application/json"},
+              body:JSON.stringify({
+                message,
+                content:kbnUtf8ToBase64(content),
+                sha,
+                branch:c.branch
+              })
+            }
+          );
+
+          return json({
+            ok:true,
+            path,
+            commit_sha:result.commit?.sha||"",
+            commit_url:result.commit?.html_url||"",
+            file_url:result.content?.html_url||"",
+            message:"GitHubへ反映しました。Cloudflareの自動デプロイが開始されます。"
+          });
+        }catch(e){
+          return json({
+            ok:false,
+            error:"GITHUB_UPDATE_FAILED",
+            detail:e.message,
+            github_status:e.status||null
+          },{status:e.status||502});
+        }
+      }
 
 
 

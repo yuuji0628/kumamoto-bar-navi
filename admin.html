@@ -1262,14 +1262,38 @@
     flex:0 0 auto;
   }
 }
+
+/* ver1.21 GitHub direct update */
+.kbn-github-status{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 14px}
+.kbn-github-dot{width:9px;height:9px;border-radius:50%;background:#7d8792;flex:0 0 auto}
+.kbn-github-dot.ok{background:#61c887;box-shadow:0 0 0 3px rgba(97,200,135,.08)}
+.kbn-github-dot.ng{background:#e37474;box-shadow:0 0 0 3px rgba(227,116,116,.08)}
+.kbn-github-layout{display:grid;grid-template-columns:250px minmax(0,1fr);gap:14px}
+.kbn-github-files{display:grid;gap:8px;align-content:start}
+.kbn-github-file{width:100%;text-align:left;border:1px solid #394653;border-radius:12px;background:#0b121a;color:#b8c1ca;padding:11px 12px;font-weight:800}
+.kbn-github-file.active{border-color:#c79e42;color:#f1c961;background:rgba(232,190,85,.07)}
+.kbn-code-editor{width:100%;min-height:520px;background:#070c12;color:#dfe6eb;border:1px solid #394653;border-radius:13px;padding:13px;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;resize:vertical;tab-size:2}
+.kbn-github-formrow{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:10px}
+.kbn-github-formrow input,.kbn-github-confirm input{width:100%;border:1px solid #394653;border-radius:10px;background:#0a1118;color:#fff;padding:11px 12px}
+.kbn-github-confirm{margin-top:10px;padding:12px;border:1px solid #655126;border-radius:12px;background:rgba(232,190,85,.04)}
+.kbn-github-confirm p{margin:0 0 8px;color:#aeb7c0;font-size:.82rem;line-height:1.6}
+.kbn-github-result{display:none;margin-top:10px;padding:12px;border:1px solid #3b654b;border-radius:12px;background:rgba(80,160,105,.06);color:#8edaa6;font-size:.86rem;line-height:1.6}
+.kbn-github-help{padding:12px;border:1px solid #6c5728;border-radius:12px;background:rgba(232,190,85,.05);color:#d8be75;margin:0 0 14px;line-height:1.7}
+@media(max-width:760px){
+  .kbn-github-layout{grid-template-columns:1fr}
+  .kbn-github-files{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .kbn-code-editor{min-height:440px}
+  .kbn-github-formrow{grid-template-columns:1fr}
+}
+
 </style>
 
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
-<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.18</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><div class="admin-security-badge">🔐 管理者ログイン</div></section>
+<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.21</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><div class="admin-security-badge">🔐 管理者ログイン</div></section>
 
 <div class="admin-login-bar">
-  <span>🔐 管理者ログイン中 <small id="authStatusText">ver1.18</small></span>
+  <span>🔐 管理者ログイン中 <small id="authStatusText">ver1.21</small></span>
   <button type="button" id="adminLogoutBtn">ログアウト</button>
 </div>
 
@@ -1284,6 +1308,7 @@
       <button data-tab="jobs">求人</button>
       <button data-tab="ownerreq">店舗申請 <span id="ownerReqTabBadge" class="tab-notify-badge" hidden>0</span></button>
       <button data-tab="analytics">アクセス</button>
+      <button data-tab="siteupdate">サイト更新</button>
     </div>
   </details>
 </nav>
@@ -1697,6 +1722,64 @@
   <div id="leadList" class="lead-list"></div>
 </section>
 
+
+<section id="tab-siteupdate" class="admin-block" hidden>
+  <div class="admin-block-head">
+    <div>
+      <p class="eyebrow">SITE UPDATE</p>
+      <h2>サイト更新</h2>
+      <p>GitHubのサイト本体ファイルを管理画面から直接編集・反映します。</p>
+    </div>
+    <button id="kbnGithubReload" class="admin-secondary-btn" type="button">再読み込み</button>
+  </div>
+
+  <div class="kbn-github-help">
+    HTML / CSS / JavaScriptなどサイト本体の変更専用です。店舗情報は今までどおり店舗管理から更新してください。<br>
+    保存するとGitHubへコミットされ、現在のCloudflare Git連携で自動デプロイが始まります。
+  </div>
+
+  <div class="kbn-github-status">
+    <span id="kbnGithubDot" class="kbn-github-dot"></span>
+    <strong id="kbnGithubStatus">GitHub接続確認中...</strong>
+    <span id="kbnGithubRepo" class="muted"></span>
+  </div>
+
+  <div id="kbnGithubSetupHelp" class="kbn-github-help" hidden>
+    Cloudflare WorkerのSecretに <b>GITHUB_TOKEN</b> を登録してください。トークンは管理画面やHTMLへ表示しません。
+  </div>
+
+  <div class="kbn-github-layout">
+    <aside>
+      <h3 style="margin-top:0">ファイル</h3>
+      <div id="kbnGithubFiles" class="kbn-github-files"></div>
+    </aside>
+
+    <div>
+      <div class="admin-block-head">
+        <div>
+          <h3 id="kbnGithubFileTitle">ファイルを選択</h3>
+          <p id="kbnGithubFileMeta"></p>
+        </div>
+      </div>
+
+      <textarea id="kbnGithubEditor" class="kbn-code-editor" spellcheck="false" placeholder="左から編集するファイルを選択してください"></textarea>
+
+      <div class="kbn-github-formrow">
+        <input id="kbnGithubMessage" placeholder="コミットメッセージ（例：管理画面からトップページ修正）">
+        <button id="kbnGithubCommit" class="btn-gold" type="button">GitHubへ反映</button>
+      </div>
+
+      <div class="kbn-github-confirm">
+        <p>誤操作防止のため、反映前に <b style="color:#e8be55">GITHUBへ反映</b> と入力してください。</p>
+        <input id="kbnGithubConfirm" placeholder="GITHUBへ反映">
+        <p>保存後はGitHubのコミット履歴に残ります。</p>
+      </div>
+
+      <div id="kbnGithubResult" class="kbn-github-result"></div>
+    </div>
+  </div>
+</section>
+
 <section id="tab-analytics" class="admin-block" hidden>
 <div class="admin-block-head"><div><p class="eyebrow">ANALYTICS</p><h2>店舗アクセス集計</h2></div><button id="reloadAnalytics" class="admin-secondary-btn" type="button">再読み込み</button></div>
 <p style="color:#aeb4bd">店舗ページの閲覧数と、地図・Instagram・電話などのクリック数を確認できます。</p>
@@ -1825,15 +1908,116 @@ document.querySelectorAll(".admin-tabs button").forEach(b=>b.onclick=async()=>{
   document.querySelector(".admin-more-menu")?.removeAttribute("open");
   document.querySelectorAll(".admin-tabs button").forEach(x=>x.classList.remove("active"));
   b.classList.add("active");
-  ["shops","jobs","subs","ownerreq","leads","analytics"].forEach(x=>$("tab-"+x).hidden=x!==b.dataset.tab);
+  ["shops","jobs","subs","ownerreq","leads","siteupdate","analytics"].forEach(x=>$("tab-"+x).hidden=x!==b.dataset.tab);
   try{
     if(b.dataset.tab==="subs" && typeof window.loadSubs==="function")await window.loadSubs();
     else if(b.dataset.tab==="shops" && typeof window.loadShops==="function")await window.loadShops();
     else if(b.dataset.tab==="jobs"){ if(typeof window.loadJobs==="function")await window.loadJobs(); if(typeof window.loadJobCandidates==="function")await window.loadJobCandidates(); }
     else if(b.dataset.tab==="ownerreq" && typeof window.loadOwnerReq==="function")await window.loadOwnerReq();
     else if(b.dataset.tab==="leads")window.renderLeadList?.();
+    else if(b.dataset.tab==="siteupdate" && typeof window.loadKbnGithubStatus==="function")await window.loadKbnGithubStatus();
     else if(b.dataset.tab==="analytics" && typeof window.loadAnalytics==="function")await window.loadAnalytics();
   }catch(e){console.error(e)}
+});
+
+
+let kbnGithubCurrent={path:"",sha:""};
+const kbnGithubFallbackFiles=["index.html","style.css","script.js","admin.html","worker.js","bars.html","shop.html","jobs.html","areas.html"];
+
+window.loadKbnGithubStatus=async function(){
+  const dot=$("kbnGithubDot");
+  const text=$("kbnGithubStatus");
+  const repo=$("kbnGithubRepo");
+  const help=$("kbnGithubSetupHelp");
+  try{
+    const d=await api("/api/admin/github/status");
+    repo.textContent=`${d.owner||"yuuji0628"}/${d.repo||"kumamoto-bar-navi"} (${d.branch||"main"})`;
+    const files=d.editable_files||kbnGithubFallbackFiles;
+    $("kbnGithubFiles").innerHTML=files.map(path=>`<button type="button" class="kbn-github-file" data-kbn-gh-file="${esc(path)}">${esc(path)}</button>`).join("");
+    document.querySelectorAll("[data-kbn-gh-file]").forEach(btn=>{
+      btn.onclick=()=>loadKbnGithubFile(btn.dataset.kbnGhFile);
+    });
+
+    if(d.configured&&d.connected){
+      dot.className="kbn-github-dot ok";
+      text.textContent="GitHub接続済み";
+      help.hidden=true;
+    }else{
+      dot.className="kbn-github-dot ng";
+      text.textContent=d.configured?"GitHub接続エラー":"GITHUB_TOKEN未設定";
+      help.hidden=false;
+    }
+  }catch(e){
+    dot.className="kbn-github-dot ng";
+    text.textContent="GitHub接続確認に失敗";
+    help.hidden=false;
+    console.error(e);
+  }
+};
+
+async function loadKbnGithubFile(path){
+  if(!path)return;
+  $("kbnGithubFileTitle").textContent=path;
+  $("kbnGithubFileMeta").textContent="読み込み中...";
+  $("kbnGithubEditor").value="読み込み中...";
+  try{
+    const d=await api("/api/admin/github/file?path="+encodeURIComponent(path));
+    kbnGithubCurrent={path:d.path,sha:d.sha};
+    $("kbnGithubEditor").value=d.content||"";
+    $("kbnGithubFileMeta").textContent=`${Number(d.size||0).toLocaleString()} bytes`;
+    $("kbnGithubMessage").value=`admin: update ${path}`;
+    $("kbnGithubConfirm").value="";
+    document.querySelectorAll("[data-kbn-gh-file]").forEach(btn=>{
+      btn.classList.toggle("active",btn.dataset.kbnGhFile===path);
+    });
+  }catch(e){
+    $("kbnGithubEditor").value="";
+    $("kbnGithubFileMeta").textContent="読み込み失敗";
+    alert("GitHubから読み込めませんでした: "+(e?.message||"UNKNOWN_ERROR"));
+  }
+}
+
+$("kbnGithubReload")?.addEventListener("click",()=>window.loadKbnGithubStatus());
+
+$("kbnGithubCommit")?.addEventListener("click",async()=>{
+  if(!kbnGithubCurrent.path||!kbnGithubCurrent.sha){
+    alert("先にファイルを選択してください。");
+    return;
+  }
+  if($("kbnGithubConfirm").value.trim()!=="GITHUBへ反映"){
+    alert("確認欄に「GITHUBへ反映」と入力してください。");
+    return;
+  }
+  if(!confirm(`${kbnGithubCurrent.path} をGitHubへ反映しますか？`))return;
+
+  const btn=$("kbnGithubCommit");
+  const result=$("kbnGithubResult");
+  btn.disabled=true;
+  btn.textContent="反映中...";
+  result.style.display="none";
+
+  try{
+    const d=await api("/api/admin/github/file",{
+      method:"PUT",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        path:kbnGithubCurrent.path,
+        sha:kbnGithubCurrent.sha,
+        content:$("kbnGithubEditor").value,
+        message:$("kbnGithubMessage").value.trim()||`admin: update ${kbnGithubCurrent.path}`,
+        confirm:$("kbnGithubConfirm").value.trim()
+      })
+    });
+
+    result.style.display="block";
+    result.innerHTML=`✅ GitHubへ反映しました。<br>${esc(d.message||"Cloudflareが自動デプロイします。")}<br>Commit: ${esc(String(d.commit_sha||"").slice(0,12))}`;
+    await loadKbnGithubFile(kbnGithubCurrent.path);
+  }catch(e){
+    alert("GitHubへ反映できませんでした: "+(e?.message||"UNKNOWN_ERROR"));
+  }finally{
+    btn.disabled=false;
+    btn.textContent="GitHubへ反映";
+  }
 });
 
 function formatJST(value){
