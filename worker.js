@@ -194,6 +194,7 @@ const KBN_GITHUB_EDITABLE_FILES = [
   "script.js",
   "admin.html",
   "worker.js",
+  "wrangler.jsonc",
   "bars.html",
   "shop.html",
   "jobs.html",
