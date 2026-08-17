@@ -2054,6 +2054,53 @@ ${urls.map(x=>`  <url>
       });
     }
 
+    // GitHub connection status is read-only and contains no secret value.
+    // Keep it outside the admin auth guard so the Site Update screen can
+    // verify Cloudflare Secret / GitHub connectivity even if a stale admin
+    // session token is present on the browser. All file read/write endpoints
+    // remain protected by the admin auth guard below.
+    if(url.pathname==="/api/admin/github/status" && request.method==="GET"){
+      const c=kbnGithubConfig(env);
+      if(!c.token){
+        return json({
+          ok:true,
+          configured:false,
+          connected:false,
+          owner:c.owner,
+          repo:c.repo,
+          branch:c.branch,
+          editable_files:KBN_GITHUB_EDITABLE_FILES
+        });
+      }
+      try{
+        const repo=await kbnGithubApi(
+          env,
+          `/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}`
+        );
+        return json({
+          ok:true,
+          configured:true,
+          connected:true,
+          owner:c.owner,
+          repo:c.repo,
+          branch:c.branch,
+          repo_url:repo.html_url||"",
+          editable_files:KBN_GITHUB_EDITABLE_FILES
+        });
+      }catch(e){
+        return json({
+          ok:true,
+          configured:true,
+          connected:false,
+          owner:c.owner,
+          repo:c.repo,
+          branch:c.branch,
+          error:e.message,
+          editable_files:KBN_GITHUB_EDITABLE_FILES
+        });
+      }
+    }
+
     if(url.pathname.startsWith("/api/admin/") && !["/api/admin/login","/api/admin/logout","/api/admin/status"].includes(url.pathname)){
       if(!(await validAdminRequest(request,env))) return json({ok:false,error:"ADMIN_AUTH_REQUIRED"},{status:401});
 
