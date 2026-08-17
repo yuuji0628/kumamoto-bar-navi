@@ -2,6 +2,11 @@
   "name": "kumamoto-bar-navi",
   "main": "worker.js",
   "compatibility_date": "2026-08-13",
+  "keep_vars": true,
+  "vars": {
+    "CLOUDFLARE_ACCOUNT_ID": "5f2c9effa39dd7b9001b18cf64d65836",
+    "CLOUDFLARE_WORKER_NAME": "kumamoto-bar-navi"
+  },
   "assets": {
     "directory": ".",
     "binding": "ASSETS",
