@@ -1215,6 +1215,7 @@
   align-items:center;
   justify-content:space-between;
   gap:10px;
+  flex-wrap:wrap;
 }
 .insta-share-dm-head>div{
   display:flex;
@@ -1238,7 +1239,7 @@
   font-size:.62rem;
   font-weight:900;
 }
-#copyShareDmBtn{
+#copyShareDmBtn,#openStoreDmBtn{
   min-height:36px;
   padding:0 12px;
   border:1px solid #6b5729;
@@ -1247,6 +1248,10 @@
   color:#e4bb55;
   font-size:.68rem;
   font-weight:900;
+}
+#openStoreDmBtn{
+  background:#e4bb55;
+  color:#111;
 }
 .insta-share-dm-box>p{
   margin:9px 0;
@@ -1271,8 +1276,8 @@
   .insta-share-dm-head{
     align-items:flex-start;
   }
-  #copyShareDmBtn{
-    flex:0 0 auto;
+  #copyShareDmBtn,#openStoreDmBtn{
+    flex:1 1 140px;
   }
 }
 
@@ -2133,6 +2138,7 @@
           <strong>店舗様へのシェアお願いDM</strong>
         </div>
         <button type="button" id="copyShareDmBtn" onclick="copyInstaShareDm()">DMをコピー</button>
+        <button type="button" id="openStoreDmBtn" onclick="openStoreInstagramDm()">店舗InstagramへDM</button>
       </div>
       <p>正式掲載のお知らせ投稿後に、そのまま店舗様へ送れる文章です。</p>
       <textarea id="instaShareDmText" rows="9"></textarea>
@@ -3856,15 +3862,13 @@ function buildInstaCaption(shop){
     "「KUMAMOTO BAR NAVI」に、",
     "",
     `🎉 ${name} 様`,
+    ...(handle ? [`🔗 @${handle}`] : []),
     "を新しく掲載させていただきました！",
     ""
   ];
 
   lines.push(...detailLines);
 
-  if(handle){
-    lines.push(`📷 @${handle}`);
-  }
 
   if(intro){
     lines.push("",intro);
@@ -4095,10 +4099,15 @@ async function shareInstaFile({forInstagram=false}={}){
     }else if(status){
       status.textContent="共有メニューから「画像を保存」を選んでください";
     }
-    await navigator.share({
+    const sharePayload={
       files:[file],
       title:"KUMAMOTO BAR NAVI Instagram画像"
-    });
+    };
+    if(forInstagram){
+      const caption=$("instaPostCaption")?.value||"";
+      if(caption)sharePayload.text=caption;
+    }
+    await navigator.share(sharePayload);
     return true;
   }
   return false;
@@ -4249,6 +4258,33 @@ window.copyInstaShareDm=async function(){
     }
   }else{
     prompt("このDM文章をコピーしてください。",text);
+  }
+};
+
+window.openStoreInstagramDm=async function(){
+  const shop=currentInstaShop||{};
+  const handle=cleanInstagramHandle(shop?.instagram||"");
+  const text=$("instaShareDmText")?.value||buildInstaShareDm(shop)||"";
+  const status=$("instaSaveStatus");
+
+  if(!handle){
+    alert("この店舗のInstagramユーザー名が登録されていません。");
+    return;
+  }
+
+  if(text){
+    const copied=await copyTextSafe(text);
+    if(status)status.textContent=copied
+      ? `DM文をコピーしました。@${handle} 宛てのDMを開きます`
+      : `@${handle} 宛てのDMを開きます`;
+  }
+
+  // Instagram Webの新規DM作成画面。iPhoneではInstagramアプリへ遷移する場合があります。
+  const dmUrl=`https://www.instagram.com/direct/new/?username=${encodeURIComponent(handle)}`;
+  const win=window.open(dmUrl,"_blank");
+  if(!win){
+    // ポップアップが抑止された場合は同じタブで開く。
+    window.location.href=dmUrl;
   }
 };
 
