@@ -3228,22 +3228,34 @@ function svgTextLines(value,maxChars=20,maxLines=3){
 }
 
 function buildInstaSvgDataUrl(shop){
-  const name=svgXmlEscape(shop?.name||"NEW BAR");
   const area=svgXmlEscape(shop?.area||"熊本");
   const genre=svgXmlEscape(shop?.genre||"BAR");
   const hours=svgXmlEscape(shop?.hours||"店舗情報をご確認ください");
   const holiday=svgXmlEscape(shop?.holiday||"店舗情報をご確認ください");
   const handle=svgXmlEscape(cleanInstagramHandle(shop?.instagram||""));
-  const descLines=svgTextLines(shop?.description||"",24,4);
-  const descSvg=descLines.map((line,i)=>`<text x="70" y="${610+i*42}" class="desc">${svgXmlEscape(line)}</text>`).join("");
-  const initial=svgXmlEscape(String(shop?.name||"BAR").replace(/\s+/g,"").slice(0,2).toUpperCase());
-  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080" viewBox="0 0 1080 1080">
+
+  // 左カラムから写真側へ文字がはみ出さないよう、店名と説明を明示的に折り返す。
+  const nameLines=svgTextLines(shop?.name||"NEW BAR",11,2);
+  const nameSvg=nameLines.map((line,i)=>`<text x="64" y="${408+i*50}" class="white" font-size="42" font-weight="900">${svgXmlEscape(line)}</text>`).join("");
+  const descLines=svgTextLines(shop?.description||"",15,3);
+  const descSvg=descLines.map((line,i)=>`<text x="64" y="${570+i*38}" class="desc">${svgXmlEscape(line)}</text>`).join("");
+
+  // 互換モードでも登録済み店舗写真を最優先。SVG内のimage要素なのでCanvasのCORS汚染を回避できる。
+  const rawImage=absoluteMediaUrl(shop?.image_url||"");
+  const imageUrl=svgXmlEscape(rawImage);
+  const photoSvg=imageUrl
+    ? `<image href="${imageUrl}" x="535" y="245" width="485" height="460" preserveAspectRatio="xMidYMid slice" clip-path="url(#photoClip)"/>\n       <rect x="535" y="245" width="485" height="460" rx="22" fill="url(#photoShade)"/>`
+    : `<rect x="535" y="245" width="485" height="460" rx="22" fill="url(#pic)"/>\n       <circle cx="777" cy="455" r="76" fill="none" stroke="#d9ad45" stroke-width="4" stroke-opacity=".7"/>\n       <text x="777" y="468" text-anchor="middle" class="gold" font-size="34" font-weight="900">KBN</text>\n       <text x="777" y="570" text-anchor="middle" class="muted" font-size="24" font-weight="700">SHOP PHOTO</text>`;
+
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1080" height="1080" viewBox="0 0 1080 1080">
     <defs>
       <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#05080d"/><stop offset=".5" stop-color="#0b1118"/><stop offset="1" stop-color="#030507"/></linearGradient>
-      <linearGradient id="pic" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#1a232e"/><stop offset="1" stop-color="#080c11"/></linearGradient>
+      <linearGradient id="pic" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#111a24"/><stop offset="1" stop-color="#070b10"/></linearGradient>
+      <linearGradient id="photoShade" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".28"/></linearGradient>
+      <clipPath id="photoClip"><rect x="535" y="245" width="485" height="460" rx="22"/></clipPath>
       <style>
         text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans','Yu Gothic',sans-serif}
-        .white{fill:#f7f8fa}.gold{fill:#f1c75b}.muted{fill:#c0c7cf}.desc{fill:#f7f8fa;font-size:27px;font-weight:500}
+        .white{fill:#f7f8fa}.gold{fill:#f1c75b}.muted{fill:#c0c7cf}.desc{fill:#e5e9ee;font-size:25px;font-weight:500}
       </style>
     </defs>
     <rect width="1080" height="1080" fill="url(#bg)"/>
@@ -3256,14 +3268,14 @@ function buildInstaSvgDataUrl(shop){
 
     <text x="64" y="282" class="gold" font-size="54" font-style="italic" font-weight="800">New!</text>
     <text x="64" y="345" class="white" font-size="28" font-weight="800">BAR</text>
-    <text x="64" y="415" class="white" font-size="50" font-weight="900">${name}</text>
-    <rect x="64" y="450" width="190" height="48" rx="24" fill="#152233"/><text x="159" y="482" text-anchor="middle" class="white" font-size="22" font-weight="700">${area}</text>
-    <rect x="270" y="450" width="205" height="48" rx="24" fill="#152233"/><text x="372" y="482" text-anchor="middle" class="white" font-size="22" font-weight="700">${genre}</text>
+    ${nameSvg}
+    <rect x="64" y="485" width="190" height="48" rx="24" fill="#152233"/><text x="159" y="517" text-anchor="middle" class="white" font-size="22" font-weight="700">${area}</text>
+    <rect x="270" y="485" width="205" height="48" rx="24" fill="#152233"/><text x="372" y="517" text-anchor="middle" class="white" font-size="20" font-weight="700">${genre}</text>
     ${descSvg}
 
     <rect x="535" y="245" width="485" height="460" rx="22" fill="url(#pic)" stroke="#d9ad45" stroke-opacity=".45"/>
-    <text x="777" y="475" text-anchor="middle" fill="#d9ad45" fill-opacity=".18" font-size="205" font-weight="900">${initial}</text>
-    <text x="777" y="600" text-anchor="middle" class="gold" font-size="30" font-weight="700">KUMAMOTO NIGHT BAR</text>
+    ${photoSvg}
+    <rect x="535" y="245" width="485" height="460" rx="22" fill="none" stroke="#d9ad45" stroke-opacity=".55"/>
 
     <rect x="44" y="745" width="992" height="185" rx="22" fill="#080d12" stroke="#ffffff" stroke-opacity=".16"/>
     <text x="70" y="790" class="gold" font-size="23" font-weight="700">エリア</text><text x="70" y="828" class="white" font-size="26" font-weight="700">${area}</text>
@@ -3448,13 +3460,17 @@ async function renderInstaPost(shop,{forceNoImage=false}={}){
     ctx.fillRect(px,py,pw,ph);
 
     ctx.textAlign="center";
-    ctx.fillStyle="rgba(217,173,69,.14)";
-    ctx.font="900 210px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
-    ctx.fillText((shop?.name||"BAR").replace(/\s+/g,"").slice(0,2),px+pw/2,py+280);
-
+    ctx.strokeStyle="rgba(217,173,69,.65)";
+    ctx.lineWidth=4;
+    ctx.beginPath();
+    ctx.arc(px+pw/2,py+205,76,0,Math.PI*2);
+    ctx.stroke();
     ctx.fillStyle=gold2;
-    ctx.font="700 30px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
-    ctx.fillText("KUMAMOTO NIGHT BAR",px+pw/2,py+360);
+    ctx.font="900 34px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+    ctx.fillText("KBN",px+pw/2,py+216);
+    ctx.fillStyle=muted;
+    ctx.font="700 24px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+    ctx.fillText("SHOP PHOTO",px+pw/2,py+320);
   }
 
   // left "New" and store info
@@ -3493,7 +3509,7 @@ async function renderInstaPost(shop,{forceNoImage=false}={}){
   if(desc){
     ctx.fillStyle=white;
     ctx.font="500 26px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
-    wrapCanvasText(ctx,desc,64,655,410,38,4);
+    wrapCanvasText(ctx,desc,64,640,405,36,3);
   }
 
   // information panel
