@@ -160,7 +160,10 @@ async function mergeSubmissionIntoShop(env,sub,shopId){
       name=?,area=?,address=?,hours=?,holiday=?,instagram=?,genre=?,features=?,description=?,
       budget_min=?,budget_max=?,seats=?,phone=?,is_recruiting=?,
       listing_status='published',is_published=1,is_new=1,
-      published_at=COALESCE(published_at,CURRENT_TIMESTAMP),
+      published_at=CASE
+        WHEN COALESCE(listing_status,'published')='provisional' THEN CURRENT_TIMESTAMP
+        ELSE COALESCE(published_at,CURRENT_TIMESTAMP)
+      END,
       updated_at=CURRENT_TIMESTAMP
     WHERE id=?
   `).bind(
@@ -1803,7 +1806,7 @@ ${urls.map(x=>`  <url>
     if(url.pathname==="/api/shops" && request.method==="GET"){
       const r=await env.DB.prepare(`
         SELECT * FROM shops WHERE is_published=1
-        ORDER BY is_featured DESC, sort_order ASC, created_at DESC
+        ORDER BY is_featured DESC, sort_order ASC, COALESCE(published_at,created_at) DESC, id DESC
       `).all();
       return json({ok:true,shops:(r.results||[]).map(publicShopRow)});
     }
@@ -2602,6 +2605,8 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
         await env.DB.prepare(`
           UPDATE shops
           SET listing_status='published',
+              published_at=CURRENT_TIMESTAMP,
+              is_new=1,
               updated_at=CURRENT_TIMESTAMP
           WHERE id=?
         `).bind(id).run();
