@@ -3397,7 +3397,7 @@ function buildInstaSvgDataUrl(shop){
   const imageUrl=svgXmlEscape(rawImage);
   const photoSvg=imageUrl
     ? `<image href="${imageUrl}" x="535" y="245" width="485" height="460" preserveAspectRatio="xMidYMid slice" clip-path="url(#photoClip)"/>\n       <rect x="535" y="245" width="485" height="460" rx="22" fill="url(#photoShade)"/>`
-    : buildFallbackBarSceneSvg(shop);
+    : `<image href="./assets/fallback-bar-realistic.png" x="535" y="245" width="485" height="460" preserveAspectRatio="xMidYMid slice" clip-path="url(#photoClip)"/>\n       <rect x="535" y="245" width="485" height="460" rx="22" fill="url(#photoShade)"/>`;
 
   const svg=`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1080" height="1080" viewBox="0 0 1080 1080">
     <defs>
@@ -3605,8 +3605,32 @@ async function renderInstaPost(shop,{forceNoImage=false}={}){
   }
 
   if(!imageLoaded){
-    // 写真がない店舗は、店名文字ではなくバーの雰囲気が伝わる抽象ビジュアルを店舗ごとに自動選択。
-    drawFallbackBarScene(ctx,px,py,pw,ph,shop);
+    // 写真がない店舗は、同梱した実写風バー画像を表示。
+    // 画像読み込みに失敗した場合のみ従来の描画フォールバックへ切り替える。
+    try{
+      const fallbackPhoto=await loadCanvasImage("./assets/fallback-bar-realistic.png");
+      ctx.save();
+      ctx.beginPath();
+      const rr=18;
+      ctx.moveTo(px+rr,py);
+      ctx.arcTo(px+pw,py,px+pw,py+ph,rr);
+      ctx.arcTo(px+pw,py+ph,px,py+ph,rr);
+      ctx.arcTo(px,py+ph,px,py,rr);
+      ctx.arcTo(px,py,px+pw,py,rr);
+      ctx.closePath();
+      ctx.clip();
+      drawCover(ctx,fallbackPhoto,px,py,pw,ph);
+      const veil=ctx.createLinearGradient(px,py,px,py+ph);
+      veil.addColorStop(0,"rgba(0,0,0,.04)");
+      veil.addColorStop(1,"rgba(0,0,0,.22)");
+      ctx.fillStyle=veil;
+      ctx.fillRect(px,py,pw,ph);
+      ctx.restore();
+      imageLoaded=true;
+    }catch(e){
+      console.warn("realistic fallback image load failed",e);
+      drawFallbackBarScene(ctx,px,py,pw,ph,shop);
+    }
   }
 
   // left "New" and store info
