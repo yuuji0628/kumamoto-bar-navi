@@ -1884,13 +1884,16 @@
       <div class="upload-note">まだファイルが選択されていません。</div>
     </div>
 
+    
     <div class="upload-confirm">
-      誤操作防止のため、反映前に <b style="color:#e6bd55">GITHUBへ反映</b> と入力してください。
-      <input id="kbnUploadConfirm" placeholder="GITHUBへ反映">
+      <b>反映前の確認</b><br>
+      <span style="color:#aeb6c0">下の確認ボタンを押すと、反映ボタンが有効になります。</span>
+      <button id="kbnUploadApprove" class="admin-secondary-btn" type="button" style="width:100%;margin-top:10px">このファイルで更新する</button>
     </div>
 
+
     <div class="upload-actions">
-      <button id="kbnUploadStart" class="btn-gold" type="button">選択したファイルを反映</button>
+      <button id="kbnUploadStart" class="btn-gold" type="button" disabled>選択したファイルを反映</button>
       <button id="kbnUploadClear" class="admin-secondary-btn" type="button">選択をクリア</button>
     </div>
 
@@ -5513,10 +5516,25 @@ function kbnSetFiles(list){
   $("kbnUploadResult").style.display="none";
 }
 $("kbnUploadFiles")?.addEventListener("change",e=>kbnSetFiles(e.target.files||[]));
+
+$("kbnUploadFiles")?.addEventListener("change",()=>{
+  $("kbnUploadStart").disabled=true;
+  $("kbnUploadApprove").textContent="このファイルで更新する";
+  $("kbnUploadApprove").dataset.approved="";
+});
+$("kbnUploadApprove")?.addEventListener("click",()=>{
+  if(!kbnSelectedFiles.length){alert("先に更新ファイルを選択してください。");return}
+  $("kbnUploadApprove").dataset.approved="1";
+  $("kbnUploadApprove").textContent="✓ 確認しました";
+  $("kbnUploadStart").disabled=false;
+});
+
 $("kbnUploadClear")?.addEventListener("click",()=>{
   kbnSelectedFiles=[];
   $("kbnUploadFiles").value="";
-  $("kbnUploadConfirm").value="";
+  $("kbnUploadStart").disabled=true;
+  $("kbnUploadApprove").dataset.approved="";
+  $("kbnUploadApprove").textContent="このファイルで更新する";
   kbnRenderUploadList();
 });
 const kbnDrop=$("kbnFileDrop");
@@ -5524,15 +5542,13 @@ kbnDrop?.addEventListener("dragover",e=>{e.preventDefault();kbnDrop.classList.ad
 kbnDrop?.addEventListener("dragleave",()=>kbnDrop.classList.remove("dragover"));
 kbnDrop?.addEventListener("drop",e=>{
   e.preventDefault();kbnDrop.classList.remove("dragover");
-  if(e.dataTransfer?.files?.length)kbnSetFiles(e.dataTransfer.files);
+  if(e.dataTransfer?.files?.length){kbnSetFiles(e.dataTransfer.files);$("kbnUploadStart").disabled=true;$("kbnUploadApprove").dataset.approved="";$("kbnUploadApprove").textContent="このファイルで更新する"}
 });
 $("kbnGithubReload")?.addEventListener("click",()=>window.loadKbnGithubStatus());
 
 $("kbnUploadStart")?.addEventListener("click",async()=>{
   if(!kbnSelectedFiles.length){alert("更新するファイルを選択してください。");return}
-  if($("kbnUploadConfirm").value.trim()!=="GITHUBへ反映"){
-    alert("確認欄に「GITHUBへ反映」と入力してください。");return
-  }
+  if($("kbnUploadApprove").dataset.approved!=="1"){alert("先に「このファイルで更新する」を押してください。");return}
   if(!confirm(`${kbnSelectedFiles.length}個のファイルをGitHubへ反映しますか？`))return;
 
   const btn=$("kbnUploadStart"),result=$("kbnUploadResult");
