@@ -110,9 +110,6 @@ function cleanName(s){
 function isEditorial(s){
   return String(s.listing_status||"")==="provisional" || /^【KBN独自掲載】/.test(String(s.name||""));
 }
-function isOfficial(s){
-  return !isEditorial(s) && String(s.listing_status||"published")==="published";
-}
 function featureTokens(v){
   return String(v||"").split(/[、,／/・\s]+/).map(x=>x.trim()).filter(Boolean);
 }
@@ -164,7 +161,7 @@ function render(list){
       ${cardMedia(s)}
       <div class="public-directory-card-body">
         <div class="public-card-meta">
-          ${isEditorial(s)?'<span class="public-editorial-badge">KBN独自掲載</span>':(isOfficial(s)?'<span class="public-official-badge">✓ KBN正式掲載店</span>':"")}
+          ${isEditorial(s)?'<span class="public-editorial-badge">KBN独自掲載</span>':""}
           ${s.is_featured?'<span class="public-recommend-badge">おすすめ</span>':""}
         </div>
         <h3>${esc(name)}</h3>
