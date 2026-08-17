@@ -2135,13 +2135,20 @@ ${urls.map(x=>`  <url>
           const raw=Array.isArray(bd.result)?bd.result:(Array.isArray(bd.result?.builds)?bd.result.builds:[]);
           const builds=raw.slice(0,10).map(x=>({
             build_uuid:x?.build_uuid||x?.id||"",
-            status:x?.status||x?.build_status||"unknown",
+            // Cloudflare Builds API: status = queued/initializing/running/stopped,
+            // build_outcome = success/fail/skipped/cancelled/terminated.
+            // stopped の場合は build_outcome を優先して管理画面へ渡す。
+            status:(String(x?.status||"").toLowerCase()==="stopped" && x?.build_outcome)
+              ? x.build_outcome
+              : (x?.status||x?.build_status||x?.build_outcome||"unknown"),
+            raw_status:x?.status||"",
+            build_outcome:x?.build_outcome||"",
             branch:x?.build_trigger_metadata?.branch||x?.branch||x?.trigger?.branch||"",
             commit_hash:x?.build_trigger_metadata?.commit_hash||x?.commit_hash||"",
             message:x?.build_trigger_metadata?.commit_message||x?.commit_message||x?.trigger?.trigger_name||"",
             trigger:x?.trigger?.trigger_name||x?.build_trigger_source||"",
             created_at:x?.created_at||x?.created_on||"",
-            updated_at:x?.updated_at||x?.completed_at||x?.modified_on||x?.created_at||""
+            updated_at:x?.updated_at||x?.completed_at||x?.stopped_on||x?.modified_on||x?.created_at||x?.created_on||""
           })).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
           return json({ok:true,configured:true,worker_name:workerName,worker_tag:workerTag,builds});
         }catch(e){
