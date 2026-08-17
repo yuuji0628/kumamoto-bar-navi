@@ -3395,8 +3395,8 @@ function buildInstaSvgDataUrl(shop){
   // 左カラムから写真側へ文字がはみ出さないよう、店名と説明を明示的に折り返す。
   const nameLines=svgTextLines(shop?.name||"NEW BAR",11,2);
   const nameSvg=nameLines.map((line,i)=>`<text x="64" y="${408+i*50}" class="white" font-size="42" font-weight="900">${svgXmlEscape(line)}</text>`).join("");
-  const descLines=svgTextLines(shop?.description||"",15,3);
-  const descSvg=descLines.map((line,i)=>`<text x="64" y="${570+i*38}" class="desc">${svgXmlEscape(line)}</text>`).join("");
+  const descLines=svgTextLines(shop?.description||"",15,5);
+  const descSvg=descLines.map((line,i)=>`<text x="64" y="${558+i*27}" class="desc">${svgXmlEscape(line)}</text>`).join("");
 
   // 互換モードでも登録済み店舗写真を最優先。SVG内のimage要素なのでCanvasのCORS汚染を回避できる。
   const rawImage=absoluteMediaUrl(shop?.image_url||"");
@@ -3414,7 +3414,7 @@ function buildInstaSvgDataUrl(shop){
       <clipPath id="photoClip"><rect x="535" y="245" width="485" height="460" rx="22"/></clipPath>
       <style>
         text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans','Yu Gothic',sans-serif}
-        .white{fill:#f7f8fa}.gold{fill:#f1c75b}.muted{fill:#c0c7cf}.desc{fill:#e5e9ee;font-size:25px;font-weight:500}
+        .white{fill:#f7f8fa}.gold{fill:#f1c75b}.muted{fill:#c0c7cf}.desc{fill:#e5e9ee;font-size:21px;font-weight:500}
       </style>
     </defs>
     <rect width="1080" height="1080" fill="url(#bg)"/>
@@ -3671,11 +3671,11 @@ async function renderInstaPost(shop,{forceNoImage=false}={}){
 
   // description
   let desc=String(shop?.description||"").trim().replace(/\s+/g," ");
-  if(desc.length>115)desc=desc.slice(0,115)+"…";
   if(desc){
     ctx.fillStyle=white;
-    ctx.font="500 26px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
-    wrapCanvasText(ctx,desc,64,640,405,36,3);
+    const descFont=desc.length>90?19:(desc.length>65?20:22);
+    ctx.font=`500 ${descFont}px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif`;
+    wrapCanvasText(ctx,desc,64,615,405,27,4);
   }
 
   // information panel
