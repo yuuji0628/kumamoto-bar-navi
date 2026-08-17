@@ -5856,7 +5856,8 @@ safeBind("jobForm","submit",e=>{
     ["jobs",window.loadJobs],
     ["subs",window.loadSubs],
     ["ownerreq",window.loadOwnerReq],
-    ["analytics",window.loadAnalytics]
+    ["analytics",window.loadAnalytics],
+    ["github",window.loadKbnGithubStatus]
   ];
 
   await Promise.allSettled(
@@ -5880,6 +5881,10 @@ document.addEventListener("visibilitychange",()=>{
     setTimeout(()=>{
       if(document.querySelector('[data-tab="analytics"]')?.classList.contains("active")){
         loadAnalytics().catch(()=>{});
+      }
+      // iPhoneでCloudflare/GitHub画面から管理画面へ戻った時も自動で接続状態を再確認
+      if(typeof window.loadKbnGithubStatus==="function"){
+        window.loadKbnGithubStatus().catch(()=>{});
       }
     },300);
   }
