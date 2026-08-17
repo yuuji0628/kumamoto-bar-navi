@@ -4036,21 +4036,41 @@ async function getInstaPngBlob(){
   const dataUrl=instaRenderState.lastDataUrl||"";
   if(!dataUrl)throw new Error("IMAGE_NOT_READY");
 
-  if(/^data:image\/png(?:;|,)/i.test(dataUrl)){
-    return dataUrlToBlob(dataUrl);
-  }
-
-  if(/^data:image\/jpe?g(?:;|,)/i.test(dataUrl)){
-    return dataUrlToBlob(dataUrl);
-  }
-
-  // SVG互換プレビューなどは、共有前にPNGへ変換する。
+  // Instagramフィードの推奨4:5（1080x1350）に合わせて共有用PNGを生成する。
+  // 元の投稿デザインは1080x1080のまま保持し、上下をサイト背景色で埋めることで
+  // iPhone版Instagramで白い余白が出たり、拡大時に左右が切れるのを防ぐ。
   const img=await imageFromDataUrl(dataUrl);
   const c=document.createElement("canvas");
-  c.width=1080;c.height=1080;
+  c.width=1080;
+  c.height=1350;
   const ctx=c.getContext("2d");
   if(!ctx)throw new Error("CANVAS_UNAVAILABLE");
-  ctx.drawImage(img,0,0,1080,1080);
+
+  const bg=ctx.createLinearGradient(0,0,1080,1350);
+  bg.addColorStop(0,"#05080d");
+  bg.addColorStop(.5,"#0b1118");
+  bg.addColorStop(1,"#030507");
+  ctx.fillStyle=bg;
+  ctx.fillRect(0,0,1080,1350);
+
+  // 1:1デザインを中央に原寸配置。Instagramの4:5フレームに最初から収まる。
+  ctx.drawImage(img,0,135,1080,1080);
+
+  // 上下の余白をブランドの一部として自然に見せる。
+  ctx.textAlign="center";
+  ctx.fillStyle="#f1c75b";
+  ctx.font="800 30px -apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans','Yu Gothic',sans-serif";
+  ctx.fillText("KUMAMOTO BAR NAVI",540,82);
+  ctx.fillStyle="#aeb7c2";
+  ctx.font="500 20px -apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans','Yu Gothic',sans-serif";
+  ctx.fillText("熊本の夜をもっと楽しく、もっとおいしく。",540,116);
+
+  ctx.fillStyle="#d9ad45";
+  ctx.fillRect(0,1215,1080,2);
+  ctx.fillStyle="#c0c7cf";
+  ctx.font="600 20px -apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans','Yu Gothic',sans-serif";
+  ctx.fillText("Instagram Feed 4:5",540,1285);
+
   const pngUrl=c.toDataURL("image/png",1);
   return dataUrlToBlob(pngUrl);
 }
