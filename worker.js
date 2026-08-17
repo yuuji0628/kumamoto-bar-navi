@@ -1553,7 +1553,7 @@ async function renderLocalSeoAreaPage(env,slug){
       <a href="/shop.html?slug=${encodeURIComponent(s.slug||"")}">
         <div class="local-seo-img">${s.image_url?`<img src="${kbnSeoEsc(s.image_url)}" alt="${kbnSeoEsc(name)} ${kbnSeoEsc(area)} BAR" loading="lazy">`:`<img src="/default-bar.svg" alt="" loading="lazy">`}</div>
         <div class="local-seo-body">
-          <div class="local-seo-meta"><span>${kbnSeoEsc(s.genre||"BAR")}</span>${s.listing_status==="provisional"?"<small>KBN独自掲載</small>":""}</div>
+          <div class="local-seo-meta"><span>${kbnSeoEsc(s.genre||"BAR")}</span>${s.listing_status==="provisional"?"<small>KBN独自掲載</small>":"<small>✓ KBN正式掲載店</small>"}</div>
           <h2>${kbnSeoEsc(name)}</h2>
           ${s.address?`<p>${kbnSeoEsc(s.address)}</p>`:""}
           <div class="local-seo-facts">
