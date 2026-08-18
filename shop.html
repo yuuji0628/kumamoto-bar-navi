@@ -71,6 +71,28 @@ function normalizeInstagramUrl(value){
   v=v.replace(/^www\./i,"").replace(/^instagram\.com\//i,"").replace(/^\/+|\/+$/g,"");
   return "https://www.instagram.com/"+encodeURIComponent(v)+"/";
 }
+
+function kbnOpenStatus(hours){
+  const raw=String(hours||"").trim();
+  if(!raw)return {known:false,label:"営業時間不明",cls:"is-unknown"};
+  if(/24\s*時間|24h/i.test(raw))return {known:true,open:true,label:"● 営業中",cls:"is-open"};
+  const normalized=raw.replace(/[：]/g,":").replace(/[〜～−–—]/g,"-");
+  const m=normalized.match(/(\d{1,2}):?(\d{2})?\s*-\s*(?:翌\s*)?(\d{1,2}):?(\d{2})?/);
+  if(!m)return {known:false,label:"営業時間を確認",cls:"is-unknown"};
+  let sh=Number(m[1]), sm=Number(m[2]||0), eh=Number(m[3]), em=Number(m[4]||0);
+  const start=sh*60+sm; let end=eh*60+em;
+  const now=new Date(); let cur=now.getHours()*60+now.getMinutes();
+  const overnight=/翌/.test(normalized)||end<=start;
+  let open=false, toClose=null, toOpen=null;
+  if(overnight){ end+=1440; if(cur<start)cur+=1440; open=cur>=start&&cur<end; }
+  else open=cur>=start&&cur<end;
+  if(open)toClose=end-cur;
+  else { let c=now.getHours()*60+now.getMinutes(); toOpen=c<start?start-c:(1440-c)+start; }
+  if(open && toClose!=null && toClose<=60)return {known:true,open:true,label:"● まもなく閉店",cls:"is-soon"};
+  if(!open && toOpen!=null && toOpen<=60)return {known:true,open:false,label:"● まもなく営業開始",cls:"is-soon"};
+  return open?{known:true,open:true,label:"● 営業中",cls:"is-open"}:{known:true,open:false,label:"○ 営業終了",cls:"is-closed"};
+}
+
 function budgetText(s){
   const min=Number(s.budget_min||0),max=Number(s.budget_max||0);
   if(min&&max&&min!==max)return `${min.toLocaleString()}〜${max.toLocaleString()}円`;
@@ -156,6 +178,7 @@ async function load(){
     const mapUrl=s.address?`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.address)}`:"";
     const insta=normalizeInstagramUrl(s.instagram);
     const desc=String(s.description||"").replace(/※本ページ[\s\S]*/,"").trim();
+    const openStatus=kbnOpenStatus(s.hours);
 
     updateShopSeo(s,name,desc);
 
@@ -174,6 +197,7 @@ async function load(){
             ${s.is_new?'<span class="public-new-badge">NEW</span>':""}
           </div>
           <p class="public-shop-location">${esc([normalizeArea(s.area),s.genre].filter(Boolean).join(" / "))}</p>
+          ${openStatus.known?`<div class="public-shop-open-status ${openStatus.cls}">${openStatus.label}<small>営業時間 ${esc(s.hours||"")}</small></div>`:""}
           <h1>${esc(name)}</h1>
 
           <div class="public-shop-tags">
