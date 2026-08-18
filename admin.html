@@ -39,6 +39,101 @@
   color:#101010!important;
   font-weight:800!important;
 }
+
+/* ============================================================
+   KBN Instagram 投稿ワークフロー強化
+   ============================================================ */
+.insta-workflow-box{
+  margin:14px 0 16px;
+  padding:14px;
+  border:1px solid #5b4a25;
+  border-radius:14px;
+  background:linear-gradient(135deg,rgba(228,187,85,.08),rgba(12,18,25,.96));
+}
+.insta-workflow-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:11px;
+}
+.insta-workflow-head strong{color:#f0cc68;font-size:13px}
+.insta-workflow-status{
+  padding:5px 9px;
+  border:1px solid #46515d;
+  border-radius:999px;
+  color:#aeb7c0;
+  font-size:10px;
+  font-weight:800;
+}
+.insta-workflow-status.is-posted{
+  border-color:#3f7652;
+  background:rgba(74,177,105,.10);
+  color:#8fe0aa;
+}
+.insta-workflow-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+.insta-workflow-item{
+  min-width:0;
+  padding:10px;
+  border:1px solid #29333e;
+  border-radius:11px;
+  background:#0b1118;
+}
+.insta-workflow-item small{
+  display:block;
+  margin-bottom:5px;
+  color:#7f8994;
+  font-size:9px;
+  font-weight:800;
+}
+.insta-workflow-value{
+  display:block;
+  min-height:20px;
+  color:#e4e8ec;
+  font-size:10px;
+  line-height:1.5;
+  word-break:break-all;
+}
+.insta-workflow-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  margin-top:8px;
+}
+.insta-workflow-actions button{
+  min-height:34px;
+  padding:0 10px;
+  border:1px solid #495562;
+  border-radius:9px;
+  background:#121a23;
+  color:#e1e6eb;
+  font-size:9px;
+  font-weight:800;
+}
+.insta-workflow-actions button.primary{
+  border-color:#d5aa45;
+  background:#e4bb55;
+  color:#111;
+}
+.insta-workflow-actions button.posted{
+  border-color:#3f7652;
+  background:rgba(74,177,105,.12);
+  color:#9be5b3;
+}
+.insta-hashtag-preview{
+  max-height:64px;
+  overflow:auto;
+}
+@media(max-width:640px){
+  .insta-workflow-grid{grid-template-columns:1fr}
+  .insta-workflow-actions{display:grid;grid-template-columns:1fr 1fr}
+  .insta-workflow-actions button{width:100%}
+}
+
 </style>
 
 
@@ -2127,6 +2222,33 @@
     </div>
 
     <div id="instaMentionPreview" class="insta-mention-preview"></div>
+    <div class="insta-workflow-box">
+      <div class="insta-workflow-head">
+        <strong>投稿準備</strong>
+        <span id="instaPostedStatus" class="insta-workflow-status">未投稿</span>
+      </div>
+      <div class="insta-workflow-grid">
+        <div class="insta-workflow-item">
+          <small>店舗ページURL</small>
+          <span id="instaShopUrl" class="insta-workflow-value">-</span>
+          <div class="insta-workflow-actions">
+            <button type="button" onclick="copyInstaShopUrl()">URLをコピー</button>
+            <button type="button" onclick="openInstaShopPage()">店舗ページを開く</button>
+          </div>
+        </div>
+        <div class="insta-workflow-item">
+          <small>ハッシュタグ</small>
+          <span id="instaHashtagPreview" class="insta-workflow-value insta-hashtag-preview">-</span>
+          <div class="insta-workflow-actions">
+            <button type="button" onclick="copyInstaHashtags()">ハッシュタグをコピー</button>
+          </div>
+        </div>
+      </div>
+      <div class="insta-workflow-actions">
+        <button type="button" class="primary" onclick="prepareInstagramPost()">画像＋本文を投稿準備</button>
+        <button type="button" id="instaPostedBtn" onclick="toggleInstaPosted()">✓ 投稿済みにする</button>
+      </div>
+    </div>
     <label class="insta-post-label">投稿文</label>
     <textarea id="instaPostCaption" rows="12"></textarea>
 
@@ -2153,7 +2275,7 @@
     <div id="instaSaveStatus" class="insta-save-status"></div>
 
     <p class="insta-post-note">
-      店舗承認時に画像と投稿文を自動生成しています。内容を確認して、そのまま保存・コピーしてInstagramへ投稿できます。
+      店舗承認時に画像と投稿文を自動生成します。店舗URL・ハッシュタグのコピー、Instagram起動、投稿済み管理までこの画面で行えます。
     </p>
   </div>
 </div>
@@ -3963,6 +4085,128 @@ function buildInstaCaption(shop){
 }
 
 
+
+function instaDraftKey(shopId){
+  return `kbn_insta_post_${Number(shopId||0)}`;
+}
+function currentInstaShopUrl(){
+  const shop=currentInstaShop||{};
+  const slug=String(shop.slug||"").trim();
+  if(!slug)return "";
+  return `${location.origin}/shop.html?slug=${encodeURIComponent(slug)}`;
+}
+function extractInstaHashtags(text){
+  const found=String(text||"").match(/#[^\s#]+/g)||[];
+  return [...new Set(found)].join(" ");
+}
+function readInstaDraft(shopId){
+  try{
+    const raw=localStorage.getItem(instaDraftKey(shopId));
+    return raw?JSON.parse(raw):{};
+  }catch(e){return {}}
+}
+function writeInstaDraft(shopId,patch){
+  try{
+    const prev=readInstaDraft(shopId);
+    const next={...prev,...patch,shop_id:Number(shopId||0),saved_at:new Date().toISOString()};
+    localStorage.setItem(instaDraftKey(shopId),JSON.stringify(next));
+    return next;
+  }catch(e){
+    console.warn("Instagram workflow local save failed",e);
+    return {};
+  }
+}
+function renderInstaWorkflow(){
+  const shop=currentInstaShop||{};
+  const shopId=Number(shop.id||0);
+  const caption=$("instaPostCaption")?.value||"";
+  const url=currentInstaShopUrl();
+  const hashtags=extractInstaHashtags(caption);
+  const draft=readInstaDraft(shopId);
+
+  if($("instaShopUrl"))$("instaShopUrl").textContent=url||"店舗URLを取得できません";
+  if($("instaHashtagPreview"))$("instaHashtagPreview").textContent=hashtags||"ハッシュタグなし";
+
+  const postedAt=String(draft.posted_at||"");
+  const status=$("instaPostedStatus");
+  const btn=$("instaPostedBtn");
+  if(status){
+    if(postedAt){
+      const d=new Date(postedAt);
+      status.textContent=`投稿済み ${Number.isNaN(d.getTime())?"":d.toLocaleString("ja-JP")}`;
+      status.classList.add("is-posted");
+    }else{
+      status.textContent="未投稿";
+      status.classList.remove("is-posted");
+    }
+  }
+  if(btn){
+    btn.textContent=postedAt?"↩ 未投稿に戻す":"✓ 投稿済みにする";
+    btn.classList.toggle("posted",!!postedAt);
+  }
+}
+window.copyInstaShopUrl=async function(){
+  const url=currentInstaShopUrl();
+  if(!url){alert("店舗ページURLを取得できませんでした。");return;}
+  const ok=await copyTextSafe(url);
+  if(ok)alert("店舗ページURLをコピーしました。");
+  else prompt("このURLをコピーしてください。",url);
+};
+window.openInstaShopPage=function(){
+  const url=currentInstaShopUrl();
+  if(!url){alert("店舗ページURLを取得できませんでした。");return;}
+  window.open(url,"_blank");
+};
+window.copyInstaHashtags=async function(){
+  const hashtags=extractInstaHashtags($("instaPostCaption")?.value||"");
+  if(!hashtags){alert("投稿文にハッシュタグがありません。");return;}
+  const ok=await copyTextSafe(hashtags);
+  if(ok)alert("ハッシュタグをコピーしました。");
+  else prompt("このハッシュタグをコピーしてください。",hashtags);
+};
+window.toggleInstaPosted=function(){
+  const shop=currentInstaShop||{};
+  const shopId=Number(shop.id||0);
+  if(!shopId)return;
+  const draft=readInstaDraft(shopId);
+  writeInstaDraft(shopId,{
+    shop_name:shop.name||draft.shop_name||"",
+    caption:$("instaPostCaption")?.value||draft.caption||"",
+    share_dm:$("instaShareDmText")?.value||draft.share_dm||"",
+    posted_at:draft.posted_at?"":new Date().toISOString()
+  });
+  renderInstaWorkflow();
+};
+window.prepareInstagramPost=async function(){
+  if(!currentInstaShop)return;
+  const caption=$("instaPostCaption")?.value||"";
+  const url=currentInstaShopUrl();
+  const combined=url && !caption.includes(url) ? `${caption}\n\n🔗 店舗ページ\n${url}` : caption;
+
+  const ok=await copyTextSafe(combined);
+  if(ok){
+    const status=$("instaSaveStatus");
+    if(status)status.textContent="投稿文＋店舗URLをコピーしました。画像共有を開きます";
+  }
+  writeInstaDraft(Number(currentInstaShop.id||0),{
+    shop_name:currentInstaShop.name||"",
+    caption:$("instaPostCaption")?.value||"",
+    share_dm:$("instaShareDmText")?.value||"",
+    generated_at:readInstaDraft(currentInstaShop.id).generated_at||new Date().toISOString()
+  });
+
+  if(instaRenderState.ready && instaRenderState.lastDataUrl){
+    try{
+      const shared=await shareInstaFile({forInstagram:true});
+      if(shared)return;
+    }catch(e){
+      if(e?.name==="AbortError")return;
+      console.warn("Instagram prepare share failed",e);
+    }
+  }
+  window.open("https://www.instagram.com/","_blank");
+};
+
 window.reopenInstaDraft=async function(shopId){
   await window.createInstaPost(shopId);
   try{
@@ -4013,6 +4257,11 @@ window.createInstaPost=async function(shopId){
     mention.innerHTML=handle
       ? `店舗メンション候補：<strong>@${esc(handle)}</strong>`
       : "Instagramアカウント未登録";
+  }
+
+  renderInstaWorkflow();
+  if(caption){
+    caption.addEventListener("input",renderInstaWorkflow,{once:false});
   }
 
   modal.hidden=false;
