@@ -3612,14 +3612,12 @@ async function renderInstaPost(shop,{forceNoImage=false}={}){
   // headline
   const displayName=cleanShopDisplayName(shop?.name||"NEW BAR");
 
-  drawRoundedRect(ctx,690,34,320,92,20,"rgba(217,173,69,.10)","rgba(217,173,69,.42)");
+  // 右上バッジは長い店舗名やキャッチコピーと重なるため廃止。
+  // ヘッダーは中央寄せの1行にして、どの店舗でも崩れないようにする。
   ctx.textAlign="center";
-  ctx.fillStyle=gold2;
-  ctx.font="800 23px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
-  ctx.fillText("KUMAMOTO BAR NAVI",850,68);
   ctx.fillStyle=white;
-  ctx.font="900 38px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
-  ctx.fillText("新規掲載しました",850,109);
+  ctx.font="900 40px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+  ctx.fillText("新規掲載しました",650,112);
 
   // gold ribbon
   ctx.fillStyle=gold;
@@ -3630,7 +3628,7 @@ async function renderInstaPost(shop,{forceNoImage=false}={}){
   ctx.fillText("熊本のBAR情報サイト「KUMAMOTO BAR NAVI」に新店掲載！",540,187);
 
   // photo area
-  const px=70,py=720,pw=940,ph=300;
+  const px=70,py=710,pw=940,ph=300;
   drawRoundedRect(ctx,px,py,pw,ph,18,dark2,"rgba(217,173,69,.45)");
 
   let imageLoaded=false;
@@ -3700,8 +3698,18 @@ async function renderInstaPost(shop,{forceNoImage=false}={}){
   ctx.font="800 31px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
   ctx.fillText("BAR",64,375);
 
-  ctx.font="900 64px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
-  wrapCanvasText(ctx,displayName,64,450,410,68,2);
+  // 店名は無理に改行せず、1行で収まるまで文字サイズを自動調整
+  const nameFamily="-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans','Yu Gothic',sans-serif";
+  let nameFont=64;
+  const nameMaxWidth=900;
+  while(nameFont>30){
+    ctx.font=`900 ${nameFont}px ${nameFamily}`;
+    if(ctx.measureText(displayName).width<=nameMaxWidth)break;
+    nameFont-=2;
+  }
+  ctx.fillStyle=white;
+  ctx.textAlign="left";
+  ctx.fillText(displayName,64,450);
 
   // chips
   const chips=[
@@ -3720,39 +3728,41 @@ async function renderInstaPost(shop,{forceNoImage=false}={}){
     if(cx>420){cx=64;cy+=58;}
   }
 
-  // description: 店舗ごとの文章量に合わせて自動縮小し、途中で切れないようにする
+  // description: 画像と重ならないよう、投稿画像内は最大3行の要約表示。
+  // 全文は下のInstagram投稿文に残るため、画像側では読みやすさを優先する。
   let desc=String(shop?.description||"").trim().replace(/\s+/g," ");
   if(desc){
     ctx.fillStyle=white;
     const family="-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans','Yu Gothic',sans-serif";
+    ctx.font=`500 20px ${family}`;
     const maxWidth=940;
-    const maxLines=10;
-    let descFont=20;
-    let lineHeight=25;
+    const maxLines=3;
+    const chars=Array.from(desc);
+    let line="", lines=[], used=0;
 
-    const countWrappedLines=(fontSize)=>{
-      ctx.font=`500 ${fontSize}px ${family}`;
-      let line="";
-      let lines=1;
-      for(const ch of Array.from(desc)){
-        const test=line+ch;
-        if(ctx.measureText(test).width>maxWidth && line){
-          lines++;
-          line=ch;
-        }else{
-          line=test;
-        }
+    for(const ch of chars){
+      const test=line+ch;
+      if(ctx.measureText(test).width>maxWidth && line){
+        lines.push(line);
+        used += Array.from(line).length;
+        line=ch;
+        if(lines.length===maxLines-1)break;
+      }else{
+        line=test;
       }
-      return lines;
-    };
-
-    // 全文が8行に入るまで段階的に縮小（最小11px）
-    while(descFont>11 && countWrappedLines(descFont)>maxLines){
-      descFont--;
     }
-    lineHeight=Math.max(15,Math.round(descFont*1.28));
-    ctx.font=`500 ${descFont}px ${family}`;
-    wrapCanvasText(ctx,desc,64,605,maxWidth,lineHeight,maxLines);
+    if(lines.length<maxLines && line)lines.push(line);
+
+    const shownCount=lines.reduce((n,l)=>n+Array.from(l).length,0);
+    if(shownCount<chars.length && lines.length){
+      let last=lines[lines.length-1];
+      while(last && ctx.measureText(last+"…").width>maxWidth){
+        last=Array.from(last).slice(0,-1).join("");
+      }
+      lines[lines.length-1]=last+"…";
+    }
+
+    lines.forEach((ln,i)=>ctx.fillText(ln,64,610+i*27));
   }
 
   // information panel
