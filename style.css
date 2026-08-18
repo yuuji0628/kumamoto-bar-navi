@@ -3304,3 +3304,15 @@ a.directory-card:hover{
 @media(max-width:700px){.public-instagram-section{padding:22px 0}.public-instagram-card{align-items:stretch;flex-direction:column;padding:22px 18px}.public-instagram-avatar{width:62px;height:62px;flex-basis:62px;font-size:25px}.public-instagram-button{width:100%}}
 
 .public-instagram-avatar img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;background:#111}
+
+
+/* KBN open-now status */
+.public-directory-card{position:relative}
+.public-open-status{position:absolute;z-index:5;top:10px;right:10px;padding:5px 8px;border:1px solid #46515d;border-radius:999px;background:rgba(6,9,14,.9);font-size:8px;font-weight:900;backdrop-filter:blur(8px)}
+.public-open-status.is-open,.public-shop-open-status.is-open{color:#bfe9c5;border-color:#56815b}
+.public-open-status.is-closed,.public-shop-open-status.is-closed{color:#aeb6bf;border-color:#46515d}
+.public-open-status.is-soon,.public-shop-open-status.is-soon{color:#f0cd73;border-color:#7d6327}
+.public-open-filter[aria-pressed="true"]{border-color:#56815b!important;background:rgba(86,129,91,.18)!important;color:#c7edcc!important}
+.public-shop-open-status{display:flex;align-items:center;gap:8px;width:max-content;max-width:100%;margin:10px 0 0;padding:6px 9px;border:1px solid #46515d;border-radius:999px;background:#090e14;font-size:10px;font-weight:900}
+.public-shop-open-status small{color:#7f8994;font-size:8px;font-weight:700}
+@media(max-width:640px){.public-open-status{top:8px;right:8px}.public-shop-open-status{flex-wrap:wrap}}
