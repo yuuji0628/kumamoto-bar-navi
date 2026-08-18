@@ -3387,3 +3387,77 @@ a.directory-card:hover{
   .public-discovery-grid-area{grid-template-columns:repeat(2,1fr)}
   .public-discovery-grid-genre{grid-template-columns:repeat(3,1fr)}
 }
+
+
+/* ============================================================
+   KBN 正式掲載店舗デザイン復旧
+   ============================================================ */
+.public-official-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  padding:3px 8px;
+  border:1px solid #7d6327;
+  border-radius:999px;
+  background:linear-gradient(135deg,rgba(228,187,85,.14),rgba(228,187,85,.05));
+  color:#f0cd73;
+  font-size:8px;
+  font-weight:900;
+  line-height:1.2;
+}
+.public-official-badge i{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:14px;
+  height:14px;
+  flex:0 0 14px;
+  border-radius:999px;
+  background:var(--kbn-gold);
+  color:#111;
+  font-style:normal;
+  font-size:9px;
+  line-height:1;
+}
+.public-shop-badges{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:6px;
+  min-height:20px;
+}
+.public-shop-trust-box{
+  margin-top:14px;
+  padding:12px 13px;
+  border:1px solid #5c4b24;
+  border-radius:12px;
+  background:rgba(228,187,85,.06);
+}
+.public-shop-trust-box b{
+  display:block;
+  color:#e5c05f;
+  font-size:11px;
+}
+.public-shop-trust-box p{
+  margin:6px 0 0;
+  color:#b8c0c9;
+  font-size:10px;
+  line-height:1.75;
+}
+@media(max-width:640px){
+  .public-official-badge{
+    padding:4px 8px;
+    font-size:9px;
+  }
+  .public-shop-trust-box{
+    margin-top:12px;
+    padding:12px;
+  }
+  .public-shop-trust-box b{
+    font-size:12px;
+  }
+  .public-shop-trust-box p{
+    font-size:10px;
+    line-height:1.8;
+  }
+}
