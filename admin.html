@@ -1918,7 +1918,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.28 画面圧縮調整
+   KBN ADMIN ver1.30 画面圧縮調整
    ============================================================ */
 
 /* 上部 welcome とログアウトをコンパクト化 */
@@ -2147,7 +2147,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.28 — 独自掲載 Instagram DM
+   KBN ADMIN ver1.30 — 独自掲載 Instagram DM
    ============================================================ */
 .shop-provisional-dm{
   border:1px solid #6c5a2b!important;
@@ -2162,7 +2162,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
-<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.28</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
+<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.30</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
 
 
 
@@ -2245,7 +2245,7 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
 
   <div id="buttonHealthNote" class="version-note">
-    ver1.28：成功/失敗表示＋履歴折りたたみ＋実写風画像内蔵
+    ver1.30：成功/失敗表示＋履歴折りたたみ＋実写風画像内蔵
   </div>
 </section>
 
@@ -2495,7 +2495,7 @@ html,body{max-width:100%;overflow-x:hidden}
 <div class="lead-mode-kicker">おすすめ</div>
 <div class="existing-refresh-box lead-mode-card">
   <strong>🔄 既存店舗を更新</strong>
-  <small>すでに独自掲載している店舗を再検索し、空欄の料金・営業時間・定休日・特徴を補完します。エリア修正ボタンでは、説明文や住所に書かれた実際の市町村を優先して誤登録を直します。</small>
+  <small>すでに独自掲載している店舗をInstagram検索＋Google Maps照合で再確認し、住所・電話番号・営業時間・定休日・料金・特徴などの空欄を補完します。店名とエリアの一致度が低い候補は自動採用しません。</small>
   <button type="button" id="refreshExistingBtn" class="admin-secondary-btn">既存店舗情報を更新</button>
   <button type="button" id="repairExistingAreasBtn" class="admin-secondary-btn">既存店舗のエリアを修正</button>
   <div id="refreshExistingStatus" class="auto-discovery-status"></div>
@@ -2585,7 +2585,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <small id="leadSearchConfigNote">検索API設定を確認中...</small><small class="lead-follow-filter-note">✓ フォロー済みアカウントは検索結果から自動除外します。</small>
     <strong>⚡ 自動開拓</strong>
 <small>県内45市町村 × 14ジャンルを順番に検索。1組最大2店舗に抑えて地域を分散し、公開情報に少しでも料金表記があれば、料金・営業時間などをできるだけ自動反映します。</small>
-<button type="button" id="autoDiscoverBtn" class="btn-gold">新規BARを自動開拓</button>
+<button type="button" id="autoDiscoverBtn" class="btn-gold">高精度で新規BARを自動開拓</button>
 <div id="autoDiscoverStatus" class="auto-discovery-status"></div>
 </div>
 
@@ -5919,9 +5919,9 @@ window.refreshExistingIndependentListings=async function(){
 
 window.runAutoDiscovery=async function(){
   const btn=$("autoDiscoverBtn"), status=$("autoDiscoverStatus");
-  if(!confirm("熊本県内の未検索エリア・ジャンルから順番に検索し、条件に合う新規店舗を最大10件まで仮掲載します。\n\n実行しますか？"))return;
+  if(!confirm("Instagram候補を検索したあとGoogle Mapsでも店名・エリアを照合し、信頼度の高い店舗だけ最大10件までKBN独自掲載します。\n\n実行しますか？"))return;
   btn.disabled=true;btn.textContent="自動開拓中...";
-  if(status)status.textContent="検索・重複確認・仮掲載を実行しています...";
+  if(status)status.textContent="Instagram検索 → Google Maps照合 → 情報抽出 → 重複確認を実行しています...";
   try{
     const d=await api("/api/admin/leads/auto-discover",{
       method:"POST",
@@ -5936,7 +5936,10 @@ window.runAutoDiscovery=async function(){
         const meta=[
           x.hours?`営業時間:${esc(x.hours)}`:"",
           x.budget_min?`料金:${Number(x.budget_min).toLocaleString()}円〜`:"",
-          x.holiday?`休:${esc(x.holiday)}`:""
+          x.holiday?`休:${esc(x.holiday)}`:"",
+          x.address?`住所:${esc(x.address)}`:"",
+          x.phone?`電話:${esc(x.phone)}`:"",
+          x.match_confidence?`照合:${esc(x.match_confidence)}`:""
         ].filter(Boolean).join(" / ");
         return `${esc(x.area)} / ${esc(x.genre)} / @${esc(x.handle)}${meta?` / ${meta}`:""}`;
       }).join("<br>")}</small>`:"");
@@ -5945,7 +5948,7 @@ window.runAutoDiscovery=async function(){
     if(status)status.textContent="自動開拓に失敗しました: "+(e?.message||"UNKNOWN_ERROR");
     alert("自動開拓できませんでした: "+(e?.message||"UNKNOWN_ERROR"));
   }finally{
-    btn.disabled=false;btn.textContent="新規BARを自動開拓";
+    btn.disabled=false;btn.textContent="高精度で新規BARを自動開拓";
   }
 };
 
