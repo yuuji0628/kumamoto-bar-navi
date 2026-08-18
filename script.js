@@ -118,7 +118,6 @@ async function loadHomeNews(){
     const d=await r.json();
     if(!r.ok||!d.ok)throw new Error();
 
-    // APIが返したお知らせを保持。初期表示は3件、件数ボタンで全件表示する。
     const items=Array.isArray(d.news)?d.news:[];
     let expanded=false;
 
@@ -141,7 +140,8 @@ async function loadHomeNews(){
       box.innerHTML=`<div class="public-news-equal-grid-v120">${visible.map((x,i)=>{
         const date=fmt(x.date||x.published_at||x.created_at);
         const name=kbnCleanName(x.name||"店舗");
-        return `<a href="${href(x)}" class="public-news-equal-card-v120${i===0?" is-latest":""}" data-news-link="1">
+        const forceShow=expanded&&i>=3?' style="display:grid"':'';
+        return `<a href="${href(x)}" class="public-news-equal-card-v120${i===0?" is-latest":""}" data-news-link="1"${forceShow}>
           <div class="public-news-equal-date-v120">
             <time>${escHtml(date.short)}</time>
           </div>
@@ -167,6 +167,7 @@ async function loadHomeNews(){
           countEl.setAttribute("tabindex","0");
           countEl.style.cursor="pointer";
           countEl.style.userSelect="none";
+          countEl.style.touchAction="manipulation";
         }else{
           countEl.removeAttribute("role");
           countEl.removeAttribute("tabindex");
@@ -182,8 +183,7 @@ async function loadHomeNews(){
     };
 
     if(countEl){
-      // 再読込時の二重登録を避けるため onclick/onkeydown を上書きする。
-      countEl.onclick=e=>{e.preventDefault();toggle();};
+      countEl.onclick=e=>{e.preventDefault();e.stopPropagation();toggle();};
       countEl.onkeydown=e=>{
         if(e.key==="Enter"||e.key===" "){
           e.preventDefault();
