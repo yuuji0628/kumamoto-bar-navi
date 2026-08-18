@@ -744,7 +744,7 @@ async function searchInstagramLeads(env,{area,type,start=1}){
     shisha:"シーシャバー", concept:"コンセプトバー"
   }[type]||"BAR";
 
-  const q=`site:instagram.com ${area} ${typeWord} 熊本`;
+  const q=`site:instagram.com "${area}" "${typeWord}" 熊本 -求人 -まとめ`;
   const page=Math.max(0,Math.floor((Math.max(1,Number(start)||1)-1)/10));
 
   const u=new URL("https://serpapi.com/search.json");
@@ -884,25 +884,257 @@ function likelyBar(x){
 }
 
 
+function normalizePlaceName(value){
+  return String(value||"")
+    .toLowerCase()
+    .replace(/^【kbn独自掲載】/i,"")
+    .replace(/\s*[（(]\s*@[a-z0-9._]+\s*[）)]\s*$/i,"")
+    .replace(/\s+@[a-z0-9._]+\s*$/i,"")
+    .replace(/\b(bar|cafe|club|lounge|snack)\b/gi,"")
+    .replace(/[・･\-‐‑–—―ー_.,，。'’"“”「」『』【】()[\]{}]/g,"")
+    .replace(/\s+/g,"")
+    .trim();
+}
+
+function placeNameMatchScore(a,b){
+  const x=normalizePlaceName(a), y=normalizePlaceName(b);
+  if(!x || !y)return 0;
+  if(x===y)return 100;
+  if(x.includes(y) || y.includes(x)){
+    const short=Math.min(x.length,y.length), long=Math.max(x.length,y.length);
+    return Math.round(72 + 24*(short/long));
+  }
+
+  // character bigram overlap works reasonably for Japanese shop names.
+  const grams=s=>{
+    const arr=Array.from(s);
+    const out=new Set();
+    if(arr.length===1){out.add(arr[0]);return out;}
+    for(let i=0;i<arr.length-1;i++)out.add(arr[i]+arr[i+1]);
+    return out;
+  };
+  const gx=grams(x), gy=grams(y);
+  let hit=0;
+  for(const g of gx)if(gy.has(g))hit++;
+  const denom=Math.max(1,gx.size+gy.size);
+  return Math.round((2*hit/denom)*100);
+}
+
+function mapTypeLooksLikeBar(place){
+  const s=[
+    place?.type||"",
+    ...(Array.isArray(place?.types)?place.types:[]),
+    place?.description||""
+  ].join(" ").toLowerCase();
+
+  const good=["bar","バー","pub","パブ","night club","ナイトクラブ","lounge","ラウンジ","snack","スナック","cocktail","カクテル","darts","ダーツ","karaoke","カラオケ","shisha","シーシャ"];
+  const bad=["美容","ネイル","エステ","不動産","病院","歯科","ホテル","旅館","レストラン専門","カフェ専門"];
+  if(bad.some(w=>s.includes(w)))return false;
+  return good.some(w=>s.includes(w));
+}
+
+function mapCandidateScore(place,{name,area}={}){
+  let score=placeNameMatchScore(name,place?.title||"");
+  const address=String(place?.address||"");
+  if(area && address.includes(area))score+=18;
+  else if(address.includes("熊本"))score+=8;
+  if(mapTypeLooksLikeBar(place))score+=12;
+  if(place?.phone)score+=2;
+  if(place?.hours || place?.operating_hours)score+=2;
+  return score;
+}
+
+async function serpApiGoogleMapsSearch(env,{q}){
+  const cfg=leadSearchConfig(env);
+  if(!cfg.apiKey)return {ok:false,error:"SERPAPI_NOT_CONFIGURED",results:[]};
+
+  const u=new URL("https://serpapi.com/search.json");
+  u.searchParams.set("engine","google_maps");
+  u.searchParams.set("type","search");
+  u.searchParams.set("q",String(q||""));
+  u.searchParams.set("hl","ja");
+  u.searchParams.set("gl","jp");
+  u.searchParams.set("api_key",cfg.apiKey);
+
+  const r=await fetch(u.toString(),{headers:{"Accept":"application/json"}});
+  const text=await r.text();
+  let d={};
+  try{d=text?JSON.parse(text):{}}catch{d={raw:text}}
+  if(!r.ok || d?.error)return {ok:false,error:d?.error||`MAPS_HTTP_${r.status}`,results:[]};
+
+  return {ok:true,results:Array.isArray(d?.local_results)?d.local_results:[]};
+}
+
+async function serpApiGoogleMapsPlace(env,dataId){
+  const cfg=leadSearchConfig(env);
+  if(!cfg.apiKey || !dataId)return {ok:false,place:null};
+
+  const u=new URL("https://serpapi.com/search.json");
+  u.searchParams.set("engine","google_maps");
+  u.searchParams.set("type","place");
+  u.searchParams.set("data",String(dataId));
+  u.searchParams.set("hl","ja");
+  u.searchParams.set("gl","jp");
+  u.searchParams.set("api_key",cfg.apiKey);
+
+  // SerpApi currently accepts data_id through the data_id parameter for place lookup.
+  // Keep both for compatibility across response variants.
+  u.searchParams.set("data_id",String(dataId));
+
+  const r=await fetch(u.toString(),{headers:{"Accept":"application/json"}});
+  const text=await r.text();
+  let d={};
+  try{d=text?JSON.parse(text):{}}catch{d={raw:text}}
+  if(!r.ok || d?.error)return {ok:false,place:null};
+  return {ok:true,place:d?.place_results||null};
+}
+
+function formatOperatingHours(place){
+  const op=place?.operating_hours;
+  if(op && typeof op==="object" && !Array.isArray(op)){
+    const pairs=Object.entries(op)
+      .map(([day,val])=>`${day} ${String(val||"").trim()}`)
+      .filter(x=>x.trim());
+    if(pairs.length)return pairs.join(" / ");
+  }
+  const h=String(place?.hours||"").trim();
+  // Avoid saving volatile strings such as "Open ⋅ Closes 2 AM" as the canonical weekly hours.
+  if(h && !/(open|closed|営業中|営業時間外|まもなく)/i.test(h))return h;
+  return "";
+}
+
+function inferHolidayFromOperatingHours(place){
+  const op=place?.operating_hours;
+  if(!op || typeof op!=="object" || Array.isArray(op))return "";
+  const closed=[];
+  for(const [day,val] of Object.entries(op)){
+    if(/closed|休業|定休/i.test(String(val||"")))closed.push(day);
+  }
+  return closed.join("・");
+}
+
+function mapFeatures(place){
+  const text=[
+    place?.type||"",
+    ...(Array.isArray(place?.types)?place.types:[]),
+    place?.description||"",
+    JSON.stringify(place?.extensions||{})
+  ].join(" ");
+  return extractFeaturesInfo(text);
+}
+
+async function enrichLeadWithMaps(env,lead,{fallbackArea=""}={}){
+  const rawName=t(lead?.title||lead?.handle||"",180);
+  if(!rawName)return {matched:false,confidence:"none",lead};
+
+  const area=inferLeadArea(lead,fallbackArea)||fallbackArea||"熊本";
+  const query=`${rawName} ${area} 熊本`;
+  const sr=await serpApiGoogleMapsSearch(env,{q:query});
+  if(!sr.ok || !sr.results.length)return {matched:false,confidence:"none",lead};
+
+  const ranked=sr.results
+    .map(place=>({place,score:mapCandidateScore(place,{name:rawName,area})}))
+    .sort((a,b)=>b.score-a.score);
+
+  const best=ranked[0];
+  // Strict threshold to reduce wrong-store merges.
+  if(!best || best.score<78)return {matched:false,confidence:"low",lead,score:best?.score||0};
+
+  let place=best.place;
+  const dataId=place?.data_id||place?.data_cid||"";
+  if(dataId){
+    try{
+      const detail=await serpApiGoogleMapsPlace(env,dataId);
+      if(detail.ok && detail.place)place={...place,...detail.place};
+    }catch{}
+  }
+
+  const address=t(place?.address,500);
+  const inferredArea=inferKumamotoAreaFromText(address,area);
+  const mapHours=formatOperatingHours(place);
+  const mapHoliday=inferHolidayFromOperatingHours(place);
+  const mapFeat=mapFeatures(place);
+  const mapDesc=t(place?.description,1200);
+  const title=t(place?.title,180)||rawName;
+  const phone=t(place?.phone,80);
+
+  return {
+    matched:true,
+    confidence:best.score>=100?"high":"medium",
+    score:best.score,
+    lead:{
+      ...lead,
+      title,
+      address:address||lead?.address||"",
+      area:inferredArea||area,
+      phone,
+      map_hours:mapHours,
+      map_holiday:mapHoliday,
+      map_features:mapFeat,
+      map_description:mapDesc,
+      map_type:t(place?.type,120),
+      map_types:Array.isArray(place?.types)?place.types:[],
+      map_website:t(place?.website,1000)
+    }
+  };
+}
+
+
 function extractPriceInfo(text){
   const raw=String(text||"");
-  const s=raw
+
+  // Normalize full-width digits / separators first.
+  let s=raw
     .replace(/[，,]/g,"")
     .replace(/１/g,"1").replace(/２/g,"2").replace(/３/g,"3")
     .replace(/４/g,"4").replace(/５/g,"5").replace(/６/g,"6")
     .replace(/７/g,"7").replace(/８/g,"8").replace(/９/g,"9")
     .replace(/０/g,"0");
 
+  // ------------------------------------------------------------
+  // Price extraction safety:
+  // Mask numbers that are commonly mistaken for prices.
+  // Especially important for Japanese phone numbers such as
+  // 096-123-4567 / 090-1234-5678.
+  // ------------------------------------------------------------
+  s=s
+    // URLs / mail / social identifiers
+    .replace(/https?:\/\/\S+/gi," ")
+    .replace(/\bwww\.\S+/gi," ")
+    .replace(/\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b/gi," ")
+
+    // Japanese phone / fax numbers, including spaces, hyphens and parentheses.
+    .replace(/(?:TEL|電話|PHONE|FAX|予約|お問い合わせ)?\s*[:：]?\s*(?:\+81[\s-]?(?:0)?|0)\d{1,4}[\s\-‐‑–—ー]?\d{1,4}[\s\-‐‑–—ー]?\d{3,4}\b/gi," ")
+    .replace(/\b0\d{1,4}\s*\(\s*0?\d{1,4}\s*\)\s*\d{3,4}\b/g," ")
+
+    // Postal codes
+    .replace(/〒?\s*\d{3}[\s\-‐‑–—ー]\d{4}\b/g," ")
+
+    // Clock times and time ranges
+    .replace(/\b(?:[01]?\d|2[0-9])[:：]\d{2}(?::\d{2})?\b/g," ")
+    .replace(/\b(?:[01]?\d|2[0-9])時(?:\d{1,2}分)?\b/g," ")
+
+    // Dates / years that should never become prices
+    .replace(/\b20\d{2}[\/.\-年]\d{1,2}(?:[\/.\-月]\d{1,2}日?)?\b/g," ")
+    .replace(/\b\d{1,2}[\/.\-]\d{1,2}\b/g," ")
+
+    // Coordinates / IDs / follower counts / review counts
+    .replace(/\b(?:緯度|経度|ID|店番号|店舗番号|郵便番号|フォロワー|followers?|口コミ|reviews?)\s*[:：]?\s*\d+(?:\.\d+)?\b/gi," ");
+
   const prices=[];
 
   function addPrice(v,score=1){
     const n=Number(String(v||"").replace(/[^\d]/g,""));
     if(!Number.isFinite(n))return;
+
+    // Typical BAR pricing guardrail.
+    // Keep inexpensive cover/charge values, but reject unrealistic values.
     if(n<100 || n>100000)return;
+
     prices.push({value:n,score});
   }
 
-  // Strong signals: explicit currency marks / 円.
+  // Explicit currency is the safest signal.
   const strongPatterns=[
     /[¥￥]\s*([0-9]{2,6})/g,
     /([0-9]{2,6})\s*円/g,
@@ -911,37 +1143,51 @@ function extractPriceInfo(text){
 
   for(const p of strongPatterns){
     let m;
-    while((m=p.exec(s)))addPrice(m[1],3);
+    while((m=p.exec(s)))addPrice(m[1],5);
   }
 
-  // Strong contextual price phrases, even if 円 is omitted.
+  // Explicit currency ranges.
+  const strongRangePatterns=[
+    /[¥￥]\s*([0-9]{2,6})\s*(?:〜|～|~|-|–|—|to)\s*[¥￥]?\s*([0-9]{2,6})(?:\s*円)?/gi,
+    /([0-9]{2,6})\s*円\s*(?:〜|～|~|-|–|—|to)\s*([0-9]{2,6})\s*円?/gi
+  ];
+  for(const p of strongRangePatterns){
+    let m;
+    while((m=p.exec(s))){
+      addPrice(m[1],5);
+      addPrice(m[2],5);
+    }
+  }
+
+  // Price-context phrases. Numbers are accepted only when immediately
+  // connected to a known pricing label.
+  const labels="料金|価格|予算|平均予算|price|チャージ|charge|セット料金|set料金|飲み放題|フリータイム|入場料|テーブルチャージ|席料|TC|SC|男性|女性|メンズ|レディース|お一人様|1名|一人";
   const contextualPatterns=[
-    /(?:料金|価格|price|チャージ|charge|セット料金|set料金|飲み放題|フリータイム|入場料|テーブルチャージ|席料|TC|SC|男性|女性|メンズ|レディース)\s*[:：]?\s*[¥￥]?\s*([0-9]{2,6})/gi,
-    /(?:お一人様|1名|一人)\s*[:：]?\s*[¥￥]?\s*([0-9]{2,6})/gi,
-    /(?:from|starting at)\s*[¥￥]?\s*([0-9]{2,6})/gi
+    new RegExp(`(?:${labels})\\s*[:：]?\\s*[¥￥]?\\s*([0-9]{2,6})(?:\\s*円)?`,"gi"),
+    /(?:from|starting at)\s*[¥￥]?\s*([0-9]{2,6})(?:\s*円)?/gi
   ];
 
   for(const p of contextualPatterns){
     let m;
-    while((m=p.exec(s)))addPrice(m[1],2);
+    while((m=p.exec(s)))addPrice(m[1],4);
   }
 
-  // Ranges: 1500〜3000 / ¥1500-3000 / 1500円〜3000円.
-  const rangePatterns=[
-    /[¥￥]?\s*([0-9]{2,6})\s*(?:円)?\s*(?:〜|～|~|-|–|—|to)\s*[¥￥]?\s*([0-9]{2,6})\s*(?:円)?/gi
-  ];
+  // Contextual ranges without a currency symbol are allowed only when
+  // a pricing keyword appears immediately before the range.
+  const contextualRange=new RegExp(
+    `(?:${labels})\\s*[:：]?\\s*[¥￥]?\\s*([0-9]{2,6})\\s*(?:円)?\\s*(?:〜|～|~|-|–|—|to)\\s*[¥￥]?\\s*([0-9]{2,6})(?:\\s*円)?`,
+    "gi"
+  );
 
-  for(const p of rangePatterns){
-    let m;
-    while((m=p.exec(s))){
-      addPrice(m[1],2);
-      addPrice(m[2],2);
-    }
+  let rm;
+  while((rm=contextualRange.exec(s))){
+    addPrice(rm[1],4);
+    addPrice(rm[2],4);
   }
 
   if(!prices.length)return {min:null,max:null};
 
-  // Prefer values with explicit currency/price context.
+  // Use only the strongest evidence found.
   const maxScore=Math.max(...prices.map(x=>x.score));
   const candidates=prices
     .filter(x=>x.score===maxScore)
@@ -951,10 +1197,15 @@ function extractPriceInfo(text){
 
   if(!candidates.length)return {min:null,max:null};
 
-  return {
-    min:candidates[0],
-    max:candidates.length>1?candidates[candidates.length-1]:candidates[0]
-  };
+  // Sanity check: if two values form a range, reject obviously broken ranges.
+  if(candidates.length>1){
+    const min=candidates[0];
+    const max=candidates[candidates.length-1];
+    if(max/min>50)return {min:null,max:null};
+    return {min,max};
+  }
+
+  return {min:candidates[0],max:candidates[0]};
 }
 
 function extractHoursInfo(text){
@@ -1129,28 +1380,49 @@ async function repairExistingIndependentListingAreas(env,{limit=100}={}){
 }
 
 function extractPublicMetadata(lead){
-  const text=`${lead.title||""} ${lead.snippet||""}`;
+  const text=`${lead.title||""} ${lead.snippet||""} ${lead.map_description||""} ${lead.map_type||""} ${(lead.map_types||[]).join(" ")}`;
   const price=extractPriceInfo(text);
+  const snippetHours=extractHoursInfo(text);
+  const snippetHoliday=extractHolidayInfo(text);
+  const snippetFeatures=extractFeaturesInfo(text);
   return {
     budget_min:price.min,
     budget_max:price.max,
-    hours:extractHoursInfo(text),
-    holiday:extractHolidayInfo(text),
-    features:extractFeaturesInfo(text)
+    hours:t(lead.map_hours||snippetHours,500),
+    holiday:t(lead.map_holiday||snippetHoliday,200),
+    features:t([lead.map_features,snippetFeatures].filter(Boolean).join("、"),500)
+      .split("、").filter((x,i,a)=>x&&a.indexOf(x)===i).join("、")
   };
 }
 
 
-async function refreshIndependentListings(env,{limit=10}={}){
+
+function sanitizeStoredBudget(minValue,maxValue){
+  let min=Number(minValue||0)||null;
+  let max=Number(maxValue||0)||null;
+
+  const valid=v=>v==null || (Number.isFinite(v) && v>=100 && v<=100000);
+  if(!valid(min))min=null;
+  if(!valid(max))max=null;
+
+  if(min && max && max<min)[min,max]=[max,min];
+  if(min && max && max/min>50)return {min:null,max:null,invalid:true};
+
+  return {min,max,invalid:false};
+}
+
+async function refreshIndependentListings(env,{limit=10,afterId=0,revalidate=false}={}){
   const max=Math.max(1,Math.min(Number(limit)||10,30));
 
+  const cursor=Math.max(0,Number(afterId)||0);
   const r=await env.DB.prepare(`
-    SELECT id,name,area,instagram,genre,hours,holiday,features,budget_min,budget_max,listing_status
+    SELECT id,name,area,address,phone,instagram,genre,hours,holiday,features,budget_min,budget_max,listing_status
     FROM shops
     WHERE COALESCE(listing_status,'published')='provisional'
-    ORDER BY updated_at ASC, id ASC
+      AND id>?
+    ORDER BY id ASC
     LIMIT ?
-  `).bind(max).all();
+  `).bind(cursor,max).all();
 
   const rows=r.results||[];
   const updated=[];
@@ -1205,21 +1477,54 @@ async function refreshIndependentListings(env,{limit=10}={}){
       }
 
       if(!lead){
-        unchanged.push({id:shop.id,name:shop.name,reason:"MATCH_NOT_FOUND"});
-        continue;
+        lead={
+          title:String(shop.name||"").replace(/^【KBN独自掲載】/,"").trim(),
+          area:shop.area,
+          type:shop.genre,
+          snippet:""
+        };
       }
 
-      const meta=extractPublicMetadata(lead);
+      const enriched=await enrichLeadWithMaps(env,lead,{fallbackArea:queryArea});
+      const sourceLead=enriched.matched?enriched.lead:lead;
+      const meta=extractPublicMetadata(sourceLead);
+      const storedBudget=sanitizeStoredBudget(shop.budget_min,shop.budget_max);
+
+      const mapTrusted=enriched.matched && Number(enriched.score||0)>=90;
+      const extractedMin=meta.budget_min ?? null;
+      const extractedMax=meta.budget_max ?? null;
 
       const next={
-        hours:shop.hours || meta.hours || "",
-        holiday:shop.holiday || meta.holiday || "",
-        features:shop.features || meta.features || "",
-        budget_min:shop.budget_min ?? meta.budget_min ?? null,
-        budget_max:shop.budget_max ?? meta.budget_max ?? null
+        area:(revalidate && mapTrusted)
+          ? (inferLeadArea(sourceLead,shop.area)||shop.area)
+          : (enriched.matched ? (inferLeadArea(sourceLead,shop.area)||shop.area) : shop.area),
+        address:(revalidate && mapTrusted && sourceLead.address)
+          ? sourceLead.address
+          : (shop.address || (enriched.matched?sourceLead.address:"") || ""),
+        phone:(revalidate && mapTrusted && sourceLead.phone)
+          ? sourceLead.phone
+          : (shop.phone || (enriched.matched?sourceLead.phone:"") || ""),
+        hours:(revalidate && mapTrusted && meta.hours)
+          ? meta.hours
+          : (shop.hours || meta.hours || ""),
+        holiday:(revalidate && mapTrusted && meta.holiday)
+          ? meta.holiday
+          : (shop.holiday || meta.holiday || ""),
+        features:(revalidate && mapTrusted && meta.features)
+          ? meta.features
+          : (shop.features || meta.features || ""),
+        budget_min: extractedMin!=null
+          ? extractedMin
+          : (storedBudget.min ?? null),
+        budget_max: extractedMax!=null
+          ? extractedMax
+          : (storedBudget.max ?? null)
       };
 
       const changed=
+        String(next.area||"")!==String(shop.area||"") ||
+        String(next.address||"")!==String(shop.address||"") ||
+        String(next.phone||"")!==String(shop.phone||"") ||
         String(next.hours||"")!==String(shop.hours||"") ||
         String(next.holiday||"")!==String(shop.holiday||"") ||
         String(next.features||"")!==String(shop.features||"") ||
@@ -1233,7 +1538,10 @@ async function refreshIndependentListings(env,{limit=10}={}){
 
       await env.DB.prepare(`
         UPDATE shops
-        SET hours=?,
+        SET area=?,
+            address=?,
+            phone=?,
+            hours=?,
             holiday=?,
             features=?,
             budget_min=?,
@@ -1241,6 +1549,9 @@ async function refreshIndependentListings(env,{limit=10}={}){
             updated_at=CURRENT_TIMESTAMP
         WHERE id=?
       `).bind(
+        next.area,
+        next.address,
+        next.phone,
         next.hours,
         next.holiday,
         next.features,
@@ -1252,11 +1563,16 @@ async function refreshIndependentListings(env,{limit=10}={}){
       updated.push({
         id:shop.id,
         name:shop.name,
+        area:next.area,
+        address:next.address,
+        phone:next.phone,
         hours:next.hours,
         holiday:next.holiday,
         features:next.features,
         budget_min:next.budget_min,
-        budget_max:next.budget_max
+        budget_max:next.budget_max,
+        match_confidence:enriched?.confidence||"none",
+        match_score:Number(enriched?.score||0)
       });
 
     }catch(e){
@@ -1268,12 +1584,23 @@ async function refreshIndependentListings(env,{limit=10}={}){
     }
   }
 
+  const nextAfterId=rows.length?Number(rows[rows.length-1].id||0):cursor;
+  const moreR=await env.DB.prepare(`
+    SELECT id FROM shops
+    WHERE COALESCE(listing_status,'published')='provisional'
+      AND id>?
+    ORDER BY id ASC
+    LIMIT 1
+  `).bind(nextAfterId).first();
+
   return {
     ok:true,
     checked:rows.length,
     updated,
     unchanged,
-    failed
+    failed,
+    next_after_id:nextAfterId,
+    has_more:!!moreR
   };
 }
 
@@ -1299,12 +1626,20 @@ async function autoDiscover(env,request,maxListings=10,pairLimit=6,perPairLimit=
       if(created.length>=maxListings)break;
       const h=kbnHandle(lead.handle);
       if(!h || listed.has(h) || seen.has(h) || !likelyBar(lead))continue;
-      const name=t(lead.title||h,150)||h;
-      const area=t(inferLeadArea(lead,lead.area||pair.area),80)||pair.area;
-      const genre=t(lead.type||pair.label,120)||pair.label;
-      const meta=extractPublicMetadata(lead);
 
-      const descBase=t(lead.snippet,2000);
+      // Accuracy-first: cross-check the Instagram candidate against Google Maps.
+      const enriched=await enrichLeadWithMaps(env,lead,{fallbackArea:lead.area||pair.area});
+      if(!enriched.matched)continue;
+      const eLead=enriched.lead;
+
+      const name=t(eLead.title||lead.title||h,150)||h;
+      const area=t(inferLeadArea(eLead,eLead.area||pair.area),80)||pair.area;
+      const genre=t(eLead.map_type||lead.type||pair.label,120)||pair.label;
+      const meta=extractPublicMetadata(eLead);
+      const address=t(eLead.address,500);
+      const phone=t(eLead.phone,80);
+
+      const descBase=t(eLead.map_description||lead.snippet,1400);
       const desc=(descBase?descBase+"\n\n":"")+
         "※本ページは、公開されている情報をもとにKUMAMOTO BAR NAVIが独自に掲載しています。"+
         "掲載内容の修正・削除をご希望の場合は店舗様専用ページよりご連絡ください。";
@@ -1317,9 +1652,9 @@ async function autoDiscover(env,request,maxListings=10,pairLimit=6,perPairLimit=
           is_featured,is_new,sort_order,listing_status,published_at
         ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'provisional',CURRENT_TIMESTAMP)
       `).bind(
-        slug,name,"",area,"",meta.hours,meta.holiday,
+        slug,name,"",area,address,meta.hours,meta.holiday,
         `https://www.instagram.com/${h}/`,genre,meta.features,desc,
-        meta.budget_min,meta.budget_max,null,"",0,1,"","",0,1,100
+        meta.budget_min,meta.budget_max,null,phone,0,1,"","",0,1,100
       ).run();
       const id=Number(ins.meta?.last_row_id||0);
       const token=ownerToken(), hash=await sha256hex(token);
@@ -2496,7 +2831,9 @@ ${urls.map(x=>`  <url>
 
         try{
           const result=await refreshIndependentListings(env,{
-            limit:Math.max(1,Math.min(Number(x.limit)||10,30))
+            limit:Math.max(1,Math.min(Number(x.limit)||10,30)),
+            afterId:Math.max(0,Number(x.after_id)||0),
+            revalidate:!!x.revalidate
           });
 
           return json(result,{headers:{"Cache-Control":"no-store"}});
