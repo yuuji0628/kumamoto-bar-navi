@@ -1918,7 +1918,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.27 画面圧縮調整
+   KBN ADMIN ver1.28 画面圧縮調整
    ============================================================ */
 
 /* 上部 welcome とログアウトをコンパクト化 */
@@ -2144,9 +2144,25 @@ html,body{max-width:100%;overflow-x:hidden}
 }
 </style>
 
+
+<style>
+/* ============================================================
+   KBN ADMIN ver1.28 — 独自掲載 Instagram DM
+   ============================================================ */
+.shop-provisional-dm{
+  border:1px solid #6c5a2b!important;
+  background:rgba(228,187,85,.10)!important;
+  color:#efc65f!important;
+  font-weight:900!important;
+}
+.shop-provisional-dm:hover{
+  background:rgba(228,187,85,.18)!important;
+}
+</style>
+
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
-<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.27</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
+<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.28</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
 
 
 
@@ -2229,7 +2245,7 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
 
   <div id="buttonHealthNote" class="version-note">
-    ver1.27：成功/失敗表示＋履歴折りたたみ＋実写風画像内蔵
+    ver1.28：成功/失敗表示＋履歴折りたたみ＋実写風画像内蔵
   </div>
 </section>
 
@@ -3318,6 +3334,7 @@ function renderShopList(){
             <p>${esc(s.area)}${s.genre?` / ${esc(s.genre)}`:''}</p>
           </div>
           <div class="admin-item-actions compact-actions dense-actions">
+            ${provisional && cleanInstagramHandle(s.instagram||"")?`<button type="button" onclick="sendProvisionalInstagramDm(${s.id})" class="shop-provisional-dm dense-icon-btn" title="店舗へInstagram DM">DM</button>`:""}
             ${!provisional?`<button type="button" onclick="reopenInstaDraft(${s.id})" class="shop-instagram-reopen dense-icon-btn" title="Instagram投稿">IG</button>`:""}
             <button onclick="editShop(${s.id})" class="shop-edit-main">編集</button>
             <details class="shop-more-menu">
@@ -3440,6 +3457,65 @@ async function openInstagramOwnerInvite(shop,url){
   window.open(target,"_blank");
 }
 
+
+
+function buildExistingProvisionalDm(shop){
+  const rawName=String(shop?.name||"店舗").trim();
+  const name=rawName
+    .replace(/^【KBN独自掲載】/,"")
+    .replace(/\s*[（(]\s*@[A-Za-z0-9._]+\s*[）)]\s*$/,"")
+    .replace(/\s+@[A-Za-z0-9._]+\s*$/,"")
+    .trim() || "店舗";
+  const handle=cleanInstagramHandle(shop?.instagram||"");
+  const slug=String(shop?.slug||"").trim();
+  const publicUrl=slug
+    ? `${location.origin}/shop.html?slug=${encodeURIComponent(slug)}`
+    : location.origin;
+
+  return `${name} 様
+${handle?`@${handle}`:""}
+
+突然のDM失礼いたします。
+熊本県内のBAR情報を紹介している「KUMAMOTO BAR NAVI」です🍸
+
+このたび、Web上で公開されている店舗情報を参考に、
+${name} 様を「KBN独自掲載」として当サイトでご紹介させていただいております。
+
+▼掲載ページ
+${publicUrl}
+
+掲載内容に相違・変更がある場合や、修正・削除をご希望の場合は、このDMへご返信ください。
+
+また、掲載内容に問題がなく正式掲載をご希望いただける場合も、その旨ご返信いただければ正式掲載へ切り替えます。
+
+熊本のBARをもっと見つけやすく、地域のお店を盛り上げていければと思っています。
+どうぞよろしくお願いいたします。
+
+KUMAMOTO BAR NAVI
+${location.origin}`;
+}
+
+window.sendProvisionalInstagramDm=async function(id){
+  const shop=shops.find(x=>Number(x.id)===Number(id));
+  if(!shop)return;
+
+  const handle=cleanInstagramHandle(shop.instagram||"");
+  if(!handle){
+    alert("この店舗にはInstagramアカウントが登録されていません。");
+    return;
+  }
+
+  const text=buildExistingProvisionalDm(shop);
+  const copied=await copyTextSafe(text);
+
+  if(copied){
+    alert("店舗確認用DMをコピーしました。Instagramを開きます。DMに貼り付けて送信してください。");
+  }else{
+    prompt("このDM文をコピーしてInstagramで送ってください。",text);
+  }
+
+  window.open(`https://www.instagram.com/${encodeURIComponent(handle)}/`,"_blank");
+};
 
 window.openInstagramProfile=function(id){
   const s=shops.find(x=>Number(x.id)===Number(id));
