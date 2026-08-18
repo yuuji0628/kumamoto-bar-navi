@@ -170,7 +170,7 @@ async function load(){
 
         <section class="public-shop-summary">
           <div class="public-shop-badges">
-            ${editorial?'<span class="public-editorial-badge">KBN独自掲載</span>':""}
+            ${editorial?'<span class="public-editorial-badge">KBN独自掲載</span>':'<span class="public-official-badge"><i>✓</i>正式掲載店舗</span>'}
             ${s.is_new?'<span class="public-new-badge">NEW</span>':""}
           </div>
           <p class="public-shop-location">${esc([normalizeArea(s.area),s.genre].filter(Boolean).join(" / "))}</p>
@@ -192,6 +192,12 @@ async function load(){
             ${insta?`<a href="${esc(insta)}" target="_blank" rel="noopener" data-track="instagram">Instagram ↗</a>`:""}
             ${s.phone?`<a href="tel:${esc(s.phone)}" data-track="phone">☎ 電話する</a>`:""}
           </div>
+
+          ${!editorial?`
+          <div class="public-shop-trust-box">
+            <b>正式掲載店舗とは？</b>
+            <p>店舗オーナー・運営者から掲載申請または掲載許可をいただき、掲載内容を確認したうえで公開している店舗です。営業時間・料金・サービス内容など、できるだけ正確な情報を掲載しています。</p>
+          </div>`:""}
         </section>
 
         <section class="public-shop-content">
