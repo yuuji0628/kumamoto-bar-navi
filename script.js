@@ -42,7 +42,7 @@ function kbnCard(s){
     </div>
     <div class="public-featured-body">
       <div class="public-card-meta">
-        ${kbnIsEditorial(s)?'<span class="public-editorial-badge">KBN独自掲載</span>':""}
+        ${kbnIsEditorial(s)?'<span class="public-editorial-badge">KBN独自掲載</span>':'<span class="public-official-badge"><i>✓</i>正式掲載店舗</span>'}
         ${s.is_featured?'<span class="public-recommend-badge">おすすめ</span>':""}
       </div>
       <h3>${escHtml(name)}</h3>
@@ -86,7 +86,7 @@ async function loadHomeShops(){
             <small>${escHtml(kbnNormalizeArea(s.area)||"熊本県")} ${s.genre?`/ ${escHtml(s.genre)}`:""}</small>
             <b>${escHtml(name)}</b>
           </div>
-          <span>${kbnIsEditorial(s)?'<em>KBN独自掲載</em>':""} ›</span>
+          <span>${kbnIsEditorial(s)?'<em>KBN独自掲載</em>':'<em>正式掲載</em>'} ›</span>
         </a>`;
       }).join(""):'<div class="public-empty"><b>新着店舗はありません。</b></div>';
     }
