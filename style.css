@@ -3461,3 +3461,76 @@ a.directory-card:hover{
     line-height:1.8;
   }
 }
+
+
+/* ============================================================
+   KBN 営業ステータス表示デザイン復旧
+   ============================================================ */
+.public-open-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  padding:4px 8px;
+  border:1px solid #3f4954;
+  border-radius:999px;
+  background:#121922;
+  color:#aeb7c0;
+  font-size:9px;
+  font-weight:900;
+  line-height:1.2;
+  white-space:nowrap;
+}
+.public-open-badge i{
+  display:block;
+  width:7px;
+  height:7px;
+  flex:0 0 7px;
+  border-radius:50%;
+  background:currentColor;
+  box-shadow:0 0 8px currentColor;
+}
+.public-open-badge.is-open{
+  border-color:#315f46;
+  background:rgba(62,177,105,.10);
+  color:#74d899;
+}
+.public-open-badge.is-closing{
+  border-color:#80662c;
+  background:rgba(228,187,85,.09);
+  color:#e8c15f;
+}
+.public-open-badge.is-opening{
+  border-color:#496580;
+  background:rgba(83,143,199,.10);
+  color:#8bc2f0;
+}
+.public-open-badge.is-closed,
+.public-open-badge.is-holiday{
+  border-color:#3b434c;
+  background:#10151b;
+  color:#89939d;
+}
+.public-open-badge.is-unknown{
+  border-color:#3b434c;
+  background:#10151b;
+  color:#8b949e;
+}
+.public-open-filter.is-active{
+  border-color:#4c9a68!important;
+  background:rgba(62,177,105,.14)!important;
+  color:#86dda4!important;
+}
+
+@media(max-width:640px){
+  .public-shop-badges{
+    gap:7px;
+  }
+  .public-open-badge{
+    padding:4px 8px;
+    font-size:9px;
+  }
+  .public-filter-chips .public-open-filter{
+    position:sticky;
+    right:0;
+  }
+}
