@@ -2643,14 +2643,12 @@ a.directory-card:hover{
 }
 .public-featured-body,.public-directory-card-body{padding:15px}
 .public-card-meta{display:flex;flex-wrap:wrap;gap:5px;min-height:22px}
-.public-editorial-badge,.public-recommend-badge,.public-new-badge,.public-official-badge{
+.public-editorial-badge,.public-recommend-badge,.public-new-badge{
   display:inline-flex;align-items:center;padding:3px 7px;border-radius:999px;font-size:8px;font-weight:900
 }
 .public-editorial-badge{border:1px solid #7d6327;color:#e8c15f;background:rgba(228,187,85,.08)}
 .public-recommend-badge{background:#243044;color:#dbe8ff}
 .public-new-badge{background:var(--kbn-gold);color:#111}
-.public-official-badge{gap:5px;border:1px solid #7d6327;color:#f0cd73;background:linear-gradient(135deg,rgba(228,187,85,.14),rgba(228,187,85,.05))}
-.public-official-badge i{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:999px;background:var(--kbn-gold);color:#111;font-style:normal;font-size:9px;line-height:1;flex:0 0 14px}
 .public-featured-body h3,.public-directory-card-body h3{
   margin:7px 0 9px;font-size:17px;line-height:1.35
 }
@@ -2784,9 +2782,6 @@ a.directory-card:hover{
   background:#121b25;color:#e6e9ed;font-size:10px;font-weight:800
 }
 .public-shop-primary-actions a:first-child{background:var(--kbn-gold);border-color:var(--kbn-gold);color:#111}
-.public-shop-trust-box{margin-top:14px;padding:12px 13px;border:1px solid #5c4b24;border-radius:12px;background:rgba(228,187,85,.06)}
-.public-shop-trust-box b{display:block;color:#e5c05f;font-size:11px}
-.public-shop-trust-box p{margin:6px 0 0;color:#b8c0c9;font-size:10px;line-height:1.7}
 .public-shop-content{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:2px}
 .public-shop-description,.public-shop-info,.public-editorial-note{
   padding:20px;border:1px solid #27313b;border-radius:16px;background:#0c1219
@@ -3306,13 +3301,89 @@ a.directory-card:hover{
 .public-instagram-avatar img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;background:#111}
 
 
-/* KBN open-now status */
-.public-directory-card{position:relative}
-.public-open-status{position:absolute;z-index:5;top:10px;right:10px;padding:5px 8px;border:1px solid #46515d;border-radius:999px;background:rgba(6,9,14,.9);font-size:8px;font-weight:900;backdrop-filter:blur(8px)}
-.public-open-status.is-open,.public-shop-open-status.is-open{color:#bfe9c5;border-color:#56815b}
-.public-open-status.is-closed,.public-shop-open-status.is-closed{color:#aeb6bf;border-color:#46515d}
-.public-open-status.is-soon,.public-shop-open-status.is-soon{color:#f0cd73;border-color:#7d6327}
-.public-open-filter[aria-pressed="true"]{border-color:#56815b!important;background:rgba(86,129,91,.18)!important;color:#c7edcc!important}
-.public-shop-open-status{display:flex;align-items:center;gap:8px;width:max-content;max-width:100%;margin:10px 0 0;padding:6px 9px;border:1px solid #46515d;border-radius:999px;background:#090e14;font-size:10px;font-weight:900}
-.public-shop-open-status small{color:#7f8994;font-size:8px;font-weight:700}
-@media(max-width:640px){.public-open-status{top:8px;right:8px}.public-shop-open-status{flex-wrap:wrap}}
+/* v1.22 realtime business status */
+.public-open-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 7px;border:1px solid #3f4954;border-radius:999px;background:#121922;color:#aeb7c0;font-size:8px;font-weight:900;white-space:nowrap}
+.public-open-badge i{width:6px;height:6px;border-radius:50%;background:currentColor;box-shadow:0 0 8px currentColor}
+.public-open-badge.is-open{border-color:#315f46;background:rgba(62,177,105,.10);color:#74d899}
+.public-open-badge.is-closing{border-color:#80662c;background:rgba(228,187,85,.09);color:#e8c15f}
+.public-open-badge.is-opening{border-color:#496580;background:rgba(83,143,199,.10);color:#8bc2f0}
+.public-open-badge.is-closed,.public-open-badge.is-holiday{color:#89939d;background:#10151b}
+.public-open-badge.is-unknown{color:#8b949e;background:#10151b}
+.public-open-filter.is-active{border-color:#4c9a68!important;background:rgba(62,177,105,.14)!important;color:#86dda4!important}
+.public-shop-badges{flex-wrap:wrap;align-items:center}
+@media(max-width:640px){.public-open-badge{font-size:8px;padding:3px 7px}.public-filter-chips .public-open-filter{position:sticky;right:0}}
+
+
+/* ============================================================
+   KUMAMOTO BAR NAVI ver1.23 — DISCOVERY ICON GRID
+   ============================================================ */
+.public-discovery-panel{
+  position:relative;z-index:3;margin-top:-22px;padding-bottom:8px
+}
+.public-discovery-card{
+  padding:22px;border:1px solid #2d3742;border-radius:22px;
+  background:linear-gradient(180deg,#0d141d,#0a1017);
+  box-shadow:0 18px 42px rgba(0,0,0,.3)
+}
+.public-discovery-block+.public-discovery-block{margin-top:28px}
+.public-discovery-title-row{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:13px
+}
+.public-discovery-title-row h2{margin:0;font-size:17px;letter-spacing:-.02em}
+.public-discovery-title-row>a{color:#77828d;font-size:9px;font-weight:700}
+.public-discovery-title-row>a span{color:var(--kbn-gold);font-size:16px;vertical-align:-1px}
+.public-discovery-grid{display:grid;gap:8px}
+.public-discovery-grid-area{grid-template-columns:repeat(4,minmax(0,1fr))}
+.public-discovery-grid-genre{grid-template-columns:repeat(6,minmax(0,1fr))}
+.public-discovery-tile{
+  min-width:0;min-height:106px;padding:13px 8px 11px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;
+  border:1px solid #27323e;border-radius:14px;
+  background:linear-gradient(180deg,#111a24,#0e161f);
+  color:#e9edf1;text-align:center;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.015);
+  transition:transform .16s ease,border-color .16s ease,background .16s ease
+}
+.public-discovery-tile:hover{
+  transform:translateY(-2px);border-color:#6b5727;background:linear-gradient(180deg,#151f2a,#101821)
+}
+.public-discovery-icon{
+  width:40px;height:40px;display:grid;place-items:center;color:#d6ad4e
+}
+.public-discovery-icon svg{
+  width:38px;height:38px;fill:none;stroke:currentColor;stroke-width:2.2;
+  stroke-linecap:round;stroke-linejoin:round
+}
+.public-discovery-dots svg circle{fill:currentColor;stroke:none}
+.public-discovery-tile b{
+  display:block;font-size:10px;line-height:1.35;font-weight:800
+}
+.public-discovery-job-link{
+  display:grid;grid-template-columns:1fr auto;align-items:center;gap:2px 12px;
+  margin-top:20px;padding:13px 15px;border-top:1px solid #242e39;color:#dce1e6
+}
+.public-discovery-job-link span{font-size:11px;font-weight:900}
+.public-discovery-job-link small{grid-column:1;color:#77828d;font-size:8px}
+.public-discovery-job-link i{grid-column:2;grid-row:1/3;color:var(--kbn-gold);font-style:normal;font-size:20px}
+
+@media(max-width:900px){
+  .public-discovery-grid-genre{grid-template-columns:repeat(3,1fr)}
+}
+@media(max-width:640px){
+  .public-discovery-panel{margin-top:-14px}
+  .public-discovery-card{padding:16px 13px;border-radius:18px}
+  .public-discovery-block+.public-discovery-block{margin-top:24px}
+  .public-discovery-title-row{margin-bottom:10px}
+  .public-discovery-title-row h2{font-size:16px}
+  .public-discovery-grid{gap:7px}
+  .public-discovery-grid-area{grid-template-columns:repeat(4,1fr)}
+  .public-discovery-grid-genre{grid-template-columns:repeat(4,1fr)}
+  .public-discovery-tile{min-height:94px;padding:10px 5px 9px;border-radius:12px}
+  .public-discovery-icon{width:34px;height:34px}
+  .public-discovery-icon svg{width:32px;height:32px;stroke-width:2.1}
+  .public-discovery-tile b{font-size:8px}
+}
+@media(max-width:390px){
+  .public-discovery-grid-area{grid-template-columns:repeat(2,1fr)}
+  .public-discovery-grid-genre{grid-template-columns:repeat(3,1fr)}
+}
