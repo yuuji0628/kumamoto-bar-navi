@@ -1918,7 +1918,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.30 画面圧縮調整
+   KBN ADMIN ver1.31 画面圧縮調整
    ============================================================ */
 
 /* 上部 welcome とログアウトをコンパクト化 */
@@ -2147,7 +2147,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.30 — 独自掲載 Instagram DM
+   KBN ADMIN ver1.31 — 独自掲載 Instagram DM
    ============================================================ */
 .shop-provisional-dm{
   border:1px solid #6c5a2b!important;
@@ -2162,7 +2162,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
-<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.30</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
+<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.31</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
 
 
 
@@ -2245,7 +2245,7 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
 
   <div id="buttonHealthNote" class="version-note">
-    ver1.30：成功/失敗表示＋履歴折りたたみ＋実写風画像内蔵
+    ver1.31：成功/失敗表示＋履歴折りたたみ＋実写風画像内蔵
   </div>
 </section>
 
@@ -2495,9 +2495,11 @@ html,body{max-width:100%;overflow-x:hidden}
 <div class="lead-mode-kicker">おすすめ</div>
 <div class="existing-refresh-box lead-mode-card">
   <strong>🔄 既存店舗を更新</strong>
-  <small>すでに独自掲載している店舗をInstagram検索＋Google Maps照合で再確認し、住所・電話番号・営業時間・定休日・料金・特徴などの空欄を補完します。店名とエリアの一致度が低い候補は自動採用しません。</small>
-  <button type="button" id="refreshExistingBtn" class="admin-secondary-btn">既存店舗情報を更新</button>
+  <small>独自掲載店舗をInstagram検索＋Google Maps照合で再確認します。通常更新は空欄補完、一括精査は既存値も再検証し、信頼度の高い情報が見つかった場合に住所・電話・営業時間・定休日・料金・特徴を更新します。</small>
+  <button type="button" id="bulkRevalidateBtn" class="btn-gold">独自掲載を一括で高精度更新</button>
+  <button type="button" id="refreshExistingBtn" class="admin-secondary-btn">10店舗だけ更新</button>
   <button type="button" id="repairExistingAreasBtn" class="admin-secondary-btn">既存店舗のエリアを修正</button>
+  <div id="bulkRevalidateStatus" class="auto-discovery-status"></div>
   <div id="refreshExistingStatus" class="auto-discovery-status"></div>
   <div id="repairExistingAreasStatus" class="auto-discovery-status"></div>
 </div>
@@ -5855,13 +5857,108 @@ window.repairExistingIndependentAreas=async function(){
   }
 };
 
+
+window.bulkRevalidateIndependentListings=async function(){
+  const btn=$("bulkRevalidateBtn");
+  const status=$("bulkRevalidateStatus");
+  if(!btn)return;
+
+  if(!confirm(
+    "現在のKBN独自掲載店舗をすべて再精査します。\n\n"+
+    "Instagram候補とGoogle Mapsを照合し、信頼度が高い場合のみ住所・電話番号・営業時間・定休日・料金・特徴を更新します。\n"+
+    "誤って価格欄に入った電話番号なども再判定します。\n\n"+
+    "店舗数によっては少し時間がかかります。実行しますか？"
+  ))return;
+
+  btn.disabled=true;
+  btn.textContent="一括精査中...";
+  if(status)status.innerHTML="<b>0店舗確認済み</b><br><small>高精度照合を開始しています...</small>";
+
+  let afterId=0;
+  let checked=0;
+  let updatedCount=0;
+  let unchangedCount=0;
+  let failedCount=0;
+  let batches=0;
+  const changedRows=[];
+
+  try{
+    while(true){
+      const d=await api("/api/admin/leads/refresh-existing",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          limit:10,
+          after_id:afterId,
+          revalidate:true
+        })
+      });
+
+      batches++;
+      checked+=Number(d.checked||0);
+      const updated=Array.isArray(d.updated)?d.updated:[];
+      const unchanged=Array.isArray(d.unchanged)?d.unchanged:[];
+      const failed=Array.isArray(d.failed)?d.failed:[];
+
+      updatedCount+=updated.length;
+      unchangedCount+=unchanged.length;
+      failedCount+=failed.length;
+      changedRows.push(...updated.slice(0,20));
+
+      afterId=Number(d.next_after_id||afterId||0);
+
+      if(status){
+        status.innerHTML=
+          `<b>${checked}店舗確認 / ${updatedCount}店舗更新</b><br>`+
+          `<small>変更なし:${unchangedCount} / エラー:${failedCount} / バッチ:${batches}</small>`;
+      }
+
+      if(!d.has_more || !Number(d.checked||0))break;
+      await new Promise(r=>setTimeout(r,250));
+    }
+
+    await window.loadShops?.();
+
+    if(status){
+      const detail=changedRows.length
+        ? `<br><small>${changedRows.map(x=>{
+            const bits=[
+              x.address?`住所:${esc(x.address)}`:"",
+              x.phone?`電話:${esc(x.phone)}`:"",
+              x.hours?`営業時間:${esc(x.hours)}`:"",
+              x.holiday?`定休日:${esc(x.holiday)}`:"",
+              x.budget_min?`料金:${Number(x.budget_min).toLocaleString()}${x.budget_max&&Number(x.budget_max)!==Number(x.budget_min)?`〜${Number(x.budget_max).toLocaleString()}`:""}円`:"",
+              x.match_confidence?`照合:${esc(x.match_confidence)}`:""
+            ].filter(Boolean).join(" / ");
+            return `${esc(x.name)}${bits?` / ${bits}`:""}`;
+          }).join("<br>")}</small>`
+        : "";
+
+      status.innerHTML=
+        `<b>一括精査完了：${checked}店舗確認 / ${updatedCount}店舗更新</b><br>`+
+        `変更なし:${unchangedCount} / エラー:${failedCount}`+
+        detail;
+    }
+
+    alert(`一括精査が完了しました。\n確認 ${checked}店舗\n更新 ${updatedCount}店舗\nエラー ${failedCount}店舗`);
+  }catch(e){
+    console.error("bulk revalidate failed",e);
+    const msg=e?.message||"UNKNOWN_ERROR";
+    if(status)status.innerHTML=`<b>一括精査を途中で停止しました。</b><br><small>${esc(msg)} / 確認済み:${checked}店舗</small>`;
+    alert("一括精査を途中で停止しました: "+msg);
+  }finally{
+    btn.disabled=false;
+    btn.textContent="独自掲載を一括で高精度更新";
+  }
+};
+
 window.refreshExistingIndependentListings=async function(){
   const btn=$("refreshExistingBtn");
   const status=$("refreshExistingStatus");
   if(!btn)return;
 
   if(!confirm(
-    "既存のKBN独自掲載店舗を再検索して、空欄の料金・営業時間・定休日・特徴を補完します。\n\n実行しますか？"
+    "KBN独自掲載店舗を10店舗だけ再確認し、空欄の住所・電話・料金・営業時間・定休日・特徴を補完します。\n\n実行しますか？"
   ))return;
 
   btn.disabled=true;
@@ -6790,6 +6887,14 @@ document.addEventListener("click",e=>{
   if(e.target.closest?.("#autoDiscoverBtn")){
     e.preventDefault();
     window.runAutoDiscovery?.();
+  }
+});
+
+document.addEventListener("click",e=>{
+  const btn=e.target.closest?.("#bulkRevalidateBtn");
+  if(btn){
+    e.preventDefault();
+    window.bulkRevalidateIndependentListings?.();
   }
 });
 
