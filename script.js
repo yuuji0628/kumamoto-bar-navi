@@ -118,9 +118,20 @@ async function loadHomeNews(){
     const d=await r.json();
     if(!r.ok||!d.ok)throw new Error();
 
-    // NEWSは最大8件取得。スマホでは最初の3件を表示し、件数バッジで開閉する。
-    const items=(d.news||[]).slice(0,8);
+    // APIが返したお知らせを保持。初期表示は3件、件数ボタンで全件表示する。
+    const items=Array.isArray(d.news)?d.news:[];
     let expanded=false;
+
+    if(!items.length){
+      if(countEl){
+        countEl.textContent="0件";
+        countEl.removeAttribute("role");
+        countEl.removeAttribute("tabindex");
+        countEl.style.cursor="default";
+      }
+      box.innerHTML='<div class="public-empty"><b>現在、お知らせはありません。</b></div>';
+      return;
+    }
 
     const href=x=>x.slug?`shop.html?slug=${encodeURIComponent(x.slug)}`:"bars.html";
     const title=x=>`${kbnCleanName(x.name||"店舗")} を正式掲載しました`;
@@ -130,58 +141,49 @@ async function loadHomeNews(){
       box.innerHTML=`<div class="public-news-equal-grid-v120">${visible.map((x,i)=>{
         const date=fmt(x.date||x.published_at||x.created_at);
         const name=kbnCleanName(x.name||"店舗");
-
-        return `<a href="${href(x)}" class="public-news-equal-card-v120${i===0?" is-latest":""}">
+        return `<a href="${href(x)}" class="public-news-equal-card-v120${i===0?" is-latest":""}" data-news-link="1">
           <div class="public-news-equal-date-v120">
             <time>${escHtml(date.short)}</time>
           </div>
-
           <div class="public-news-equal-body-v120">
             <div class="public-news-equal-badges-v120">
               ${i===0?'<span class="news-new-v120">NEW</span>':""}
               <span class="news-official-v120">正式掲載</span>
             </div>
-
             <b>${escHtml(title(x))}</b>
             <small>${escHtml(name)}の店舗ページを公開しました。</small>
           </div>
-
           <div class="public-news-equal-arrow-v120">›</div>
         </a>`;
       }).join("")}</div>`;
 
       if(countEl){
-        countEl.textContent=items.length>3
-          ? `${items.length}件 ${expanded?"▲":"▼"}`
-          : `${items.length}件`;
-        countEl.style.cursor=items.length>3?"pointer":"default";
-        countEl.style.userSelect="none";
-        countEl.setAttribute("role",items.length>3?"button":"status");
-        countEl.setAttribute("tabindex",items.length>3?"0":"-1");
-        countEl.setAttribute("aria-expanded",String(expanded));
-        countEl.setAttribute("aria-label",items.length>3
-          ? (expanded?"お知らせを3件表示に戻す":"お知らせをすべて表示する")
-          : `お知らせ${items.length}件`);
+        const canToggle=items.length>3;
+        countEl.textContent=canToggle?`${items.length}件 ${expanded?"▲":"▼"}`:`${items.length}件`;
+        countEl.setAttribute("aria-expanded",expanded?"true":"false");
+        countEl.setAttribute("aria-label",canToggle?(expanded?"お知らせを3件表示に戻す":"お知らせをすべて表示する"):`お知らせ${items.length}件`);
+        if(canToggle){
+          countEl.setAttribute("role","button");
+          countEl.setAttribute("tabindex","0");
+          countEl.style.cursor="pointer";
+          countEl.style.userSelect="none";
+        }else{
+          countEl.removeAttribute("role");
+          countEl.removeAttribute("tabindex");
+          countEl.style.cursor="default";
+        }
       }
     };
 
-    if(!items.length){
-      if(countEl)countEl.textContent="0件";
-      box.innerHTML='<div class="public-empty"><b>現在、お知らせはありません。</b></div>';
-      return;
-    }
+    const toggle=()=>{
+      if(items.length<=3)return;
+      expanded=!expanded;
+      render();
+    };
 
-    render();
-
-    if(countEl && items.length>3){
-      const toggle=()=>{
-        expanded=!expanded;
-        render();
-        if(expanded){
-          setTimeout(()=>box.scrollIntoView({behavior:"smooth",block:"nearest"}),50);
-        }
-      };
-      countEl.onclick=toggle;
+    if(countEl){
+      // 再読込時の二重登録を避けるため onclick/onkeydown を上書きする。
+      countEl.onclick=e=>{e.preventDefault();toggle();};
       countEl.onkeydown=e=>{
         if(e.key==="Enter"||e.key===" "){
           e.preventDefault();
@@ -189,6 +191,8 @@ async function loadHomeNews(){
         }
       };
     }
+
+    render();
   }catch{
     if(countEl)countEl.textContent="0件";
     box.innerHTML='<div class="public-empty"><b>お知らせを読み込めませんでした。</b></div>';
