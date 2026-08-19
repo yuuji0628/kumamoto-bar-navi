@@ -1918,7 +1918,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.72 画面圧縮調整
+   KBN ADMIN ver1.73 画面圧縮調整
    ============================================================ */
 
 /* 上部 welcome とログアウトをコンパクト化 */
@@ -2147,7 +2147,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.72 — 独自掲載 Instagram DM
+   KBN ADMIN ver1.73 — 独自掲載 Instagram DM
    ============================================================ */
 .shop-provisional-dm{
   border:1px solid #6c5a2b!important;
@@ -2839,6 +2839,28 @@ html,body{max-width:100%;overflow-x:hidden}
 }
 </style>
 
+
+<style id="kbn-hide-legacy-leads-v173">
+/* 旧・手動候補管理を確実に非表示 */
+.lead-results-card,
+.lead-add-card,
+.lead-summary,
+.lead-filters,
+#leadList,
+#leadSearchStatus{
+  display:none!important;
+}
+
+/* 旧手動検索カード/見出し/タブも非表示 */
+#leadSmartManual,
+.manual-section-label,
+[data-lead-smart-tab="manual"],
+[data-lead-tab="manual"],
+[data-lead-mode="manual"]{
+  display:none!important;
+}
+</style>
+
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
 <div id="topMaintenanceResult" class="top-maintenance-result">
@@ -2851,7 +2873,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver1.72</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver1.73</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -2935,7 +2957,7 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
 
   <div id="buttonHealthNote" class="version-note">
-    ver1.72：よく使う操作の先頭に自動開拓を配置
+    ver1.73：よく使う操作の先頭に自動開拓を配置
   </div>
 </section>
 
@@ -3230,7 +3252,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div id="refreshExistingStatus" class="auto-discovery-status lead-smart-message"></div>
     <div id="repairExistingAreasStatus" class="auto-discovery-status lead-smart-message"></div>
-    <small class="version-note">ver1.72：自動掲載店舗一覧・掲載取り消しに対応。Google Places優先検索は継続します。</small>
+    <small class="version-note">ver1.73：自動掲載店舗一覧・掲載取り消しに対応。Google Places優先検索は継続します。</small>
   </div>
 
   
