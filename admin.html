@@ -1918,7 +1918,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.75 画面圧縮調整
+   KBN ADMIN ver1.76 画面圧縮調整
    ============================================================ */
 
 /* 上部 welcome とログアウトをコンパクト化 */
@@ -2147,7 +2147,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.75 — 独自掲載 Instagram DM
+   KBN ADMIN ver1.76 — 独自掲載 Instagram DM
    ============================================================ */
 .shop-provisional-dm{
   border:1px solid #6c5a2b!important;
@@ -2861,6 +2861,43 @@ html,body{max-width:100%;overflow-x:hidden}
 }
 </style>
 
+
+<style id="kbn-schedule-editor-v176">
+.kbn-schedule-editor{
+  display:block!important;
+}
+.kbn-schedule-title{
+  display:flex;align-items:center;justify-content:space-between;gap:8px
+}
+.kbn-schedule-title b{color:#efc45a!important;font-size:.74rem!important}
+.kbn-schedule-title span{color:#7f8994!important;font-size:.62rem!important}
+.kbn-schedule-controls{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:6px;margin-top:8px
+}
+.kbn-schedule-controls input{
+  min-width:0;height:38px;padding:0 7px;border:1px solid #3d4854;border-radius:9px;
+  background:#0a1118;color:#eef1f4;font-weight:850;font-size:.72rem;color-scheme:dark
+}
+.kbn-schedule-controls button{
+  min-height:38px;padding:0 10px;border:1px solid #8a6b27;border-radius:9px;
+  background:#dfb342;color:#111;font-size:.68rem;font-weight:900;white-space:nowrap
+}
+.kbn-schedule-controls button:disabled{opacity:.55}
+#autoScheduleStatus{
+  display:block;margin-top:6px;color:#8f99a4;font-size:.61rem;line-height:1.45
+}
+#autoScheduleStatus[data-state="ok"]{color:#7fd7a2}
+#autoScheduleStatus[data-state="error"]{color:#ff9b9b}
+@media(max-width:680px){
+  .kbn-schedule-controls{
+    grid-template-columns:repeat(3,minmax(0,1fr))
+  }
+  .kbn-schedule-controls button{
+    grid-column:1/-1;min-height:36px
+  }
+}
+</style>
+
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
 <div id="topMaintenanceResult" class="top-maintenance-result">
@@ -2873,7 +2910,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver1.75</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver1.76</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -2957,7 +2994,7 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
 
   <div id="buttonHealthNote" class="version-note">
-    ver1.75：よく使う操作の先頭に自動開拓を配置
+    ver1.76：よく使う操作の先頭に自動開拓を配置
   </div>
 </section>
 
@@ -3252,7 +3289,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div id="refreshExistingStatus" class="auto-discovery-status lead-smart-message"></div>
     <div id="repairExistingAreasStatus" class="auto-discovery-status lead-smart-message"></div>
-    <small class="version-note">ver1.75：自動掲載店舗一覧・掲載取り消しに対応。Google Places優先検索は継続します。</small>
+    <small class="version-note">ver1.76：予約自動開拓の時間を管理画面から日本時間でワンタップ更新できます。</small>
   </div>
 
   
@@ -3269,9 +3306,18 @@ html,body{max-width:100%;overflow-x:hidden}
       <button type="button" id="checkClosedShopsBtn">閉業チェック</button>
       <button type="button" id="refreshInstagramBtn">Instagram補完</button>
     </div>
-    <div class="kbn-schedule-note">
-      <b>予約自動開拓</b>
-      <span>毎日 3:10 / 11:10 / 19:10ごろ（日本時間）に自動実行</span>
+    <div class="kbn-schedule-note kbn-schedule-editor">
+      <div class="kbn-schedule-title">
+        <b>予約自動開拓</b>
+        <span>日本時間（JST）</span>
+      </div>
+      <div class="kbn-schedule-controls">
+        <input type="time" id="autoScheduleTime1" value="03:10" aria-label="1回目の予約時間">
+        <input type="time" id="autoScheduleTime2" value="11:10" aria-label="2回目の予約時間">
+        <input type="time" id="autoScheduleTime3" value="19:10" aria-label="3回目の予約時間">
+        <button type="button" id="autoScheduleSaveBtn">予約を更新</button>
+      </div>
+      <small id="autoScheduleStatus">現在の予約時間を読み込み中...</small>
     </div>
     <div id="maintenanceStatus" class="auto-discovery-status"></div>
     <div class="kbn-alert-head">
@@ -8483,6 +8529,98 @@ document.addEventListener("click",async(e)=>{
     if(id)window.jumpToInstagramDm(id);
     return;
   }
+});
+</script>
+
+
+<script id="kbn-schedule-editor-v176-js">
+window.loadAutoSchedule=async function(){
+  const status=document.getElementById("autoScheduleStatus");
+  try{
+    const d=await api("/api/admin/auto-schedule");
+    const times=Array.isArray(d.times_jst)?d.times_jst:[];
+    if(times.length===3){
+      times.forEach((v,i)=>{
+        const el=document.getElementById(`autoScheduleTime${i+1}`);
+        if(el)el.value=v;
+      });
+      if(status){
+        status.dataset.state="ok";
+        status.textContent=`現在：${times.join(" / ")}（日本時間）`;
+      }
+    }else{
+      if(status){
+        status.dataset.state="error";
+        status.textContent="予約時間を3件取得できませんでした。";
+      }
+    }
+  }catch(e){
+    if(status){
+      status.dataset.state="error";
+      status.textContent=`予約時間を取得できませんでした：${e?.message||"UNKNOWN_ERROR"}`;
+    }
+  }
+};
+
+document.addEventListener("click",async(e)=>{
+  if(e.target?.id!=="autoScheduleSaveBtn")return;
+
+  const btn=e.target;
+  const status=document.getElementById("autoScheduleStatus");
+  const times=[1,2,3].map(i=>document.getElementById(`autoScheduleTime${i}`)?.value||"");
+
+  if(times.some(v=>!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(v))){
+    if(status){
+      status.dataset.state="error";
+      status.textContent="3つの時間をすべて入力してください。";
+    }
+    return;
+  }
+  if(new Set(times).size!==3){
+    if(status){
+      status.dataset.state="error";
+      status.textContent="同じ時間は設定できません。";
+    }
+    return;
+  }
+
+  btn.disabled=true;
+  btn.textContent="反映中...";
+  if(status){
+    status.dataset.state="";
+    status.textContent="GitHubへ予約設定を反映しています...";
+  }
+
+  try{
+    const d=await api("/api/admin/auto-schedule",{
+      method:"PUT",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({times_jst:times})
+    });
+
+    const saved=Array.isArray(d.times_jst)?d.times_jst:times;
+    saved.forEach((v,i)=>{
+      const el=document.getElementById(`autoScheduleTime${i+1}`);
+      if(el)el.value=v;
+    });
+
+    if(status){
+      status.dataset.state="ok";
+      status.textContent=`✓ ${saved.join(" / ")}（日本時間）で反映しました。Cloudflareのデプロイ後に有効になります。`;
+    }
+  }catch(err){
+    if(status){
+      status.dataset.state="error";
+      status.textContent=`更新できませんでした：${err?.message||"UNKNOWN_ERROR"}`;
+    }
+  }finally{
+    btn.disabled=false;
+    btn.textContent="予約を更新";
+  }
+});
+
+document.addEventListener("DOMContentLoaded",()=>{
+  setTimeout(()=>window.loadAutoSchedule?.(),650);
 });
 </script>
 
