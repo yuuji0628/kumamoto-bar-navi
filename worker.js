@@ -1336,7 +1336,7 @@ out center tags;
         method:"POST",
         headers:{
           "Content-Type":"application/x-www-form-urlencoded;charset=UTF-8",
-          "User-Agent":"KUMAMOTO-BAR-NAVI/1.48"
+          "User-Agent":"KUMAMOTO-BAR-NAVI/1.49"
         },
         body:"data="+encodeURIComponent(query)
       });
@@ -1584,7 +1584,7 @@ async function fetchOfficialWebsiteMetadata(url){
   }
   try{
     const r=await fetch(target,{
-      headers:{"User-Agent":"Mozilla/5.0 KUMAMOTO-BAR-NAVI/1.48"}
+      headers:{"User-Agent":"Mozilla/5.0 KUMAMOTO-BAR-NAVI/1.49"}
     });
     if(!r.ok)return {ok:false,price:{min:null,max:null},hours:"",holiday:"",features:""};
     const ct=String(r.headers.get("content-type")||"");
@@ -1605,110 +1605,32 @@ async function fetchOfficialWebsiteMetadata(url){
 }
 
 async function findOpenDataPlaceForShop(env,{name,area}){
-  // 1) Google Places first: use as the strongest existence/name/area verifier.
   const google=await findGooglePlaceForShop(env,{name,area});
 
-  // 2) Secondary sources independently provide the persisted business fields.
-  const fsq=await findFoursquarePlaceForShop(env,{name,area});
-  const geo=await findGeoapifyPlaceForShop(env,{name,area});
-  const osmSnap=await fetchKumamotoOsmBars(env);
-
-  let osmMatch=null;
-  if(osmSnap.ok){
-    const ranked=osmSnap.places
-      .map(place=>({place,score:osmPlaceScore(place,{name,area})}))
-      .sort((a,b)=>b.score-a.score);
-    if(ranked[0]&&ranked[0].score>=78)osmMatch=ranked[0];
+  if(!google.configured){
+    return {ok:false,error:"GOOGLE_PLACES_NOT_CONFIGURED",matched:false};
   }
 
-  // Google matched: require/use the best confirming secondary source when available.
-  if(google.ok&&google.matched){
-    const gName=googlePlaceName(google.place);
-    const gAddress=googlePlaceAddress(google.place);
-    const secondary=[];
-
-    if(fsq.ok&&fsq.matched){
-      secondary.push({
-        kind:"foursquare",
-        fsq_place:fsq.place,
-        score:crossSourceNameAreaScore(gName,gAddress,fsqName(fsq.place),fsqAddress(fsq.place))
-      });
-    }
-    if(geo.ok&&geo.matched){
-      secondary.push({
-        kind:"geoapify",
-        feature:geo.feature,
-        score:crossSourceNameAreaScore(gName,gAddress,geoName(geo.feature),geoAddress(geo.feature))
-      });
-    }
-    if(osmMatch){
-      secondary.push({
-        kind:"osm",
-        place:osmMatch.place,
-        score:crossSourceNameAreaScore(gName,gAddress,osmPlaceName(osmMatch.place),osmAddress(osmMatch.place))
-      });
-    }
-
-    secondary.sort((a,b)=>b.score-a.score);
-    const best=secondary.find(x=>x.score>=82);
-
-    if(best){
-      return {
-        ok:true,
-        matched:true,
-        kind:best.kind,
-        place:best.place,
-        feature:best.feature,
-        fsq_place:best.fsq_place,
-        score:Math.max(Number(google.score||0),Number(best.score||0)),
-        confidence:"high",
-        source:`google_places+${best.kind}`,
-        google_place_id:String(google.place?.id||"")
-      };
-    }
+  if(!google.ok){
+    return {ok:false,error:google.error||"GOOGLE_PLACES_ERROR",matched:false};
   }
 
-  // If Google is unavailable / no confident match, continue with the existing fallback chain.
-  if(fsq.ok&&fsq.matched){
+  if(!google.matched){
     return {
-      ok:true,matched:true,kind:"foursquare",fsq_place:fsq.place,score:fsq.score,
-      confidence:fsq.confidence,source:"foursquare"
-    };
-  }
-
-  if(geo.ok&&geo.matched){
-    return {
-      ok:true,matched:true,kind:"geoapify",feature:geo.feature,score:geo.score,
-      confidence:geo.confidence,source:"geoapify"
-    };
-  }
-
-  if(osmMatch){
-    return {
-      ok:true,matched:true,kind:"osm",place:osmMatch.place,score:osmMatch.score,
-      confidence:osmMatch.score>=100?"high":"medium",
-      source:osmSnap.source
-    };
-  }
-
-  if(!google.configured&&!fsq.configured&&!geo.configured&&!osmSnap.ok){
-    return {
-      ok:false,
-      error:google.error||fsq.error||geo.error||osmSnap.error||"DISCOVERY_SOURCES_UNAVAILABLE",
-      matched:false
+      ok:true,matched:false,
+      score:Number(google.score||0),
+      source:"google_places"
     };
   }
 
   return {
     ok:true,
-    matched:false,
-    score:Math.max(
-      Number(google.score||0),
-      Number(fsq.score||0),
-      Number(geo.score||0),
-      Number(osmMatch?.score||0)
-    ),
-    source:google.configured?"google_places":(fsq.configured?"foursquare":(geo.configured?"geoapify":"osm"))
+    matched:true,
+    kind:"google",
+    google_place:google.place,
+    score:google.score,
+    confidence:google.confidence,
+    source:"google_places"
   };
 }
 async function ensureOpenSyncTable(env){
@@ -1772,8 +1694,12 @@ async function refreshIndependentListings(env,{limit=10,afterId=0,revalidate=fal
   const max=Math.max(1,Math.min(Number(limit)||10,30));
   const cursor=Math.max(0,Number(afterId)||0);
 
+  if(!googlePlacesConfig(env).apiKey){
+    return {ok:false,error:"GOOGLE_PLACES_NOT_CONFIGURED",checked:0,updated:[],unchanged:[],failed:[]};
+  }
+
   const r=await env.DB.prepare(`
-    SELECT id,name,area,address,phone,instagram,genre,hours,holiday,features,budget_min,budget_max,listing_status
+    SELECT id,name,area,address,listing_status
     FROM shops
     WHERE COALESCE(listing_status,'published')='provisional'
       AND id>?
@@ -1786,142 +1712,58 @@ async function refreshIndependentListings(env,{limit=10,afterId=0,revalidate=fal
 
   for(const shop of rows){
     try{
-      if(!force&&!revalidate&&await recentlyCheckedOpenData(env,shop.id,30)){
-        unchanged.push({id:shop.id,name:shop.name,reason:"CHECKED_WITHIN_30_DAYS"});
-        continue;
-      }
-
-      const found=await findOpenDataPlaceForShop(env,{
+      const found=await findGooglePlaceForShop(env,{
         name:String(shop.name||"").replace(/^【KBN独自掲載】/,"").trim(),
         area:shop.area||"熊本"
       });
 
       if(!found.ok){
-        failed.push({id:shop.id,name:shop.name,reason:found.error||"OPEN_DATA_ERROR"});
+        failed.push({id:shop.id,name:shop.name,reason:found.error||"GOOGLE_PLACES_ERROR"});
         continue;
       }
-
-      const storedBudget=sanitizeStoredBudget(shop.budget_min,shop.budget_max);
 
       if(!found.matched){
-        const changedBudget=
-          Number(storedBudget.min||0)!==Number(shop.budget_min||0)||
-          Number(storedBudget.max||0)!==Number(shop.budget_max||0);
-
-        if(changedBudget){
-          await env.DB.prepare(`
-            UPDATE shops SET budget_min=?,budget_max=?,updated_at=CURRENT_TIMESTAMP WHERE id=?
-          `).bind(storedBudget.min,storedBudget.max,shop.id).run();
-          updated.push({
-            id:shop.id,name:shop.name,
-            budget_min:storedBudget.min,budget_max:storedBudget.max,
-            match_confidence:"none",match_score:0
-          });
-        }else{
-          unchanged.push({id:shop.id,name:shop.name,reason:"MATCH_NOT_FOUND"});
-        }
-        await markOpenDataChecked(env,shop.id,"");
+        unchanged.push({id:shop.id,name:shop.name,reason:"GOOGLE_MATCH_NOT_FOUND"});
         continue;
       }
 
-      const isGeo=found.kind==="geoapify";
-      const isFsq=found.kind==="foursquare";
-      const place=isGeo?found.feature:(isFsq?found.fsq_place:found.place);
-
-      const address=isGeo?geoAddress(place):(isFsq?fsqAddress(place):osmAddress(place));
-      const phone=isGeo?geoPhone(place):(isFsq?fsqPhone(place):osmPhone(place));
-      const website=isGeo?geoWebsite(place):(isFsq?fsqWebsite(place):osmWebsite(place));
-      const instagram=isGeo?geoInstagram(place):(isFsq?fsqInstagram(place):osmInstagram(place));
-      const sourceHours=isGeo?geoHours(place):(isFsq?fsqHours(place):osmHours(place));
-      const sourceHoliday=(isGeo||isFsq)?"":osmHoliday(place);
-      const sourceFeatures=isGeo
-        ? extractFeaturesInfo(`${geoCategories(place).join(" ")} ${geoName(place)}`)
-        : isFsq
-          ? extractFeaturesInfo(`${fsqCategories(place).join(" ")} ${fsqName(place)}`)
-          : osmFeatures(place);
-
-      const trusted=Number(found.score||0)>=90;
-      let webMeta={ok:false,price:{min:null,max:null},hours:"",holiday:"",features:""};
-      const needsWebPrice=storedBudget.invalid||!storedBudget.min||!storedBudget.max;
-      if(website&&(revalidate||needsWebPrice||!shop.hours||!shop.holiday)){
-        webMeta=await fetchOfficialWebsiteMetadata(website);
-      }
-
-      const sourcePrice=isGeo
-        ? extractPriceInfo(JSON.stringify(geoFeatureProps(place)))
-        : isFsq
-          ? extractPriceInfo(JSON.stringify(place))
-          : extractPublicMetadata(place);
-      const sourceMin=(isGeo||isFsq)?sourcePrice.min:sourcePrice.budget_min;
-      const sourceMax=(isGeo||isFsq)?sourcePrice.max:sourcePrice.budget_max;
-
-      const extractedMin=webMeta.price?.min??sourceMin??null;
-      const extractedMax=webMeta.price?.max??sourceMax??null;
+      const address=googlePlaceAddress(found.place);
       const inferredArea=inferKumamotoAreaFromText(address,shop.area||"");
+      const trusted=Number(found.score||0)>=90;
 
-      const next={
-        area:trusted?(inferredArea||shop.area):shop.area,
-        address:(trusted&&address)?address:(shop.address||""),
-        phone:(trusted&&phone)?phone:(shop.phone||""),
-        instagram:shop.instagram||instagram||"",
-        hours:(trusted&&(sourceHours||webMeta.hours))
-          ? (sourceHours||webMeta.hours)
-          : (shop.hours||sourceHours||webMeta.hours||""),
-        holiday:(trusted&&(sourceHoliday||webMeta.holiday))
-          ? (sourceHoliday||webMeta.holiday)
-          : (shop.holiday||sourceHoliday||webMeta.holiday||""),
-        features:(trusted&&(sourceFeatures||webMeta.features))
-          ? [sourceFeatures,webMeta.features].filter(Boolean).join("、")
-          : (shop.features||sourceFeatures||webMeta.features||""),
-        budget_min:extractedMin!=null?extractedMin:(storedBudget.min??null),
-        budget_max:extractedMax!=null?extractedMax:(storedBudget.max??null)
-      };
-
-      if(next.budget_min&&next.budget_max&&next.budget_max<next.budget_min){
-        [next.budget_min,next.budget_max]=[next.budget_max,next.budget_min];
+      if(!trusted){
+        unchanged.push({
+          id:shop.id,name:shop.name,reason:"GOOGLE_MATCH_SCORE_LOW",
+          match_score:found.score
+        });
+        continue;
       }
+
+      const nextAddress=address||shop.address||"";
+      const nextArea=inferredArea||shop.area||"";
 
       const changed=
-        String(next.area||"")!==String(shop.area||"")||
-        String(next.address||"")!==String(shop.address||"")||
-        String(next.phone||"")!==String(shop.phone||"")||
-        String(next.instagram||"")!==String(shop.instagram||"")||
-        String(next.hours||"")!==String(shop.hours||"")||
-        String(next.holiday||"")!==String(shop.holiday||"")||
-        String(next.features||"")!==String(shop.features||"")||
-        Number(next.budget_min||0)!==Number(shop.budget_min||0)||
-        Number(next.budget_max||0)!==Number(shop.budget_max||0);
-
-      const sid=isGeo
-        ? `geoapify/${String(geoFeatureProps(place).place_id||"")}`
-        : isFsq
-          ? `foursquare/${String(place.fsq_place_id||place.fsq_id||place.id||"")}`
-          : `${place.type||""}/${place.id||""}`;
-      await markOpenDataChecked(env,shop.id,sid);
+        String(nextAddress)!==String(shop.address||"")||
+        String(nextArea)!==String(shop.area||"");
 
       if(!changed){
-        unchanged.push({id:shop.id,name:shop.name,reason:"NO_CHANGE"});
+        unchanged.push({
+          id:shop.id,name:shop.name,reason:"NO_CHANGE",
+          match_score:found.score
+        });
         continue;
       }
 
       await env.DB.prepare(`
-        UPDATE shops SET
-          area=?,address=?,phone=?,instagram=?,hours=?,holiday=?,features=?,
-          budget_min=?,budget_max=?,updated_at=CURRENT_TIMESTAMP
+        UPDATE shops
+        SET area=?,address=?,updated_at=CURRENT_TIMESTAMP
         WHERE id=?
-      `).bind(
-        next.area,next.address,next.phone,next.instagram,next.hours,next.holiday,next.features,
-        next.budget_min,next.budget_max,shop.id
-      ).run();
+      `).bind(nextArea,nextAddress,shop.id).run();
 
       updated.push({
-        id:shop.id,name:shop.name,
-        area:next.area,address:next.address,phone:next.phone,
-        hours:next.hours,holiday:next.holiday,
-        budget_min:next.budget_min,budget_max:next.budget_max,
-        match_confidence:found.confidence,
-        match_score:found.score,
-        source:found.source
+        id:shop.id,name:shop.name,area:nextArea,address:nextAddress,
+        match_confidence:found.confidence,match_score:found.score,
+        source:"google_places"
       });
     }catch(e){
       failed.push({
@@ -1942,12 +1784,9 @@ async function refreshIndependentListings(env,{limit=10,afterId=0,revalidate=fal
   return {
     ok:true,checked:rows.length,updated,unchanged,failed,
     next_after_id:nextAfterId,has_more:!!moreR,
-    provider:"osm_geoapify"
+    provider:"google_places_only"
   };
 }
-
-
-
 function googlePlacesConfig(env){
   return {apiKey:t(env.GOOGLE_PLACES_API_KEY,2000)};
 }
@@ -2026,7 +1865,8 @@ async function googlePlacesTextSearch(env,{query,pageSize=20}){
     return {
       ok:true,
       configured:true,
-      places:Array.isArray(d?.places)?d.places:[]
+      places:Array.isArray(d?.places)?d.places:[],
+      next_page_token:String(d?.nextPageToken||"")
     };
   }catch(e){
     return {
@@ -2425,23 +2265,18 @@ function strictAutoListingGate({
   };
 }
 
-async function autoDiscover(env,request,maxListings=10,pairLimit=6,perPairLimit=2){
+async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit=3){
   await ensureLeadDiscoveryTables(env);
 
-  const osmSnap=await fetchKumamotoOsmBars(env);
-  const geoSnap=await fetchKumamotoGeoapifyBars(env);
-  const fsqConfigured=!!foursquareConfig(env).apiKey;
-  const googleConfigured=!!googlePlacesConfig(env).apiKey;
-
-  if(!googleConfigured&&!fsqConfigured&&!geoSnap.ok&&!osmSnap.ok){
+  if(!googlePlacesConfig(env).apiKey){
     return {
-      ok:false,
-      error:"DISCOVERY_SOURCES_UNAVAILABLE",
-      created:[],searched:[],rejected:[]
+      ok:false,error:"GOOGLE_PLACES_NOT_CONFIGURED",
+      created:[],searched:[],rejected:[],
+      provider:"google_places_only"
     };
   }
 
-  const pairs=await autoDiscoveryPairs(env,pairLimit);
+  const pairs=await autoDiscoveryPairs(env,Math.max(1,Math.min(Number(pairLimit)||15,20)));
   const created=[],searched=[],rejected=[];
   const existingR=await env.DB.prepare(
     "SELECT id,name,address,phone,instagram FROM shops"
@@ -2451,58 +2286,26 @@ async function autoDiscover(env,request,maxListings=10,pairLimit=6,perPairLimit=
   for(const pair of pairs){
     if(created.length>=maxListings)break;
 
-    const googleSearch=googleConfigured
-      ? await googlePlacesTextSearch(env,{
-          query:[pair.area,"熊本県",pair.label].filter(Boolean).join(" "),
-          pageSize:20
-        })
-      : {ok:false,configured:false,places:[],error:"GOOGLE_PLACES_NOT_CONFIGURED"};
+    const query=[pair.area,"熊本県",pair.label||"BAR"].filter(Boolean).join(" ");
+    const sr=await googlePlacesTextSearch(env,{query,pageSize:20});
 
-    const fsqSearch=fsqConfigured
-      ? await foursquareSearch(env,{
-          query:pair.label||"BAR",
-          near:[pair.area,"熊本県","日本"].filter(Boolean).join(", "),
-          limit:20
-        })
-      : {ok:false,configured:false,results:[],error:"FOURSQUARE_NOT_CONFIGURED"};
+    if(!sr.ok){
+      searched.push({
+        area:pair.area,type:pair.label,ok:false,
+        google_found:0,error:sr.error||"GOOGLE_PLACES_ERROR",
+        source:"google_places"
+      });
+      continue;
+    }
 
-    const googleCandidates=googleSearch.ok
-      ? googleSearch.places.filter(googlePlaceLooksLikeBar)
-      : [];
-
-    const fsqCandidates=fsqSearch.ok
-      ? fsqSearch.results.filter(fsqLooksLikeBar)
-      : [];
-
-    const geoCandidates=geoSnap.ok
-      ? geoSnap.features.filter(feature=>{
-          const addr=geoAddress(feature);
-          const hint=geoAreaHint(feature);
-          return (!pair.area||addr.includes(pair.area)||hint.includes(pair.area))&&geoLooksLikeBar(feature);
-        })
-      : [];
-
-    const osmCandidates=osmSnap.ok
-      ? osmSnap.places.filter(place=>{
-          const addr=osmAddress(place);
-          const hint=osmAreaHint(place);
-          return (!pair.area||addr.includes(pair.area)||hint.includes(pair.area))&&osmPlaceLooksLikeBar(place);
-        })
-      : [];
+    const candidates=(sr.places||[]).filter(googlePlaceLooksLikeBar);
 
     searched.push({
-      area:pair.area,
-      type:pair.label,
-      ok:true,
-      found:googleCandidates.length+fsqCandidates.length+geoCandidates.length+osmCandidates.length,
-      source:[
-        googleSearch.ok?"google_places":"",
-        fsqSearch.ok?"foursquare":"",
-        geoSnap.ok?geoSnap.source:"",
-        osmSnap.ok?osmSnap.source:""
-      ].filter(Boolean).join("+"),
-      google_error:googleSearch.ok?"":(googleSearch.error||""),
-      foursquare_error:fsqSearch.ok?"":(fsqSearch.error||"")
+      area:pair.area,type:pair.label,ok:true,
+      google_found:candidates.length,
+      raw_found:Array.isArray(sr.places)?sr.places.length:0,
+      source:"google_places",
+      query
     });
 
     await env.DB.prepare(
@@ -2510,140 +2313,41 @@ async function autoDiscover(env,request,maxListings=10,pairLimit=6,perPairLimit=
     ).bind(pair.area,pair.type).run();
 
     let made=0;
-    const seenNames=new Set();
 
-    // Google is the first candidate source.
-    for(const g of googleCandidates){
+    for(const place of candidates){
       if(made>=perPairLimit||created.length>=maxListings)break;
 
-      const gName=t(googlePlaceName(g),150);
-      const gAddress=t(googlePlaceAddress(g),500);
-      if(!gName||!gAddress||!gAddress.includes("熊本"))continue;
+      const name=t(googlePlaceName(place),150);
+      const address=t(googlePlaceAddress(place),500);
+      if(!name||!address)continue;
+      if(!address.includes("熊本")){
+        rejected.push({name,reason:"OUTSIDE_KUMAMOTO",source:"google_places"});
+        continue;
+      }
 
-      const nkey=normalizePlaceName(gName);
-      if(seenNames.has(nkey))continue;
-      seenNames.add(nkey);
-
-      // Confirm Google candidate with an independent secondary source.
-      const best=findBestSecondaryForGoogle({
-        googlePlace:g,
-        fsqResults:fsqCandidates,
-        geoFeatures:geoCandidates,
-        osmPlaces:osmCandidates
+      const duplicate=autoListingDuplicateScore(existing,{
+        name,address,phone:"",instagram:""
       });
-
-      if(!best){
-        rejected.push({
-          name:gName,area:pair.area,reason:"GOOGLE_ONLY_NO_SECONDARY_MATCH",
-          source:"google_places"
-        });
+      if(duplicate){
+        rejected.push({name,reason:"DUPLICATE",source:"google_places"});
         continue;
       }
 
-      const isFsq=best.kind==="foursquare";
-      const isGeo=best.kind==="geoapify";
-      const place=best.place;
-
-      const name=t(
-        isFsq?fsqName(place):(isGeo?geoName(place):osmPlaceName(place)),
-        150
-      );
-      const address=t(
-        isFsq?fsqAddress(place):(isGeo?geoAddress(place):osmAddress(place)),
-        500
-      );
-      const phone=t(
-        isFsq?fsqPhone(place):(isGeo?geoPhone(place):osmPhone(place)),
-        80
-      );
-      const website=isFsq?fsqWebsite(place):(isGeo?geoWebsite(place):osmWebsite(place));
-      const instagram=isFsq?fsqInstagram(place):(isGeo?geoInstagram(place):osmInstagram(place));
-
-      const sourceHours=isFsq?fsqHours(place):(isGeo?geoHours(place):osmHours(place));
-      const sourceHoliday=(isFsq||isGeo)?"":osmHoliday(place);
-      const categories=isFsq?fsqCategories(place):(isGeo?geoCategories(place):[]);
-      const amenity=(isFsq||isGeo)?"":String(osmTags(place).amenity||"");
-      const sourceFeatures=isFsq
-        ? extractFeaturesInfo(`${categories.join(" ")} ${name}`)
-        : isGeo
-          ? extractFeaturesInfo(`${categories.join(" ")} ${name}`)
-          : osmFeatures(place);
-
-      if(autoListingDuplicateScore(existing,{name,address,phone,instagram})){
-        rejected.push({name,area:pair.area,reason:"DUPLICATE"});
+      const types=googlePlaceTypes(place);
+      if(!googlePlaceLooksLikeBar(place)){
+        rejected.push({name,reason:"NOT_BAR_TYPE",source:"google_places"});
         continue;
       }
-
-      const genre=t(
-        isFsq
-          ? (
-              categories.some(x=>/pub|パブ/i.test(x))?"パブ":
-              categories.some(x=>/night.?club|ナイトクラブ/i.test(x))?"ナイトクラブ":
-              categories.some(x=>/karaoke|カラオケ/i.test(x))?"カラオケBAR":"BAR"
-            )
-          : isGeo
-            ? (categories.some(x=>x==="catering.pub")?"パブ":"BAR")
-            : (amenity==="karaoke_box"?"カラオケBAR":
-               amenity==="pub"?"パブ":
-               amenity==="nightclub"?"ナイトクラブ":"BAR"),
-        120
-      );
-
-      const gate=strictAutoListingGate({
-        name,
-        area:pair.area,
-        address,
-        genre,
-        categories,
-        amenity,
-        phone,
-        website,
-        instagram,
-        sourceMatchScore:best.score,
-        sourceCount:2
-      });
-
-      // Google + independent source = strong cross-check.
-      gate.confidence+=2;
-      if(!gate.approved){
-        const coreBlocked=gate.reasons.some(r=>
-          ["NAME_WEAK","ADDRESS_NOT_CONFIRMED","BAR_CATEGORY_WEAK","NO_RELIABLE_CONTACT"].includes(r)
-        );
-        gate.approved=!coreBlocked&&gate.confidence>=10;
-      }
-
-      if(!gate.approved){
-        rejected.push({
-          name,area:pair.area,
-          reason:gate.reasons.join(",")||"LOW_CONFIDENCE",
-          confidence:gate.confidence,
-          source:`google_places+${best.kind}`,
-          source_count:2
-        });
-        continue;
-      }
-
-      const webMeta=website?await fetchOfficialWebsiteMetadata(website):
-        {ok:false,price:{min:null,max:null},hours:"",holiday:"",features:""};
-
-      const sourcePrice=isFsq
-        ? extractPriceInfo(JSON.stringify(place))
-        : isGeo
-          ? extractPriceInfo(JSON.stringify(geoFeatureProps(place)))
-          : extractPublicMetadata(place);
-
-      const sourceMin=(isFsq||isGeo)?sourcePrice.min:sourcePrice.budget_min;
-      const sourceMax=(isFsq||isGeo)?sourcePrice.max:sourcePrice.budget_max;
 
       const area=inferKumamotoAreaFromText(address,pair.area);
-      const hours=sourceHours||webMeta.hours||"";
-      const holiday=sourceHoliday||webMeta.holiday||"";
-      const features=[sourceFeatures,webMeta.features].filter(Boolean).join("、");
-      const budgetMin=webMeta.price?.min??sourceMin??null;
-      const budgetMax=webMeta.price?.max??sourceMax??null;
+      const typeText=types.join(" ").toLowerCase();
+      const genre=
+        /night_club|night club/.test(typeText)?"ナイトクラブ":
+        /pub/.test(typeText)?"パブ":
+        /karaoke/.test(typeText)?"カラオケBAR":"BAR";
 
       const desc=
-        "※本ページは、公開されている情報をもとにKUMAMOTO BAR NAVIが独自に掲載しています。"+
+        "※本ページは、Google Places上の公開店舗情報をもとにKUMAMOTO BAR NAVIが独自に掲載しています。"+
         "掲載内容の修正・削除をご希望の場合は店舗様専用ページよりご連絡ください。";
 
       const slug=slugify(name);
@@ -2654,8 +2358,8 @@ async function autoDiscover(env,request,maxListings=10,pairLimit=6,perPairLimit=
           is_featured,is_new,sort_order,listing_status,published_at
         ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'provisional',CURRENT_TIMESTAMP)
       `).bind(
-        slug,name,"",area,address,hours,holiday,instagram,
-        genre,features,desc,budgetMin,budgetMax,null,phone,
+        slug,name,"",area,address,"","","",
+        genre,types.join("、"),desc,null,null,null,"",
         0,1,"","",0,1,100
       ).run();
 
@@ -2665,146 +2369,16 @@ async function autoDiscover(env,request,maxListings=10,pairLimit=6,perPairLimit=
         "UPDATE shops SET owner_token_hash=?,owner_token_created_at=CURRENT_TIMESTAMP WHERE id=?"
       ).bind(hash,id).run();
 
-      const sid=isFsq
-        ? `foursquare/${String(place.fsq_place_id||place.fsq_id||place.id||id)}`
-        : isGeo
-          ? `geoapify/${String(geoFeatureProps(place).place_id||id)}`
-          : `${place.type||""}/${place.id||""}`;
-      await markOpenDataChecked(env,id,sid);
-
-      await env.DB.prepare(`
-        INSERT OR IGNORE INTO lead_discovery_seen(instagram_handle,source_area,source_type,status)
-        VALUES(?,?,?,'provisional_listed')
-      `).bind(
-        `${best.kind}_${String(
-          isFsq?(place.fsq_place_id||place.fsq_id||place.id||id):
-          isGeo?(geoFeatureProps(place).place_id||id):(place.id||id)
-        )}`,
-        area,pair.type
-      ).run();
-
-      existing.push({id,name,address,phone,instagram});
+      existing.push({id,name,address,phone:"",instagram:""});
 
       const origin=new URL(request.url).origin;
       created.push({
-        shop_id:id,
-        name,
-        handle:kbnHandle(instagram),
-        area,
-        genre,
-        address,
-        phone,
-        hours,
-        holiday,
-        budget_min:budgetMin,
-        budget_max:budgetMax,
-        auto_confidence:gate.confidence,
-        source_count:2,
-        source:`google_places+${best.kind}`,
-        google_place_id:String(g.id||""),
+        shop_id:id,name,area,genre,address,
+        google_place_id:String(place.id||""),
+        source:"google_places",
         public_url:`${origin}/shop.html?slug=${encodeURIComponent(slug)}`
       });
       made++;
-    }
-
-    // If Google returned nothing / unavailable, keep the existing fallback candidates.
-    if(made<perPairLimit && created.length<maxListings && !googleCandidates.length){
-      const fallback=[
-        ...fsqCandidates.map(place=>({kind:"foursquare",place})),
-        ...geoCandidates.map(place=>({kind:"geoapify",place})),
-        ...osmCandidates.map(place=>({kind:"osm",place}))
-      ];
-
-      for(const item of fallback){
-        if(made>=perPairLimit||created.length>=maxListings)break;
-
-        const isFsq=item.kind==="foursquare";
-        const isGeo=item.kind==="geoapify";
-        const place=item.place;
-        const name=t(isFsq?fsqName(place):(isGeo?geoName(place):osmPlaceName(place)),150);
-        const address=t(isFsq?fsqAddress(place):(isGeo?geoAddress(place):osmAddress(place)),500);
-        const phone=t(isFsq?fsqPhone(place):(isGeo?geoPhone(place):osmPhone(place)),80);
-        const website=isFsq?fsqWebsite(place):(isGeo?geoWebsite(place):osmWebsite(place));
-        const instagram=isFsq?fsqInstagram(place):(isGeo?geoInstagram(place):osmInstagram(place));
-        if(!name||!address)continue;
-
-        if(autoListingDuplicateScore(existing,{name,address,phone,instagram}))continue;
-
-        const categories=isFsq?fsqCategories(place):(isGeo?geoCategories(place):[]);
-        const amenity=(isFsq||isGeo)?"":String(osmTags(place).amenity||"");
-        const genre=t(
-          isFsq
-            ? (categories.some(x=>/pub|パブ/i.test(x))?"パブ":"BAR")
-            : isGeo
-              ? (categories.some(x=>x==="catering.pub")?"パブ":"BAR")
-              : (amenity==="pub"?"パブ":amenity==="nightclub"?"ナイトクラブ":"BAR"),
-          120
-        );
-
-        const gate=strictAutoListingGate({
-          name,area:pair.area,address,genre,categories,amenity,phone,website,instagram,
-          sourceMatchScore:90,sourceCount:1
-        });
-        if(!gate.approved)continue;
-
-        const sourceHours=isFsq?fsqHours(place):(isGeo?geoHours(place):osmHours(place));
-        const sourceHoliday=(isFsq||isGeo)?"":osmHoliday(place);
-        const sourceFeatures=isFsq
-          ? extractFeaturesInfo(`${categories.join(" ")} ${name}`)
-          : isGeo
-            ? extractFeaturesInfo(`${categories.join(" ")} ${name}`)
-            : osmFeatures(place);
-        const webMeta=website?await fetchOfficialWebsiteMetadata(website):
-          {ok:false,price:{min:null,max:null},hours:"",holiday:"",features:""};
-        const sourcePrice=isFsq
-          ? extractPriceInfo(JSON.stringify(place))
-          : isGeo
-            ? extractPriceInfo(JSON.stringify(geoFeatureProps(place)))
-            : extractPublicMetadata(place);
-        const sourceMin=(isFsq||isGeo)?sourcePrice.min:sourcePrice.budget_min;
-        const sourceMax=(isFsq||isGeo)?sourcePrice.max:sourcePrice.budget_max;
-
-        const area=inferKumamotoAreaFromText(address,pair.area);
-        const hours=sourceHours||webMeta.hours||"";
-        const holiday=sourceHoliday||webMeta.holiday||"";
-        const features=[sourceFeatures,webMeta.features].filter(Boolean).join("、");
-        const budgetMin=webMeta.price?.min??sourceMin??null;
-        const budgetMax=webMeta.price?.max??sourceMax??null;
-        const desc=
-          "※本ページは、公開されている情報をもとにKUMAMOTO BAR NAVIが独自に掲載しています。"+
-          "掲載内容の修正・削除をご希望の場合は店舗様専用ページよりご連絡ください。";
-
-        const slug=slugify(name);
-        const ins=await env.DB.prepare(`
-          INSERT INTO shops(
-            slug,name,name_kana,area,address,hours,holiday,instagram,genre,features,description,
-            budget_min,budget_max,seats,phone,is_recruiting,is_published,image_url,image_key,
-            is_featured,is_new,sort_order,listing_status,published_at
-          ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'provisional',CURRENT_TIMESTAMP)
-        `).bind(
-          slug,name,"",area,address,hours,holiday,instagram,
-          genre,features,desc,budgetMin,budgetMax,null,phone,
-          0,1,"","",0,1,100
-        ).run();
-
-        const id=Number(ins.meta?.last_row_id||0);
-        const token=ownerToken(),hash=await sha256hex(token);
-        await env.DB.prepare(
-          "UPDATE shops SET owner_token_hash=?,owner_token_created_at=CURRENT_TIMESTAMP WHERE id=?"
-        ).bind(hash,id).run();
-
-        existing.push({id,name,address,phone,instagram});
-        const origin=new URL(request.url).origin;
-        created.push({
-          shop_id:id,name,area,genre,address,phone,hours,holiday,
-          budget_min:budgetMin,budget_max:budgetMax,
-          auto_confidence:gate.confidence,
-          source_count:1,
-          source:item.kind,
-          public_url:`${origin}/shop.html?slug=${encodeURIComponent(slug)}`
-        });
-        made++;
-      }
     }
   }
 
@@ -2812,14 +2386,10 @@ async function autoDiscover(env,request,maxListings=10,pairLimit=6,perPairLimit=
     ok:true,
     created,
     searched,
-    rejected:rejected.slice(0,50),
+    rejected:rejected.slice(0,100),
     rejected_count:rejected.length,
-    provider:googleConfigured
-      ?"google_places_foursquare_geoapify_osm"
-      :(fsqConfigured?"foursquare_geoapify_osm":"geoapify_osm"),
-    google_configured:googleConfigured,
-    foursquare_configured:fsqConfigured,
-    geoapify_configured:!!geoSnap.configured
+    provider:"google_places_only",
+    google_configured:true
   };
 }
 async function ensureListingStatusColumn(env){
@@ -3989,7 +3559,7 @@ ${urls.map(x=>`  <url>
       if(url.pathname==="/api/admin/leads/auto-discover" && request.method==="POST"){
         let x={}; try{x=await request.json()}catch{}
         const max=Math.max(1,Math.min(Number(x.max_listings)||10,20));
-        const pairs=Math.max(1,Math.min(Number(x.pair_limit)||6,10));
+        const pairs=Math.max(1,Math.min(Number(x.pair_limit)||15,20));
         const perPair=Math.max(1,Math.min(Number(x.per_pair_limit)||2,3));
 
         try{
@@ -4006,33 +3576,67 @@ ${urls.map(x=>`  <url>
       }
 
 if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
-        const cfg=leadSearchConfig(env);
+        const cfg=googlePlacesConfig(env);
         return json({
           ok:true,
           configured:!!cfg.apiKey,
           has_api_key:!!cfg.apiKey,
-          provider:"serpapi"
+          provider:"google_places_only"
         });
       }
 
       if(url.pathname==="/api/admin/leads/search" && request.method==="GET"){
         const area=t(url.searchParams.get("area")||"熊本",120);
         const type=t(url.searchParams.get("type")||"bar",50);
-        const start=Math.max(1,Math.min(91,Number(url.searchParams.get("start")||1)));
 
-        const result=await searchInstagramLeads(env,{area,type,start});
+        const typeWord={
+          bar:"BAR", darts:"ダーツバー", karaoke:"カラオケバー", snack:"スナック",
+          lounge:"ラウンジ", girls:"ガールズバー", shot:"ショットバー", sports:"スポーツバー",
+          wine:"ワインバー", beer:"ビアバー", cocktail:"カクテルバー", music:"ミュージックバー",
+          shisha:"シーシャバー", concept:"コンセプトバー"
+        }[type]||"BAR";
 
-        if(!result.ok && result.error==="SERPAPI_NOT_CONFIGURED"){
-          return json(result,{status:503});
+        const sr=await googlePlacesTextSearch(env,{
+          query:[area,"熊本県",typeWord].filter(Boolean).join(" "),
+          pageSize:20
+        });
+
+        if(!sr.configured){
+          return json({ok:false,error:"GOOGLE_PLACES_NOT_CONFIGURED"},{status:503});
+        }
+        if(!sr.ok){
+          return json({ok:false,error:sr.error||"GOOGLE_PLACES_ERROR"},{status:502});
         }
 
-        if(!result.ok){
-          return json(result,{status:502});
-        }
+        const leads=(sr.places||[])
+          .filter(googlePlaceLooksLikeBar)
+          .map(place=>{
+            const name=googlePlaceName(place);
+            const address=googlePlaceAddress(place);
+            const q=encodeURIComponent([name,address].filter(Boolean).join(" "));
+            return {
+              source:"google_places",
+              handle:"",
+              instagram:"",
+              title:name,
+              snippet:address,
+              area:inferKumamotoAreaFromText(address,area),
+              type:typeWord,
+              google_place_id:String(place.id||""),
+              url:`https://www.google.com/maps/search/?api=1&query=${q}`
+            };
+          });
 
-        return json(result);
+        return json({
+          ok:true,
+          configured:true,
+          provider:"google_places_only",
+          query:[area,"熊本県",typeWord].join(" "),
+          leads,
+          total:leads.length,
+          next_start:null
+        });
       }
-
 
       if(url.pathname==="/api/admin/leads/provisional-shop" && request.method==="POST"){
         let x;
