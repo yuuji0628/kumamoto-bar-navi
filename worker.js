@@ -2196,6 +2196,46 @@ async function refreshIndependentListings(env,{limit=10,afterId=0,revalidate=fal
     provider:"google_details_secondary_official_web"
   };
 }
+async function refreshMissingShopImages(env,{limit=20,afterId=0}={}){
+  const max=Math.max(1,Math.min(Number(limit)||20,30));
+  const cursor=Math.max(0,Number(afterId)||0);
+  const r=await env.DB.prepare(`
+    SELECT id,name,area,address,image_url,image_key
+    FROM shops
+    WHERE id>?
+      AND COALESCE(is_published,1)=1
+      AND COALESCE(TRIM(image_url),'')=''
+    ORDER BY id ASC LIMIT ?
+  `).bind(cursor,max).all();
+  const rows=r.results||[],updated=[],unchanged=[],failed=[];
+  for(const shop of rows){
+    try{
+      const cleanName=String(shop.name||"").replace(/^【KBN独自掲載】/,"").trim();
+      const found=await findGooglePlaceForShop(env,{name:cleanName,area:shop.area||"熊本"});
+      if(!found.ok||!found.matched){
+        unchanged.push({id:shop.id,name:shop.name,reason:found.error||"GOOGLE_MATCH_NOT_FOUND"});
+        continue;
+      }
+      const details=await googlePlaceDetails(env,found.place?.id);
+      const gp=details.ok&&details.place?details.place:found.place;
+      const photoName=googlePhotoName(gp);
+      if(!photoName){
+        unchanged.push({id:shop.id,name:shop.name,reason:"GOOGLE_PHOTO_NOT_FOUND"});
+        continue;
+      }
+      const imageUrl=googlePhotoProxyUrl(shop.id);
+      await env.DB.prepare(`UPDATE shops SET image_url=?,image_key=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`)
+        .bind(imageUrl,`google:${photoName}`,shop.id).run();
+      updated.push({id:shop.id,name:shop.name,image_url:imageUrl,source:"google_places_photo"});
+    }catch(e){
+      failed.push({id:shop.id,name:shop.name,reason:String(e?.message||e||"IMAGE_REFRESH_ERROR").slice(0,250)});
+    }
+  }
+  const next=rows.length?Number(rows[rows.length-1].id||0):cursor;
+  const more=await env.DB.prepare(`SELECT id FROM shops WHERE id>? AND COALESCE(is_published,1)=1 AND COALESCE(TRIM(image_url),'')='' ORDER BY id ASC LIMIT 1`).bind(next).first();
+  return {ok:true,checked:rows.length,updated,unchanged,failed,next_after_id:next,has_more:!!more};
+}
+
 function googlePlacesConfig(env){
   return {apiKey:t(env.GOOGLE_PLACES_API_KEY,2000)};
 }
@@ -2328,7 +2368,7 @@ async function googlePlaceDetails(env,placeId){
       "id","displayName","formattedAddress","primaryType","types","businessStatus",
       "nationalPhoneNumber","internationalPhoneNumber",
       "regularOpeningHours","currentOpeningHours",
-      "websiteUri","priceLevel","priceRange","googleMapsUri"
+      "websiteUri","priceLevel","priceRange","googleMapsUri","photos"
     ].join(",");
 
     const r=await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(id)}`,{
@@ -2380,6 +2420,16 @@ function googlePhone(place){
 
 function googleWebsite(place){
   return String(place?.websiteUri||"").trim();
+}
+
+function googlePhotoName(place){
+  const photos=Array.isArray(place?.photos)?place.photos:[];
+  const name=String(photos[0]?.name||"").trim();
+  return /^places\/[^/]+\/photos\/[^/]+$/.test(name)?name:"";
+}
+
+function googlePhotoProxyUrl(shopId){
+  return `/api/shop-photo?id=${encodeURIComponent(String(shopId||""))}`;
 }
 
 function googlePriceInfo(place){
@@ -3056,6 +3106,12 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
       await env.DB.prepare(
         "UPDATE shops SET owner_token_hash=?,owner_token_created_at=CURRENT_TIMESTAMP WHERE id=?"
       ).bind(hash,id).run();
+
+      const autoPhotoName=googlePhotoName(gp);
+      if(autoPhotoName){
+        await env.DB.prepare("UPDATE shops SET image_url=?,image_key=?,updated_at=CURRENT_TIMESTAMP WHERE id=?")
+          .bind(googlePhotoProxyUrl(id),`google:${autoPhotoName}`,id).run();
+      }
 
       existing.push({id,name:gName,address,phone,instagram});
 
@@ -3858,6 +3914,34 @@ ${urls.map(x=>`  <url>
       await ensureListingStatusColumn(env);
     }
 
+    if(url.pathname==="/api/shop-photo" && request.method==="GET"){
+      const id=Math.max(0,Number(url.searchParams.get("id")||0));
+      if(!id)return new Response("Not found",{status:404});
+      const shop=await env.DB.prepare("SELECT image_key FROM shops WHERE id=? AND COALESCE(is_published,1)=1").bind(id).first();
+      const key=String(shop?.image_key||"");
+      if(!key.startsWith("google:"))return new Response("Not found",{status:404});
+      const photoName=key.slice(7);
+      if(!/^places\/[^/]+\/photos\/[^/]+$/.test(photoName))return new Response("Not found",{status:404});
+      const cfg=googlePlacesConfig(env);
+      if(!cfg.apiKey)return new Response("Photo service unavailable",{status:503});
+      const endpoint=`https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=1200&skipHttpRedirect=true&key=${encodeURIComponent(cfg.apiKey)}`;
+      try{
+        const metaRes=await fetch(endpoint,{headers:{"Accept":"application/json"}});
+        if(!metaRes.ok)return new Response("Photo unavailable",{status:metaRes.status});
+        const meta=await metaRes.json();
+        const photoUri=String(meta?.photoUri||"");
+        if(!/^https:\/\//i.test(photoUri))return new Response("Photo unavailable",{status:404});
+        const img=await fetch(photoUri);
+        if(!img.ok)return new Response("Photo unavailable",{status:img.status});
+        const h=new Headers(img.headers);
+        h.set("Cache-Control","public, max-age=86400, stale-while-revalidate=604800");
+        h.delete("set-cookie");
+        return new Response(img.body,{status:200,headers:h});
+      }catch(e){
+        return new Response("Photo unavailable",{status:502});
+      }
+    }
+
     if(url.pathname==="/api/shops" && request.method==="GET"){
       const r=await env.DB.prepare(`
         SELECT * FROM shops WHERE is_published=1
@@ -4628,6 +4712,16 @@ ${urls.map(x=>`  <url>
         }
       }
 
+
+      if(url.pathname==="/api/admin/leads/refresh-images" && request.method==="POST"){
+        let x={};try{x=await request.json()}catch{}
+        try{
+          const result=await refreshMissingShopImages(env,{limit:Math.max(1,Math.min(Number(x.limit)||20,30)),afterId:Math.max(0,Number(x.after_id)||0)});
+          return json(result,{headers:{"Cache-Control":"no-store"}});
+        }catch(e){
+          return json({ok:false,error:"REFRESH_IMAGES_FAILED",message:String(e?.message||e).slice(0,500)},{status:500});
+        }
+      }
 
       if(url.pathname==="/api/admin/leads/refresh-missing" && request.method==="POST"){
         let x={};try{x=await request.json()}catch{}
