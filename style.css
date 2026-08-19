@@ -3914,3 +3914,55 @@ a.directory-card:hover{
     line-height:1.8;
   }
 }
+
+
+/* ============================================================
+   KBN public ver1.46
+   正式掲載説明枠をコンパクト化
+   ============================================================ */
+
+.public-shop-trust-box{
+  margin-top:14px!important;
+  padding:15px 16px 14px!important;
+  border-radius:15px!important;
+}
+
+.public-shop-trust-label{
+  margin-bottom:7px!important;
+  font-size:8px!important;
+  letter-spacing:.16em!important;
+}
+
+.public-shop-trust-box b{
+  margin-bottom:8px!important;
+  font-size:16px!important;
+  line-height:1.25!important;
+}
+
+.public-shop-trust-box p{
+  font-size:12px!important;
+  line-height:1.7!important;
+}
+
+@media(max-width:640px){
+  .public-shop-trust-box{
+    margin-top:12px!important;
+    padding:14px 14px 13px!important;
+    border-radius:14px!important;
+  }
+
+  .public-shop-trust-label{
+    margin-bottom:6px!important;
+    font-size:7px!important;
+  }
+
+  .public-shop-trust-box b{
+    margin-bottom:7px!important;
+    font-size:15px!important;
+  }
+
+  .public-shop-trust-box p{
+    font-size:11px!important;
+    line-height:1.65!important;
+  }
+}
