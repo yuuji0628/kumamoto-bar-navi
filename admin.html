@@ -1918,7 +1918,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.77 画面圧縮調整
+   KBN ADMIN ver1.78 画面圧縮調整
    ============================================================ */
 
 /* 上部 welcome とログアウトをコンパクト化 */
@@ -2147,7 +2147,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.77 — 独自掲載 Instagram DM
+   KBN ADMIN ver1.78 — 独自掲載 Instagram DM
    ============================================================ */
 .shop-provisional-dm{
   border:1px solid #6c5a2b!important;
@@ -2862,18 +2862,18 @@ html,body{max-width:100%;overflow-x:hidden}
 </style>
 
 
-<style id="kbn-schedule-editor-v177">
+<style id="kbn-schedule-editor-v178">
 .kbn-schedule-editor{display:block!important}
 .kbn-schedule-title{
-  display:flex;align-items:center;justify-content:space-between;gap:8px
+  display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap
 }
 .kbn-schedule-title b{color:#efc45a!important;font-size:.74rem!important}
 .kbn-schedule-title span{color:#7f8994!important;font-size:.62rem!important}
 
 .kbn-schedule-controls{
   display:grid;
-  grid-template-columns:repeat(3,minmax(88px,1fr)) auto;
-  gap:6px;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:8px;
   margin-top:8px;
   align-items:center;
 }
@@ -2883,56 +2883,54 @@ html,body{max-width:100%;overflow-x:hidden}
   width:100%!important;
   max-width:100%!important;
   min-width:0!important;
-  height:40px!important;
-  padding:0 8px!important;
+  height:42px!important;
+  padding:0 10px!important;
   margin:0!important;
   border:1px solid #3d4854!important;
-  border-radius:9px!important;
+  border-radius:10px!important;
   background:#0a1118!important;
   color:#eef1f4!important;
   font-weight:850!important;
-  font-size:.72rem!important;
-  line-height:40px!important;
+  font-size:.78rem!important;
+  line-height:42px!important;
   color-scheme:dark;
   -webkit-appearance:none;
   appearance:none;
 }
 .kbn-schedule-controls button{
-  min-height:40px;padding:0 10px;border:1px solid #8a6b27;border-radius:9px;
-  background:#dfb342;color:#111;font-size:.68rem;font-weight:900;white-space:nowrap
+  grid-column:1 / -1;
+  min-height:40px;padding:0 12px;border:1px solid #8a6b27;border-radius:10px;
+  background:#dfb342;color:#111;font-size:.72rem;font-weight:900;white-space:nowrap;width:100%
 }
 .kbn-schedule-controls button:disabled{opacity:.55}
 #autoScheduleStatus{
-  display:block;margin-top:7px;color:#8f99a4;font-size:.61rem;line-height:1.45
+  display:block;margin-top:8px;color:#8f99a4;font-size:.61rem;line-height:1.45
 }
 #autoScheduleStatus[data-state="ok"]{color:#7fd7a2}
 #autoScheduleStatus[data-state="error"]{color:#ff9b9b}
 
-/* iPhoneではネイティブtime入力の最小幅が大きいため、縦並びで確実に収める */
+/* スマホでは3つの時間を横並び、更新ボタンは下段で見やすく */
 @media(max-width:680px){
-  .kbn-schedule-editor{
-    padding:10px!important
-  }
-  .kbn-schedule-title{
-    margin-bottom:7px
-  }
-  .kbn-schedule-controls{
-    grid-template-columns:1fr!important;
-    gap:6px!important;
-  }
+  .kbn-schedule-editor{padding:10px!important}
+  .kbn-schedule-title{margin-bottom:6px}
+  .kbn-schedule-controls{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:7px!important}
   .kbn-schedule-controls input[type="time"]{
-    width:100%!important;
-    max-width:none!important;
-    min-width:0!important;
-    height:42px!important;
-    font-size:.78rem!important;
-    padding:0 12px!important;
+    height:40px!important;
+    padding:0 6px!important;
+    font-size:.72rem!important;
+    text-align:center!important;
   }
   .kbn-schedule-controls button{
+    grid-column:1 / -1!important;
+    min-height:39px!important;
     width:100%!important;
-    min-height:40px!important;
-    margin-top:2px
   }
+}
+
+/* さらに狭い端末では2列+1列に自動で折り返す */
+@media(max-width:360px){
+  .kbn-schedule-controls{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  #autoScheduleTime3{grid-column:1 / -1!important}
 }
 </style>
 
@@ -2948,7 +2946,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver1.77</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver1.78</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -3032,7 +3030,7 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
 
   <div id="buttonHealthNote" class="version-note">
-    ver1.77：よく使う操作の先頭に自動開拓を配置
+    ver1.78：よく使う操作の先頭に自動開拓を配置
   </div>
 </section>
 
@@ -3327,7 +3325,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div id="refreshExistingStatus" class="auto-discovery-status lead-smart-message"></div>
     <div id="repairExistingAreasStatus" class="auto-discovery-status lead-smart-message"></div>
-    <small class="version-note">ver1.77：予約自動開拓の時間を管理画面から日本時間でワンタップ更新できます。</small>
+    <small class="version-note">ver1.78：予約時間はスマホでも見やすい横並び表示にしました。</small>
   </div>
 
   
