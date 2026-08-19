@@ -1336,7 +1336,7 @@ out center tags;
         method:"POST",
         headers:{
           "Content-Type":"application/x-www-form-urlencoded;charset=UTF-8",
-          "User-Agent":"KUMAMOTO-BAR-NAVI/1.69"
+          "User-Agent":"KUMAMOTO-BAR-NAVI/1.74"
         },
         body:"data="+encodeURIComponent(query)
       });
@@ -1585,7 +1585,7 @@ async function fetchOfficialWebsiteMetadata(url){
   }
   try{
     const r=await fetch(target,{
-      headers:{"User-Agent":"Mozilla/5.0 KUMAMOTO-BAR-NAVI/1.69"}
+      headers:{"User-Agent":"Mozilla/5.0 KUMAMOTO-BAR-NAVI/1.74"}
     });
     if(!r.ok)return empty;
     const ct=String(r.headers.get("content-type")||"");
