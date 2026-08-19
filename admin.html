@@ -1918,7 +1918,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.71 画面圧縮調整
+   KBN ADMIN ver1.72 画面圧縮調整
    ============================================================ */
 
 /* 上部 welcome とログアウトをコンパクト化 */
@@ -2147,7 +2147,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.71 — 独自掲載 Instagram DM
+   KBN ADMIN ver1.72 — 独自掲載 Instagram DM
    ============================================================ */
 .shop-provisional-dm{
   border:1px solid #6c5a2b!important;
@@ -2809,6 +2809,36 @@ html,body{max-width:100%;overflow-x:hidden}
 }
 </style>
 
+
+<style id="kbn-hide-manual-leads-v172">
+/* 手動検索・Google検索結果・候補保存は通常運用では使わないため非表示 */
+#leadSmartManual,
+#tab-leads .lead-results-card,
+#tab-leads .lead-add-card,
+#tab-leads .lead-summary,
+#tab-leads .lead-filters,
+#tab-leads #leadList{
+  display:none!important;
+}
+
+/* 「03 手動検索」見出しも非表示 */
+#tab-leads .kbn-lead-section-label.manual-section-label{
+  display:none!important;
+}
+
+/* 手動検索タブも非表示 */
+#tab-leads [data-lead-smart-tab="manual"],
+#tab-leads [data-lead-tab="manual"],
+#tab-leads [data-lead-mode="manual"]{
+  display:none!important;
+}
+
+/* 自動開拓＋メンテナンスだけでスッキリ */
+#tab-leads .lead-smart-tabs{
+  grid-template-columns:1fr!important;
+}
+</style>
+
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
 <div id="topMaintenanceResult" class="top-maintenance-result">
@@ -2821,7 +2851,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver1.71</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver1.72</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -2905,7 +2935,7 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
 
   <div id="buttonHealthNote" class="version-note">
-    ver1.71：よく使う操作の先頭に自動開拓を配置
+    ver1.72：よく使う操作の先頭に自動開拓を配置
   </div>
 </section>
 
@@ -3200,7 +3230,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div id="refreshExistingStatus" class="auto-discovery-status lead-smart-message"></div>
     <div id="repairExistingAreasStatus" class="auto-discovery-status lead-smart-message"></div>
-    <small class="version-note">ver1.71：自動掲載店舗一覧・掲載取り消しに対応。Google Places優先検索は継続します。</small>
+    <small class="version-note">ver1.72：自動掲載店舗一覧・掲載取り消しに対応。Google Places優先検索は継続します。</small>
   </div>
 
   
@@ -3229,7 +3259,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <div id="kbnAlertsList" class="kbn-alert-list"><small>通知を読み込み中...</small></div>
   </div>
 
-<div class="kbn-lead-section-label">03 手動検索 <span>必要なときだけ</span></div>
+<div class="kbn-lead-section-label manual-section-label">03 手動検索 <span>必要なときだけ</span></div>
 <div id="leadSmartManual" class="lead-smart-card">
     <button type="button" class="lead-smart-collapse-head" data-lead-collapse="manual" aria-expanded="false">
       <span class="lead-smart-icon">⌕</span>
