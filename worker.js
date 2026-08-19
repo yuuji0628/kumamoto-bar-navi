@@ -1336,7 +1336,7 @@ out center tags;
         method:"POST",
         headers:{
           "Content-Type":"application/x-www-form-urlencoded;charset=UTF-8",
-          "User-Agent":"KUMAMOTO-BAR-NAVI/1.74"
+          "User-Agent":"KUMAMOTO-BAR-NAVI/1.75"
         },
         body:"data="+encodeURIComponent(query)
       });
@@ -1585,7 +1585,7 @@ async function fetchOfficialWebsiteMetadata(url){
   }
   try{
     const r=await fetch(target,{
-      headers:{"User-Agent":"Mozilla/5.0 KUMAMOTO-BAR-NAVI/1.74"}
+      headers:{"User-Agent":"Mozilla/5.0 KUMAMOTO-BAR-NAVI/1.75"}
     });
     if(!r.ok)return empty;
     const ct=String(r.headers.get("content-type")||"");
@@ -3555,6 +3555,36 @@ export default {
       });
     }
 
+    const sitemapLastmodDate=value=>{
+      const raw=String(value||"").trim();
+      if(!raw)return "";
+
+      // Google sitemapのlastmodはYYYY-MM-DDだけに統一。
+      // D1のCURRENT_TIMESTAMP形式、ISO形式、旧データの日時形式でも日付部分だけ採用。
+      const m=raw.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
+      if(m){
+        const y=Number(m[1]),mo=Number(m[2]),d=Number(m[3]);
+        const dt=new Date(Date.UTC(y,mo-1,d));
+        if(
+          dt.getUTCFullYear()===y &&
+          dt.getUTCMonth()===mo-1 &&
+          dt.getUTCDate()===d
+        ){
+          return `${String(y).padStart(4,"0")}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+        }
+      }
+
+      // Unix秒/ミリ秒などの旧値が混在していても、有効な場合だけ採用。
+      if(/^\d{10,13}$/.test(raw)){
+        const n=Number(raw);
+        const dt=new Date(raw.length===10?n*1000:n);
+        if(!Number.isNaN(dt.getTime()))return dt.toISOString().slice(0,10);
+      }
+
+      // それ以外は無効なlastmodを出さない。
+      return "";
+    };
+
     if(url.pathname==="/sitemap.xml" && request.method==="GET"){
       const base="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev";
       const urls=[
@@ -3628,7 +3658,7 @@ export default {
             if(!s.slug)continue;
             urls.push({
               loc:`${base}/shop.html?slug=${encodeURIComponent(s.slug)}`,
-              lastmod:s.updated_at||"",
+              lastmod:sitemapLastmodDate(s.updated_at),
               priority:"0.8",
               freq:"weekly"
             });
@@ -3649,7 +3679,7 @@ export default {
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls.map(x=>`  <url>
     <loc>${escXml(x.loc)}</loc>${x.lastmod?`
-    <lastmod>${escXml(String(x.lastmod).replace(" ","T"))}</lastmod>`:""}
+    <lastmod>${escXml(x.lastmod)}</lastmod>`:""}
     <changefreq>${x.freq}</changefreq>
     <priority>${x.priority}</priority>
   </url>`).join("\n")}
