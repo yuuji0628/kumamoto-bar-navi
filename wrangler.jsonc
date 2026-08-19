@@ -5,7 +5,8 @@
   "keep_vars": true,
   "vars": {
     "CLOUDFLARE_ACCOUNT_ID": "5f2c9effa39dd7b9001b18cf64d65836",
-    "CLOUDFLARE_WORKER_NAME": "kumamoto-bar-navi"
+    "CLOUDFLARE_WORKER_NAME": "kumamoto-bar-navi",
+    "KBN_CONFIG_VERSION": "1.74"
   },
   "assets": {
     "directory": ".",
@@ -30,7 +31,9 @@
   ],
   "triggers": {
     "crons": [
-      "10 18 * * *"
+      "10 18 * * *",
+      "10 2 * * *",
+      "10 10 * * *"
     ]
   }
 }
