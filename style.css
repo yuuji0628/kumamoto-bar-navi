@@ -2643,10 +2643,12 @@ a.directory-card:hover{
 }
 .public-featured-body,.public-directory-card-body{padding:15px}
 .public-card-meta{display:flex;flex-wrap:wrap;gap:5px;min-height:22px}
-.public-editorial-badge,.public-recommend-badge,.public-new-badge{
-  display:inline-flex;align-items:center;padding:3px 7px;border-radius:999px;font-size:8px;font-weight:900
+.public-editorial-badge,.public-official-badge,.public-recommend-badge,.public-new-badge{
+  display:inline-flex;align-items:center;gap:4px;padding:3px 7px;border-radius:999px;font-size:8px;font-weight:900;line-height:1.1;white-space:nowrap
 }
 .public-editorial-badge{border:1px solid #7d6327;color:#e8c15f;background:rgba(228,187,85,.08)}
+.public-official-badge{border:1px solid rgba(173,223,196,.35);color:#f3f7ff;background:rgba(255,255,255,.03)}
+.public-official-badge i{display:inline-flex;align-items:center;justify-content:center;font-style:normal;color:#b8ffd2;font-size:10px;line-height:1}
 .public-recommend-badge{background:#243044;color:#dbe8ff}
 .public-new-badge{background:var(--kbn-gold);color:#111}
 .public-featured-body h3,.public-directory-card-body h3{
@@ -3502,6 +3504,7 @@ a.directory-card:hover{
   }
 
   .public-editorial-badge,
+  .public-official-badge,
   .public-recommend-badge,
   .public-new-badge{
     padding:3px 7px!important;
@@ -3627,7 +3630,19 @@ a.directory-card:hover{
     max-width:100%!important;
   }
 
+  .public-official-badge{
+    max-width:100%!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+  }
+
+  .public-official-badge i{
+    flex:0 0 auto!important;
+    font-size:10px!important;
+  }
+
   .public-editorial-badge,
+  .public-official-badge,
   .public-recommend-badge,
   .public-new-badge{
     min-height:22px!important;
@@ -3739,3 +3754,7 @@ a.directory-card:hover{
     font-size:14px!important;
   }
 }
+
+
+/* KBN public ver1.42
+   正式掲載バッジの見た目と折返し崩れを修正 */
