@@ -1918,7 +1918,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.49 画面圧縮調整
+   KBN ADMIN ver1.50 画面圧縮調整
    ============================================================ */
 
 /* 上部 welcome とログアウトをコンパクト化 */
@@ -2147,7 +2147,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.49 — 独自掲載 Instagram DM
+   KBN ADMIN ver1.50 — 独自掲載 Instagram DM
    ============================================================ */
 .shop-provisional-dm{
   border:1px solid #6c5a2b!important;
@@ -2162,7 +2162,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
-<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.49</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
+<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.50</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
 
 
 
@@ -2499,7 +2499,7 @@ html,body{max-width:100%;overflow-x:hidden}
   <button type="button" id="refreshExistingBtn" class="admin-secondary-btn">10店舗だけ更新</button>
   <button type="button" id="repairExistingAreasBtn" class="admin-secondary-btn">既存店舗のエリアを修正</button>
   <div id="bulkRevalidateStatus" class="auto-discovery-status"></div>
-  <small class="version-note">※ ver1.49 GOOGLE ONLYテスト版：検索はGoogle Placesだけを使用します。補助APIへのフォールバックは一時停止しています。</small>
+  <small class="version-note">※ ver1.50 Google診断版：Google Placesだけを使用し、各検索ごとの生ヒット数・BAR判定数・エラー内容まで管理画面に表示します。</small>
   <div id="refreshExistingStatus" class="auto-discovery-status"></div>
   <div id="repairExistingAreasStatus" class="auto-discovery-status"></div>
 </div>
@@ -2587,7 +2587,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <small id="leadSearchConfigNote">検索API設定を確認中...</small><small class="lead-follow-filter-note">✓ フォロー済みアカウントは検索結果から自動除外します。</small>
     <strong>⚡ 自動開拓</strong>
 <small>県内45市町村 × 14ジャンルを順番に検索。1組最大2店舗に抑えて地域を分散し、公開情報に少しでも料金表記があれば、料金・営業時間などをできるだけ自動反映します。</small>
-<button type="button" id="autoDiscoverBtn" class="btn-gold">Google ONLYで自動開拓</button>
+<button type="button" id="autoDiscoverBtn" class="btn-gold">Google診断つきで自動開拓</button>
 <div id="autoDiscoverStatus" class="auto-discovery-status"></div>
 </div>
 
@@ -6016,28 +6016,41 @@ window.refreshExistingIndependentListings=async function(){
 
 window.runAutoDiscovery=async function(){
   const btn=$("autoDiscoverBtn"), status=$("autoDiscoverStatus");
-  if(!confirm("動作確認のためGoogle Placesだけで検索します。Foursquare・Geoapify・OSM・SerpApiはこのテスト版では検索に使用しません。\n\n実行しますか？"))return;
+  if(!confirm("Google Placesだけで検索し、生ヒット数・BAR判定後・重複除外後・自動掲載数・APIエラーを表示します。補助APIはこの診断版では使用しません。\n\n実行しますか？"))return;
   btn.disabled=true;btn.textContent="自動開拓中...";
-  if(status)status.textContent="Google Places ONLYで検索中 → BAR判定 → 熊本県内住所確認 → 重複確認 → 自動掲載を実行しています...";
+  if(status)status.textContent="Google Places診断中 → 生ヒット数取得 → BAR判定 → 熊本県内住所確認 → 重複確認 → 自動掲載...";
   try{
     const d=await api("/api/admin/leads/auto-discover",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({max_listings:20,pair_limit:15,per_pair_limit:3})
+      body:JSON.stringify({max_listings:20,pair_limit:20,per_pair_limit:3})
     });
     await window.loadShops?.();
     const c=Array.isArray(d.created)?d.created:[];
     const s=Array.isArray(d.searched)?d.searched:[];
-    if(status)status.innerHTML=`<b>${c.length}店舗をKBN独自掲載しました。</b><br>Google検索：${s.length}組 / Google候補合計：${s.reduce((n,x)=>n+Number(x.google_found||0),0)}件`+
-      (c.length?`<br><small>${c.map(x=>{
-        const meta=[
-          x.hours?`営業時間:${esc(x.hours)}`:"",
-          x.budget_min?`料金:${Number(x.budget_min).toLocaleString()}円〜`:"",
-          x.holiday?`休:${esc(x.holiday)}`:"",
-          x.address?`住所:${esc(x.address)}`:"",
-          x.phone?`電話:${esc(x.phone)}`:"",
-          x.match_confidence?`照合:${esc(x.match_confidence)}`:""
-        ].filter(Boolean).join(" / ");
+    if(status){
+      const rawTotal=s.reduce((n,x)=>n+Number(x.raw_found||0),0);
+      const barTotal=s.reduce((n,x)=>n+Number(x.google_found||0),0);
+      const errRows=s.filter(x=>!x.ok||x.error);
+      const diagRows=s.map((x,i)=>`
+        <div style="padding:8px 0;border-top:1px solid rgba(255,255,255,.08)">
+          <b>${i+1}. ${esc(x.area||"")} / ${esc(x.type||"")}</b><br>
+          <span>生ヒット ${Number(x.raw_found||0)}件 → BAR判定 ${Number(x.google_found||0)}件</span>
+          ${x.query?`<br><small>検索語：${esc(x.query)}</small>`:""}
+          ${x.error?`<br><small style="color:#ff8c8c">エラー：${esc(x.error)}</small>`:""}
+        </div>`).join("");
+      status.innerHTML=`
+        <b>${c.length}店舗をKBN独自掲載しました。</b><br>
+        Google検索：${s.length}組<br>
+        Google生ヒット合計：${rawTotal}件<br>
+        BAR判定後：${barTotal}件<br>
+        自動掲載：${c.length}件<br>
+        APIエラー：${errRows.length?`${errRows.length}件`:"なし"}
+        <details style="margin-top:10px">
+          <summary style="cursor:pointer;font-weight:800">検索診断を見る</summary>
+          <div style="margin-top:8px">${diagRows||"診断データなし"}</div>
+        </details>`;
+    }
         return `${esc(x.area)} / ${esc(x.genre)} / @${esc(x.handle)}${meta?` / ${meta}`:""}`;
       }).join("<br>")}</small>`:"");
     alert(c.length?`${c.length}店舗を自動でKBN独自掲載しました。`:"今回は新しい独自掲載対象が見つかりませんでした。");
@@ -6045,7 +6058,7 @@ window.runAutoDiscovery=async function(){
     if(status)status.textContent="自動開拓に失敗しました: "+(e?.message||"UNKNOWN_ERROR");
     alert("自動開拓できませんでした: "+(e?.message||"UNKNOWN_ERROR"));
   }finally{
-    btn.disabled=false;btn.textContent="Google ONLYで自動開拓";
+    btn.disabled=false;btn.textContent="Google診断つきで自動開拓";
   }
 };
 
