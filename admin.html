@@ -1918,7 +1918,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.36 画面圧縮調整
+   KBN ADMIN ver1.39 画面圧縮調整
    ============================================================ */
 
 /* 上部 welcome とログアウトをコンパクト化 */
@@ -2147,7 +2147,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.36 — 独自掲載 Instagram DM
+   KBN ADMIN ver1.39 — 独自掲載 Instagram DM
    ============================================================ */
 .shop-provisional-dm{
   border:1px solid #6c5a2b!important;
@@ -2161,24 +2161,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </style>
 
 </head>
-<body class="admin-body"><main class="admin-page"><div class="container">
-<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.36</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
-
-
-
-<nav class="admin-tabs admin-tabs-v108">
-  <button data-tab="shops" class="active">店舗</button>
-  <button type="button" data-tab="leads">開拓</button>
-  <button data-tab="subs">申込み <span id="subTabBadge" class="tab-notify-badge" hidden>0</span></button>
-  <details class="admin-more-menu">
-    <summary>その他</summary>
-    <div class="admin-more-menu-panel">
-      <button data-tab="jobs">求人</button>
-      <button data-tab="ownerreq">店舗申請 <span id="ownerReqTabBadge" class="tab-notify-badge" hidden>0</span></button>
-      <button data-tab="analytics">アクセス</button>
-      <button data-tab="siteupdate">サイト更新</button>
-      <button data-tab="builds">ビルド状況</button>
-    </div>
+<body class="admin-body"><main class="admin-page">
   </details>
 </nav>
 
@@ -2245,7 +2228,7 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
 
   <div id="buttonHealthNote" class="version-note">
-    ver1.36：成功/失敗表示＋履歴折りたたみ＋実写風画像内蔵
+    ver1.39：成功/失敗表示＋履歴折りたたみ＋実写風画像内蔵
   </div>
 </section>
 
@@ -2500,7 +2483,7 @@ html,body{max-width:100%;overflow-x:hidden}
   <button type="button" id="refreshExistingBtn" class="admin-secondary-btn">10店舗だけ更新</button>
   <button type="button" id="repairExistingAreasBtn" class="admin-secondary-btn">既存店舗のエリアを修正</button>
   <div id="bulkRevalidateStatus" class="auto-discovery-status"></div>
-  <small class="version-note">※ ver1.36から高精度更新は GOOGLE_PLACES_API_KEY を使用します。SerpApiの月間検索枠は消費しません。</small>
+  <small class="version-note">※ ver1.39から高精度更新は GOOGLE_PLACES_API_KEY を使用します。SerpApiの月間検索枠は消費しません。</small>
   <div id="refreshExistingStatus" class="auto-discovery-status"></div>
   <div id="repairExistingAreasStatus" class="auto-discovery-status"></div>
 </div>
@@ -2746,6 +2729,25 @@ html,body{max-width:100%;overflow-x:hidden}
     <div id="kbnUploadResult" class="upload-result"></div>
   </div>
 </section>
+<div class="container">
+<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.39</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
+
+
+
+<nav class="admin-tabs admin-tabs-v108">
+  <button data-tab="shops" class="active">店舗</button>
+  <button type="button" data-tab="leads">開拓</button>
+  <button data-tab="subs">申込み <span id="subTabBadge" class="tab-notify-badge" hidden>0</span></button>
+  <details class="admin-more-menu">
+    <summary>その他</summary>
+    <div class="admin-more-menu-panel">
+      <button data-tab="jobs">求人</button>
+      <button data-tab="ownerreq">店舗申請 <span id="ownerReqTabBadge" class="tab-notify-badge" hidden>0</span></button>
+      <button data-tab="analytics">アクセス</button>
+      <button data-tab="siteupdate">サイト更新</button>
+      <button data-tab="builds">ビルド状況</button>
+    </div>
+
 
 
 <section id="tab-analytics" class="admin-block" hidden>
