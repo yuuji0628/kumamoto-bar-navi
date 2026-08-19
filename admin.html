@@ -1918,7 +1918,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.61 画面圧縮調整
+   KBN ADMIN ver1.62 画面圧縮調整
    ============================================================ */
 
 /* 上部 welcome とログアウトをコンパクト化 */
@@ -2147,7 +2147,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.61 — 独自掲載 Instagram DM
+   KBN ADMIN ver1.62 — 独自掲載 Instagram DM
    ============================================================ */
 .shop-provisional-dm{
   border:1px solid #6c5a2b!important;
@@ -2334,9 +2334,54 @@ html,body{max-width:100%;overflow-x:hidden}
 @media(max-width:640px){.kbn-maintenance-grid{grid-template-columns:1fr}.kbn-schedule-note{align-items:flex-start;flex-direction:column}}
 </style>
 
+
+<style id="kbn-maintenance-top-v162">
+.top-maintenance-result{
+  display:grid;grid-template-columns:9px minmax(0,1fr) auto;gap:9px;align-items:center;
+  margin:6px 0 8px;padding:8px 10px;border:1px solid #36414d;border-radius:11px;
+  background:#0b1219;min-height:48px
+}
+.top-maintenance-dot{
+  width:8px;height:8px;border-radius:50%;background:#efc45a;box-shadow:0 0 0 4px rgba(239,196,90,.08)
+}
+.top-maintenance-copy{min-width:0}
+.top-maintenance-copy b{
+  display:block;font-size:.72rem;line-height:1.25;color:#eef1f4;margin-bottom:2px
+}
+.top-maintenance-copy span{
+  display:block;color:#929ca7;font-size:.64rem;line-height:1.3;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis
+}
+#topMaintenanceOpenBtn{
+  min-height:30px;padding:0 10px;border:1px solid #4a5561;border-radius:8px;
+  background:#111922;color:#e8ebef;font-size:.66rem;font-weight:850
+}
+.kbn-alert-actions{
+  display:flex;flex-wrap:wrap;gap:5px;margin-top:8px
+}
+.kbn-alert-actions button{
+  min-height:32px;padding:0 9px;border:1px solid #46515d;border-radius:8px;
+  background:#111922;color:#fff;font-size:.65rem;font-weight:850
+}
+.kbn-alert-actions .alert-temp{border-color:#8b702d;color:#efc45a}
+.kbn-alert-actions .alert-unpublish{border-color:#7e3f43;color:#ff9696}
+.kbn-alert-actions .alert-active{border-color:#356d50;color:#79d5a2}
+@media(max-width:640px){
+  .top-maintenance-result{margin-top:3px;padding:7px 9px;min-height:44px}
+}
+</style>
+
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
-<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.61</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
+<div id="topMaintenanceResult" class="top-maintenance-result">
+  <div class="top-maintenance-dot"></div>
+  <div class="top-maintenance-copy">
+    <b id="topMaintenanceTitle">メンテナンス結果</b>
+    <span id="topMaintenanceText">結果を読み込み中...</span>
+  </div>
+  <button type="button" id="topMaintenanceOpenBtn">見る</button>
+</div>
+<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.62</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
 
 
 
@@ -2418,7 +2463,7 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
 
   <div id="buttonHealthNote" class="version-note">
-    ver1.61：よく使う操作の先頭に自動開拓を配置
+    ver1.62：よく使う操作の先頭に自動開拓を配置
   </div>
 </section>
 
@@ -2712,7 +2757,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div id="refreshExistingStatus" class="auto-discovery-status lead-smart-message"></div>
     <div id="repairExistingAreasStatus" class="auto-discovery-status lead-smart-message"></div>
-    <small class="version-note">ver1.61：自動掲載店舗一覧・掲載取り消しに対応。Google Places優先検索は継続します。</small>
+    <small class="version-note">ver1.62：自動掲載店舗一覧・掲載取り消しに対応。Google Places優先検索は継続します。</small>
   </div>
 
   
@@ -7585,28 +7630,121 @@ document.addEventListener("click",(e)=>{
 </script>
 
 
-<script id="kbn-maintenance-v160-js">
+<script id="kbn-maintenance-v162-js">
+function kbnAlertTime(v){
+  if(!v)return "";
+  const d=new Date(String(v).replace(" ","T")+"Z");
+  if(Number.isNaN(d.getTime()))return String(v);
+  return d.toLocaleString("ja-JP",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"});
+}
+
+window.renderTopMaintenanceResult=function(alerts=[]){
+  const title=document.getElementById("topMaintenanceTitle");
+  const text=document.getElementById("topMaintenanceText");
+  if(!title||!text)return;
+
+  const latestSummary=alerts.find(x=>x.alert_type==="scheduled_summary");
+  const latestImportant=alerts.find(x=>x.alert_type==="closed_shop"&&!Number(x.is_read));
+  const chosen=latestImportant||latestSummary||alerts[0];
+
+  if(!chosen){
+    title.textContent="メンテナンス結果";
+    text.textContent="まだ結果はありません";
+    return;
+  }
+  title.textContent=latestImportant?"要確認の店舗があります":chosen.title||"メンテナンス結果";
+  text.textContent=`${chosen.message||""}${chosen.created_at?` ・ ${kbnAlertTime(chosen.created_at)}`:""}`;
+};
+
 window.loadKbnAlerts=async function(){
   const box=document.getElementById("kbnAlertsList");
-  if(!box)return;
   try{
     const d=await api("/api/admin/alerts");
     const rows=Array.isArray(d.alerts)?d.alerts:[];
-    box.innerHTML=rows.length?rows.slice(0,12).map(x=>`
-      <div class="kbn-alert-item ${Number(x.is_read)?"":"unread"}" data-alert-id="${x.id}">
+    window.renderTopMaintenanceResult(rows);
+
+    if(!box)return;
+    box.innerHTML=rows.length?rows.slice(0,15).map(x=>{
+      const closed=x.alert_type==="closed_shop"&&x.shop_id;
+      return `
+      <div class="kbn-alert-item ${Number(x.is_read)?"":"unread"}" data-alert-id="${x.id}" data-shop-id="${x.shop_id||""}">
         <b>${esc(x.title||"お知らせ")}</b>
         <p>${esc(x.message||"")}</p>
-        <small>${esc(x.created_at||"")}</small>
-      </div>`).join(""):"<small>新しい通知はありません。</small>";
+        <small>${esc(kbnAlertTime(x.created_at))}</small>
+        ${closed?`
+          <div class="kbn-alert-actions">
+            <button type="button" class="alert-detail" data-alert-detail="${x.shop_id}">詳細確認</button>
+            <button type="button" class="alert-active" data-maint-action="operational" data-shop-id="${x.shop_id}">営業中</button>
+            <button type="button" class="alert-temp" data-maint-action="temporary_closed" data-shop-id="${x.shop_id}">一時休業</button>
+            <button type="button" class="alert-unpublish" data-maint-action="unpublish" data-shop-id="${x.shop_id}">掲載取消</button>
+          </div>`:""}
+      </div>`;
+    }).join(""):"<small>新しい通知はありません。</small>";
   }catch(e){
-    box.innerHTML=`<small>通知を取得できませんでした: ${esc(e?.message||"")}</small>`;
+    if(box)box.innerHTML=`<small>通知を取得できませんでした: ${esc(e?.message||"")}</small>`;
+    const text=document.getElementById("topMaintenanceText");
+    if(text)text.textContent="結果を取得できませんでした";
   }
 };
 
 document.addEventListener("click",async(e)=>{
+  if(e.target?.id==="topMaintenanceOpenBtn"){
+    document.querySelector('[data-tab="leads"]')?.click();
+    setTimeout(()=>{
+      document.querySelector(".kbn-maintenance-card")?.scrollIntoView({behavior:"smooth",block:"start"});
+    },100);
+    return;
+  }
+
   if(e.target?.id==="reloadKbnAlertsBtn"){
     await window.loadKbnAlerts();
+    return;
   }
+
+  const detailBtn=e.target.closest("[data-alert-detail]");
+  if(detailBtn){
+    const id=Number(detailBtn.dataset.alertDetail||0);
+    if(id){
+      document.querySelector('[data-tab="shops"]')?.click();
+      setTimeout(()=>{
+        if(typeof window.openShopEdit==="function")window.openShopEdit(id);
+        else if(typeof window.editShop==="function")window.editShop(id);
+      },120);
+    }
+    return;
+  }
+
+  const actionBtn=e.target.closest("[data-maint-action][data-shop-id]");
+  if(actionBtn){
+    const id=Number(actionBtn.dataset.shopId||0);
+    const action=actionBtn.dataset.maintAction;
+    const labels={
+      operational:"この店舗を「営業中」として掲載継続しますか？",
+      temporary_closed:"この店舗を「一時休業」として記録しますか？",
+      unpublish:"この店舗の掲載を取り消しますか？データは残ります。"
+    };
+    if(!id||!confirm(labels[action]||"状態を変更しますか？"))return;
+
+    const oldText=actionBtn.textContent;
+    actionBtn.disabled=true;
+    actionBtn.textContent="処理中...";
+    try{
+      await api(`/api/admin/shops/${id}/maintenance-action`,{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({action})
+      });
+      await window.loadKbnAlerts();
+      await window.loadShops?.();
+    }catch(err){
+      alert("処理できませんでした: "+(err?.message||"UNKNOWN_ERROR"));
+    }finally{
+      actionBtn.disabled=false;
+      actionBtn.textContent=oldText;
+    }
+    return;
+  }
+
   if(e.target?.id==="refreshMissingInfoBtn"){
     const btn=e.target,st=document.getElementById("maintenanceStatus");
     btn.disabled=true;btn.textContent="補完中...";
@@ -7625,10 +7763,13 @@ document.addEventListener("click",async(e)=>{
         if(!d.has_more)break;
       }
       if(st)st.textContent=`情報不足チェック完了：${checked}店舗確認 / ${updated}店舗を補完`;
+      await window.loadKbnAlerts();
     }catch(err){
       if(st)st.textContent="情報補完に失敗: "+(err?.message||"");
     }finally{btn.disabled=false;btn.textContent="情報不足を補完";}
+    return;
   }
+
   if(e.target?.id==="checkClosedShopsBtn"){
     const btn=e.target,st=document.getElementById("maintenanceStatus");
     btn.disabled=true;btn.textContent="確認中...";
@@ -7651,10 +7792,11 @@ document.addEventListener("click",async(e)=>{
     }catch(err){
       if(st)st.textContent="閉業チェックに失敗: "+(err?.message||"");
     }finally{btn.disabled=false;btn.textContent="閉業チェック";}
+    return;
   }
 
   const item=e.target.closest(".kbn-alert-item[data-alert-id]");
-  if(item&&!item.classList.contains("unread")===false){
+  if(item&&item.classList.contains("unread")){
     try{
       await api(`/api/admin/alerts/${item.dataset.alertId}/read`,{method:"POST"});
       item.classList.remove("unread");
@@ -7662,7 +7804,7 @@ document.addEventListener("click",async(e)=>{
   }
 });
 
-document.addEventListener("DOMContentLoaded",()=>setTimeout(()=>window.loadKbnAlerts?.(),700));
+document.addEventListener("DOMContentLoaded",()=>setTimeout(()=>window.loadKbnAlerts?.(),450));
 </script>
 
 </body></html>
