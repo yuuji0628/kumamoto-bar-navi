@@ -1336,7 +1336,7 @@ out center tags;
         method:"POST",
         headers:{
           "Content-Type":"application/x-www-form-urlencoded;charset=UTF-8",
-          "User-Agent":"KUMAMOTO-BAR-NAVI/1.61"
+          "User-Agent":"KUMAMOTO-BAR-NAVI/1.62"
         },
         body:"data="+encodeURIComponent(query)
       });
@@ -1584,7 +1584,7 @@ async function fetchOfficialWebsiteMetadata(url){
   }
   try{
     const r=await fetch(target,{
-      headers:{"User-Agent":"Mozilla/5.0 KUMAMOTO-BAR-NAVI/1.61"}
+      headers:{"User-Agent":"Mozilla/5.0 KUMAMOTO-BAR-NAVI/1.62"}
     });
     if(!r.ok)return {ok:false,price:{min:null,max:null},hours:"",holiday:"",features:""};
     const ct=String(r.headers.get("content-type")||"");
@@ -3210,6 +3210,49 @@ async function renderLocalSeoAreaPage(env,slug){
 </main><nav class="public-bottom-nav"><a href="/"><span>⌂</span><b>ホーム</b></a><a href="/bars.html"><span>⌕</span><b>BARを探す</b></a><a href="/jobs.html"><span>▣</span><b>求人</b></a><a href="/listing-form.html"><span>＋</span><b>店舗掲載</b></a></nav></body></html>`;
 }
 
+
+async function ensureShopMaintenanceStatusColumn(env){
+  try{
+    await env.DB.prepare("ALTER TABLE shops ADD COLUMN business_status TEXT").run();
+  }catch(e){
+    const msg=String(e?.message||e||"").toLowerCase();
+    if(!msg.includes("duplicate column")&&!msg.includes("already exists"))throw e;
+  }
+}
+
+async function setShopMaintenanceAction(env,shopId,action){
+  await ensureShopMaintenanceStatusColumn(env);
+  const id=Math.max(1,Number(shopId)||0);
+  const act=String(action||"");
+
+  if(act==="operational"){
+    await env.DB.prepare(`
+      UPDATE shops
+      SET business_status='OPERATIONAL',is_published=1,updated_at=CURRENT_TIMESTAMP
+      WHERE id=?
+    `).bind(id).run();
+  }else if(act==="temporary_closed"){
+    await env.DB.prepare(`
+      UPDATE shops
+      SET business_status='CLOSED_TEMPORARILY',is_published=1,updated_at=CURRENT_TIMESTAMP
+      WHERE id=?
+    `).bind(id).run();
+  }else if(act==="unpublish"){
+    await env.DB.prepare(`
+      UPDATE shops
+      SET business_status='UNPUBLISHED',is_published=0,updated_at=CURRENT_TIMESTAMP
+      WHERE id=?
+    `).bind(id).run();
+  }else{
+    throw new Error("INVALID_MAINTENANCE_ACTION");
+  }
+
+  return await env.DB.prepare(`
+    SELECT id,slug,name,area,is_published,business_status
+    FROM shops WHERE id=? LIMIT 1
+  `).bind(id).first();
+}
+
 async function ensureKbnAlertsTable(env){
   await env.DB.prepare(`
     CREATE TABLE IF NOT EXISTS kbn_admin_alerts(
@@ -3251,6 +3294,7 @@ async function notifyCreatedShops(env,created,sourceLabel="自動開拓"){
 
 async function checkClosedShops(env,{limit=20,afterId=0}={}){
   await ensureKbnAlertsTable(env);
+  await ensureShopMaintenanceStatusColumn(env);
   const max=Math.max(1,Math.min(Number(limit)||20,50));
   const cursor=Math.max(0,Number(afterId)||0);
   const r=await env.DB.prepare(`
@@ -4312,6 +4356,44 @@ ${urls.map(x=>`  <url>
         await ensureKbnAlertsTable(env);
         await env.DB.prepare("UPDATE kbn_admin_alerts SET is_read=1 WHERE id=?").bind(Number(alertReadRoute[1])).run();
         return json({ok:true});
+      }
+
+      const maintenanceActionRoute=url.pathname.match(/^\/api\/admin\/shops\/(\d+)\/maintenance-action$/);
+      if(maintenanceActionRoute && request.method==="POST"){
+        let x={};try{x=await request.json()}catch{}
+        try{
+          const shop=await setShopMaintenanceAction(
+            env,
+            Number(maintenanceActionRoute[1]),
+            String(x.action||"")
+          );
+          if(!shop)return json({ok:false,error:"SHOP_NOT_FOUND"},{status:404});
+
+          await ensureKbnAlertsTable(env);
+          await env.DB.prepare(`
+            UPDATE kbn_admin_alerts SET is_read=1
+            WHERE shop_id=? AND alert_type='closed_shop'
+          `).bind(Number(shop.id)).run();
+
+          const labels={
+            operational:"営業中として継続",
+            temporary_closed:"一時休業として確認",
+            unpublish:"掲載取り消し"
+          };
+          await createKbnAlert(env,{
+            type:"maintenance_action",
+            title:`店舗対応: ${shop.name}`,
+            message:`${labels[String(x.action||"")]||"状態変更"}を実行しました。`,
+            shopId:shop.id
+          });
+
+          return json({ok:true,shop});
+        }catch(e){
+          return json({
+            ok:false,error:"MAINTENANCE_ACTION_FAILED",
+            message:String(e?.message||e).slice(0,500)
+          },{status:400});
+        }
       }
 
 if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
