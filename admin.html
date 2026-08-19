@@ -1918,7 +1918,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.34 画面圧縮調整
+   KBN ADMIN ver1.36 画面圧縮調整
    ============================================================ */
 
 /* 上部 welcome とログアウトをコンパクト化 */
@@ -2147,7 +2147,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.34 — 独自掲載 Instagram DM
+   KBN ADMIN ver1.36 — 独自掲載 Instagram DM
    ============================================================ */
 .shop-provisional-dm{
   border:1px solid #6c5a2b!important;
@@ -2162,7 +2162,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
-<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.34</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
+<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.36</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
 
 
 
@@ -2245,7 +2245,7 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
 
   <div id="buttonHealthNote" class="version-note">
-    ver1.34：成功/失敗表示＋履歴折りたたみ＋実写風画像内蔵
+    ver1.36：成功/失敗表示＋履歴折りたたみ＋実写風画像内蔵
   </div>
 </section>
 
@@ -2500,7 +2500,7 @@ html,body{max-width:100%;overflow-x:hidden}
   <button type="button" id="refreshExistingBtn" class="admin-secondary-btn">10店舗だけ更新</button>
   <button type="button" id="repairExistingAreasBtn" class="admin-secondary-btn">既存店舗のエリアを修正</button>
   <div id="bulkRevalidateStatus" class="auto-discovery-status"></div>
-  <small class="version-note">※ ver1.34から高精度更新は GOOGLE_PLACES_API_KEY を使用します。SerpApiの月間検索枠は消費しません。</small>
+  <small class="version-note">※ ver1.36から高精度更新は GOOGLE_PLACES_API_KEY を使用します。SerpApiの月間検索枠は消費しません。</small>
   <div id="refreshExistingStatus" class="auto-discovery-status"></div>
   <div id="repairExistingAreasStatus" class="auto-discovery-status"></div>
 </div>
@@ -2588,7 +2588,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <small id="leadSearchConfigNote">検索API設定を確認中...</small><small class="lead-follow-filter-note">✓ フォロー済みアカウントは検索結果から自動除外します。</small>
     <strong>⚡ 自動開拓</strong>
 <small>県内45市町村 × 14ジャンルを順番に検索。1組最大2店舗に抑えて地域を分散し、公開情報に少しでも料金表記があれば、料金・営業時間などをできるだけ自動反映します。</small>
-<button type="button" id="autoDiscoverBtn" class="btn-gold">OSM＋GeoapifyでBARを開拓</button>
+<button type="button" id="autoDiscoverBtn" class="btn-gold">複数APIで高精度自動掲載</button>
 <div id="autoDiscoverStatus" class="auto-discovery-status"></div>
 </div>
 
@@ -6017,9 +6017,9 @@ window.refreshExistingIndependentListings=async function(){
 
 window.runAutoDiscovery=async function(){
   const btn=$("autoDiscoverBtn"), status=$("autoDiscoverStatus");
-  if(!confirm("OpenStreetMap / OverpassでBARを検索し、Geoapify Placesでも補完して、重複していない信頼度の高い店舗だけ最大10件までKBN独自掲載します。\n\n実行しますか？"))return;
+  if(!confirm("Foursquareをメイン検索に、Geoapify・OSMを照合へ使います。複数ソースで店名・住所・BAR判定・連絡先を確認し、信頼度が基準を超えた店舗だけKBN独自掲載します。\n\n実行しますか？"))return;
   btn.disabled=true;btn.textContent="自動開拓中...";
-  if(status)status.textContent="OSM検索 → Geoapify補完 → 公式Web確認 → 重複確認を実行しています...";
+  if(status)status.textContent="Foursquare検索 → Geoapify/OSM照合 → BAR判定 → 住所/連絡先確認 → 重複確認 → 自動掲載を実行しています...";
   try{
     const d=await api("/api/admin/leads/auto-discover",{
       method:"POST",
@@ -6046,7 +6046,7 @@ window.runAutoDiscovery=async function(){
     if(status)status.textContent="自動開拓に失敗しました: "+(e?.message||"UNKNOWN_ERROR");
     alert("自動開拓できませんでした: "+(e?.message||"UNKNOWN_ERROR"));
   }finally{
-    btn.disabled=false;btn.textContent="OSM＋GeoapifyでBARを開拓";
+    btn.disabled=false;btn.textContent="複数APIで高精度自動掲載";
   }
 };
 
