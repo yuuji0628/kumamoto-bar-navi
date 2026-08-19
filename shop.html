@@ -6,7 +6,7 @@
   <meta name="description" content="熊本のBAR店舗情報｜KUMAMOTO BAR NAVI">
   <meta name="theme-color" content="#080b10">
   <title>店舗詳細｜KUMAMOTO BAR NAVI</title>
-  <link rel="stylesheet" href="style.css?v=124">
+  <link rel="stylesheet" href="style.css?v=144">
 <link id="dynamicCanonical" rel="canonical" href="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/shop.html">
 <meta id="dynamicOgTitle" property="og:title" content="店舗詳細｜KUMAMOTO BAR NAVI">
 <meta id="dynamicOgDescription" property="og:description" content="熊本のBAR店舗情報">
@@ -14,7 +14,7 @@
 <meta property="og:type" content="website">
 <script id="shopJsonLd" type="application/ld+json">{}</script>
 </head>
-<body class="public-v109">
+<body class="public-v109 public-v144">
 
 <header class="public-header">
   <div class="container public-header-inner">
@@ -63,41 +63,6 @@ function normalizeArea(v){
   return s;
 }
 function tokens(v){return String(v||"").split(/[、,／/・\s]+/).map(x=>x.trim()).filter(Boolean)}
-
-function kbnJapanNow(){
-  const parts=new Intl.DateTimeFormat("ja-JP",{timeZone:"Asia/Tokyo",weekday:"short",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date());
-  const get=t=>parts.find(x=>x.type===t)?.value||"";
-  return {minutes:Number(get("hour"))*60+Number(get("minute")),weekday:get("weekday")};
-}
-function kbnTodayHoliday(holiday,weekday){
-  const h=String(holiday||"");
-  if(!h||/不定休|無休|なし|無し/i.test(h))return false;
-  const w=String(weekday||"").replace("曜日","").replace("曜","");
-  return w && (h.includes(w+"曜")||h.includes(w+"曜日"));
-}
-function kbnBusinessStatus(s){
-  const {minutes:now,weekday}=kbnJapanNow();
-  if(kbnTodayHoliday(s?.holiday,weekday))return {key:"holiday",label:"本日定休"};
-  const raw=String(s?.hours||"").replace(/：/g,":").replace(/～/g,"〜");
-  const m=raw.match(/(\d{1,2}):(\d{2})\s*(?:〜|~|-|–|—|から)\s*(翌\s*)?(\d{1,2}):(\d{2})/);
-  if(!m)return {key:"unknown",label:"営業時間確認"};
-  const start=Number(m[1])*60+Number(m[2]);
-  let end=Number(m[4])*60+Number(m[5]);
-  const overnight=!!m[3]||end<=start;
-  if(overnight)end+=1440;
-  const current=overnight&&now<start?now+1440:now;
-  if(current>=start&&current<end){
-    const left=end-current;
-    return left<=60?{key:"closing",label:"まもなく閉店"}:{key:"open",label:"営業中"};
-  }
-  let until=start-now;
-  if(until<0)until+=1440;
-  return until<=60?{key:"opening",label:"まもなく営業"}:{key:"closed",label:"営業時間外"};
-}
-function kbnStatusBadge(s){
-  const st=kbnBusinessStatus(s);
-  return `<span class="public-open-badge is-${st.key}"><i></i>${st.label}</span>`;
-}
 function normalizeInstagramUrl(value){
   let v=String(value||"").trim();
   if(!v)return "";
@@ -207,7 +172,6 @@ async function load(){
           <div class="public-shop-badges">
             ${editorial?'<span class="public-editorial-badge">KBN独自掲載</span>':'<span class="public-official-badge"><i>✓</i>正式掲載店舗</span>'}
             ${s.is_new?'<span class="public-new-badge">NEW</span>':""}
-            ${kbnStatusBadge(s)}
           </div>
           <p class="public-shop-location">${esc([normalizeArea(s.area),s.genre].filter(Boolean).join(" / "))}</p>
           <h1>${esc(name)}</h1>
