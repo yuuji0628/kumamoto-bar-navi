@@ -1918,7 +1918,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.66 画面圧縮調整
+   KBN ADMIN ver1.67 画面圧縮調整
    ============================================================ */
 
 /* 上部 welcome とログアウトをコンパクト化 */
@@ -2147,7 +2147,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.66 — 独自掲載 Instagram DM
+   KBN ADMIN ver1.67 — 独自掲載 Instagram DM
    ============================================================ */
 .shop-provisional-dm{
   border:1px solid #6c5a2b!important;
@@ -2421,7 +2421,7 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
   <button type="button" id="topMaintenanceOpenBtn">見る</button>
 </div>
-<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.66</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
+<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.67</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
 
 
 
@@ -2503,7 +2503,7 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
 
   <div id="buttonHealthNote" class="version-note">
-    ver1.66：よく使う操作の先頭に自動開拓を配置
+    ver1.67：よく使う操作の先頭に自動開拓を配置
   </div>
 </section>
 
@@ -2797,7 +2797,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div id="refreshExistingStatus" class="auto-discovery-status lead-smart-message"></div>
     <div id="repairExistingAreasStatus" class="auto-discovery-status lead-smart-message"></div>
-    <small class="version-note">ver1.66：自動掲載店舗一覧・掲載取り消しに対応。Google Places優先検索は継続します。</small>
+    <small class="version-note">ver1.67：自動掲載店舗一覧・掲載取り消しに対応。Google Places優先検索は継続します。</small>
   </div>
 
   
@@ -7790,10 +7790,15 @@ window.loadKbnAlerts=async function(){
   try{
     const d=await api("/api/admin/alerts");
     const rows=Array.isArray(d.alerts)?d.alerts:[];
-    window.renderTopMaintenanceResult(rows);
+    const visibleRows=rows.filter(x=>{
+      if(x.alert_type==="maintenance_action")return false;
+      if(x.alert_type==="closed_shop" && Number(x.is_read))return false;
+      return true;
+    });
+    window.renderTopMaintenanceResult(visibleRows);
 
     if(!box)return;
-    box.innerHTML=rows.length?rows.slice(0,15).map(x=>{
+    box.innerHTML=visibleRows.length?visibleRows.slice(0,15).map(x=>{
       const closed=x.alert_type==="closed_shop"&&x.shop_id;
       return `
       <div class="kbn-alert-item ${Number(x.is_read)?"":"unread"}" data-alert-id="${x.id}" data-shop-id="${x.shop_id||""}">
