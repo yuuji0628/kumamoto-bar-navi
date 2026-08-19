@@ -3829,3 +3829,88 @@ a.directory-card:hover{
     font-size:13px!important;
   }
 }
+
+
+/* ============================================================
+   KBN public ver1.45
+   店舗詳細：正式掲載店舗とは？ 高級感ある囲み枠
+   ============================================================ */
+
+.public-shop-trust-box{
+  position:relative;
+  margin-top:18px;
+  padding:20px 20px 18px;
+  border:1px solid rgba(226,186,82,.42);
+  border-radius:18px;
+  background:
+    linear-gradient(180deg,rgba(18,27,40,.96),rgba(10,17,27,.98));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.025),
+    0 10px 26px rgba(0,0,0,.16);
+  overflow:hidden;
+}
+
+.public-shop-trust-box::before{
+  content:"";
+  position:absolute;
+  inset:0 0 auto;
+  height:1px;
+  background:linear-gradient(
+    90deg,
+    transparent,
+    rgba(234,197,96,.78),
+    transparent
+  );
+}
+
+.public-shop-trust-label{
+  display:block;
+  margin:0 0 9px;
+  color:#e8c45f;
+  font-size:9px;
+  font-weight:900;
+  line-height:1;
+  letter-spacing:.20em;
+}
+
+.public-shop-trust-box b{
+  display:block;
+  margin:0 0 11px;
+  color:#f5f7fb;
+  font-size:19px;
+  font-weight:900;
+  line-height:1.35;
+  letter-spacing:.01em;
+}
+
+.public-shop-trust-box p{
+  margin:0;
+  color:#c8d0db;
+  font-size:13px;
+  line-height:1.85;
+  letter-spacing:.01em;
+}
+
+@media(max-width:640px){
+  .public-shop-trust-box{
+    margin-top:14px;
+    padding:17px 16px 16px;
+    border-radius:16px;
+  }
+
+  .public-shop-trust-label{
+    margin-bottom:8px;
+    font-size:8px;
+    letter-spacing:.18em;
+  }
+
+  .public-shop-trust-box b{
+    margin-bottom:9px;
+    font-size:17px;
+  }
+
+  .public-shop-trust-box p{
+    font-size:12px;
+    line-height:1.8;
+  }
+}
