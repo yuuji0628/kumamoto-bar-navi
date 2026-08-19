@@ -1918,7 +1918,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.41 画面圧縮調整
+   KBN ADMIN ver1.43 画面圧縮調整
    ============================================================ */
 
 /* 上部 welcome とログアウトをコンパクト化 */
@@ -2147,7 +2147,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.41 — 独自掲載 Instagram DM
+   KBN ADMIN ver1.43 — 独自掲載 Instagram DM
    ============================================================ */
 .shop-provisional-dm{
   border:1px solid #6c5a2b!important;
@@ -2162,7 +2162,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
-<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.41</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
+<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.43</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
 
 
 
@@ -2244,7 +2244,7 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
 
   <div id="buttonHealthNote" class="version-note">
-    ver1.41：成功/失敗表示＋履歴折りたたみ＋実写風画像内蔵
+    ver1.43：成功/失敗表示＋履歴折りたたみ＋実写風画像内蔵
   </div>
 </section>
 
@@ -2499,7 +2499,7 @@ html,body{max-width:100%;overflow-x:hidden}
   <button type="button" id="refreshExistingBtn" class="admin-secondary-btn">10店舗だけ更新</button>
   <button type="button" id="repairExistingAreasBtn" class="admin-secondary-btn">既存店舗のエリアを修正</button>
   <div id="bulkRevalidateStatus" class="auto-discovery-status"></div>
-  <small class="version-note">※ ver1.41から高精度更新は GOOGLE_PLACES_API_KEY を使用します。SerpApiの月間検索枠は消費しません。</small>
+  <small class="version-note">※ ver1.43から高精度更新は GOOGLE_PLACES_API_KEY を使用します。SerpApiの月間検索枠は消費しません。</small>
   <div id="refreshExistingStatus" class="auto-discovery-status"></div>
   <div id="repairExistingAreasStatus" class="auto-discovery-status"></div>
 </div>
@@ -2651,46 +2651,6 @@ html,body{max-width:100%;overflow-x:hidden}
   <div id="leadList" class="lead-list"></div>
 </section>
 
-
-
-<section id="tab-builds" hidden class="admin-block" hidden>
-  <div class="admin-block-head">
-    <div>
-      <p class="eyebrow">CLOUDFLARE BUILDS</p>
-      <h2>ビルド状況</h2>
-      <p>必要なときだけ最新のデプロイ状況と履歴を確認できます。</p>
-    </div>
-  </div>
-
-  <details class="deploy-monitor deploy-monitor-compact" id="deployMonitor" data-state="idle" aria-live="polite">
-    <summary class="deploy-monitor-summary">
-      <div class="deploy-monitor-title">
-        <span class="deploy-dot"></span>
-        <div>
-          <b>最新ビルド</b>
-          <small id="deployProjectName">KUMAMOTO BAR NAVI</small>
-          <small id="deploySummaryMeta" class="deploy-summary-meta">取得中…</small>
-        </div>
-      </div>
-      <div class="deploy-summary-status">
-        <div class="deploy-summary-right"><strong id="deployCurrentStatus">確認中…</strong><small id="deploySummaryTime"></small></div>
-        <span class="deploy-summary-chevron">⌄</span>
-      </div>
-    </summary>
-    <div class="deploy-monitor-detail">
-      <div class="deploy-detail-toolbar">
-        <span>Cloudflare ビルド履歴</span>
-        <button type="button" class="deploy-refresh" id="deployRefreshBtn">更新</button>
-      </div>
-      <div class="deploy-current">
-        <div><p id="deployCurrentMeta">最新ビルドを取得しています。</p></div>
-        <span class="deploy-time" id="deployCurrentTime"></span>
-      </div>
-      <div class="deploy-history" id="deployHistory"></div>
-      <div class="deploy-config" id="deployConfigNote" hidden></div>
-    </div>
-  </details>
-</section>
 
 
 <section id="tab-siteupdate" class="admin-block" hidden>
