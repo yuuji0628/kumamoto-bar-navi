@@ -1336,7 +1336,7 @@ out center tags;
         method:"POST",
         headers:{
           "Content-Type":"application/x-www-form-urlencoded;charset=UTF-8",
-          "User-Agent":"KUMAMOTO-BAR-NAVI/1.66"
+          "User-Agent":"KUMAMOTO-BAR-NAVI/1.69"
         },
         body:"data="+encodeURIComponent(query)
       });
@@ -1579,30 +1579,144 @@ function htmlToText(html){
 
 async function fetchOfficialWebsiteMetadata(url){
   const target=safeHttpUrl(url);
+  const empty={ok:false,price:{min:null,max:null},hours:"",holiday:"",features:"",instagram:""};
   if(!target || /instagram\.com|facebook\.com|x\.com|twitter\.com/i.test(target)){
-    return {ok:false,price:{min:null,max:null},hours:"",holiday:"",features:""};
+    return empty;
   }
   try{
     const r=await fetch(target,{
-      headers:{"User-Agent":"Mozilla/5.0 KUMAMOTO-BAR-NAVI/1.66"}
+      headers:{"User-Agent":"Mozilla/5.0 KUMAMOTO-BAR-NAVI/1.69"}
     });
-    if(!r.ok)return {ok:false,price:{min:null,max:null},hours:"",holiday:"",features:""};
+    if(!r.ok)return empty;
     const ct=String(r.headers.get("content-type")||"");
-    if(!/text\/html|text\/plain/i.test(ct))return {ok:false,price:{min:null,max:null},hours:"",holiday:"",features:""};
+    if(!/text\/html|text\/plain/i.test(ct))return empty;
     let html=await r.text();
     if(html.length>250000)html=html.slice(0,250000);
+
+    let instagram="";
+    const links=[...html.matchAll(/https?:\/\/(?:www\.)?instagram\.com\/([A-Za-z0-9._]+)/gi)];
+    for(const m of links){
+      const h=String(m?.[1]||"").trim();
+      if(!h)continue;
+      if(["p","reel","reels","stories","explore","accounts","direct"].includes(h.toLowerCase()))continue;
+      instagram=`https://www.instagram.com/${h}/`;
+      break;
+    }
+
     const text=htmlToText(html);
     return {
       ok:true,
       price:extractPriceInfo(text),
       hours:extractHoursInfo(text),
       holiday:extractHolidayInfo(text),
-      features:extractFeaturesInfo(text)
+      features:extractFeaturesInfo(text),
+      instagram
     };
   }catch{
-    return {ok:false,price:{min:null,max:null},hours:"",holiday:"",features:""};
+    return empty;
   }
 }
+
+function instagramSearchScore({shopName="",area="",handle="",title="",snippet=""}={}){
+  const text=`${title||""} ${snippet||""}`;
+  const handleText=String(handle||"").replace(/[._]/g," ");
+  const nameScore=Math.max(
+    placeNameMatchScore(shopName,title||""),
+    placeNameMatchScore(shopName,snippet||""),
+    placeNameMatchScore(shopName,handleText)
+  );
+
+  let score=Math.round(nameScore*0.72);
+  const normName=normalizePlaceName(shopName);
+  const normText=normalizePlaceName(text);
+  if(normName && normText && normText.includes(normName))score+=22;
+  if(area && text.includes(area))score+=10;
+  if(/熊本/.test(text))score+=6;
+  if(/bar|バー|シーシャ|ラウンジ|スナック|ダーツ|カラオケ|ナイト|club|クラブ/i.test(text))score+=5;
+  if(/公式|official/i.test(text))score+=8;
+
+  return Math.max(0,Math.min(99,score));
+}
+
+async function discoverInstagramForShop(env,{name,area,website="",existing=""}={}){
+  const current=kbnHandle(existing);
+  if(current){
+    return {
+      ok:true,instagram:`https://www.instagram.com/${current}/`,
+      score:100,confidence:"high",source:"existing"
+    };
+  }
+
+  // 公式サイトから直接リンクされているInstagramは最優先
+  if(website){
+    const meta=await fetchOfficialWebsiteMetadata(website);
+    const h=kbnHandle(meta?.instagram||"");
+    if(h){
+      return {
+        ok:true,instagram:`https://www.instagram.com/${h}/`,
+        score:100,confidence:"official",source:"official_website"
+      };
+    }
+  }
+
+  // Google検索(SerpApi)で候補を探して一致度を採点
+  const cfg=leadSearchConfig(env);
+  if(!cfg.apiKey){
+    return {ok:false,configured:false,error:"SERPAPI_NOT_CONFIGURED",instagram:"",score:0,candidates:[]};
+  }
+
+  const query=`"${String(name||"").trim()}" Instagram ${String(area||"熊本").trim()} 熊本`;
+  const sr=await serpApiGoogleSearch(env,{q:query,start:0,num:10});
+  if(!sr.ok){
+    return {ok:false,configured:true,error:sr.error||"INSTAGRAM_SEARCH_FAILED",instagram:"",score:0,candidates:[]};
+  }
+
+  const seen=new Set();
+  const candidates=[];
+  for(const item of (sr.results||[])){
+    const handle=extractInstagramHandleFromUrl(item?.link||"");
+    if(!handle)continue;
+    const key=handle.toLowerCase();
+    if(seen.has(key))continue;
+    seen.add(key);
+
+    const score=instagramSearchScore({
+      shopName:name,
+      area,
+      handle,
+      title:String(item?.title||""),
+      snippet:String(item?.snippet||"")
+    });
+
+    candidates.push({
+      handle,
+      instagram:`https://www.instagram.com/${handle}/`,
+      score,
+      title:t(item?.title,300),
+      snippet:t(item?.snippet,700)
+    });
+  }
+
+  candidates.sort((a,b)=>b.score-a.score);
+  const best=candidates[0]||null;
+
+  if(best && best.score>=90){
+    return {
+      ok:true,configured:true,instagram:best.instagram,
+      score:best.score,confidence:"high",source:"google_instagram_search",
+      candidates:candidates.slice(0,5)
+    };
+  }
+
+  return {
+    ok:true,configured:true,instagram:"",
+    score:Number(best?.score||0),
+    confidence:best&&best.score>=70?"candidate":"low",
+    source:"google_instagram_search",
+    candidates:candidates.slice(0,5)
+  };
+}
+
 
 async function findOpenDataPlaceForShop(env,{name,area}){
   // 1) Google Places first: use as the strongest existence/name/area verifier.
@@ -1784,7 +1898,8 @@ async function refreshIndependentListings(env,{limit=10,afterId=0,revalidate=fal
         COALESCE(TRIM(phone),'')='' OR
         budget_min IS NULL OR budget_max IS NULL OR
         COALESCE(TRIM(address),'')='' OR
-        COALESCE(TRIM(features),'')=''
+        COALESCE(TRIM(features),'')='' OR
+        COALESCE(TRIM(instagram),'')=''
       )
     ORDER BY id ASC
     LIMIT ?
@@ -1859,7 +1974,7 @@ async function refreshIndependentListings(env,{limit=10,afterId=0,revalidate=fal
         (geoFeature?geoWebsite(geoFeature):"") ||
         (osmMatch?osmWebsite(osmMatch):"");
 
-      const instagram=
+      let instagram=
         (fsqPlace?fsqInstagram(fsqPlace):"") ||
         (geoFeature?geoInstagram(geoFeature):"") ||
         (osmMatch?osmInstagram(osmMatch):"") ||
@@ -1875,7 +1990,27 @@ async function refreshIndependentListings(env,{limit=10,afterId=0,revalidate=fal
 
       // 4) 公式Webがある場合はさらに補完
       const webMeta=website?await fetchOfficialWebsiteMetadata(website):
-        {ok:false,price:{min:null,max:null},hours:"",holiday:"",features:""};
+        {ok:false,price:{min:null,max:null},hours:"",holiday:"",features:"",instagram:""};
+
+      if(!instagram && webMeta.instagram)instagram=webMeta.instagram;
+
+      let instagramDiscovery=null;
+      if(!instagram){
+        instagramDiscovery=await discoverInstagramForShop(env,{
+          name:gName,area,website,existing:shop.instagram||""
+        });
+        if(instagramDiscovery?.instagram && Number(instagramDiscovery.score||0)>=90){
+          instagram=instagramDiscovery.instagram;
+        }else if(instagramDiscovery?.confidence==="candidate" && instagramDiscovery?.candidates?.[0]){
+          const top=instagramDiscovery.candidates[0];
+          await createKbnAlert(env,{
+            type:"instagram_candidate",
+            title:`Instagram候補: ${gName}`,
+            message:`@${top.handle} / 一致度 ${top.score}% — 自動保存せず候補として保留しました。`,
+            shopId:shop.id
+          });
+        }
+      }
 
       const finalHours=hours||webMeta.hours||shop.hours||"";
       const finalHoliday=holiday||webMeta.holiday||shop.holiday||"";
@@ -1950,7 +2085,8 @@ async function refreshIndependentListings(env,{limit=10,afterId=0,revalidate=fal
         COALESCE(TRIM(phone),'')='' OR
         budget_min IS NULL OR budget_max IS NULL OR
         COALESCE(TRIM(address),'')='' OR
-        COALESCE(TRIM(features),'')=''
+        COALESCE(TRIM(features),'')='' OR
+        COALESCE(TRIM(instagram),'')=''
       )
     ORDER BY id ASC LIMIT 1
   `).bind(nextAfterId,missingOnly?1:0).first();
@@ -2757,7 +2893,16 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
       }
 
       const webMeta=website?await fetchOfficialWebsiteMetadata(website):
-        {ok:false,price:{min:null,max:null},hours:"",holiday:"",features:""};
+        {ok:false,price:{min:null,max:null},hours:"",holiday:"",features:"",instagram:""};
+
+      if(!instagram && webMeta.instagram)instagram=webMeta.instagram;
+      if(!instagram){
+        const ig=await discoverInstagramForShop(env,{name:gName,area,website,existing:""});
+        if(ig?.instagram && Number(ig.score||0)>=90){
+          instagram=ig.instagram;
+          sourceKind+=`+instagram:${ig.source}`;
+        }
+      }
 
       const googlePrice=googlePriceInfo(gp);
       let sourceMin=googlePrice.min,sourceMax=googlePrice.max;
@@ -2851,8 +2996,13 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
         const address=t(isFsq?fsqAddress(place):(isGeo?geoAddress(place):osmAddress(place)),500);
         const phone=t(isFsq?fsqPhone(place):(isGeo?geoPhone(place):osmPhone(place)),80);
         const website=isFsq?fsqWebsite(place):(isGeo?geoWebsite(place):osmWebsite(place));
-        const instagram=isFsq?fsqInstagram(place):(isGeo?geoInstagram(place):osmInstagram(place));
+        let instagram=isFsq?fsqInstagram(place):(isGeo?geoInstagram(place):osmInstagram(place));
         if(!name||!address||!address.includes("熊本"))continue;
+
+        if(!instagram){
+          const ig=await discoverInstagramForShop(env,{name,area:pair.area,website,existing:""});
+          if(ig?.instagram && Number(ig.score||0)>=90)instagram=ig.instagram;
+        }
 
         if(autoListingDuplicateScore(existing,{name,address,phone,instagram}))continue;
 
@@ -4394,6 +4544,70 @@ ${urls.map(x=>`  <url>
             message:String(e?.message||e).slice(0,500)
           },{status:400});
         }
+      }
+
+      if(url.pathname==="/api/admin/leads/refresh-instagram" && request.method==="POST"){
+        let x={};try{x=await request.json()}catch{}
+        const limit=Math.max(1,Math.min(Number(x.limit)||20,40));
+        const afterId=Math.max(0,Number(x.after_id)||0);
+
+        const r=await env.DB.prepare(`
+          SELECT id,name,area,instagram
+          FROM shops
+          WHERE COALESCE(listing_status,'published')='provisional'
+            AND COALESCE(TRIM(instagram),'')=''
+            AND id>?
+          ORDER BY id ASC
+          LIMIT ?
+        `).bind(afterId,limit).all();
+
+        const updated=[],candidates=[],failed=[];
+        for(const shop of (r.results||[])){
+          try{
+            const found=await findGooglePlaceForShop(env,{
+              name:String(shop.name||"").replace(/^【KBN独自掲載】/,"").trim(),
+              area:shop.area||"熊本"
+            });
+            let website="";
+            if(found.ok&&found.matched){
+              const details=await googlePlaceDetails(env,found.place?.id);
+              website=googleWebsite(details.ok?details.place:found.place);
+            }
+
+            const ig=await discoverInstagramForShop(env,{
+              name:String(shop.name||"").replace(/^【KBN独自掲載】/,"").trim(),
+              area:shop.area||"熊本",
+              website,
+              existing:""
+            });
+
+            if(ig?.instagram && Number(ig.score||0)>=90){
+              await env.DB.prepare(`
+                UPDATE shops SET instagram=?,updated_at=CURRENT_TIMESTAMP WHERE id=?
+              `).bind(ig.instagram,shop.id).run();
+              updated.push({id:shop.id,name:shop.name,instagram:ig.instagram,score:ig.score,source:ig.source});
+            }else if(ig?.candidates?.[0] && Number(ig.candidates[0].score||0)>=70){
+              const c=ig.candidates[0];
+              candidates.push({id:shop.id,name:shop.name,handle:c.handle,score:c.score});
+            }
+          }catch(e){
+            failed.push({id:shop.id,name:shop.name,error:String(e?.message||e).slice(0,250)});
+          }
+        }
+
+        const last=(r.results||[]).length?Number(r.results[r.results.length-1].id||0):afterId;
+        const more=await env.DB.prepare(`
+          SELECT id FROM shops
+          WHERE COALESCE(listing_status,'published')='provisional'
+            AND COALESCE(TRIM(instagram),'')=''
+            AND id>?
+          ORDER BY id ASC LIMIT 1
+        `).bind(last).first();
+
+        return json({
+          ok:true,checked:(r.results||[]).length,updated,candidates,failed,
+          next_after_id:last,has_more:!!more
+        },{headers:{"Cache-Control":"no-store"}});
       }
 
 if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
