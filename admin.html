@@ -1918,7 +1918,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.54 画面圧縮調整
+   KBN ADMIN ver1.55 画面圧縮調整
    ============================================================ */
 
 /* 上部 welcome とログアウトをコンパクト化 */
@@ -2147,7 +2147,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.54 — 独自掲載 Instagram DM
+   KBN ADMIN ver1.55 — 独自掲載 Instagram DM
    ============================================================ */
 .shop-provisional-dm{
   border:1px solid #6c5a2b!important;
@@ -2228,9 +2228,36 @@ html,body{max-width:100%;overflow-x:hidden}
 }
 </style>
 
+
+<style id="kbn-auto-listed-v155">
+.auto-listed-panel{margin-top:14px;padding-top:14px;border-top:1px solid #293440}
+.auto-listed-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px}
+.auto-listed-head b{display:block;color:#f1f3f5;font-size:.9rem}
+.auto-listed-head small{display:block;margin-top:3px;color:#87919c;font-size:.68rem;line-height:1.45}
+.auto-listed-head button{min-height:34px;padding:0 11px;border:1px solid #3b4652;border-radius:9px;background:#101821;color:#dfe4e8;font-size:.7rem;font-weight:850}
+.auto-listed-summary{margin:0 0 8px;color:#9ca6b1;font-size:.72rem}
+.auto-listed-list{display:grid;gap:7px}
+.auto-listed-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 11px;border:1px solid #303b47;border-radius:12px;background:#091018}
+.auto-listed-main{min-width:0}
+.auto-listed-main b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#f1f3f5;font-size:.82rem}
+.auto-listed-main small{display:block;margin-top:3px;color:#7f8994;font-size:.65rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.auto-listed-badges{display:flex;gap:5px;flex-wrap:wrap;margin-top:5px}
+.auto-listed-badge{display:inline-flex;align-items:center;min-height:20px;padding:0 7px;border-radius:999px;background:#121b25;color:#aab3bd;font-size:.59rem;font-weight:850}
+.auto-listed-badge.live{background:rgba(80,180,115,.1);color:#7ed69a}
+.auto-listed-badge.off{background:rgba(220,100,100,.09);color:#ef9898}
+.auto-listed-actions{display:flex;gap:6px}
+.auto-listed-actions button{min-height:34px;padding:0 9px;border:1px solid #3d4854;border-radius:9px;background:#111922;color:#e5e9ed;font-size:.66rem;font-weight:850}
+.auto-listed-actions .cancel{border-color:#684142;color:#ef9a9a;background:#171012}
+.auto-listed-empty{padding:16px 10px;text-align:center;border:1px dashed #34404c;border-radius:12px;color:#818b96;font-size:.72rem}
+@media(max-width:680px){
+ .auto-listed-item{grid-template-columns:1fr}
+ .auto-listed-actions{display:grid;grid-template-columns:repeat(3,1fr)}
+ .auto-listed-actions button{width:100%}
+}
+</style>
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
-<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.54</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
+<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.55</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
 
 
 
@@ -2596,7 +2623,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <div id="bulkRevalidateStatus" class="auto-discovery-status lead-smart-message"></div>
     <div id="refreshExistingStatus" class="auto-discovery-status lead-smart-message"></div>
     <div id="repairExistingAreasStatus" class="auto-discovery-status lead-smart-message"></div>
-    <small class="version-note">ver1.54：Google Placesを第一検索にし、Foursquare・Geoapify・OSM・公式Webで補完します。</small>
+    <small class="version-note">ver1.55：自動掲載店舗一覧・掲載取り消しに対応。Google Places優先検索は継続します。</small>
   </div>
 
   <div id="leadSmartManual" class="lead-smart-card">
@@ -2647,6 +2674,18 @@ html,body{max-width:100%;overflow-x:hidden}
       <p class="lead-smart-helper">県内45市町村 × 14ジャンルを順番に検索し、重複を避けながら高精度で独自掲載します。</p>
       <button type="button" id="autoDiscoverBtn" class="btn-gold lead-smart-primary">Google優先で高精度自動掲載</button>
       <div id="autoDiscoverStatus" class="auto-discovery-status"></div>
+
+      <div class="auto-listed-panel">
+        <div class="auto-listed-head">
+          <div>
+            <b>自動掲載した店舗</b>
+            <small>KBN独自掲載中の店舗を確認・編集・掲載取り消しできます。</small>
+          </div>
+          <button type="button" id="reloadAutoListedBtn">更新</button>
+        </div>
+        <div id="autoListedSummary" class="auto-listed-summary">読み込み中...</div>
+        <div id="autoListedShops" class="auto-listed-list"></div>
+      </div>
     </div>
   </div>
 
@@ -6109,6 +6148,7 @@ window.runAutoDiscovery=async function(){
         </details>`;
     }
 
+    await loadAutoListedShops?.();
     alert(c.length?`${c.length}店舗を自動でKBN独自掲載しました。`:"今回は新しい独自掲載対象が見つかりませんでした。");
   }catch(e){
     if(status)status.textContent="自動開拓に失敗しました: "+(e?.message||"UNKNOWN_ERROR");
@@ -7233,4 +7273,4 @@ document.addEventListener("click",(e)=>{
 });
 </script>
 
-</body></html>
+\n<script>\nasync function loadAutoListedShops(){\n  const wrap=document.getElementById("autoListedShops");\n  const summary=document.getElementById("autoListedSummary");\n  if(!wrap)return;\n  wrap.innerHTML='<div class="auto-listed-empty">読み込み中...</div>';\n  try{\n    const d=await api("/api/admin/leads/auto-listed");\n    const rows=Array.isArray(d.shops)?d.shops:[];\n    const live=rows.filter(x=>Number(x.is_published||0)===1).length;\n    if(summary)summary.textContent=`${rows.length}店舗 / 掲載中 ${live}店舗 / 取消済み ${rows.length-live}店舗`;\n    if(!rows.length){\n      wrap.innerHTML='<div class="auto-listed-empty">自動掲載された店舗はまだありません。</div>';\n      return;\n    }\n    wrap.innerHTML=rows.map(x=>{\n      const on=Number(x.is_published||0)===1;\n      const publicUrl=`/shop.html?slug=${encodeURIComponent(x.slug||"")}`;\n      return `<div class="auto-listed-item" data-auto-shop-id="${Number(x.id||0)}">\n        <div class="auto-listed-main">\n          <b>${esc(x.name||"名称未設定")}</b>\n          <small>${esc(x.area||"エリア未設定")} / ${esc(x.genre||"BAR")}</small>\n          <div class="auto-listed-badges">\n            <span class="auto-listed-badge">KBN独自掲載</span>\n            <span class="auto-listed-badge ${on?"live":"off"}">${on?"掲載中":"掲載取消済み"}</span>\n          </div>\n        </div>\n        <div class="auto-listed-actions">\n          <button type="button" onclick="window.open('${publicUrl}','_blank','noopener')" ${on?"":"disabled"}>詳細</button>\n          <button type="button" onclick="editAutoListedShop(${Number(x.id||0)})">編集</button>\n          ${on?`<button type="button" class="cancel" onclick="cancelAutoListing(${Number(x.id||0)},'${esc(String(x.name||"").replace(/'/g,"&#39;"))}')">掲載取消</button>`:`<button type="button" onclick="restoreAutoListing(${Number(x.id||0)})">再掲載</button>`}\n        </div>\n      </div>`;\n    }).join("");\n  }catch(e){\n    if(summary)summary.textContent="一覧を取得できませんでした";\n    wrap.innerHTML=`<div class="auto-listed-empty">${esc(e?.message||"読み込みエラー")}</div>`;\n  }\n}\n\nwindow.cancelAutoListing=async function(id,name){\n  if(!confirm(`${name||"この店舗"}の掲載を取り消しますか？\\n\\nデータは削除せず、サイト上だけ非公開にします。`))return;\n  try{\n    await api(`/api/admin/leads/auto-listed/${id}/unpublish`,{method:"POST"});\n    await loadAutoListedShops();\n    await window.loadShops?.();\n  }catch(e){alert("掲載を取り消せませんでした: "+(e?.message||"UNKNOWN_ERROR"));}\n};\nwindow.restoreAutoListing=async function(id){\n  if(!confirm("この店舗を再掲載しますか？"))return;\n  try{\n    await api(`/api/admin/leads/auto-listed/${id}/restore`,{method:"POST"});\n    await loadAutoListedShops();\n    await window.loadShops?.();\n  }catch(e){alert("再掲載できませんでした: "+(e?.message||"UNKNOWN_ERROR"));}\n};\nwindow.editAutoListedShop=function(id){\n  const shopTab=document.querySelector('[data-tab="shops"]');\n  shopTab?.click();\n  setTimeout(()=>{\n    if(typeof window.editShop==="function")window.editShop(id);\n    else if(typeof window.openShopEdit==="function")window.openShopEdit(id);\n  },120);\n};\n\ndocument.addEventListener("click",e=>{\n  if(e.target?.id==="reloadAutoListedBtn")loadAutoListedShops();\n});\n\n// 初回表示・自動開拓後に一覧を更新\ndocument.addEventListener("DOMContentLoaded",()=>setTimeout(loadAutoListedShops,500));\n</script>\n</body></html>
