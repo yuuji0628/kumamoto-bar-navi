@@ -1336,7 +1336,7 @@ out center tags;
         method:"POST",
         headers:{
           "Content-Type":"application/x-www-form-urlencoded;charset=UTF-8",
-          "User-Agent":"KUMAMOTO-BAR-NAVI/1.49"
+          "User-Agent":"KUMAMOTO-BAR-NAVI/1.50"
         },
         body:"data="+encodeURIComponent(query)
       });
@@ -1584,7 +1584,7 @@ async function fetchOfficialWebsiteMetadata(url){
   }
   try{
     const r=await fetch(target,{
-      headers:{"User-Agent":"Mozilla/5.0 KUMAMOTO-BAR-NAVI/1.49"}
+      headers:{"User-Agent":"Mozilla/5.0 KUMAMOTO-BAR-NAVI/1.50"}
     });
     if(!r.ok)return {ok:false,price:{min:null,max:null},hours:"",holiday:"",features:""};
     const ct=String(r.headers.get("content-type")||"");
@@ -1858,14 +1858,18 @@ async function googlePlacesTextSearch(env,{query,pageSize=20}){
         configured:true,
         status:r.status,
         error:d?.error?.message||`GOOGLE_PLACES_HTTP_${r.status}`,
-        places:[]
+        error_code:d?.error?.status||"",
+        places:[],
+        raw_count:0
       };
     }
 
+    const places=Array.isArray(d?.places)?d.places:[];
     return {
       ok:true,
       configured:true,
-      places:Array.isArray(d?.places)?d.places:[],
+      places,
+      raw_count:places.length,
       next_page_token:String(d?.nextPageToken||"")
     };
   }catch(e){
@@ -2265,7 +2269,7 @@ function strictAutoListingGate({
   };
 }
 
-async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit=3){
+async function autoDiscover(env,request,maxListings=20,pairLimit=20,perPairLimit=3){
   await ensureLeadDiscoveryTables(env);
 
   if(!googlePlacesConfig(env).apiKey){
@@ -2276,7 +2280,7 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
     };
   }
 
-  const pairs=await autoDiscoveryPairs(env,Math.max(1,Math.min(Number(pairLimit)||15,20)));
+  const pairs=await autoDiscoveryPairs(env,Math.max(1,Math.min(Number(pairLimit)||20,20)));
   const created=[],searched=[],rejected=[];
   const existingR=await env.DB.prepare(
     "SELECT id,name,address,phone,instagram FROM shops"
@@ -2291,9 +2295,16 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
 
     if(!sr.ok){
       searched.push({
-        area:pair.area,type:pair.label,ok:false,
-        google_found:0,error:sr.error||"GOOGLE_PLACES_ERROR",
-        source:"google_places"
+        area:pair.area,
+        type:pair.label,
+        ok:false,
+        raw_found:Number(sr.raw_count||0),
+        google_found:0,
+        error:sr.error||"GOOGLE_PLACES_ERROR",
+        error_code:sr.error_code||"",
+        http_status:Number(sr.status||0),
+        source:"google_places",
+        query
       });
       continue;
     }
@@ -2301,9 +2312,12 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
     const candidates=(sr.places||[]).filter(googlePlaceLooksLikeBar);
 
     searched.push({
-      area:pair.area,type:pair.label,ok:true,
+      area:pair.area,
+      type:pair.label,
+      ok:true,
+      raw_found:Number(sr.raw_count ?? (Array.isArray(sr.places)?sr.places.length:0)),
       google_found:candidates.length,
-      raw_found:Array.isArray(sr.places)?sr.places.length:0,
+      filtered_out_non_bar:Math.max(0,Number(sr.raw_count ?? 0)-candidates.length),
       source:"google_places",
       query
     });
@@ -2382,12 +2396,25 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
     }
   }
 
+  const rejectSummary=rejected.reduce((acc,x)=>{
+    const k=String(x.reason||"UNKNOWN");
+    acc[k]=(acc[k]||0)+1;
+    return acc;
+  },{});
+
   return {
     ok:true,
     created,
     searched,
     rejected:rejected.slice(0,100),
     rejected_count:rejected.length,
+    reject_summary:rejectSummary,
+    diagnostics:{
+      search_count:searched.length,
+      raw_google_hits:searched.reduce((n,x)=>n+Number(x.raw_found||0),0),
+      bar_hits:searched.reduce((n,x)=>n+Number(x.google_found||0),0),
+      api_errors:searched.filter(x=>!x.ok||x.error).length
+    },
     provider:"google_places_only",
     google_configured:true
   };
@@ -3559,7 +3586,7 @@ ${urls.map(x=>`  <url>
       if(url.pathname==="/api/admin/leads/auto-discover" && request.method==="POST"){
         let x={}; try{x=await request.json()}catch{}
         const max=Math.max(1,Math.min(Number(x.max_listings)||10,20));
-        const pairs=Math.max(1,Math.min(Number(x.pair_limit)||15,20));
+        const pairs=Math.max(1,Math.min(Number(x.pair_limit)||20,20));
         const perPair=Math.max(1,Math.min(Number(x.per_pair_limit)||2,3));
 
         try{
