@@ -1918,7 +1918,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.70 画面圧縮調整
+   KBN ADMIN ver1.71 画面圧縮調整
    ============================================================ */
 
 /* 上部 welcome とログアウトをコンパクト化 */
@@ -2147,7 +2147,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.70 — 独自掲載 Instagram DM
+   KBN ADMIN ver1.71 — 独自掲載 Instagram DM
    ============================================================ */
 .shop-provisional-dm{
   border:1px solid #6c5a2b!important;
@@ -2785,6 +2785,30 @@ html,body{max-width:100%;overflow-x:hidden}
 }
 </style>
 
+
+<style id="kbn-hide-existing-refresh-v171">
+/* 既存店舗更新は自動メンテナンスに統合したため、通常画面では非表示 */
+#leadSmartRefresh,
+.kbn-lead-section-label + #leadSmartRefresh{
+  display:none!important;
+}
+#tab-leads [data-lead-smart-tab="refresh"],
+#tab-leads [data-lead-tab="refresh"],
+#tab-leads [data-lead-mode="refresh"]{
+  display:none!important;
+}
+
+/* 残りのタブを均等に */
+#tab-leads .lead-smart-tabs{
+  grid-template-columns:1fr 1fr!important;
+}
+
+/* メンテナンスカードを少し上に詰める */
+.kbn-maintenance-card{
+  margin-top:6px!important;
+}
+</style>
+
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
 <div id="topMaintenanceResult" class="top-maintenance-result">
@@ -2797,7 +2821,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver1.70</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver1.71</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -2881,7 +2905,7 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
 
   <div id="buttonHealthNote" class="version-note">
-    ver1.70：よく使う操作の先頭に自動開拓を配置
+    ver1.71：よく使う操作の先頭に自動開拓を配置
   </div>
 </section>
 
@@ -3131,7 +3155,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <button type="button" class="lead-smart-tab active" data-lead-jump="refresh">↻ 既存更新</button>
   </div>
 
-  <div class="kbn-lead-section-label">02 掲載後メンテナンス <span>既存店舗の精度維持</span></div>
+  <div class="kbn-lead-section-label">02 自動メンテナンス <span>掲載後の情報管理</span></div>
 <div id="leadSmartRefresh" class="lead-smart-card lead-smart-featured">
     <div class="lead-smart-card-head">
       <div class="lead-smart-icon">↻</div>
@@ -3176,7 +3200,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div id="refreshExistingStatus" class="auto-discovery-status lead-smart-message"></div>
     <div id="repairExistingAreasStatus" class="auto-discovery-status lead-smart-message"></div>
-    <small class="version-note">ver1.70：自動掲載店舗一覧・掲載取り消しに対応。Google Places優先検索は継続します。</small>
+    <small class="version-note">ver1.71：自動掲載店舗一覧・掲載取り消しに対応。Google Places優先検索は継続します。</small>
   </div>
 
   
