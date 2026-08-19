@@ -1356,6 +1356,207 @@ out center tags;
   return {ok:false,error:lastError,places:[]};
 }
 
+
+function geoapifyConfig(env){
+  return {apiKey:t(env.GEOAPIFY_API_KEY,1000)};
+}
+
+function geoFeatureProps(feature){
+  return feature&&typeof feature.properties==="object"?feature.properties:{};
+}
+
+function geoName(feature){
+  const p=geoFeatureProps(feature);
+  return String(p.name||p.address_line1||"").trim();
+}
+
+function geoAddress(feature){
+  const p=geoFeatureProps(feature);
+  return String(
+    p.formatted||
+    [p.address_line1,p.address_line2].filter(Boolean).join(" ")||
+    ""
+  ).replace(/\s+/g," ").trim();
+}
+
+function geoPhone(feature){
+  const p=geoFeatureProps(feature);
+  const ds=p.datasource?.raw||{};
+  return String(
+    p.contact?.phone||
+    p.phone||
+    ds.phone||
+    ds["contact:phone"]||
+    ds["contact:mobile"]||
+    ""
+  ).trim();
+}
+
+function geoWebsite(feature){
+  const p=geoFeatureProps(feature);
+  const ds=p.datasource?.raw||{};
+  return String(
+    p.website||
+    p.contact?.website||
+    ds.website||
+    ds["contact:website"]||
+    ""
+  ).trim();
+}
+
+function geoInstagram(feature){
+  const p=geoFeatureProps(feature);
+  const ds=p.datasource?.raw||{};
+  const raw=String(
+    ds.instagram||
+    ds["contact:instagram"]||
+    p.contact?.instagram||
+    ""
+  ).trim();
+  const h=kbnHandle(raw||geoWebsite(feature));
+  return h?`https://www.instagram.com/${h}/`:"";
+}
+
+function geoHours(feature){
+  const p=geoFeatureProps(feature);
+  const ds=p.datasource?.raw||{};
+  const h=
+    p.opening_hours||
+    p.openingHours||
+    ds.opening_hours||
+    ds["opening_hours"]||
+    "";
+  if(Array.isArray(h))return h.join(" / ");
+  return String(h||"").trim();
+}
+
+function geoCategories(feature){
+  const p=geoFeatureProps(feature);
+  return Array.isArray(p.categories)?p.categories.map(String):[];
+}
+
+function geoLooksLikeBar(feature){
+  const cats=geoCategories(feature).join(" ").toLowerCase();
+  const n=geoName(feature).toLowerCase();
+  return /catering\.(bar|pub)/.test(cats)
+    || /(bar|バー|スナック|ラウンジ|pub|パブ|ダーツ|カラオケ|シーシャ)/i.test(n);
+}
+
+function geoAreaHint(feature){
+  const p=geoFeatureProps(feature);
+  return String(p.city||p.town||p.village||p.suburb||p.county||"").trim();
+}
+
+function geoPlaceScore(feature,{name="",area=""}={}){
+  let score=placeNameMatchScore(name,geoName(feature));
+  const addr=geoAddress(feature);
+  const hint=geoAreaHint(feature);
+  if(area&&(addr.includes(area)||hint.includes(area)))score+=18;
+  else if(addr.includes("熊本")||String(geoFeatureProps(feature).state||"").includes("熊本"))score+=8;
+  if(geoLooksLikeBar(feature))score+=12;
+  if(geoPhone(feature))score+=2;
+  if(geoHours(feature))score+=2;
+  return score;
+}
+
+async function geoapifyGeocodeShop(env,{name,area}){
+  const cfg=geoapifyConfig(env);
+  if(!cfg.apiKey)return {ok:false,configured:false,error:"GEOAPIFY_NOT_CONFIGURED",features:[]};
+
+  const u=new URL("https://api.geoapify.com/v1/geocode/search");
+  u.searchParams.set("text",[name,area,"熊本県","日本"].filter(Boolean).join(" "));
+  u.searchParams.set("filter","countrycode:jp");
+  u.searchParams.set("lang","ja");
+  u.searchParams.set("limit","10");
+  u.searchParams.set("format","geojson");
+  u.searchParams.set("apiKey",cfg.apiKey);
+
+  try{
+    const r=await fetch(u.toString(),{headers:{"Accept":"application/json"}});
+    const text=await r.text();
+    let d={};
+    try{d=text?JSON.parse(text):{}}catch{d={}}
+    if(!r.ok)return {ok:false,configured:true,error:`GEOAPIFY_HTTP_${r.status}`,features:[]};
+    return {ok:true,configured:true,features:Array.isArray(d?.features)?d.features:[]};
+  }catch(e){
+    return {ok:false,configured:true,error:String(e?.message||e||"GEOAPIFY_ERROR"),features:[]};
+  }
+}
+
+async function geoapifyPlaceDetails(env,placeId){
+  const cfg=geoapifyConfig(env);
+  if(!cfg.apiKey||!placeId)return {ok:false,feature:null};
+  const u=new URL("https://api.geoapify.com/v2/place-details");
+  u.searchParams.set("id",String(placeId));
+  u.searchParams.set("features","details");
+  u.searchParams.set("lang","ja");
+  u.searchParams.set("apiKey",cfg.apiKey);
+  try{
+    const r=await fetch(u.toString(),{headers:{"Accept":"application/json"}});
+    const d=await r.json().catch(()=>({}));
+    const feature=Array.isArray(d?.features)?d.features[0]:null;
+    return {ok:r.ok&&!!feature,feature};
+  }catch{
+    return {ok:false,feature:null};
+  }
+}
+
+async function findGeoapifyPlaceForShop(env,{name,area}){
+  const sr=await geoapifyGeocodeShop(env,{name,area});
+  if(!sr.ok)return {ok:false,configured:!!sr.configured,error:sr.error,matched:false};
+
+  const ranked=(sr.features||[])
+    .filter(f=>geoLooksLikeBar(f))
+    .map(feature=>({feature,score:geoPlaceScore(feature,{name,area})}))
+    .sort((a,b)=>b.score-a.score);
+
+  const best=ranked[0];
+  if(!best||best.score<78)return {ok:true,configured:true,matched:false,score:best?.score||0};
+
+  const placeId=geoFeatureProps(best.feature).place_id||"";
+  const detail=placeId?await geoapifyPlaceDetails(env,placeId):{ok:false,feature:null};
+  return {
+    ok:true,configured:true,matched:true,
+    feature:detail.ok&&detail.feature?detail.feature:best.feature,
+    score:best.score,
+    confidence:best.score>=100?"high":"medium",
+    source:"geoapify"
+  };
+}
+
+async function fetchKumamotoGeoapifyBars(env,{force=false}={}){
+  const cfg=geoapifyConfig(env);
+  if(!cfg.apiKey)return {ok:false,configured:false,error:"GEOAPIFY_NOT_CONFIGURED",features:[]};
+
+  const key="geoapify_kumamoto_bars_v1";
+  if(!force){
+    const cached=await getOpenDataCache(env,key,24);
+    if(Array.isArray(cached))return {ok:true,configured:true,source:"geoapify_cache",features:cached};
+  }
+
+  const u=new URL("https://api.geoapify.com/v2/places");
+  u.searchParams.set("categories","catering.bar,catering.pub");
+  // Kumamoto Prefecture broad bounding box: west,south,east,north
+  u.searchParams.set("filter","rect:129.90,32.05,131.35,33.25");
+  u.searchParams.set("lang","ja");
+  u.searchParams.set("limit","100");
+  u.searchParams.set("apiKey",cfg.apiKey);
+
+  try{
+    const r=await fetch(u.toString(),{headers:{"Accept":"application/json"}});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)return {ok:false,configured:true,error:`GEOAPIFY_PLACES_HTTP_${r.status}`,features:[]};
+
+    const features=(Array.isArray(d?.features)?d.features:[]).filter(geoLooksLikeBar);
+    await setOpenDataCache(env,key,features);
+    return {ok:true,configured:true,source:"geoapify",features};
+  }catch(e){
+    const stale=await getOpenDataCache(env,key,24*30);
+    if(Array.isArray(stale))return {ok:true,configured:true,source:"geoapify_stale_cache",features:stale};
+    return {ok:false,configured:true,error:String(e?.message||e||"GEOAPIFY_ERROR"),features:[]};
+  }
+}
+
 function safeHttpUrl(value){
   try{
     const u=new URL(String(value||"").trim());
@@ -1405,16 +1606,37 @@ async function fetchOfficialWebsiteMetadata(url){
 
 async function findOpenDataPlaceForShop(env,{name,area}){
   const snap=await fetchKumamotoOsmBars(env);
-  if(!snap.ok)return {ok:false,error:snap.error,matched:false};
-  const ranked=snap.places
-    .map(place=>({place,score:osmPlaceScore(place,{name,area})}))
-    .sort((a,b)=>b.score-a.score);
-  const best=ranked[0];
-  if(!best||best.score<78)return {ok:true,matched:false,score:best?.score||0,source:snap.source};
+  if(snap.ok){
+    const ranked=snap.places
+      .map(place=>({place,score:osmPlaceScore(place,{name,area})}))
+      .sort((a,b)=>b.score-a.score);
+    const best=ranked[0];
+    if(best&&best.score>=78){
+      return {
+        ok:true,matched:true,kind:"osm",place:best.place,score:best.score,
+        confidence:best.score>=100?"high":"medium",
+        source:snap.source
+      };
+    }
+  }
+
+  // OSMで見つからない/一致度が低い場合だけGeoapifyを使用。
+  const geo=await findGeoapifyPlaceForShop(env,{name,area});
+  if(geo.ok&&geo.matched){
+    return {
+      ok:true,matched:true,kind:"geoapify",feature:geo.feature,score:geo.score,
+      confidence:geo.confidence,source:geo.source
+    };
+  }
+
+  if(!snap.ok && !geo.configured){
+    return {ok:false,error:snap.error||"OPEN_DATA_UNAVAILABLE",matched:false};
+  }
+
   return {
-    ok:true,matched:true,place:best.place,score:best.score,
-    confidence:best.score>=100?"high":"medium",
-    source:snap.source
+    ok:true,matched:false,
+    score:Number(geo.score||0),
+    source:snap.ok?snap.source:(geo.configured?"geoapify":"none")
   };
 }
 
@@ -1511,7 +1733,6 @@ async function refreshIndependentListings(env,{limit=10,afterId=0,revalidate=fal
       const storedBudget=sanitizeStoredBudget(shop.budget_min,shop.budget_max);
 
       if(!found.matched){
-        // Even if no OSM match exists, remove clearly invalid stored price values.
         const changedBudget=
           Number(storedBudget.min||0)!==Number(shop.budget_min||0)||
           Number(storedBudget.max||0)!==Number(shop.budget_max||0);
@@ -1532,22 +1753,32 @@ async function refreshIndependentListings(env,{limit=10,afterId=0,revalidate=fal
         continue;
       }
 
-      const place=found.place||{};
-      const meta=extractPublicMetadata(place);
-      const trusted=Number(found.score||0)>=90;
-      const address=osmAddress(place);
-      const phone=osmPhone(place);
-      const website=osmWebsite(place);
-      const instagram=osmInstagram(place);
+      const isGeo=found.kind==="geoapify";
+      const place=isGeo?found.feature:found.place;
 
+      const address=isGeo?geoAddress(place):osmAddress(place);
+      const phone=isGeo?geoPhone(place):osmPhone(place);
+      const website=isGeo?geoWebsite(place):osmWebsite(place);
+      const instagram=isGeo?geoInstagram(place):osmInstagram(place);
+      const sourceHours=isGeo?geoHours(place):osmHours(place);
+      const sourceHoliday=isGeo?"":osmHoliday(place);
+      const sourceFeatures=isGeo
+        ? extractFeaturesInfo(`${geoCategories(place).join(" ")} ${geoName(place)}`)
+        : osmFeatures(place);
+
+      const trusted=Number(found.score||0)>=90;
       let webMeta={ok:false,price:{min:null,max:null},hours:"",holiday:"",features:""};
       const needsWebPrice=storedBudget.invalid||!storedBudget.min||!storedBudget.max;
-      if(website && (revalidate||needsWebPrice||!shop.hours||!shop.holiday)){
+      if(website&&(revalidate||needsWebPrice||!shop.hours||!shop.holiday)){
         webMeta=await fetchOfficialWebsiteMetadata(website);
       }
 
-      const extractedMin=webMeta.price?.min??meta.budget_min??null;
-      const extractedMax=webMeta.price?.max??meta.budget_max??null;
+      const sourcePrice=isGeo?extractPriceInfo(JSON.stringify(geoFeatureProps(place))):extractPublicMetadata(place);
+      const sourceMin=isGeo?sourcePrice.min:sourcePrice.budget_min;
+      const sourceMax=isGeo?sourcePrice.max:sourcePrice.budget_max;
+
+      const extractedMin=webMeta.price?.min??sourceMin??null;
+      const extractedMax=webMeta.price?.max??sourceMax??null;
       const inferredArea=inferKumamotoAreaFromText(address,shop.area||"");
 
       const next={
@@ -1555,15 +1786,15 @@ async function refreshIndependentListings(env,{limit=10,afterId=0,revalidate=fal
         address:(trusted&&address)?address:(shop.address||""),
         phone:(trusted&&phone)?phone:(shop.phone||""),
         instagram:shop.instagram||instagram||"",
-        hours:(trusted&&(meta.hours||webMeta.hours))
-          ? (meta.hours||webMeta.hours)
-          : (shop.hours||meta.hours||webMeta.hours||""),
-        holiday:(trusted&&(meta.holiday||webMeta.holiday))
-          ? (meta.holiday||webMeta.holiday)
-          : (shop.holiday||meta.holiday||webMeta.holiday||""),
-        features:(trusted&&(meta.features||webMeta.features))
-          ? [meta.features,webMeta.features].filter(Boolean).join("、")
-          : (shop.features||meta.features||webMeta.features||""),
+        hours:(trusted&&(sourceHours||webMeta.hours))
+          ? (sourceHours||webMeta.hours)
+          : (shop.hours||sourceHours||webMeta.hours||""),
+        holiday:(trusted&&(sourceHoliday||webMeta.holiday))
+          ? (sourceHoliday||webMeta.holiday)
+          : (shop.holiday||sourceHoliday||webMeta.holiday||""),
+        features:(trusted&&(sourceFeatures||webMeta.features))
+          ? [sourceFeatures,webMeta.features].filter(Boolean).join("、")
+          : (shop.features||sourceFeatures||webMeta.features||""),
         budget_min:extractedMin!=null?extractedMin:(storedBudget.min??null),
         budget_max:extractedMax!=null?extractedMax:(storedBudget.max??null)
       };
@@ -1583,7 +1814,9 @@ async function refreshIndependentListings(env,{limit=10,afterId=0,revalidate=fal
         Number(next.budget_min||0)!==Number(shop.budget_min||0)||
         Number(next.budget_max||0)!==Number(shop.budget_max||0);
 
-      const sid=`${place.type||""}/${place.id||""}`;
+      const sid=isGeo
+        ? `geoapify/${String(geoFeatureProps(place).place_id||"")}`
+        : `${place.type||""}/${place.id||""}`;
       await markOpenDataChecked(env,shop.id,sid);
 
       if(!changed){
@@ -1629,14 +1862,22 @@ async function refreshIndependentListings(env,{limit=10,afterId=0,revalidate=fal
   return {
     ok:true,checked:rows.length,updated,unchanged,failed,
     next_after_id:nextAfterId,has_more:!!moreR,
-    provider:"openstreetmap_overpass"
+    provider:"osm_geoapify"
   };
 }
 async function autoDiscover(env,request,maxListings=10,pairLimit=6,perPairLimit=2){
   await ensureLeadDiscoveryTables(env);
 
-  const snap=await fetchKumamotoOsmBars(env);
-  if(!snap.ok)return {ok:false,error:snap.error||"OVERPASS_UNAVAILABLE",created:[],searched:[]};
+  const osmSnap=await fetchKumamotoOsmBars(env);
+  const geoSnap=await fetchKumamotoGeoapifyBars(env);
+
+  if(!osmSnap.ok && !geoSnap.ok){
+    return {
+      ok:false,
+      error:osmSnap.error||geoSnap.error||"DISCOVERY_SOURCES_UNAVAILABLE",
+      created:[],searched:[]
+    };
+  }
 
   const pairs=await autoDiscoveryPairs(env,pairLimit);
   const created=[],searched=[];
@@ -1646,15 +1887,31 @@ async function autoDiscover(env,request,maxListings=10,pairLimit=6,perPairLimit=
   for(const pair of pairs){
     if(created.length>=maxListings)break;
 
-    const candidates=snap.places.filter(place=>{
-      const addr=osmAddress(place);
-      const areaHint=osmAreaHint(place);
-      const inArea=!pair.area||addr.includes(pair.area)||areaHint.includes(pair.area);
-      return inArea&&osmPlaceLooksLikeBar(place);
-    });
+    const osmCandidates=osmSnap.ok
+      ? osmSnap.places.filter(place=>{
+          const addr=osmAddress(place);
+          const areaHint=osmAreaHint(place);
+          return (!pair.area||addr.includes(pair.area)||areaHint.includes(pair.area))&&osmPlaceLooksLikeBar(place);
+        }).map(place=>({kind:"osm",place}))
+      : [];
+
+    const geoCandidates=geoSnap.ok
+      ? geoSnap.features.filter(feature=>{
+          const addr=geoAddress(feature);
+          const areaHint=geoAreaHint(feature);
+          return (!pair.area||addr.includes(pair.area)||areaHint.includes(pair.area))&&geoLooksLikeBar(feature);
+        }).map(feature=>({kind:"geoapify",place:feature}))
+      : [];
+
+    const candidates=[...osmCandidates,...geoCandidates];
 
     searched.push({
-      area:pair.area,type:pair.label,ok:true,found:candidates.length,source:snap.source
+      area:pair.area,type:pair.label,ok:true,
+      found:candidates.length,
+      source:[
+        osmSnap.ok?osmSnap.source:"",
+        geoSnap.ok?geoSnap.source:""
+      ].filter(Boolean).join("+")
     });
 
     await env.DB.prepare(
@@ -1662,14 +1919,30 @@ async function autoDiscover(env,request,maxListings=10,pairLimit=6,perPairLimit=
     ).bind(pair.area,pair.type).run();
 
     let made=0;
-    for(const place of candidates){
+    const seenCandidateNames=new Set();
+
+    for(const item of candidates){
       if(made>=perPairLimit||created.length>=maxListings)break;
 
-      const name=t(osmPlaceName(place),150);
-      const address=t(osmAddress(place),500);
+      const isGeo=item.kind==="geoapify";
+      let place=item.place;
+
+      const name=t(isGeo?geoName(place):osmPlaceName(place),150);
       if(!name)continue;
 
       const nkey=normalizePlaceName(name);
+      if(seenCandidateNames.has(nkey))continue;
+      seenCandidateNames.add(nkey);
+
+      if(isGeo){
+        const pid=geoFeatureProps(place).place_id||"";
+        if(pid){
+          const detail=await geoapifyPlaceDetails(env,pid);
+          if(detail.ok&&detail.feature)place=detail.feature;
+        }
+      }
+
+      const address=t(isGeo?geoAddress(place):osmAddress(place),500);
       const duplicate=existing.some(x=>{
         const sameName=normalizePlaceName(x.name)===nkey;
         const sameAddress=address&&x.address&&
@@ -1678,25 +1951,37 @@ async function autoDiscover(env,request,maxListings=10,pairLimit=6,perPairLimit=
       });
       if(duplicate)continue;
 
-      const meta=extractPublicMetadata(place);
-      const website=osmWebsite(place);
+      const website=isGeo?geoWebsite(place):osmWebsite(place);
+      const instagram=isGeo?geoInstagram(place):osmInstagram(place);
+      const phone=t(isGeo?geoPhone(place):osmPhone(place),80);
+      const sourceHours=isGeo?geoHours(place):osmHours(place);
+      const sourceHoliday=isGeo?"":osmHoliday(place);
+      const sourceFeatures=isGeo
+        ? extractFeaturesInfo(`${geoCategories(place).join(" ")} ${name}`)
+        : osmFeatures(place);
+
       const webMeta=website?await fetchOfficialWebsiteMetadata(website):
         {ok:false,price:{min:null,max:null},hours:"",holiday:"",features:""};
 
+      const sourcePrice=isGeo?extractPriceInfo(JSON.stringify(geoFeatureProps(place))):extractPublicMetadata(place);
+      const sourceMin=isGeo?sourcePrice.min:sourcePrice.budget_min;
+      const sourceMax=isGeo?sourcePrice.max:sourcePrice.budget_max;
+
       const area=inferKumamotoAreaFromText(address,pair.area);
-      const instagram=osmInstagram(place);
       const genre=t(
-        osmTags(place).amenity==="karaoke_box"?"カラオケBAR":
-        osmTags(place).amenity==="pub"?"パブ":
-        osmTags(place).amenity==="nightclub"?"ナイトクラブ":"BAR",
+        isGeo
+          ? (geoCategories(place).some(x=>x==="catering.pub")?"パブ":"BAR")
+          : (osmTags(place).amenity==="karaoke_box"?"カラオケBAR":
+             osmTags(place).amenity==="pub"?"パブ":
+             osmTags(place).amenity==="nightclub"?"ナイトクラブ":"BAR"),
         120
       );
-      const phone=t(osmPhone(place),80);
-      const hours=meta.hours||webMeta.hours||"";
-      const holiday=meta.holiday||webMeta.holiday||"";
-      const features=[meta.features,webMeta.features].filter(Boolean).join("、");
-      const budgetMin=webMeta.price?.min??meta.budget_min??null;
-      const budgetMax=webMeta.price?.max??meta.budget_max??null;
+
+      const hours=sourceHours||webMeta.hours||"";
+      const holiday=sourceHoliday||webMeta.holiday||"";
+      const features=[sourceFeatures,webMeta.features].filter(Boolean).join("、");
+      const budgetMin=webMeta.price?.min??sourceMin??null;
+      const budgetMax=webMeta.price?.max??sourceMax??null;
 
       const desc=
         "※本ページは、公開されている情報をもとにKUMAMOTO BAR NAVIが独自に掲載しています。"+
@@ -1721,27 +2006,37 @@ async function autoDiscover(env,request,maxListings=10,pairLimit=6,perPairLimit=
         "UPDATE shops SET owner_token_hash=?,owner_token_created_at=CURRENT_TIMESTAMP WHERE id=?"
       ).bind(hash,id).run();
 
-      const sid=`${place.type||""}/${place.id||""}`;
+      const sid=isGeo
+        ? `geoapify/${String(geoFeatureProps(place).place_id||id)}`
+        : `${place.type||""}/${place.id||""}`;
       await markOpenDataChecked(env,id,sid);
 
       await env.DB.prepare(`
         INSERT OR IGNORE INTO lead_discovery_seen(instagram_handle,source_area,source_type,status)
         VALUES(?,?,?,'provisional_listed')
-      `).bind(`osm_${String(place.type||"")}_${String(place.id||id)}`,area,pair.type).run();
+      `).bind(
+        `${isGeo?"geo":"osm"}_${String(isGeo?geoFeatureProps(place).place_id:(place.id||id))}`,
+        area,pair.type
+      ).run();
 
       existing.push({id,name,address,instagram});
       const origin=new URL(request.url).origin;
       created.push({
         shop_id:id,name,handle:kbnHandle(instagram),area,genre,address,phone,
         hours,holiday,budget_min:budgetMin,budget_max:budgetMax,
-        match_confidence:"open_data",
+        match_confidence:isGeo?"geoapify":"open_data",
+        source:isGeo?"geoapify":"osm",
         public_url:`${origin}/shop.html?slug=${encodeURIComponent(slug)}`
       });
       made++;
     }
   }
 
-  return {ok:true,created,searched,provider:"openstreetmap_overpass"};
+  return {
+    ok:true,created,searched,
+    provider:geoSnap.ok?"osm_geoapify":"osm_only",
+    geoapify_configured:!!geoSnap.configured
+  };
 }
 async function ensureListingStatusColumn(env){
   if(!env.DB)return;
