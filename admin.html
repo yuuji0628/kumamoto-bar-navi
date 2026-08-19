@@ -1918,7 +1918,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.53 画面圧縮調整
+   KBN ADMIN ver1.54 画面圧縮調整
    ============================================================ */
 
 /* 上部 welcome とログアウトをコンパクト化 */
@@ -2147,7 +2147,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.53 — 独自掲載 Instagram DM
+   KBN ADMIN ver1.54 — 独自掲載 Instagram DM
    ============================================================ */
 .shop-provisional-dm{
   border:1px solid #6c5a2b!important;
@@ -2160,9 +2160,77 @@ html,body{max-width:100%;overflow-x:hidden}
 }
 </style>
 
+
+<style id="kbn-lead-smart-v154">
+.lead-smart-page{max-width:900px;margin:0 auto}
+.lead-smart-head{margin:8px 0 16px}
+.lead-smart-head h2{margin:3px 0 7px;font-size:2rem;letter-spacing:-.03em}
+.lead-smart-head>p:last-child{margin:0;color:#9fa8b3;line-height:1.65;font-size:.88rem}
+.lead-smart-tabs{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;
+  padding:6px;margin:0 0 14px;border:1px solid #303a45;border-radius:15px;background:#0a1118
+}
+.lead-smart-tab{
+  min-height:46px;border:0;border-radius:10px;background:#111922;color:#aeb6c0;font-weight:850
+}
+.lead-smart-tab.active{background:rgba(229,187,80,.13);box-shadow:inset 0 0 0 1px #9b772b;color:#efc45a}
+.lead-smart-card{
+  margin:0 0 12px;padding:14px;border:1px solid #34404c;border-radius:18px;
+  background:linear-gradient(180deg,#101821,#0c131b)
+}
+.lead-smart-featured{border-color:#715a25;background:linear-gradient(180deg,rgba(225,182,73,.07),#0d141c)}
+.lead-smart-card-head{display:grid;grid-template-columns:46px minmax(0,1fr);gap:12px;align-items:start}
+.lead-smart-icon{
+  width:46px;height:46px;border:1px solid #46515d;border-radius:13px;background:#111a24;
+  display:grid;place-items:center;color:#efc45a;font-size:1.35rem;font-weight:900
+}
+.lead-smart-badge{
+  display:inline-flex;padding:4px 8px;margin:0 0 7px;border-radius:999px;background:#efc45a;color:#101010;
+  font-size:.66rem;font-weight:950
+}
+.lead-smart-card h3{margin:0 0 5px;font-size:1.12rem}
+.lead-smart-card-head p{margin:0;color:#aeb6c0;line-height:1.6;font-size:.79rem}
+.lead-smart-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:13px}
+.lead-smart-actions .lead-smart-primary{grid-column:1/-1}
+.lead-smart-actions button,.lead-smart-primary{min-height:46px!important;border-radius:11px!important;font-weight:900!important}
+.lead-smart-status{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-top:12px;
+  border:1px solid #313c48;border-radius:12px;background:#091018;overflow:hidden
+}
+.lead-smart-status>div{padding:10px 9px;text-align:center;border-right:1px solid #28323d}
+.lead-smart-status>div:last-child{border-right:0}
+.lead-smart-status span{display:block;color:#7f8994;font-size:.64rem;margin-bottom:3px}
+.lead-smart-status strong{display:block;color:#e9edf1;font-size:.78rem}
+.lead-smart-status>div:first-child strong{color:#efc45a}
+.lead-smart-message{margin-top:9px;padding:0!important;border:0!important;background:transparent!important;font-size:.76rem!important}
+.lead-smart-card .version-note{display:block;margin-top:9px!important;line-height:1.5}
+.lead-smart-collapse-head{
+  width:100%;display:grid;grid-template-columns:46px minmax(0,1fr) auto;gap:12px;align-items:center;
+  padding:0;border:0;background:transparent;color:#fff;text-align:left
+}
+.lead-smart-collapse-head span:nth-child(2) b{display:block;font-size:1rem;margin-bottom:3px}
+.lead-smart-collapse-head span:nth-child(2) small{display:block;color:#8f99a4;font-size:.72rem;line-height:1.45}
+.lead-smart-collapse-head i{font-style:normal;font-size:1.7rem;color:#77818d;transition:.18s}
+.lead-smart-collapse-head[aria-expanded="true"] i{transform:rotate(90deg);color:#efc45a}
+.lead-smart-collapse-body{padding-top:14px}
+.lead-smart-helper{margin:0 0 12px;color:#9ea7b1;font-size:.78rem;line-height:1.65}
+.lead-smart-page .lead-area-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.lead-smart-page .lead-custom-search{grid-template-columns:1.25fr 1fr auto}
+@media(max-width:680px){
+  .lead-smart-head h2{font-size:1.75rem}
+  .lead-smart-tab{font-size:.73rem;min-height:43px;padding:0 6px}
+  .lead-smart-card{padding:12px;border-radius:16px}
+  .lead-smart-actions{grid-template-columns:1fr}
+  .lead-smart-actions .lead-smart-primary{grid-column:auto}
+  .lead-smart-status strong{font-size:.7rem}
+  .lead-smart-page .lead-area-grid{grid-template-columns:1fr 1fr}
+  .lead-smart-page .lead-custom-search{grid-template-columns:1fr}
+}
+</style>
+
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
-<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.53</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
+<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.54</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
 
 
 
@@ -2481,117 +2549,106 @@ html,body{max-width:100%;overflow-x:hidden}
 
 
 
-<section id="tab-leads" class="admin-block" hidden>
-  <div class="admin-block-head">
-    <div>
-      <p class="eyebrow">LEAD FINDER</p>
-      <h2>BAR開拓</h2>
-      <p>「自動開拓」「手動検索」「既存店舗更新」の3つに整理しました。</p>
+<section id="tab-leads" class="admin-block lead-smart-page" hidden>
+  <div class="lead-smart-head">
+    <p class="eyebrow">LEAD FINDER</p>
+    <h2>BAR開拓</h2>
+    <p>自動開拓・手動検索・既存店舗更新を、使いやすく3つに整理しました。</p>
+  </div>
+
+  <div class="lead-smart-tabs" role="tablist" aria-label="BAR開拓メニュー">
+    <button type="button" class="lead-smart-tab" data-lead-jump="auto">⚡ 自動開拓</button>
+    <button type="button" class="lead-smart-tab" data-lead-jump="manual">⌕ 手動検索</button>
+    <button type="button" class="lead-smart-tab active" data-lead-jump="refresh">↻ 既存更新</button>
+  </div>
+
+  <div id="leadSmartRefresh" class="lead-smart-card lead-smart-featured">
+    <div class="lead-smart-card-head">
+      <div class="lead-smart-icon">↻</div>
+      <div>
+        <span class="lead-smart-badge">おすすめ</span>
+        <h3>既存店舗を更新</h3>
+        <p>Google Placesを優先して候補を照合し、信頼度の高い情報だけ反映します。</p>
+      </div>
+    </div>
+
+    <div class="lead-smart-actions">
+      <button type="button" id="bulkRevalidateBtn" class="btn-gold lead-smart-primary">↻ 一括更新を開始</button>
+      <button type="button" id="refreshExistingBtn" class="admin-secondary-btn">10店舗だけ更新</button>
+      <button type="button" id="repairExistingAreasBtn" class="admin-secondary-btn">エリアを修正</button>
+    </div>
+
+    <div class="lead-smart-status">
+      <div>
+        <span>確認済み</span>
+        <strong id="leadSmartChecked">—</strong>
+      </div>
+      <div>
+        <span>更新状況</span>
+        <strong id="leadSmartUpdateState">待機中</strong>
+      </div>
+      <div>
+        <span>方式</span>
+        <strong>Google優先</strong>
+      </div>
+    </div>
+
+    <div id="bulkRevalidateStatus" class="auto-discovery-status lead-smart-message"></div>
+    <div id="refreshExistingStatus" class="auto-discovery-status lead-smart-message"></div>
+    <div id="repairExistingAreasStatus" class="auto-discovery-status lead-smart-message"></div>
+    <small class="version-note">ver1.54：Google Placesを第一検索にし、Foursquare・Geoapify・OSM・公式Webで補完します。</small>
+  </div>
+
+  <div id="leadSmartManual" class="lead-smart-card">
+    <button type="button" class="lead-smart-collapse-head" data-lead-collapse="manual" aria-expanded="false">
+      <span class="lead-smart-icon">⌕</span>
+      <span>
+        <b>手動検索</b>
+        <small>エリアとジャンルを指定してGoogle Places候補を検索</small>
+      </span>
+      <i>›</i>
+    </button>
+
+    <div class="lead-smart-collapse-body" data-lead-panel="manual" hidden>
+      <div class="lead-area-grid">
+        <button type="button" data-lead-area="熊本市">熊本市</button>
+        <button type="button" data-lead-area="八代市">八代市</button>
+        <button type="button" data-lead-area="天草市">天草市</button>
+        <button type="button" data-lead-area="人吉市">人吉市</button>
+        <button type="button" data-lead-area="玉名市">玉名市</button>
+        <button type="button" data-lead-area="菊池市">菊池市</button>
+      </div>
+
+      <div class="lead-custom-search">
+        <input id="leadSearchArea" list="kbnAreaList" placeholder="熊本県内の市町村を選択・入力">
+        <datalist id="kbnAreaList">
+<option value="熊本市"></option><option value="八代市"></option><option value="人吉市"></option><option value="荒尾市"></option><option value="水俣市"></option><option value="玉名市"></option><option value="山鹿市"></option><option value="菊池市"></option><option value="宇土市"></option><option value="上天草市"></option><option value="宇城市"></option><option value="阿蘇市"></option><option value="天草市"></option><option value="合志市"></option><option value="美里町"></option><option value="玉東町"></option><option value="南関町"></option><option value="長洲町"></option><option value="和水町"></option><option value="大津町"></option><option value="菊陽町"></option><option value="南小国町"></option><option value="小国町"></option><option value="産山村"></option><option value="高森町"></option><option value="西原村"></option><option value="南阿蘇村"></option><option value="御船町"></option><option value="嘉島町"></option><option value="益城町"></option><option value="甲佐町"></option><option value="山都町"></option><option value="氷川町"></option><option value="芦北町"></option><option value="津奈木町"></option><option value="錦町"></option><option value="多良木町"></option><option value="湯前町"></option><option value="水上村"></option><option value="相良村"></option><option value="五木村"></option><option value="山江村"></option><option value="球磨村"></option><option value="あさぎり町"></option><option value="苓北町"></option>
+        </datalist>
+        <select id="leadSearchType">
+<option value="bar">BAR</option><option value="darts">ダーツバー</option><option value="karaoke">カラオケバー</option><option value="snack">スナック</option><option value="lounge">ラウンジ</option><option value="girls">ガールズバー</option><option value="shot">ショットバー</option><option value="sports">スポーツバー</option><option value="wine">ワインバー</option><option value="beer">ビアバー</option><option value="cocktail">カクテルバー</option><option value="music">ミュージックバー</option><option value="shisha">シーシャバー</option><option value="concept">コンセプトバー</option>
+        </select>
+        <button type="button" id="leadSearchBtn">検索する</button>
+      </div>
+      <small id="leadSearchConfigNote">検索API設定を確認中...</small>
+      <small class="lead-follow-filter-note">✓ フォロー済みアカウントは検索結果から自動除外します。</small>
     </div>
   </div>
 
-  <div class="lead-mode-grid"><div class="auto-discovery-box lead-mode-card lead-mode-primary">
-<div class="lead-mode-kicker">おすすめ</div>
-<div class="existing-refresh-box lead-mode-card">
-  <strong>🔄 既存店舗を更新</strong>
-  <small>Google Placesで店舗候補を最初に照合し、Foursquare・Geoapify・OpenStreetMapで再確認します。保存する店舗情報は補助APIや店舗公式Webを優先し、信頼度が高い情報だけ反映します。</small>
-  <button type="button" id="bulkRevalidateBtn" class="btn-gold">独自掲載を一括で複合精査</button>
-  <button type="button" id="refreshExistingBtn" class="admin-secondary-btn">10店舗だけ更新</button>
-  <button type="button" id="repairExistingAreasBtn" class="admin-secondary-btn">既存店舗のエリアを修正</button>
-  <div id="bulkRevalidateStatus" class="auto-discovery-status"></div>
-  <small class="version-note">※ ver1.53 Google診断版：Google Placesだけを使用し、各検索ごとの生ヒット数・BAR判定数・エラー内容まで管理画面に表示します。</small>
-  <div id="refreshExistingStatus" class="auto-discovery-status"></div>
-  <div id="repairExistingAreasStatus" class="auto-discovery-status"></div>
-</div>
-<div class="lead-search-card">
-    <h3>🔎 手動検索</h3>
-    <p>エリアを選ぶと、熊本のBAR系Instagram候補を探す検索を開きます。</p>
-
-    <div class="lead-area-grid">
-      <button type="button" data-lead-area="熊本市">熊本市</button>
-      <button type="button" data-lead-area="八代市">八代市</button>
-      <button type="button" data-lead-area="天草市">天草市</button>
-      <button type="button" data-lead-area="人吉市">人吉市</button>
-      <button type="button" data-lead-area="玉名市">玉名市</button>
-      <button type="button" data-lead-area="菊池市">菊池市</button>
+  <div id="leadSmartAuto" class="lead-smart-card">
+    <button type="button" class="lead-smart-collapse-head" data-lead-collapse="auto" aria-expanded="false">
+      <span class="lead-smart-icon">⚡</span>
+      <span>
+        <b>自動開拓</b>
+        <small>Google優先で県内のBAR候補を自動検索・掲載</small>
+      </span>
+      <i>›</i>
+    </button>
+    <div class="lead-smart-collapse-body" data-lead-panel="auto" hidden>
+      <p class="lead-smart-helper">県内45市町村 × 14ジャンルを順番に検索し、重複を避けながら高精度で独自掲載します。</p>
+      <button type="button" id="autoDiscoverBtn" class="btn-gold lead-smart-primary">Google優先で高精度自動掲載</button>
+      <div id="autoDiscoverStatus" class="auto-discovery-status"></div>
     </div>
-
-    <div class="lead-custom-search">
-      <input id="leadSearchArea" list="kbnAreaList" placeholder="熊本県内の市町村を選択・入力">
-      <datalist id="kbnAreaList">
-<option value="熊本市"></option>
-<option value="八代市"></option>
-<option value="人吉市"></option>
-<option value="荒尾市"></option>
-<option value="水俣市"></option>
-<option value="玉名市"></option>
-<option value="山鹿市"></option>
-<option value="菊池市"></option>
-<option value="宇土市"></option>
-<option value="上天草市"></option>
-<option value="宇城市"></option>
-<option value="阿蘇市"></option>
-<option value="天草市"></option>
-<option value="合志市"></option>
-<option value="美里町"></option>
-<option value="玉東町"></option>
-<option value="南関町"></option>
-<option value="長洲町"></option>
-<option value="和水町"></option>
-<option value="大津町"></option>
-<option value="菊陽町"></option>
-<option value="南小国町"></option>
-<option value="小国町"></option>
-<option value="産山村"></option>
-<option value="高森町"></option>
-<option value="西原村"></option>
-<option value="南阿蘇村"></option>
-<option value="御船町"></option>
-<option value="嘉島町"></option>
-<option value="益城町"></option>
-<option value="甲佐町"></option>
-<option value="山都町"></option>
-<option value="氷川町"></option>
-<option value="芦北町"></option>
-<option value="津奈木町"></option>
-<option value="錦町"></option>
-<option value="多良木町"></option>
-<option value="湯前町"></option>
-<option value="水上村"></option>
-<option value="相良村"></option>
-<option value="五木村"></option>
-<option value="山江村"></option>
-<option value="球磨村"></option>
-<option value="あさぎり町"></option>
-<option value="苓北町"></option>
-      </datalist>
-      <select id="leadSearchType">
-<option value="bar">BAR</option>
-<option value="darts">ダーツバー</option>
-<option value="karaoke">カラオケバー</option>
-<option value="snack">スナック</option>
-<option value="lounge">ラウンジ</option>
-<option value="girls">ガールズバー</option>
-<option value="shot">ショットバー</option>
-<option value="sports">スポーツバー</option>
-<option value="wine">ワインバー</option>
-<option value="beer">ビアバー</option>
-<option value="cocktail">カクテルバー</option>
-<option value="music">ミュージックバー</option>
-<option value="shisha">シーシャバー</option>
-<option value="concept">コンセプトバー</option>
-</select>
-      <button type="button" id="leadSearchBtn">検索する</button>
-    </div>
-
-    <small id="leadSearchConfigNote">検索API設定を確認中...</small><small class="lead-follow-filter-note">✓ フォロー済みアカウントは検索結果から自動除外します。</small>
-    <strong>⚡ 自動開拓</strong>
-<small>県内45市町村 × 14ジャンルを順番に検索。1組最大2店舗に抑えて地域を分散し、公開情報に少しでも料金表記があれば、料金・営業時間などをできるだけ自動反映します。</small>
-<button type="button" id="autoDiscoverBtn" class="btn-gold">Google優先で高精度自動掲載</button>
-<div id="autoDiscoverStatus" class="auto-discovery-status"></div>
-</div>
-
-</div>
+  </div>
 
 <div id="leadSearchStatus" class="lead-search-status"></div>
   </div>
@@ -7138,6 +7195,40 @@ document.addEventListener("DOMContentLoaded",()=>{
   const wrap=document.querySelector(".shop-compact-head");
   if(wrap && !document.getElementById("toggleShopFormBtn")){
     wrap.style.justifyContent="flex-start";
+  }
+});
+</script>
+
+
+<script>
+document.addEventListener("click",(e)=>{
+  const collapse=e.target.closest("[data-lead-collapse]");
+  if(collapse){
+    const key=collapse.dataset.leadCollapse;
+    const panel=document.querySelector(`[data-lead-panel="${key}"]`);
+    if(panel){
+      const open=panel.hasAttribute("hidden");
+      panel.toggleAttribute("hidden",!open);
+      collapse.setAttribute("aria-expanded",open?"true":"false");
+    }
+    return;
+  }
+  const jump=e.target.closest("[data-lead-jump]");
+  if(jump){
+    document.querySelectorAll(".lead-smart-tab").forEach(x=>x.classList.toggle("active",x===jump));
+    const key=jump.dataset.leadJump;
+    const target=key==="refresh"?document.getElementById("leadSmartRefresh"):
+                 key==="manual"?document.getElementById("leadSmartManual"):
+                 document.getElementById("leadSmartAuto");
+    target?.scrollIntoView({behavior:"smooth",block:"start"});
+    if(key!=="refresh"){
+      const head=document.querySelector(`[data-lead-collapse="${key}"]`);
+      const panel=document.querySelector(`[data-lead-panel="${key}"]`);
+      if(head&&panel){
+        panel.removeAttribute("hidden");
+        head.setAttribute("aria-expanded","true");
+      }
+    }
   }
 });
 </script>
