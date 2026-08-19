@@ -1336,7 +1336,7 @@ out center tags;
         method:"POST",
         headers:{
           "Content-Type":"application/x-www-form-urlencoded;charset=UTF-8",
-          "User-Agent":"KUMAMOTO-BAR-NAVI/1.55"
+          "User-Agent":"KUMAMOTO-BAR-NAVI/1.59"
         },
         body:"data="+encodeURIComponent(query)
       });
@@ -1584,7 +1584,7 @@ async function fetchOfficialWebsiteMetadata(url){
   }
   try{
     const r=await fetch(target,{
-      headers:{"User-Agent":"Mozilla/5.0 KUMAMOTO-BAR-NAVI/1.55"}
+      headers:{"User-Agent":"Mozilla/5.0 KUMAMOTO-BAR-NAVI/1.59"}
     });
     if(!r.ok)return {ok:false,price:{min:null,max:null},hours:"",holiday:"",features:""};
     const ct=String(r.headers.get("content-type")||"");
@@ -1773,7 +1773,8 @@ async function refreshIndependentListings(env,{limit=10,afterId=0,revalidate=fal
   const cursor=Math.max(0,Number(afterId)||0);
 
   const r=await env.DB.prepare(`
-    SELECT id,name,area,address,phone,instagram,genre,hours,holiday,features,budget_min,budget_max,listing_status
+    SELECT id,name,area,address,hours,holiday,instagram,genre,features,description,
+           budget_min,budget_max,seats,phone,listing_status,is_published
     FROM shops
     WHERE COALESCE(listing_status,'published')='provisional'
       AND id>?
@@ -1786,142 +1787,141 @@ async function refreshIndependentListings(env,{limit=10,afterId=0,revalidate=fal
 
   for(const shop of rows){
     try{
-      if(!force&&!revalidate&&await recentlyCheckedOpenData(env,shop.id,30)){
-        unchanged.push({id:shop.id,name:shop.name,reason:"CHECKED_WITHIN_30_DAYS"});
-        continue;
-      }
+      const cleanName=String(shop.name||"").replace(/^【KBN独自掲載】/,"").trim();
 
-      const found=await findOpenDataPlaceForShop(env,{
-        name:String(shop.name||"").replace(/^【KBN独自掲載】/,"").trim(),
-        area:shop.area||"熊本"
-      });
-
+      // 1) Googleで存在・店名・エリアを照合
+      const found=await findGooglePlaceForShop(env,{name:cleanName,area:shop.area||"熊本"});
       if(!found.ok){
-        failed.push({id:shop.id,name:shop.name,reason:found.error||"OPEN_DATA_ERROR"});
+        failed.push({id:shop.id,name:shop.name,reason:found.error||"GOOGLE_PLACES_ERROR"});
         continue;
       }
-
-      const storedBudget=sanitizeStoredBudget(shop.budget_min,shop.budget_max);
-
       if(!found.matched){
-        const changedBudget=
-          Number(storedBudget.min||0)!==Number(shop.budget_min||0)||
-          Number(storedBudget.max||0)!==Number(shop.budget_max||0);
-
-        if(changedBudget){
-          await env.DB.prepare(`
-            UPDATE shops SET budget_min=?,budget_max=?,updated_at=CURRENT_TIMESTAMP WHERE id=?
-          `).bind(storedBudget.min,storedBudget.max,shop.id).run();
-          updated.push({
-            id:shop.id,name:shop.name,
-            budget_min:storedBudget.min,budget_max:storedBudget.max,
-            match_confidence:"none",match_score:0
-          });
-        }else{
-          unchanged.push({id:shop.id,name:shop.name,reason:"MATCH_NOT_FOUND"});
-        }
-        await markOpenDataChecked(env,shop.id,"");
+        unchanged.push({id:shop.id,name:shop.name,reason:"GOOGLE_MATCH_NOT_FOUND"});
         continue;
       }
 
-      const isGeo=found.kind==="geoapify";
-      const isFsq=found.kind==="foursquare";
-      const place=isGeo?found.feature:(isFsq?found.fsq_place:found.place);
+      // 2) Place IDから詳細情報を取得
+      const details=await googlePlaceDetails(env,found.place?.id);
+      const gp=details.ok&&details.place?details.place:found.place;
 
-      const address=isGeo?geoAddress(place):(isFsq?fsqAddress(place):osmAddress(place));
-      const phone=isGeo?geoPhone(place):(isFsq?fsqPhone(place):osmPhone(place));
-      const website=isGeo?geoWebsite(place):(isFsq?fsqWebsite(place):osmWebsite(place));
-      const instagram=isGeo?geoInstagram(place):(isFsq?fsqInstagram(place):osmInstagram(place));
-      const sourceHours=isGeo?geoHours(place):(isFsq?fsqHours(place):osmHours(place));
-      const sourceHoliday=(isGeo||isFsq)?"":osmHoliday(place);
-      const sourceFeatures=isGeo
-        ? extractFeaturesInfo(`${geoCategories(place).join(" ")} ${geoName(place)}`)
-        : isFsq
-          ? extractFeaturesInfo(`${fsqCategories(place).join(" ")} ${fsqName(place)}`)
-          : osmFeatures(place);
+      const gName=t(googlePlaceName(gp)||cleanName,150);
+      const gAddress=t(googlePlaceAddress(gp)||shop.address||"",500);
+      const gPhone=t(googlePhone(gp)||"",80);
+      const gHours=t(googleOpeningHours(gp)||"",800);
+      const gHoliday=t(googleHolidayFromHours(gp)||"",180);
+      const gWebsite=googleWebsite(gp);
+      const gFeatures=googleDetailFeatures(gp);
+      const gPrice=googlePriceInfo(gp);
+      const area=inferKumamotoAreaFromText(gAddress,shop.area||"熊本市");
 
-      const trusted=Number(found.score||0)>=90;
-      let webMeta={ok:false,price:{min:null,max:null},hours:"",holiday:"",features:""};
-      const needsWebPrice=storedBudget.invalid||!storedBudget.min||!storedBudget.max;
-      if(website&&(revalidate||needsWebPrice||!shop.hours||!shop.holiday)){
-        webMeta=await fetchOfficialWebsiteMetadata(website);
+      // 3) 補助APIでGoogleにない項目を補完
+      const fsq=await findFoursquarePlaceForShop(env,{name:gName,area});
+      const geo=await findGeoapifyPlaceForShop(env,{name:gName,area});
+      const osmSnap=await fetchKumamotoOsmBars(env);
+
+      let osmMatch=null;
+      if(osmSnap.ok){
+        const ranked=osmSnap.places
+          .map(place=>({place,score:osmPlaceScore(place,{name:gName,area})}))
+          .sort((a,b)=>b.score-a.score);
+        if(ranked[0]&&ranked[0].score>=78)osmMatch=ranked[0].place;
       }
 
-      const sourcePrice=isGeo
-        ? extractPriceInfo(JSON.stringify(geoFeatureProps(place)))
-        : isFsq
-          ? extractPriceInfo(JSON.stringify(place))
-          : extractPublicMetadata(place);
-      const sourceMin=(isGeo||isFsq)?sourcePrice.min:sourcePrice.budget_min;
-      const sourceMax=(isGeo||isFsq)?sourcePrice.max:sourcePrice.budget_max;
+      const fsqPlace=fsq.ok&&fsq.matched?fsq.place:null;
+      const geoFeature=geo.ok&&geo.matched?geo.feature:null;
 
-      const extractedMin=webMeta.price?.min??sourceMin??null;
-      const extractedMax=webMeta.price?.max??sourceMax??null;
-      const inferredArea=inferKumamotoAreaFromText(address,shop.area||"");
+      const phone=gPhone ||
+        (fsqPlace?fsqPhone(fsqPlace):"") ||
+        (geoFeature?geoPhone(geoFeature):"") ||
+        (osmMatch?osmPhone(osmMatch):"") ||
+        shop.phone || "";
 
-      const next={
-        area:trusted?(inferredArea||shop.area):shop.area,
-        address:(trusted&&address)?address:(shop.address||""),
-        phone:(trusted&&phone)?phone:(shop.phone||""),
-        instagram:shop.instagram||instagram||"",
-        hours:(trusted&&(sourceHours||webMeta.hours))
-          ? (sourceHours||webMeta.hours)
-          : (shop.hours||sourceHours||webMeta.hours||""),
-        holiday:(trusted&&(sourceHoliday||webMeta.holiday))
-          ? (sourceHoliday||webMeta.holiday)
-          : (shop.holiday||sourceHoliday||webMeta.holiday||""),
-        features:(trusted&&(sourceFeatures||webMeta.features))
-          ? [sourceFeatures,webMeta.features].filter(Boolean).join("、")
-          : (shop.features||sourceFeatures||webMeta.features||""),
-        budget_min:extractedMin!=null?extractedMin:(storedBudget.min??null),
-        budget_max:extractedMax!=null?extractedMax:(storedBudget.max??null)
-      };
+      const hours=gHours ||
+        (fsqPlace?fsqHours(fsqPlace):"") ||
+        (geoFeature?geoHours(geoFeature):"") ||
+        (osmMatch?osmHours(osmMatch):"") ||
+        shop.hours || "";
 
-      if(next.budget_min&&next.budget_max&&next.budget_max<next.budget_min){
-        [next.budget_min,next.budget_max]=[next.budget_max,next.budget_min];
-      }
+      const holiday=gHoliday ||
+        (osmMatch?osmHoliday(osmMatch):"") ||
+        shop.holiday || "";
+
+      const website=gWebsite ||
+        (fsqPlace?fsqWebsite(fsqPlace):"") ||
+        (geoFeature?geoWebsite(geoFeature):"") ||
+        (osmMatch?osmWebsite(osmMatch):"");
+
+      const instagram=
+        (fsqPlace?fsqInstagram(fsqPlace):"") ||
+        (geoFeature?geoInstagram(geoFeature):"") ||
+        (osmMatch?osmInstagram(osmMatch):"") ||
+        shop.instagram || "";
+
+      let features=[
+        gFeatures,
+        fsqPlace?extractFeaturesInfo(`${fsqCategories(fsqPlace).join(" ")} ${gName}`):"",
+        geoFeature?extractFeaturesInfo(`${geoCategories(geoFeature).join(" ")} ${gName}`):"",
+        osmMatch?osmFeatures(osmMatch):"",
+        shop.features||""
+      ].filter(Boolean).join("、");
+
+      // 4) 公式Webがある場合はさらに補完
+      const webMeta=website?await fetchOfficialWebsiteMetadata(website):
+        {ok:false,price:{min:null,max:null},hours:"",holiday:"",features:""};
+
+      const finalHours=hours||webMeta.hours||shop.hours||"";
+      const finalHoliday=holiday||webMeta.holiday||shop.holiday||"";
+      if(webMeta.features)features=[features,webMeta.features].filter(Boolean).join("、");
+
+      const budgetMin=
+        webMeta.price?.min ??
+        gPrice.min ??
+        shop.budget_min ??
+        null;
+
+      const budgetMax=
+        webMeta.price?.max ??
+        gPrice.max ??
+        shop.budget_max ??
+        null;
 
       const changed=
-        String(next.area||"")!==String(shop.area||"")||
-        String(next.address||"")!==String(shop.address||"")||
-        String(next.phone||"")!==String(shop.phone||"")||
-        String(next.instagram||"")!==String(shop.instagram||"")||
-        String(next.hours||"")!==String(shop.hours||"")||
-        String(next.holiday||"")!==String(shop.holiday||"")||
-        String(next.features||"")!==String(shop.features||"")||
-        Number(next.budget_min||0)!==Number(shop.budget_min||0)||
-        Number(next.budget_max||0)!==Number(shop.budget_max||0);
-
-      const sid=isGeo
-        ? `geoapify/${String(geoFeatureProps(place).place_id||"")}`
-        : isFsq
-          ? `foursquare/${String(place.fsq_place_id||place.fsq_id||place.id||"")}`
-          : `${place.type||""}/${place.id||""}`;
-      await markOpenDataChecked(env,shop.id,sid);
+        String(area)!==String(shop.area||"") ||
+        String(gAddress)!==String(shop.address||"") ||
+        String(phone)!==String(shop.phone||"") ||
+        String(finalHours)!==String(shop.hours||"") ||
+        String(finalHoliday)!==String(shop.holiday||"") ||
+        String(instagram)!==String(shop.instagram||"") ||
+        String(features)!==String(shop.features||"") ||
+        Number(budgetMin??-1)!==Number(shop.budget_min??-1) ||
+        Number(budgetMax??-1)!==Number(shop.budget_max??-1);
 
       if(!changed){
-        unchanged.push({id:shop.id,name:shop.name,reason:"NO_CHANGE"});
+        unchanged.push({
+          id:shop.id,name:shop.name,reason:"NO_CHANGE",
+          match_score:found.score,
+          details_ok:!!details.ok
+        });
         continue;
       }
 
       await env.DB.prepare(`
         UPDATE shops SET
-          area=?,address=?,phone=?,instagram=?,hours=?,holiday=?,features=?,
-          budget_min=?,budget_max=?,updated_at=CURRENT_TIMESTAMP
+          area=?,address=?,hours=?,holiday=?,instagram=?,features=?,
+          budget_min=?,budget_max=?,phone=?,updated_at=CURRENT_TIMESTAMP
         WHERE id=?
       `).bind(
-        next.area,next.address,next.phone,next.instagram,next.hours,next.holiday,next.features,
-        next.budget_min,next.budget_max,shop.id
+        area,gAddress,finalHours,finalHoliday,instagram,features,
+        budgetMin,budgetMax,phone,shop.id
       ).run();
 
       updated.push({
-        id:shop.id,name:shop.name,
-        area:next.area,address:next.address,phone:next.phone,
-        hours:next.hours,holiday:next.holiday,
-        budget_min:next.budget_min,budget_max:next.budget_max,
-        match_confidence:found.confidence,
-        match_score:found.score,
-        source:found.source
+        id:shop.id,name:shop.name,area,address:gAddress,phone,
+        hours:finalHours,holiday:finalHoliday,instagram,
+        budget_min:budgetMin,budget_max:budgetMax,
+        match_confidence:found.confidence,match_score:found.score,
+        google_details:!!details.ok,
+        source:"google_details+secondary+official_web"
       });
     }catch(e){
       failed.push({
@@ -1942,12 +1942,9 @@ async function refreshIndependentListings(env,{limit=10,afterId=0,revalidate=fal
   return {
     ok:true,checked:rows.length,updated,unchanged,failed,
     next_after_id:nextAfterId,has_more:!!moreR,
-    provider:"osm_geoapify"
+    provider:"google_details_secondary_official_web"
   };
 }
-
-
-
 function googlePlacesConfig(env){
   return {apiKey:t(env.GOOGLE_PLACES_API_KEY,2000)};
 }
@@ -2067,6 +2064,107 @@ async function findGooglePlaceForShop(env,{name,area}){
     confidence:best.score>=100?"high":"medium",
     source:"google_places"
   };
+}
+
+async function googlePlaceDetails(env,placeId){
+  const cfg=googlePlacesConfig(env);
+  const id=String(placeId||"").trim();
+  if(!cfg.apiKey)return {ok:false,configured:false,error:"GOOGLE_PLACES_NOT_CONFIGURED",place:null};
+  if(!id)return {ok:false,configured:true,error:"GOOGLE_PLACE_ID_MISSING",place:null};
+
+  try{
+    const fieldMask=[
+      "id","displayName","formattedAddress","primaryType","types","businessStatus",
+      "nationalPhoneNumber","internationalPhoneNumber",
+      "regularOpeningHours","currentOpeningHours",
+      "websiteUri","priceLevel","priceRange","googleMapsUri"
+    ].join(",");
+
+    const r=await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(id)}`,{
+      headers:{
+        "X-Goog-Api-Key":cfg.apiKey,
+        "X-Goog-FieldMask":fieldMask,
+        "Accept-Language":"ja"
+      }
+    });
+
+    const raw=await r.text();
+    let d={};
+    try{d=raw?JSON.parse(raw):{}}catch{d={raw}}
+
+    if(!r.ok){
+      return {
+        ok:false,configured:true,status:r.status,
+        error:d?.error?.message||`GOOGLE_PLACE_DETAILS_HTTP_${r.status}`,
+        place:null
+      };
+    }
+    return {ok:true,configured:true,place:d};
+  }catch(e){
+    return {ok:false,configured:true,error:String(e?.message||e||"GOOGLE_PLACE_DETAILS_ERROR"),place:null};
+  }
+}
+
+function googleOpeningHours(place){
+  const rows=place?.regularOpeningHours?.weekdayDescriptions;
+  if(Array.isArray(rows)&&rows.length)return rows.join(" / ");
+  const current=place?.currentOpeningHours?.weekdayDescriptions;
+  if(Array.isArray(current)&&current.length)return current.join(" / ");
+  return "";
+}
+
+function googleHolidayFromHours(place){
+  const rows=place?.regularOpeningHours?.weekdayDescriptions;
+  if(!Array.isArray(rows))return "";
+  return rows
+    .filter(x=>/休業|定休|closed/i.test(String(x||"")))
+    .map(x=>String(x||"").split(":")[0].trim())
+    .filter(Boolean)
+    .join("・");
+}
+
+function googlePhone(place){
+  return String(place?.nationalPhoneNumber||place?.internationalPhoneNumber||"").trim();
+}
+
+function googleWebsite(place){
+  return String(place?.websiteUri||"").trim();
+}
+
+function googlePriceInfo(place){
+  const moneyToNum=(x)=>{
+    if(x===null||x===undefined)return null;
+    if(typeof x==="number")return Number.isFinite(x)?Math.round(x):null;
+    if(typeof x==="object"){
+      const units=Number(x.units||0);
+      const nanos=Number(x.nanos||0);
+      const v=units+nanos/1e9;
+      return Number.isFinite(v)?Math.round(v):null;
+    }
+    const n=Number(String(x).replace(/[^\d.]/g,""));
+    return Number.isFinite(n)?Math.round(n):null;
+  };
+
+  const range=place?.priceRange;
+  let min=range?moneyToNum(range.startPrice||range.minPrice||range.minimumPrice):null;
+  let max=range?moneyToNum(range.endPrice||range.maxPrice||range.maximumPrice):null;
+
+  if(min===null&&max===null){
+    const rough={
+      PRICE_LEVEL_FREE:[0,0],
+      PRICE_LEVEL_INEXPENSIVE:[500,2000],
+      PRICE_LEVEL_MODERATE:[2000,5000],
+      PRICE_LEVEL_EXPENSIVE:[5000,10000],
+      PRICE_LEVEL_VERY_EXPENSIVE:[10000,30000]
+    }[String(place?.priceLevel||"").toUpperCase()];
+    if(rough){min=rough[0];max=rough[1];}
+  }
+  return {min,max};
+}
+
+function googleDetailFeatures(place){
+  const types=googlePlaceTypes(place).map(x=>String(x).replace(/_/g," "));
+  return extractFeaturesInfo(types.join(" "));
 }
 
 function findBestSecondaryForGoogle({googlePlace,fsqResults=[],geoFeatures=[],osmPlaces=[]}={}){
@@ -2527,13 +2625,19 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
     for(const g of googleCandidates){
       if(made>=perPairLimit||created.length>=maxListings)break;
 
-      const gName=t(googlePlaceName(g),150);
-      const gAddress=t(googlePlaceAddress(g),500);
+      let gName=t(googlePlaceName(g),150);
+      let gAddress=t(googlePlaceAddress(g),500);
       if(!gName||!gAddress)continue;
       if(!gAddress.includes("熊本")){
         rejected.push({name:gName,reason:"OUTSIDE_KUMAMOTO",source:"google_places"});
         continue;
       }
+
+      // 候補として通った店舗だけPlace Detailsを取得（コスト節約）
+      const gDetails=await googlePlaceDetails(env,g.id);
+      const gp=gDetails.ok&&gDetails.place?gDetails.place:g;
+      gName=t(googlePlaceName(gp)||gName,150);
+      gAddress=t(googlePlaceAddress(gp)||gAddress,500);
 
       // Find best secondary match for richer fields.
       const secondary=findBestSecondaryForGoogle({
@@ -2543,51 +2647,51 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
         osmPlaces:osmCandidates
       });
 
-      let sourceKind="google_places";
+      let sourceKind=gDetails.ok?"google_place_details":"google_places";
       let sourcePlace=null;
       let address=gAddress;
-      let phone="";
-      let website="";
+      let phone=t(googlePhone(gp)||"",80);
+      let website=googleWebsite(gp);
       let instagram="";
-      let hours="";
-      let holiday="";
-      let features=googlePlaceTypes(g).join("、");
-      let genre=/night_club|night club/.test(googlePlaceTypes(g).join(" ").toLowerCase())
+      let hours=t(googleOpeningHours(gp)||"",800);
+      let holiday=t(googleHolidayFromHours(gp)||"",180);
+      let features=googleDetailFeatures(gp)||googlePlaceTypes(gp).join("、");
+      let genre=/night_club|night club/.test(googlePlaceTypes(gp).join(" ").toLowerCase())
         ?"ナイトクラブ"
-        :/pub/.test(googlePlaceTypes(g).join(" ").toLowerCase())
+        :/pub/.test(googlePlaceTypes(gp).join(" ").toLowerCase())
           ?"パブ"
-          :/karaoke/.test(googlePlaceTypes(g).join(" ").toLowerCase())
+          :/karaoke/.test(googlePlaceTypes(gp).join(" ").toLowerCase())
             ?"カラオケBAR":"BAR";
       let sourceCount=1;
       let matchScore=googlePlaceScore(g,{name:gName,area:pair.area});
 
       if(secondary){
-        sourceKind=`google_places+${secondary.kind}`;
+        sourceKind=`${gDetails.ok?"google_place_details":"google_places"}+${secondary.kind}`;
         sourceCount=2;
         matchScore=Math.max(matchScore,Number(secondary.score||0));
         sourcePlace=secondary.place;
 
         if(secondary.kind==="foursquare"){
           address=fsqAddress(sourcePlace)||address;
-          phone=fsqPhone(sourcePlace)||"";
-          website=fsqWebsite(sourcePlace)||"";
+          phone=phone||fsqPhone(sourcePlace)||"";
+          website=website||fsqWebsite(sourcePlace)||"";
           instagram=fsqInstagram(sourcePlace)||"";
-          hours=fsqHours(sourcePlace)||"";
+          hours=hours||fsqHours(sourcePlace)||"";
           features=extractFeaturesInfo(`${fsqCategories(sourcePlace).join(" ")} ${gName}`)||features;
         }else if(secondary.kind==="geoapify"){
           address=geoAddress(sourcePlace)||address;
-          phone=geoPhone(sourcePlace)||"";
-          website=geoWebsite(sourcePlace)||"";
+          phone=phone||geoPhone(sourcePlace)||"";
+          website=website||geoWebsite(sourcePlace)||"";
           instagram=geoInstagram(sourcePlace)||"";
-          hours=geoHours(sourcePlace)||"";
+          hours=hours||geoHours(sourcePlace)||"";
           features=extractFeaturesInfo(`${geoCategories(sourcePlace).join(" ")} ${gName}`)||features;
         }else if(secondary.kind==="osm"){
           address=osmAddress(sourcePlace)||address;
-          phone=osmPhone(sourcePlace)||"";
-          website=osmWebsite(sourcePlace)||"";
+          phone=phone||osmPhone(sourcePlace)||"";
+          website=website||osmWebsite(sourcePlace)||"";
           instagram=osmInstagram(sourcePlace)||"";
-          hours=osmHours(sourcePlace)||"";
-          holiday=osmHoliday(sourcePlace)||"";
+          hours=hours||osmHours(sourcePlace)||"";
+          holiday=holiday||osmHoliday(sourcePlace)||"";
           features=osmFeatures(sourcePlace)||features;
         }
       }
@@ -2639,7 +2743,8 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
       const webMeta=website?await fetchOfficialWebsiteMetadata(website):
         {ok:false,price:{min:null,max:null},hours:"",holiday:"",features:""};
 
-      let sourceMin=null,sourceMax=null;
+      const googlePrice=googlePriceInfo(gp);
+      let sourceMin=googlePrice.min,sourceMax=googlePrice.max;
       if(sourcePlace){
         if(secondary?.kind==="foursquare"){
           const p=extractPriceInfo(JSON.stringify(sourcePlace));
@@ -4155,35 +4260,6 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
         `).bind(id).run();
 
         return json({ok:true,shop_id:id,listing_status:"published"});
-      }
-
-      if(url.pathname==="/api/admin/leads/auto-listed" && request.method==="GET"){
-        const r=await env.DB.prepare(`
-          SELECT id,slug,name,area,genre,address,instagram,is_published,listing_status,published_at,updated_at
-          FROM shops
-          WHERE COALESCE(listing_status,'published')='provisional'
-          ORDER BY id DESC
-          LIMIT 300
-        `).all();
-        return json({ok:true,shops:r.results||[]});
-      }
-
-      const autoListedAction=url.pathname.match(/^\/api\/admin\/leads\/auto-listed\/(\d+)\/(unpublish|restore)$/);
-      if(autoListedAction && request.method==="POST"){
-        const id=Number(autoListedAction[1]);
-        const action=autoListedAction[2];
-        const shop=await env.DB.prepare(`
-          SELECT id,name,listing_status,is_published FROM shops WHERE id=? LIMIT 1
-        `).bind(id).first();
-        if(!shop)return json({ok:false,error:"NOT_FOUND"},{status:404});
-        if(normalizeListingStatus(shop.listing_status)!=="provisional"){
-          return json({ok:false,error:"NOT_PROVISIONAL_LISTING"},{status:400});
-        }
-        const published=action==="restore"?1:0;
-        await env.DB.prepare(`
-          UPDATE shops SET is_published=?,updated_at=CURRENT_TIMESTAMP WHERE id=?
-        `).bind(published,id).run();
-        return json({ok:true,shop_id:id,is_published:published,action});
       }
 
       if(url.pathname==="/api/admin/shops" && request.method==="GET"){
