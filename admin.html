@@ -1918,7 +1918,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.68 画面圧縮調整
+   KBN ADMIN ver1.70 画面圧縮調整
    ============================================================ */
 
 /* 上部 welcome とログアウトをコンパクト化 */
@@ -2147,7 +2147,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.68 — 独自掲載 Instagram DM
+   KBN ADMIN ver1.70 — 独自掲載 Instagram DM
    ============================================================ */
 .shop-provisional-dm{
   border:1px solid #6c5a2b!important;
@@ -2531,6 +2531,260 @@ html,body{max-width:100%;overflow-x:hidden}
 }
 </style>
 
+
+<style id="kbn-lead-organize-v170">
+/* ===== BAR開拓 全体をスマートに整理 ===== */
+#tab-leads .lead-smart-head{
+  margin-bottom:10px!important;
+}
+#tab-leads .lead-smart-head h2{
+  margin-bottom:3px!important;
+}
+#tab-leads .lead-smart-head p{
+  margin:0!important;
+  font-size:.76rem!important;
+  line-height:1.5!important;
+}
+
+/* 上部のモード切替を固定感のある小型タブに */
+#tab-leads .lead-smart-tabs{
+  position:sticky;
+  top:58px;
+  z-index:22;
+  margin:8px 0 12px!important;
+  padding:5px!important;
+  border:1px solid #303b47!important;
+  border-radius:12px!important;
+  background:rgba(8,13,19,.94)!important;
+  backdrop-filter:blur(12px);
+}
+#tab-leads .lead-smart-tab{
+  min-height:38px!important;
+  border-radius:8px!important;
+  font-size:.7rem!important;
+}
+
+/* 各機能カードの余白を圧縮 */
+#tab-leads .lead-smart-card{
+  padding:12px!important;
+  margin-bottom:10px!important;
+  border-radius:14px!important;
+}
+#tab-leads .lead-smart-card-head{
+  gap:9px!important;
+  margin-bottom:8px!important;
+}
+#tab-leads .lead-smart-icon{
+  width:44px!important;
+  height:44px!important;
+  min-width:44px!important;
+  border-radius:11px!important;
+  font-size:1.2rem!important;
+}
+#tab-leads .lead-smart-card-head h3{
+  margin:0 0 2px!important;
+  font-size:1rem!important;
+}
+#tab-leads .lead-smart-card-head p{
+  margin:0!important;
+  font-size:.7rem!important;
+  line-height:1.45!important;
+}
+
+/* 自動開拓を最重要カードとして簡潔に */
+#leadSmartAuto{
+  border-color:#70591f!important;
+  background:linear-gradient(180deg,rgba(239,196,90,.065),#0d151e)!important;
+}
+#leadSmartAuto .lead-smart-card-head{
+  margin-bottom:5px!important;
+}
+#leadSmartAuto .lead-smart-card-head p{
+  max-width:520px;
+}
+
+/* 自動開拓内の説明文を短く見せる */
+#leadSmartAuto > p,
+#leadSmartAuto .auto-discovery-description{
+  font-size:.7rem!important;
+  line-height:1.5!important;
+  color:#929ca7!important;
+}
+
+/* 既存店舗更新 + 自動メンテナンスをひとつのまとまりに見せる */
+#leadSmartRefresh,
+.kbn-maintenance-card{
+  border-color:#34404c!important;
+  background:#0d141c!important;
+}
+
+/* 既存店舗更新の大カードを小さく */
+#leadSmartRefresh .lead-smart-card-head{
+  margin-bottom:6px!important;
+}
+#leadSmartRefresh .lead-smart-actions{
+  gap:7px!important;
+}
+#leadSmartRefresh button{
+  min-height:42px!important;
+}
+#bulkRevalidateStatus,
+#maintenanceStatus{
+  margin-top:7px!important;
+  font-size:.68rem!important;
+  line-height:1.45!important;
+}
+#bulkRevalidateProgress,
+#autoDiscoverProgress{
+  margin-top:8px!important;
+}
+
+/* 自動メンテナンス：操作を2〜3列でコンパクト */
+.kbn-maintenance-card .kbn-maintenance-grid{
+  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  gap:6px!important;
+  margin-top:8px!important;
+}
+.kbn-maintenance-card .kbn-maintenance-grid button{
+  min-height:40px!important;
+  padding:0 7px!important;
+  font-size:.68rem!important;
+}
+.kbn-maintenance-card .kbn-schedule-note{
+  display:grid!important;
+  grid-template-columns:auto 1fr!important;
+  gap:7px!important;
+  margin-top:8px!important;
+  padding:8px 9px!important;
+  border-radius:9px!important;
+}
+.kbn-maintenance-card .kbn-schedule-note b{
+  font-size:.68rem!important;
+}
+.kbn-maintenance-card .kbn-schedule-note span{
+  font-size:.64rem!important;
+}
+
+/* 通知一覧は折りたたんで必要時だけ見る */
+.kbn-alert-head{
+  margin-top:10px!important;
+}
+.kbn-alert-head b{
+  font-size:.78rem!important;
+}
+#kbnAlertsList{
+  max-height:300px;
+  overflow:auto;
+  padding-right:2px;
+}
+.kbn-alert-item{
+  padding:9px!important;
+}
+.kbn-alert-item b{
+  font-size:.72rem!important;
+}
+.kbn-alert-item p{
+  font-size:.65rem!important;
+  line-height:1.45!important;
+}
+.kbn-alert-actions button{
+  min-height:30px!important;
+  padding:0 7px!important;
+  font-size:.61rem!important;
+}
+
+/* 手動検索・候補保存はさらに小さく */
+#leadSmartManual,
+#tab-leads .lead-results-card,
+#tab-leads .lead-add-card{
+  padding:11px!important;
+}
+#leadSmartManual .lead-smart-card-head{
+  margin-bottom:4px!important;
+}
+
+/* 自動掲載店舗一覧を見やすく圧縮 */
+.auto-listed-panel{
+  margin-top:10px!important;
+  padding-top:10px!important;
+}
+.auto-listed-head{
+  margin-bottom:7px!important;
+}
+.auto-listed-head b{
+  font-size:.78rem!important;
+}
+.auto-listed-head small{
+  font-size:.62rem!important;
+}
+.auto-listed-list{
+  gap:6px!important;
+}
+.auto-listed-item{
+  padding:8px 9px!important;
+  border-radius:10px!important;
+}
+.auto-listed-main b{
+  font-size:.76rem!important;
+}
+.auto-listed-main small{
+  font-size:.61rem!important;
+}
+.auto-listed-actions{
+  gap:4px!important;
+}
+.auto-listed-actions button{
+  min-height:31px!important;
+  padding:0 7px!important;
+  font-size:.61rem!important;
+}
+
+/* 大きすぎるボタンを抑える */
+#tab-leads .btn-gold,
+#tab-leads .lead-smart-primary{
+  min-height:44px!important;
+  font-size:.76rem!important;
+}
+
+/* 小見出し */
+.kbn-lead-section-label{
+  margin:14px 2px 7px;
+  color:#efc45a;
+  font-size:.64rem;
+  font-weight:900;
+  letter-spacing:.12em;
+}
+.kbn-lead-section-label span{
+  color:#707b86;
+  font-weight:700;
+  letter-spacing:0;
+  margin-left:6px;
+}
+
+/* mobile */
+@media(max-width:680px){
+  #tab-leads .lead-smart-tabs{
+    top:50px!important;
+  }
+  .kbn-maintenance-card .kbn-maintenance-grid{
+    grid-template-columns:1fr 1fr!important;
+  }
+  .kbn-maintenance-card .kbn-maintenance-grid button:last-child{
+    grid-column:1/-1;
+  }
+  .auto-listed-item{
+    grid-template-columns:1fr!important;
+  }
+  .auto-listed-actions{
+    width:100%;
+    flex-wrap:wrap;
+  }
+  .auto-listed-actions button{
+    flex:1 1 auto;
+  }
+}
+</style>
+
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
 <div id="topMaintenanceResult" class="top-maintenance-result">
@@ -2543,7 +2797,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver1.68</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver1.70</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -2627,7 +2881,7 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
 
   <div id="buttonHealthNote" class="version-note">
-    ver1.68：よく使う操作の先頭に自動開拓を配置
+    ver1.70：よく使う操作の先頭に自動開拓を配置
   </div>
 </section>
 
@@ -2877,7 +3131,8 @@ html,body{max-width:100%;overflow-x:hidden}
     <button type="button" class="lead-smart-tab active" data-lead-jump="refresh">↻ 既存更新</button>
   </div>
 
-  <div id="leadSmartRefresh" class="lead-smart-card lead-smart-featured">
+  <div class="kbn-lead-section-label">02 掲載後メンテナンス <span>既存店舗の精度維持</span></div>
+<div id="leadSmartRefresh" class="lead-smart-card lead-smart-featured">
     <div class="lead-smart-card-head">
       <div class="lead-smart-icon">↻</div>
       <div>
@@ -2921,7 +3176,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div id="refreshExistingStatus" class="auto-discovery-status lead-smart-message"></div>
     <div id="repairExistingAreasStatus" class="auto-discovery-status lead-smart-message"></div>
-    <small class="version-note">ver1.68：自動掲載店舗一覧・掲載取り消しに対応。Google Places優先検索は継続します。</small>
+    <small class="version-note">ver1.70：自動掲載店舗一覧・掲載取り消しに対応。Google Places優先検索は継続します。</small>
   </div>
 
   
@@ -2930,12 +3185,13 @@ html,body{max-width:100%;overflow-x:hidden}
       <div class="lead-smart-icon">✓</div>
       <div>
         <h3>自動メンテナンス</h3>
-        <p>情報不足・閉業チェック・予約開拓・新店舗通知をまとめて管理します。</p>
+        <p>掲載後の情報補完・閉業確認・予約実行・通知をまとめて管理。</p>
       </div>
     </div>
     <div class="kbn-maintenance-grid">
       <button type="button" id="refreshMissingInfoBtn">情報不足を補完</button>
       <button type="button" id="checkClosedShopsBtn">閉業チェック</button>
+      <button type="button" id="refreshInstagramBtn">Instagram補完</button>
     </div>
     <div class="kbn-schedule-note">
       <b>予約自動開拓</b>
@@ -2949,6 +3205,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <div id="kbnAlertsList" class="kbn-alert-list"><small>通知を読み込み中...</small></div>
   </div>
 
+<div class="kbn-lead-section-label">03 手動検索 <span>必要なときだけ</span></div>
 <div id="leadSmartManual" class="lead-smart-card">
     <button type="button" class="lead-smart-collapse-head" data-lead-collapse="manual" aria-expanded="false">
       <span class="lead-smart-icon">⌕</span>
@@ -2984,7 +3241,8 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
   </div>
 
-  <div id="leadSmartAuto" class="lead-smart-card">
+  <div class="kbn-lead-section-label">01 自動開拓 <span>普段はここだけでOK</span></div>
+<div id="leadSmartAuto" class="lead-smart-card">
     <button type="button" class="lead-smart-collapse-head" data-lead-collapse="auto" aria-expanded="false">
       <span class="lead-smart-icon">⚡</span>
       <span>
@@ -2994,7 +3252,7 @@ html,body{max-width:100%;overflow-x:hidden}
       <i>›</i>
     </button>
     <div class="lead-smart-collapse-body" data-lead-panel="auto" hidden>
-      <p class="lead-smart-helper">県内45市町村 × 14ジャンルを順番に検索し、重複を避けながら高精度で独自掲載します。</p>
+      <p class="lead-smart-helper">県内を順番に検索し、重複を避けながら高精度で自動掲載します。</p>
       <button type="button" id="autoDiscoverBtn" class="btn-gold lead-smart-primary">Google優先で高精度自動掲載</button>
       <div id="autoDiscoverStatus" class="auto-discovery-status"></div>
       <div id="autoDiscoverProgress" class="kbn-work-progress" hidden>
@@ -8011,6 +8269,35 @@ document.addEventListener("click",async(e)=>{
     }finally{
       actionBtn.disabled=false;
       actionBtn.textContent=oldText;
+    }
+    return;
+  }
+
+  if(e.target?.id==="refreshInstagramBtn"){
+    const btn=e.target,st=document.getElementById("maintenanceStatus");
+    btn.disabled=true;btn.textContent="検索中...";
+    try{
+      let after=0,checked=0,updated=0,candidates=0,loops=0;
+      while(loops<30){
+        const d=await api("/api/admin/leads/refresh-instagram",{
+          method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({limit:20,after_id:after})
+        });
+        checked+=Number(d.checked||0);
+        updated+=(d.updated||[]).length;
+        candidates+=(d.candidates||[]).length;
+        after=Number(d.next_after_id||after);
+        loops++;
+        if(st)st.textContent=`Instagram確認中… ${checked}店舗 / 自動保存 ${updated} / 要確認 ${candidates}`;
+        if(!d.has_more)break;
+      }
+      if(st)st.textContent=`Instagram補完完了：${checked}店舗確認 / ${updated}店舗を自動保存 / ${candidates}件は要確認`;
+      await window.loadShops?.();
+      await window.loadAutoListedShops?.();
+    }catch(err){
+      if(st)st.textContent="Instagram補完に失敗: "+(err?.message||"");
+    }finally{
+      btn.disabled=false;btn.textContent="Instagram補完";
     }
     return;
   }
