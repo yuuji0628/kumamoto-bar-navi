@@ -3320,6 +3320,7 @@ html,body{max-width:100%;overflow-x:hidden}
       <button type="button" id="refreshMissingInfoBtn">情報不足を補完</button>
       <button type="button" id="checkClosedShopsBtn">閉業チェック</button>
       <button type="button" id="refreshInstagramBtn">Instagram補完</button>
+      <button type="button" id="refreshImagesBtn">画像補完</button>
     </div>
     <div class="kbn-schedule-note kbn-schedule-editor">
       <div class="kbn-schedule-title">
@@ -8407,6 +8408,30 @@ document.addEventListener("click",async(e)=>{
       actionBtn.disabled=false;
       actionBtn.textContent=oldText;
     }
+    return;
+  }
+
+
+  if(e.target?.id==="refreshImagesBtn"){
+    const btn=e.target,st=document.getElementById("maintenanceStatus");
+    btn.disabled=true;btn.textContent="画像検索中...";
+    try{
+      let after=0,checked=0,updated=0,loops=0;
+      while(loops<50){
+        const d=await api("/api/admin/leads/refresh-images",{
+          method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({limit:20,after_id:after})
+        });
+        checked+=Number(d.checked||0); updated+=(d.updated||[]).length;
+        after=Number(d.next_after_id||after); loops++;
+        if(st)st.textContent=`画像補完中… ${checked}店舗確認 / ${updated}店舗に画像追加`;
+        if(!d.has_more)break;
+      }
+      if(st)st.textContent=`画像補完完了：${checked}店舗確認 / ${updated}店舗に画像を追加`;
+      await window.loadShops?.(); await window.loadAutoListedShops?.();
+    }catch(err){
+      if(st)st.textContent="画像補完に失敗: "+(err?.message||"");
+    }finally{btn.disabled=false;btn.textContent="画像補完";}
     return;
   }
 
