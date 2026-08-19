@@ -1918,7 +1918,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.56 画面圧縮調整
+   KBN ADMIN ver1.57 画面圧縮調整
    ============================================================ */
 
 /* 上部 welcome とログアウトをコンパクト化 */
@@ -2147,7 +2147,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.56 — 独自掲載 Instagram DM
+   KBN ADMIN ver1.57 — 独自掲載 Instagram DM
    ============================================================ */
 .shop-provisional-dm{
   border:1px solid #6c5a2b!important;
@@ -2255,9 +2255,31 @@ html,body{max-width:100%;overflow-x:hidden}
  .auto-listed-actions button{width:100%}
 }
 </style>
+
+<style id="kbn-dashboard-auto-v157">
+.dashboard-auto-discover-card{
+  border-color:#8a6c28!important;
+  background:linear-gradient(180deg,rgba(239,196,90,.14),#111922)!important;
+}
+.dashboard-auto-discover-card .dashboard-icon{
+  color:#efc45a;
+}
+.dashboard-auto-discover-card .dashboard-copy b{
+  color:#fff;
+}
+.dashboard-auto-discover-card .dashboard-copy small{
+  color:#c8ced5;
+}
+@media(max-width:680px){
+  .dashboard-auto-discover-card{
+    min-height:96px!important;
+  }
+}
+</style>
+
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
-<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.56</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
+<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.57</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
 
 
 
@@ -2295,20 +2317,20 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
 
   <div class="dashboard-primary-grid">
+    <button type="button" class="dashboard-primary-card dashboard-auto-discover-card" data-go-tab="leads" data-open-lead-auto="1">
+      <span class="dashboard-icon">⚡</span>
+      <span class="dashboard-copy">
+        <b>自動開拓</b>
+        <small>Google優先でBAR候補を自動検索・掲載</small>
+      </span>
+      <span class="dashboard-arrow">›</span>
+    </button>
+
     <button type="button" class="dashboard-primary-card" data-go-tab="shops">
       <span class="dashboard-icon">🏪</span>
       <span class="dashboard-copy">
         <b>店舗を管理</b>
         <small><strong id="dashShopCount">-</strong> 店舗</small>
-      </span>
-      <span class="dashboard-arrow">›</span>
-    </button>
-
-    <button type="button" class="dashboard-primary-card" data-go-tab="leads">
-      <span class="dashboard-icon">🔎</span>
-      <span class="dashboard-copy">
-        <b>新しいBARを開拓</b>
-        <small>自動開拓・手動検索</small>
       </span>
       <span class="dashboard-arrow">›</span>
     </button>
@@ -2339,7 +2361,7 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
 
   <div id="buttonHealthNote" class="version-note">
-    ver1.43：成功/失敗表示＋履歴折りたたみ＋実写風画像内蔵
+    ver1.57：よく使う操作の先頭に自動開拓を配置
   </div>
 </section>
 
@@ -2623,7 +2645,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <div id="bulkRevalidateStatus" class="auto-discovery-status lead-smart-message"></div>
     <div id="refreshExistingStatus" class="auto-discovery-status lead-smart-message"></div>
     <div id="repairExistingAreasStatus" class="auto-discovery-status lead-smart-message"></div>
-    <small class="version-note">ver1.56：自動掲載店舗一覧・掲載取り消しに対応。Google Places優先検索は継続します。</small>
+    <small class="version-note">ver1.57：自動掲載店舗一覧・掲載取り消しに対応。Google Places優先検索は継続します。</small>
   </div>
 
   <div id="leadSmartManual" class="lead-smart-card">
@@ -7348,4 +7370,19 @@ document.addEventListener("click",e=>{
 // 初回表示・自動開拓後に一覧を更新
 document.addEventListener("DOMContentLoaded",()=>setTimeout(()=>window.loadAutoListedShops?.(),500));
 </script>
+
+<script id="kbn-dashboard-auto-v157-js">
+document.addEventListener("click",(e)=>{
+  const btn=e.target.closest("[data-open-lead-auto='1']");
+  if(!btn)return;
+  setTimeout(()=>{
+    const head=document.querySelector('[data-lead-collapse="auto"]');
+    const panel=document.querySelector('[data-lead-panel="auto"]');
+    if(panel)panel.removeAttribute("hidden");
+    if(head)head.setAttribute("aria-expanded","true");
+    document.getElementById("leadSmartAuto")?.scrollIntoView({behavior:"smooth",block:"start"});
+  },80);
+});
+</script>
+
 </body></html>
