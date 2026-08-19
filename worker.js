@@ -1336,7 +1336,7 @@ out center tags;
         method:"POST",
         headers:{
           "Content-Type":"application/x-www-form-urlencoded;charset=UTF-8",
-          "User-Agent":"KUMAMOTO-BAR-NAVI/1.59"
+          "User-Agent":"KUMAMOTO-BAR-NAVI/1.60"
         },
         body:"data="+encodeURIComponent(query)
       });
@@ -1584,7 +1584,7 @@ async function fetchOfficialWebsiteMetadata(url){
   }
   try{
     const r=await fetch(target,{
-      headers:{"User-Agent":"Mozilla/5.0 KUMAMOTO-BAR-NAVI/1.59"}
+      headers:{"User-Agent":"Mozilla/5.0 KUMAMOTO-BAR-NAVI/1.60"}
     });
     if(!r.ok)return {ok:false,price:{min:null,max:null},hours:"",holiday:"",features:""};
     const ct=String(r.headers.get("content-type")||"");
@@ -1768,7 +1768,7 @@ function extractPublicMetadata(lead){
   };
 }
 
-async function refreshIndependentListings(env,{limit=10,afterId=0,revalidate=false,force=false}={}){
+async function refreshIndependentListings(env,{limit=10,afterId=0,revalidate=false,force=false,missingOnly=false}={}){
   const max=Math.max(1,Math.min(Number(limit)||10,30));
   const cursor=Math.max(0,Number(afterId)||0);
 
@@ -1778,9 +1778,17 @@ async function refreshIndependentListings(env,{limit=10,afterId=0,revalidate=fal
     FROM shops
     WHERE COALESCE(listing_status,'published')='provisional'
       AND id>?
+      AND (
+        ?=0 OR
+        COALESCE(TRIM(hours),'')='' OR
+        COALESCE(TRIM(phone),'')='' OR
+        budget_min IS NULL OR budget_max IS NULL OR
+        COALESCE(TRIM(address),'')='' OR
+        COALESCE(TRIM(features),'')=''
+      )
     ORDER BY id ASC
     LIMIT ?
-  `).bind(cursor,max).all();
+  `).bind(cursor,missingOnly?1:0,max).all();
 
   const rows=r.results||[];
   const updated=[],unchanged=[],failed=[];
@@ -1936,8 +1944,16 @@ async function refreshIndependentListings(env,{limit=10,afterId=0,revalidate=fal
     SELECT id FROM shops
     WHERE COALESCE(listing_status,'published')='provisional'
       AND id>?
+      AND (
+        ?=0 OR
+        COALESCE(TRIM(hours),'')='' OR
+        COALESCE(TRIM(phone),'')='' OR
+        budget_min IS NULL OR budget_max IS NULL OR
+        COALESCE(TRIM(address),'')='' OR
+        COALESCE(TRIM(features),'')=''
+      )
     ORDER BY id ASC LIMIT 1
-  `).bind(nextAfterId).first();
+  `).bind(nextAfterId,missingOnly?1:0).first();
 
   return {
     ok:true,checked:rows.length,updated,unchanged,failed,
@@ -3194,6 +3210,123 @@ async function renderLocalSeoAreaPage(env,slug){
 </main><nav class="public-bottom-nav"><a href="/"><span>⌂</span><b>ホーム</b></a><a href="/bars.html"><span>⌕</span><b>BARを探す</b></a><a href="/jobs.html"><span>▣</span><b>求人</b></a><a href="/listing-form.html"><span>＋</span><b>店舗掲載</b></a></nav></body></html>`;
 }
 
+async function ensureKbnAlertsTable(env){
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS kbn_admin_alerts(
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      alert_type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT,
+      shop_id INTEGER,
+      is_read INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run();
+}
+
+async function createKbnAlert(env,{type,title,message="",shopId=null}){
+  await ensureKbnAlertsTable(env);
+  await env.DB.prepare(`
+    INSERT INTO kbn_admin_alerts(alert_type,title,message,shop_id,is_read,created_at)
+    VALUES(?,?,?,?,0,CURRENT_TIMESTAMP)
+  `).bind(
+    String(type||"info").slice(0,50),
+    String(title||"お知らせ").slice(0,180),
+    String(message||"").slice(0,2000),
+    shopId===null?null:Number(shopId)
+  ).run();
+}
+
+async function notifyCreatedShops(env,created,sourceLabel="自動開拓"){
+  const rows=Array.isArray(created)?created:[];
+  for(const x of rows.slice(0,30)){
+    await createKbnAlert(env,{
+      type:"new_shop",
+      title:`新店舗を自動掲載: ${x.name||"店舗"}`,
+      message:`${sourceLabel}で新しい店舗をKBN独自掲載しました。${x.area?` エリア: ${x.area}`:""}${x.genre?` / ${x.genre}`:""}`,
+      shopId:x.shop_id||null
+    });
+  }
+}
+
+async function checkClosedShops(env,{limit=20,afterId=0}={}){
+  await ensureKbnAlertsTable(env);
+  const max=Math.max(1,Math.min(Number(limit)||20,50));
+  const cursor=Math.max(0,Number(afterId)||0);
+  const r=await env.DB.prepare(`
+    SELECT id,name,area,address,listing_status,is_published
+    FROM shops
+    WHERE is_published=1 AND id>?
+    ORDER BY id ASC
+    LIMIT ?
+  `).bind(cursor,max).all();
+
+  const checked=[],closed=[],failed=[];
+  for(const shop of (r.results||[])){
+    try{
+      const found=await findGooglePlaceForShop(env,{
+        name:String(shop.name||"").replace(/^【KBN独自掲載】/,"").trim(),
+        area:shop.area||"熊本"
+      });
+      if(!found.ok||!found.matched){
+        failed.push({id:shop.id,name:shop.name,reason:found.error||"GOOGLE_MATCH_NOT_FOUND"});
+        continue;
+      }
+      const details=await googlePlaceDetails(env,found.place?.id);
+      const gp=details.ok&&details.place?details.place:found.place;
+      const status=String(gp?.businessStatus||"").toUpperCase();
+      checked.push({id:shop.id,name:shop.name,business_status:status||"UNKNOWN"});
+      if(status==="CLOSED_PERMANENTLY"||status==="CLOSED_TEMPORARILY"){
+        const already=await env.DB.prepare(`
+          SELECT id FROM kbn_admin_alerts
+          WHERE alert_type='closed_shop' AND shop_id=? AND is_read=0
+          LIMIT 1
+        `).bind(shop.id).first();
+        if(!already){
+          await createKbnAlert(env,{
+            type:"closed_shop",
+            title:status==="CLOSED_PERMANENTLY"?"閉業の可能性":"一時休業の可能性",
+            message:`Google Placesで「${shop.name}」が${status==="CLOSED_PERMANENTLY"?"閉業":"一時休業"}として確認されました。掲載状態を確認してください。`,
+            shopId:shop.id
+          });
+        }
+        closed.push({id:shop.id,name:shop.name,business_status:status});
+      }
+    }catch(e){
+      failed.push({id:shop.id,name:shop.name,reason:String(e?.message||e||"UNKNOWN").slice(0,300)});
+    }
+  }
+
+  const nextAfterId=(r.results||[]).length?Number(r.results[r.results.length-1].id||0):cursor;
+  const more=await env.DB.prepare(`
+    SELECT id FROM shops WHERE is_published=1 AND id>? ORDER BY id ASC LIMIT 1
+  `).bind(nextAfterId).first();
+
+  return {ok:true,checked,closed,failed,next_after_id:nextAfterId,has_more:!!more};
+}
+
+async function runScheduledKbnMaintenance(env){
+  const fakeRequest=new Request("https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/api/internal/scheduled");
+  const discovery=await autoDiscover(env,fakeRequest,5,5,1);
+  if(discovery?.created?.length){
+    await notifyCreatedShops(env,discovery.created,"予約自動開拓");
+  }
+
+  const missing=await refreshIndependentListings(env,{
+    limit:20,afterId:0,revalidate:true,force:false,missingOnly:true
+  });
+
+  const closed=await checkClosedShops(env,{limit:20,afterId:0});
+
+  await createKbnAlert(env,{
+    type:"scheduled_summary",
+    title:"予約メンテナンス完了",
+    message:`新規掲載 ${discovery?.created?.length||0}店舗 / 情報補完 ${missing?.updated?.length||0}店舗 / 閉業候補 ${closed?.closed?.length||0}店舗`
+  });
+
+  return {discovery,missing,closed};
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url=new URL(request.url);
@@ -4097,7 +4230,8 @@ ${urls.map(x=>`  <url>
             limit:Math.max(1,Math.min(Number(x.limit)||10,30)),
             afterId:Math.max(0,Number(x.after_id)||0),
             revalidate:!!x.revalidate,
-            force:!!x.force
+            force:!!x.force,
+            missingOnly:!!x.missing_only
           });
 
           return json(result,{headers:{"Cache-Control":"no-store"}});
@@ -4119,6 +4253,9 @@ ${urls.map(x=>`  <url>
 
         try{
           const result=await autoDiscover(env,request,max,pairs,perPair);
+          if(result?.created?.length){
+            ctx.waitUntil(notifyCreatedShops(env,result.created,"自動開拓").catch(e=>console.error("new shop alert failed",e)));
+          }
           return json(result,{headers:{"Cache-Control":"no-store"}});
         }catch(e){
           console.error("auto-discover failed",e);
@@ -4128,6 +4265,53 @@ ${urls.map(x=>`  <url>
             message:String(e?.message||e||"UNKNOWN_ERROR").slice(0,500)
           },{status:500,headers:{"Cache-Control":"no-store"}});
         }
+      }
+
+
+      if(url.pathname==="/api/admin/leads/refresh-missing" && request.method==="POST"){
+        let x={};try{x=await request.json()}catch{}
+        try{
+          const result=await refreshIndependentListings(env,{
+            limit:Math.max(1,Math.min(Number(x.limit)||20,30)),
+            afterId:Math.max(0,Number(x.after_id)||0),
+            revalidate:true,
+            missingOnly:true
+          });
+          return json(result,{headers:{"Cache-Control":"no-store"}});
+        }catch(e){
+          return json({ok:false,error:"REFRESH_MISSING_FAILED",message:String(e?.message||e).slice(0,500)},{status:500});
+        }
+      }
+
+      if(url.pathname==="/api/admin/leads/check-closed" && request.method==="POST"){
+        let x={};try{x=await request.json()}catch{}
+        try{
+          const result=await checkClosedShops(env,{
+            limit:Math.max(1,Math.min(Number(x.limit)||20,50)),
+            afterId:Math.max(0,Number(x.after_id)||0)
+          });
+          return json(result,{headers:{"Cache-Control":"no-store"}});
+        }catch(e){
+          return json({ok:false,error:"CLOSED_CHECK_FAILED",message:String(e?.message||e).slice(0,500)},{status:500});
+        }
+      }
+
+      if(url.pathname==="/api/admin/alerts" && request.method==="GET"){
+        await ensureKbnAlertsTable(env);
+        const r=await env.DB.prepare(`
+          SELECT id,alert_type,title,message,shop_id,is_read,created_at
+          FROM kbn_admin_alerts
+          ORDER BY id DESC LIMIT 50
+        `).all();
+        const unread=(r.results||[]).filter(x=>!Number(x.is_read)).length;
+        return json({ok:true,alerts:r.results||[],unread});
+      }
+
+      const alertReadRoute=url.pathname.match(/^\/api\/admin\/alerts\/(\d+)\/read$/);
+      if(alertReadRoute && request.method==="POST"){
+        await ensureKbnAlertsTable(env);
+        await env.DB.prepare("UPDATE kbn_admin_alerts SET is_read=1 WHERE id=?").bind(Number(alertReadRoute[1])).run();
+        return json({ok:true});
       }
 
 if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
@@ -4690,5 +4874,11 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
     }
 
     return assetResponse;
-  }
+  },
+
+  async scheduled(event, env, ctx){
+    ctx.waitUntil(
+      runScheduledKbnMaintenance(env)
+        .catch(e=>console.error("scheduled KBN maintenance failed",e))
+    );
 };
