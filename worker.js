@@ -235,6 +235,105 @@ function kbnBase64ToUtf8(value){
   return new TextDecoder().decode(bytes);
 }
 
+
+function kbnNormalizeJstTime(value){
+  const m=String(value||"").trim().match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+  if(!m)return "";
+  return `${m[1]}:${m[2]}`;
+}
+
+function kbnJstTimeToCron(value){
+  const time=kbnNormalizeJstTime(value);
+  if(!time)return "";
+  const [h,m]=time.split(":").map(Number);
+  const utcMinutes=(h*60+m-9*60+24*60)%(24*60);
+  const uh=Math.floor(utcMinutes/60);
+  const um=utcMinutes%60;
+  return `${um} ${uh} * * *`;
+}
+
+function kbnCronToJstTime(cron){
+  const m=String(cron||"").trim().match(/^(\d{1,2})\s+(\d{1,2})\s+\*\s+\*\s+\*$/);
+  if(!m)return "";
+  const minute=Number(m[1]),hour=Number(m[2]);
+  if(minute<0||minute>59||hour<0||hour>23)return "";
+  const jstMinutes=(hour*60+minute+9*60)%(24*60);
+  const jh=Math.floor(jstMinutes/60);
+  const jm=jstMinutes%60;
+  return `${String(jh).padStart(2,"0")}:${String(jm).padStart(2,"0")}`;
+}
+
+function kbnSortJstTimes(times){
+  return [...times].sort((a,b)=>{
+    const [ah,am]=a.split(":").map(Number);
+    const [bh,bm]=b.split(":").map(Number);
+    return ah*60+am-(bh*60+bm);
+  });
+}
+
+async function kbnReadWranglerFromGithub(env){
+  const c=kbnGithubConfig(env);
+  const d=await kbnGithubApi(
+    env,
+    `/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc?ref=${encodeURIComponent(c.branch)}`
+  );
+  if(Array.isArray(d)||d.type!=="file")throw new Error("WRANGLER_NOT_A_FILE");
+  const content=kbnBase64ToUtf8(d.content||"");
+  let config;
+  try{config=JSON.parse(content)}
+  catch{throw new Error("WRANGLER_JSON_PARSE_FAILED")}
+  return {config,sha:d.sha,content,c};
+}
+
+async function kbnUpdateAutoSchedule(env,timesJst){
+  const normalized=timesJst.map(kbnNormalizeJstTime);
+  if(normalized.length!==3||normalized.some(x=>!x)){
+    const e=new Error("SCHEDULE_REQUIRES_3_VALID_JST_TIMES");
+    e.status=400;
+    throw e;
+  }
+  if(new Set(normalized).size!==3){
+    const e=new Error("SCHEDULE_TIMES_MUST_BE_UNIQUE");
+    e.status=400;
+    throw e;
+  }
+
+  const times=kbnSortJstTimes(normalized);
+  const crons=times.map(kbnJstTimeToCron);
+  const {config,sha,c}=await kbnReadWranglerFromGithub(env);
+
+  config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
+  config.triggers.crons=crons;
+  config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
+  config.vars.KBN_CONFIG_VERSION="1.76";
+  config.vars.KBN_SCHEDULE_UPDATED_AT=new Date().toISOString();
+
+  const content=JSON.stringify(config,null,2)+"\n";
+  const result=await kbnGithubApi(
+    env,
+    `/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,
+    {
+      method:"PUT",
+      headers:{"content-type":"application/json"},
+      body:JSON.stringify({
+        message:`admin: update auto discovery schedule ${times.join(" / ")} JST`,
+        content:kbnUtf8ToBase64(content),
+        sha,
+        branch:c.branch
+      })
+    }
+  );
+
+  return {
+    ok:true,
+    times_jst:times,
+    crons,
+    commit_sha:result.commit?.sha||"",
+    commit_url:result.commit?.html_url||"",
+    message:"予約時間をGitHubへ反映しました。Cloudflareの自動デプロイ後にCronが更新されます。"
+  };
+}
+
 async function kbnGithubApi(env,path,init={}){
   const c=kbnGithubConfig(env);
   if(!c.token){
@@ -1336,7 +1435,7 @@ out center tags;
         method:"POST",
         headers:{
           "Content-Type":"application/x-www-form-urlencoded;charset=UTF-8",
-          "User-Agent":"KUMAMOTO-BAR-NAVI/1.75"
+          "User-Agent":"KUMAMOTO-BAR-NAVI/1.76"
         },
         body:"data="+encodeURIComponent(query)
       });
@@ -1585,7 +1684,7 @@ async function fetchOfficialWebsiteMetadata(url){
   }
   try{
     const r=await fetch(target,{
-      headers:{"User-Agent":"Mozilla/5.0 KUMAMOTO-BAR-NAVI/1.75"}
+      headers:{"User-Agent":"Mozilla/5.0 KUMAMOTO-BAR-NAVI/1.76"}
     });
     if(!r.ok)return empty;
     const ct=String(r.headers.get("content-type")||"");
@@ -4151,6 +4250,44 @@ ${urls.map(x=>`  <url>
             error:e.message,
             editable_files:KBN_GITHUB_EDITABLE_FILES
           });
+        }
+      }
+
+      if(url.pathname==="/api/admin/auto-schedule" && request.method==="GET"){
+        try{
+          const {config}=await kbnReadWranglerFromGithub(env);
+          const raw=Array.isArray(config?.triggers?.crons)?config.triggers.crons:[];
+          const times=kbnSortJstTimes(raw.map(kbnCronToJstTime).filter(Boolean));
+          return json({
+            ok:true,
+            timezone:"Asia/Tokyo",
+            times_jst:times,
+            crons:raw
+          });
+        }catch(e){
+          return json({
+            ok:false,
+            error:"AUTO_SCHEDULE_READ_FAILED",
+            message:String(e?.message||e).slice(0,500)
+          },{status:e?.status||502});
+        }
+      }
+
+      if(url.pathname==="/api/admin/auto-schedule" && request.method==="PUT"){
+        let x={};
+        try{x=await request.json()}
+        catch{return json({ok:false,error:"INVALID_JSON"},{status:400})}
+
+        try{
+          const times=Array.isArray(x.times_jst)?x.times_jst:[];
+          const result=await kbnUpdateAutoSchedule(env,times);
+          return json(result);
+        }catch(e){
+          return json({
+            ok:false,
+            error:"AUTO_SCHEDULE_UPDATE_FAILED",
+            message:String(e?.message||e).slice(0,500)
+          },{status:e?.status||500});
         }
       }
 
