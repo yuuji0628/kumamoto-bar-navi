@@ -1918,7 +1918,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.59 画面圧縮調整
+   KBN ADMIN ver1.60 画面圧縮調整
    ============================================================ */
 
 /* 上部 welcome とログアウトをコンパクト化 */
@@ -2147,7 +2147,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.59 — 独自掲載 Instagram DM
+   KBN ADMIN ver1.60 — 独自掲載 Instagram DM
    ============================================================ */
 .shop-provisional-dm{
   border:1px solid #6c5a2b!important;
@@ -2313,9 +2313,30 @@ html,body{max-width:100%;overflow-x:hidden}
 }
 </style>
 
+
+<style id="kbn-maintenance-v160">
+.kbn-maintenance-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:13px}
+.kbn-maintenance-grid button,.kbn-alert-head button{
+  min-height:44px;border:1px solid #46515d;border-radius:11px;background:#101821;color:#fff;font-weight:850
+}
+.kbn-schedule-note{
+  display:flex;justify-content:space-between;gap:10px;align-items:center;margin-top:10px;padding:10px 12px;
+  border:1px solid #55451f;border-radius:11px;background:rgba(239,196,90,.06)
+}
+.kbn-schedule-note b{color:#efc45a;font-size:.78rem}.kbn-schedule-note span{color:#aeb6c0;font-size:.7rem}
+.kbn-alert-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:14px}
+.kbn-alert-head button{min-height:34px;padding:0 12px;font-size:.72rem}
+.kbn-alert-list{display:grid;gap:7px;margin-top:8px}
+.kbn-alert-item{padding:10px;border:1px solid #303b47;border-radius:11px;background:#0a1118}
+.kbn-alert-item.unread{border-color:#7a6127;background:rgba(239,196,90,.055)}
+.kbn-alert-item b{display:block;font-size:.78rem}.kbn-alert-item p{margin:4px 0;color:#aeb6c0;font-size:.7rem;line-height:1.5}
+.kbn-alert-item small{color:#74808c;font-size:.62rem}
+@media(max-width:640px){.kbn-maintenance-grid{grid-template-columns:1fr}.kbn-schedule-note{align-items:flex-start;flex-direction:column}}
+</style>
+
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
-<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.59</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
+<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.60</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
 
 
 
@@ -2397,7 +2418,7 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
 
   <div id="buttonHealthNote" class="version-note">
-    ver1.59：よく使う操作の先頭に自動開拓を配置
+    ver1.60：よく使う操作の先頭に自動開拓を配置
   </div>
 </section>
 
@@ -2691,10 +2712,35 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div id="refreshExistingStatus" class="auto-discovery-status lead-smart-message"></div>
     <div id="repairExistingAreasStatus" class="auto-discovery-status lead-smart-message"></div>
-    <small class="version-note">ver1.59：自動掲載店舗一覧・掲載取り消しに対応。Google Places優先検索は継続します。</small>
+    <small class="version-note">ver1.60：自動掲載店舗一覧・掲載取り消しに対応。Google Places優先検索は継続します。</small>
   </div>
 
-  <div id="leadSmartManual" class="lead-smart-card">
+  
+  <div class="lead-smart-card kbn-maintenance-card">
+    <div class="lead-smart-card-head">
+      <div class="lead-smart-icon">✓</div>
+      <div>
+        <h3>自動メンテナンス</h3>
+        <p>情報不足・閉業チェック・予約開拓・新店舗通知をまとめて管理します。</p>
+      </div>
+    </div>
+    <div class="kbn-maintenance-grid">
+      <button type="button" id="refreshMissingInfoBtn">情報不足を補完</button>
+      <button type="button" id="checkClosedShopsBtn">閉業チェック</button>
+    </div>
+    <div class="kbn-schedule-note">
+      <b>予約自動開拓</b>
+      <span>毎日 3:10ごろ（日本時間）に自動実行</span>
+    </div>
+    <div id="maintenanceStatus" class="auto-discovery-status"></div>
+    <div class="kbn-alert-head">
+      <b>新店舗・運営通知</b>
+      <button type="button" id="reloadKbnAlertsBtn">更新</button>
+    </div>
+    <div id="kbnAlertsList" class="kbn-alert-list"><small>通知を読み込み中...</small></div>
+  </div>
+
+<div id="leadSmartManual" class="lead-smart-card">
     <button type="button" class="lead-smart-collapse-head" data-lead-collapse="manual" aria-expanded="false">
       <span class="lead-smart-icon">⌕</span>
       <span>
@@ -7536,6 +7582,87 @@ document.addEventListener("click",(e)=>{
     document.getElementById("leadSmartAuto")?.scrollIntoView({behavior:"smooth",block:"start"});
   },80);
 });
+</script>
+
+
+<script id="kbn-maintenance-v160-js">
+window.loadKbnAlerts=async function(){
+  const box=document.getElementById("kbnAlertsList");
+  if(!box)return;
+  try{
+    const d=await api("/api/admin/alerts");
+    const rows=Array.isArray(d.alerts)?d.alerts:[];
+    box.innerHTML=rows.length?rows.slice(0,12).map(x=>`
+      <div class="kbn-alert-item ${Number(x.is_read)?"":"unread"}" data-alert-id="${x.id}">
+        <b>${esc(x.title||"お知らせ")}</b>
+        <p>${esc(x.message||"")}</p>
+        <small>${esc(x.created_at||"")}</small>
+      </div>`).join(""):"<small>新しい通知はありません。</small>";
+  }catch(e){
+    box.innerHTML=`<small>通知を取得できませんでした: ${esc(e?.message||"")}</small>`;
+  }
+};
+
+document.addEventListener("click",async(e)=>{
+  if(e.target?.id==="reloadKbnAlertsBtn"){
+    await window.loadKbnAlerts();
+  }
+  if(e.target?.id==="refreshMissingInfoBtn"){
+    const btn=e.target,st=document.getElementById("maintenanceStatus");
+    btn.disabled=true;btn.textContent="補完中...";
+    try{
+      let after=0,updated=0,checked=0,loops=0;
+      while(loops<30){
+        const d=await api("/api/admin/leads/refresh-missing",{
+          method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({limit:20,after_id:after})
+        });
+        checked+=Number(d.checked||0);
+        updated+=(d.updated||[]).length;
+        after=Number(d.next_after_id||after);
+        loops++;
+        if(st)st.textContent=`情報不足を確認中… ${checked}店舗確認 / ${updated}店舗補完`;
+        if(!d.has_more)break;
+      }
+      if(st)st.textContent=`情報不足チェック完了：${checked}店舗確認 / ${updated}店舗を補完`;
+    }catch(err){
+      if(st)st.textContent="情報補完に失敗: "+(err?.message||"");
+    }finally{btn.disabled=false;btn.textContent="情報不足を補完";}
+  }
+  if(e.target?.id==="checkClosedShopsBtn"){
+    const btn=e.target,st=document.getElementById("maintenanceStatus");
+    btn.disabled=true;btn.textContent="確認中...";
+    try{
+      let after=0,checked=0,closed=0,loops=0;
+      while(loops<30){
+        const d=await api("/api/admin/leads/check-closed",{
+          method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({limit:20,after_id:after})
+        });
+        checked+=(d.checked||[]).length;
+        closed+=(d.closed||[]).length;
+        after=Number(d.next_after_id||after);
+        loops++;
+        if(st)st.textContent=`閉業チェック中… ${checked}店舗確認 / ${closed}件検出`;
+        if(!d.has_more)break;
+      }
+      if(st)st.textContent=`閉業チェック完了：${checked}店舗確認 / ${closed}件を通知`;
+      await window.loadKbnAlerts();
+    }catch(err){
+      if(st)st.textContent="閉業チェックに失敗: "+(err?.message||"");
+    }finally{btn.disabled=false;btn.textContent="閉業チェック";}
+  }
+
+  const item=e.target.closest(".kbn-alert-item[data-alert-id]");
+  if(item&&!item.classList.contains("unread")===false){
+    try{
+      await api(`/api/admin/alerts/${item.dataset.alertId}/read`,{method:"POST"});
+      item.classList.remove("unread");
+    }catch{}
+  }
+});
+
+document.addEventListener("DOMContentLoaded",()=>setTimeout(()=>window.loadKbnAlerts?.(),700));
 </script>
 
 </body></html>
