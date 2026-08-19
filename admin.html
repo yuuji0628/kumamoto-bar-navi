@@ -1918,7 +1918,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.43 画面圧縮調整
+   KBN ADMIN ver1.48 画面圧縮調整
    ============================================================ */
 
 /* 上部 welcome とログアウトをコンパクト化 */
@@ -2147,7 +2147,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.43 — 独自掲載 Instagram DM
+   KBN ADMIN ver1.48 — 独自掲載 Instagram DM
    ============================================================ */
 .shop-provisional-dm{
   border:1px solid #6c5a2b!important;
@@ -2162,7 +2162,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
-<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.43</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
+<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.48</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
 
 
 
@@ -2494,12 +2494,12 @@ html,body{max-width:100%;overflow-x:hidden}
 <div class="lead-mode-kicker">おすすめ</div>
 <div class="existing-refresh-box lead-mode-card">
   <strong>🔄 既存店舗を更新</strong>
-  <small>独自掲載店舗をOpenStreetMap / Overpassで確認し、見つからない店舗はGeoapifyで補完します。さらに店舗公式Webを確認し、店名・エリアの一致度が高い情報だけ住所・電話・営業時間・定休日・料金・特徴へ反映します。</small>
+  <small>Google Placesで店舗候補を最初に照合し、Foursquare・Geoapify・OpenStreetMapで再確認します。保存する店舗情報は補助APIや店舗公式Webを優先し、信頼度が高い情報だけ反映します。</small>
   <button type="button" id="bulkRevalidateBtn" class="btn-gold">独自掲載を一括で複合精査</button>
   <button type="button" id="refreshExistingBtn" class="admin-secondary-btn">10店舗だけ更新</button>
   <button type="button" id="repairExistingAreasBtn" class="admin-secondary-btn">既存店舗のエリアを修正</button>
   <div id="bulkRevalidateStatus" class="auto-discovery-status"></div>
-  <small class="version-note">※ ver1.43から高精度更新は GOOGLE_PLACES_API_KEY を使用します。SerpApiの月間検索枠は消費しません。</small>
+  <small class="version-note">※ ver1.48：Google Placesを第一照合に使用し、Foursquare → Geoapify → OSMへ自動フォールバックします。GOOGLE_PLACES_API_KEY未設定でも補助APIだけで動作します。</small>
   <div id="refreshExistingStatus" class="auto-discovery-status"></div>
   <div id="repairExistingAreasStatus" class="auto-discovery-status"></div>
 </div>
@@ -2587,7 +2587,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <small id="leadSearchConfigNote">検索API設定を確認中...</small><small class="lead-follow-filter-note">✓ フォロー済みアカウントは検索結果から自動除外します。</small>
     <strong>⚡ 自動開拓</strong>
 <small>県内45市町村 × 14ジャンルを順番に検索。1組最大2店舗に抑えて地域を分散し、公開情報に少しでも料金表記があれば、料金・営業時間などをできるだけ自動反映します。</small>
-<button type="button" id="autoDiscoverBtn" class="btn-gold">複数APIで高精度自動掲載</button>
+<button type="button" id="autoDiscoverBtn" class="btn-gold">Google優先で高精度自動掲載</button>
 <div id="autoDiscoverStatus" class="auto-discovery-status"></div>
 </div>
 
@@ -5865,14 +5865,14 @@ window.bulkRevalidateIndependentListings=async function(){
 
   if(!confirm(
     "現在のKBN独自掲載店舗をすべて再精査します。\n\n"+
-    "OpenStreetMap / Overpass → Geoapify → 店舗公式Webの順に照合し、信頼度が高い場合のみ住所・電話番号・営業時間・定休日・料金・特徴を更新します。\n"+
+    "Google Placesで存在・店名・エリアを確認し、Foursquare・Geoapify・OSM・店舗公式Webで再確認します。信頼度が高い場合のみ住所・電話番号・営業時間・定休日・料金・特徴を更新します。\n"+
     "誤って価格欄に入った電話番号なども再判定します。\n\n"+
     "店舗数によっては少し時間がかかります。実行しますか？"
   ))return;
 
   btn.disabled=true;
   btn.textContent="複合精査中...";
-  if(status)status.innerHTML="<b>0店舗確認済み</b><br><small>OSM＋Geoapifyの照合を開始しています...</small>";
+  if(status)status.innerHTML="<b>0店舗確認済み</b><br><small>Google Places＋補助APIの照合を開始しています...</small>";
 
   let afterId=0;
   let checked=0;
@@ -6016,9 +6016,9 @@ window.refreshExistingIndependentListings=async function(){
 
 window.runAutoDiscovery=async function(){
   const btn=$("autoDiscoverBtn"), status=$("autoDiscoverStatus");
-  if(!confirm("Foursquareをメイン検索に、Geoapify・OSMを照合へ使います。複数ソースで店名・住所・BAR判定・連絡先を確認し、信頼度が基準を超えた店舗だけKBN独自掲載します。\n\n実行しますか？"))return;
+  if(!confirm("Google Placesを第一検索にして、Foursquare・Geoapify・OSMでクロスチェックします。複数ソースで一致したBARだけ高精度でKBN独自掲載します。\n\n実行しますか？"))return;
   btn.disabled=true;btn.textContent="自動開拓中...";
-  if(status)status.textContent="Foursquare検索 → Geoapify/OSM照合 → BAR判定 → 住所/連絡先確認 → 重複確認 → 自動掲載を実行しています...";
+  if(status)status.textContent="Google Places検索 → Foursquare/Geoapify/OSM照合 → BAR判定 → 住所/連絡先確認 → 重複確認 → 自動掲載を実行しています...";
   try{
     const d=await api("/api/admin/leads/auto-discover",{
       method:"POST",
@@ -6045,7 +6045,7 @@ window.runAutoDiscovery=async function(){
     if(status)status.textContent="自動開拓に失敗しました: "+(e?.message||"UNKNOWN_ERROR");
     alert("自動開拓できませんでした: "+(e?.message||"UNKNOWN_ERROR"));
   }finally{
-    btn.disabled=false;btn.textContent="複数APIで高精度自動掲載";
+    btn.disabled=false;btn.textContent="Google優先で高精度自動掲載";
   }
 };
 
