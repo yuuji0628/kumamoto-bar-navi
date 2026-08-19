@@ -1336,7 +1336,7 @@ out center tags;
         method:"POST",
         headers:{
           "Content-Type":"application/x-www-form-urlencoded;charset=UTF-8",
-          "User-Agent":"KUMAMOTO-BAR-NAVI/1.50"
+          "User-Agent":"KUMAMOTO-BAR-NAVI/1.52"
         },
         body:"data="+encodeURIComponent(query)
       });
@@ -1584,7 +1584,7 @@ async function fetchOfficialWebsiteMetadata(url){
   }
   try{
     const r=await fetch(target,{
-      headers:{"User-Agent":"Mozilla/5.0 KUMAMOTO-BAR-NAVI/1.50"}
+      headers:{"User-Agent":"Mozilla/5.0 KUMAMOTO-BAR-NAVI/1.52"}
     });
     if(!r.ok)return {ok:false,price:{min:null,max:null},hours:"",holiday:"",features:""};
     const ct=String(r.headers.get("content-type")||"");
@@ -2224,6 +2224,14 @@ function autoListingDuplicateScore(existing,{name,address,phone,instagram}){
   return false;
 }
 
+
+async function shopSlugExists(env,slug){
+  const row=await env.DB.prepare(
+    "SELECT id,name FROM shops WHERE slug=? LIMIT 1"
+  ).bind(slug).first();
+  return row||null;
+}
+
 function strictAutoListingGate({
   name,area,address,genre,categories=[],amenity="",
   phone,website,instagram,
@@ -2365,6 +2373,23 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=20,perPairLimit
         "掲載内容の修正・削除をご希望の場合は店舗様専用ページよりご連絡ください。";
 
       const slug=slugify(name);
+
+      // Final DB-level duplicate guard.
+      // A shop can have a slightly different display name/address and still collapse
+      // to the same slug. Skip it instead of letting D1 UNIQUE(slug) abort the whole run.
+      const slugExisting=await shopSlugExists(env,slug);
+      if(slugExisting){
+        rejected.push({
+          name,
+          area:pair.area,
+          reason:"DUPLICATE_SLUG",
+          source:"google_places",
+          existing_shop_id:Number(slugExisting.id||0),
+          existing_shop_name:String(slugExisting.name||"")
+        });
+        continue;
+      }
+
       const ins=await env.DB.prepare(`
         INSERT INTO shops(
           slug,name,name_kana,area,address,hours,holiday,instagram,genre,features,description,
