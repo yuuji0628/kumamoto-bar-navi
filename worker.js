@@ -1336,7 +1336,7 @@ out center tags;
         method:"POST",
         headers:{
           "Content-Type":"application/x-www-form-urlencoded;charset=UTF-8",
-          "User-Agent":"KUMAMOTO-BAR-NAVI/1.62"
+          "User-Agent":"KUMAMOTO-BAR-NAVI/1.66"
         },
         body:"data="+encodeURIComponent(query)
       });
@@ -1584,7 +1584,7 @@ async function fetchOfficialWebsiteMetadata(url){
   }
   try{
     const r=await fetch(target,{
-      headers:{"User-Agent":"Mozilla/5.0 KUMAMOTO-BAR-NAVI/1.62"}
+      headers:{"User-Agent":"Mozilla/5.0 KUMAMOTO-BAR-NAVI/1.66"}
     });
     if(!r.ok)return {ok:false,price:{min:null,max:null},hours:"",holiday:"",features:""};
     const ct=String(r.headers.get("content-type")||"");
@@ -4526,6 +4526,35 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
         `).bind(id).run();
 
         return json({ok:true,shop_id:id,listing_status:"published"});
+      }
+
+      if(url.pathname==="/api/admin/leads/auto-listed" && request.method==="GET"){
+        const r=await env.DB.prepare(`
+          SELECT id,slug,name,area,genre,address,instagram,is_published,listing_status,published_at,updated_at
+          FROM shops
+          WHERE COALESCE(listing_status,'published')='provisional'
+          ORDER BY id DESC
+          LIMIT 300
+        `).all();
+        return json({ok:true,shops:r.results||[]});
+      }
+
+      const autoListedAction=url.pathname.match(/^\/api\/admin\/leads\/auto-listed\/(\d+)\/(unpublish|restore)$/);
+      if(autoListedAction && request.method==="POST"){
+        const id=Number(autoListedAction[1]);
+        const action=autoListedAction[2];
+        const shop=await env.DB.prepare(`
+          SELECT id,name,listing_status,is_published FROM shops WHERE id=? LIMIT 1
+        `).bind(id).first();
+        if(!shop)return json({ok:false,error:"NOT_FOUND"},{status:404});
+        if(normalizeListingStatus(shop.listing_status)!=="provisional"){
+          return json({ok:false,error:"NOT_PROVISIONAL_LISTING"},{status:400});
+        }
+        const published=action==="restore"?1:0;
+        await env.DB.prepare(`
+          UPDATE shops SET is_published=?,updated_at=CURRENT_TIMESTAMP WHERE id=?
+        `).bind(published,id).run();
+        return json({ok:true,shop_id:id,is_published:published,action});
       }
 
       if(url.pathname==="/api/admin/shops" && request.method==="GET"){
