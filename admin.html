@@ -1918,7 +1918,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.63 画面圧縮調整
+   KBN ADMIN ver1.65 画面圧縮調整
    ============================================================ */
 
 /* 上部 welcome とログアウトをコンパクト化 */
@@ -2147,7 +2147,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.63 — 独自掲載 Instagram DM
+   KBN ADMIN ver1.65 — 独自掲載 Instagram DM
    ============================================================ */
 .shop-provisional-dm{
   border:1px solid #6c5a2b!important;
@@ -2371,6 +2371,46 @@ html,body{max-width:100%;overflow-x:hidden}
 }
 </style>
 
+
+<style id="kbn-auto-dm-v164">
+.auto-listed-actions .dm-create{
+  border-color:#7e6427!important;color:#efc45a!important;
+}
+.auto-listed-actions .dm-jump{
+  border-color:#6d3b76!important;color:#dda5ef!important;
+}
+.auto-dm-modal{
+  position:fixed;inset:0;z-index:10020;background:rgba(0,0,0,.78);
+  display:grid;place-items:center;padding:16px;overflow:auto
+}
+.auto-dm-modal[hidden]{display:none!important}
+.auto-dm-panel{
+  width:min(680px,100%);max-height:88vh;overflow:auto;
+  background:#0e151e;border:1px solid #3a4552;border-radius:18px;padding:16px
+}
+.auto-dm-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.auto-dm-head h3{margin:0;font-size:1.1rem}
+.auto-dm-head p{margin:4px 0 0;color:#929ca7;font-size:.7rem}
+.auto-dm-close{
+  width:36px;height:36px;border:1px solid #46515d;border-radius:9px;background:#111922;color:#fff;font-weight:900
+}
+#autoDmText{
+  width:100%;min-height:310px;box-sizing:border-box;margin-top:12px;padding:12px;
+  border:1px solid #3b4652;border-radius:12px;background:#091018;color:#edf0f4;
+  font:inherit;font-size:.82rem;line-height:1.65;resize:vertical
+}
+.auto-dm-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.auto-dm-actions button{
+  min-height:45px;border:1px solid #46515d;border-radius:10px;background:#111922;color:#fff;font-weight:900
+}
+.auto-dm-actions .primary{border-color:#9a772a;background:#e4b744;color:#101010}
+.auto-dm-note{margin:9px 0 0;color:#7f8994;font-size:.65rem;line-height:1.5}
+@media(max-width:640px){
+  .auto-listed-actions{flex-wrap:wrap}
+  .auto-dm-actions{grid-template-columns:1fr}
+}
+</style>
+
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
 <div id="topMaintenanceResult" class="top-maintenance-result">
@@ -2381,7 +2421,7 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
   <button type="button" id="topMaintenanceOpenBtn">見る</button>
 </div>
-<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.63</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
+<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.65</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
 
 
 
@@ -2463,7 +2503,7 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
 
   <div id="buttonHealthNote" class="version-note">
-    ver1.63：よく使う操作の先頭に自動開拓を配置
+    ver1.65：よく使う操作の先頭に自動開拓を配置
   </div>
 </section>
 
@@ -2757,7 +2797,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div id="refreshExistingStatus" class="auto-discovery-status lead-smart-message"></div>
     <div id="repairExistingAreasStatus" class="auto-discovery-status lead-smart-message"></div>
-    <small class="version-note">ver1.63：自動掲載店舗一覧・掲載取り消しに対応。Google Places優先検索は継続します。</small>
+    <small class="version-note">ver1.65：自動掲載店舗一覧・掲載取り消しに対応。Google Places優先検索は継続します。</small>
   </div>
 
   
@@ -2775,7 +2815,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div class="kbn-schedule-note">
       <b>予約自動開拓</b>
-      <span>毎日 3:10ごろ（日本時間）に自動実行</span>
+      <span>毎日 3:10 / 11:10 / 19:10ごろ（日本時間）に自動実行</span>
     </div>
     <div id="maintenanceStatus" class="auto-discovery-status"></div>
     <div class="kbn-alert-head">
@@ -7569,6 +7609,10 @@ window.loadAutoListedShops=async function(){
         </div>
         <div class="auto-listed-actions">
           <button type="button" onclick="window.open('${publicUrl}','_blank','noopener')" ${on?"":"disabled"}>詳細</button>
+          ${cleanInstagramHandle(x.instagram||"")?`
+            <button type="button" class="dm-create" onclick="openAutoListedDm(${Number(x.id||0)})">DM作成</button>
+            <button type="button" class="dm-jump" onclick="jumpToInstagramDm(${Number(x.id||0)})">DMへ</button>
+          `:""}
           <button type="button" onclick="editAutoListedShop(${Number(x.id||0)})">編集</button>
           ${on?`<button type="button" class="cancel" onclick="cancelAutoListing(${Number(x.id||0)},'${esc(String(x.name||"").replace(/'/g,"&#39;"))}')">掲載取消</button>`:`<button type="button" onclick="restoreAutoListing(${Number(x.id||0)})">再掲載</button>`}
         </div>
@@ -7578,6 +7622,91 @@ window.loadAutoListedShops=async function(){
     if(summary)summary.textContent="一覧を取得できませんでした";
     wrap.innerHTML=`<div class="auto-listed-empty">${esc(e?.message||"読み込みエラー")}</div>`;
   }
+};
+
+
+function findAutoListedShop(id){
+  const all=Array.isArray(shops)?shops:[];
+  return all.find(x=>Number(x.id)===Number(id))||null;
+}
+
+function buildAutoListedOwnerDm(shop){
+  const rawName=String(shop?.name||"店舗").trim();
+  const name=rawName
+    .replace(/^【KBN独自掲載】/,"")
+    .replace(/\s*[（(]\s*@[A-Za-z0-9._]+\s*[）)]\s*$/,"")
+    .replace(/\s+@[A-Za-z0-9._]+\s*$/,"")
+    .trim()||"店舗";
+  const handle=cleanInstagramHandle(shop?.instagram||"");
+  const slug=String(shop?.slug||"").trim();
+  const publicUrl=slug
+    ? `${location.origin}/shop.html?slug=${encodeURIComponent(slug)}`
+    : location.origin;
+
+  return `${name} 様
+${handle?`@${handle}`:""}
+
+突然のDM失礼いたします。
+熊本県内のBAR情報を紹介している「KUMAMOTO BAR NAVI」です🍸
+
+このたび、Web上で公開されている店舗情報を参考に、
+${name} 様を「KBN独自掲載」として当サイトでご紹介させていただきました。
+
+▼掲載ページ
+${publicUrl}
+
+掲載内容に相違・変更がある場合や、修正・掲載取り消しをご希望の場合は、このDMへご返信ください。
+
+また、もし掲載内容に問題がございませんでしたら、
+ぜひ「KBN正式掲載店舗」としてご掲載させていただけないでしょうか。
+
+正式掲載では、店舗様に内容をご確認いただいたうえで、
+営業時間・料金・サービス内容などを、より正確な情報としてご案内できます。
+
+ご迷惑でなければ、こちらから正式掲載への切り替えをご案内させていただければと思っております。
+ご検討いただけましたら、このDMへ一言ご返信いただけますと幸いです。
+
+熊本のBARをもっと見つけやすく、地域のお店を盛り上げていければと思っております。
+どうぞよろしくお願いいたします。
+
+KUMAMOTO BAR NAVI
+${location.origin}`;
+}
+
+window.openAutoListedDm=function(id){
+  const shop=findAutoListedShop(id);
+  if(!shop){
+    alert("店舗情報を取得できませんでした。");
+    return;
+  }
+  const handle=cleanInstagramHandle(shop.instagram||"");
+  if(!handle){
+    alert("この店舗にはInstagramアカウントが登録されていません。");
+    return;
+  }
+
+  const modal=document.getElementById("autoDmModal");
+  const text=document.getElementById("autoDmText");
+  const label=document.getElementById("autoDmShopLabel");
+  if(!modal||!text)return;
+
+  text.value=buildAutoListedOwnerDm(shop);
+  if(label)label.textContent=`${shop.name||"店舗"} / @${handle}`;
+  modal.dataset.shopId=String(id);
+  modal.removeAttribute("hidden");
+};
+
+window.jumpToInstagramDm=function(id){
+  const shop=findAutoListedShop(id);
+  if(!shop)return;
+  const handle=cleanInstagramHandle(shop.instagram||"");
+  if(!handle){
+    alert("この店舗にはInstagramアカウントが登録されていません。");
+    return;
+  }
+
+  // Instagramのメッセージ導線。環境によりプロフィールへ遷移する場合があります。
+  window.open(`https://ig.me/m/${encodeURIComponent(handle)}`,"_blank","noopener");
 };
 
 window.cancelAutoListing=async function(id,name){
@@ -7817,6 +7946,52 @@ document.addEventListener("click",async(e)=>{
 });
 
 document.addEventListener("DOMContentLoaded",()=>setTimeout(()=>window.loadKbnAlerts?.(),450));
+</script>
+
+
+<div id="autoDmModal" class="auto-dm-modal" hidden>
+  <div class="auto-dm-panel" role="dialog" aria-modal="true" aria-labelledby="autoDmTitle">
+    <div class="auto-dm-head">
+      <div>
+        <h3 id="autoDmTitle">独自掲載のお知らせDM</h3>
+        <p id="autoDmShopLabel">店舗名</p>
+      </div>
+      <button type="button" class="auto-dm-close" id="autoDmCloseBtn">×</button>
+    </div>
+    <textarea id="autoDmText" readonly></textarea>
+    <div class="auto-dm-actions">
+      <button type="button" id="autoDmCopyBtn">DM文をコピー</button>
+      <button type="button" id="autoDmJumpBtn" class="primary">InstagramのDMへ</button>
+    </div>
+    <p class="auto-dm-note">DM文をコピーしてからInstagramのメッセージ画面を開きます。Instagram側の仕様により、プロフィール画面に遷移する場合があります。</p>
+  </div>
+</div>
+
+
+<script id="kbn-auto-dm-v164-js">
+document.addEventListener("click",async(e)=>{
+  if(e.target?.id==="autoDmCloseBtn"||e.target?.id==="autoDmModal"){
+    document.getElementById("autoDmModal")?.setAttribute("hidden","");
+    return;
+  }
+
+  if(e.target?.id==="autoDmCopyBtn"){
+    const text=document.getElementById("autoDmText")?.value||"";
+    const ok=await copyTextSafe(text);
+    e.target.textContent=ok?"✓ コピーしました":"コピーできませんでした";
+    setTimeout(()=>{if(e.target)e.target.textContent="DM文をコピー";},1400);
+    return;
+  }
+
+  if(e.target?.id==="autoDmJumpBtn"){
+    const modal=document.getElementById("autoDmModal");
+    const id=Number(modal?.dataset.shopId||0);
+    const text=document.getElementById("autoDmText")?.value||"";
+    await copyTextSafe(text);
+    if(id)window.jumpToInstagramDm(id);
+    return;
+  }
+});
 </script>
 
 </body></html>
