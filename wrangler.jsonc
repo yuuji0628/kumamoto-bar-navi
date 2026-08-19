@@ -27,5 +27,10 @@
       "binding": "IMAGES",
       "bucket_name": "kumamoto-bar-navi-images"
     }
-  ]
+  ],
+  "triggers": {
+    "crons": [
+      "10 18 * * *"
+    ]
+  }
 }
