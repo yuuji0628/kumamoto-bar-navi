@@ -1918,7 +1918,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.52 画面圧縮調整
+   KBN ADMIN ver1.53 画面圧縮調整
    ============================================================ */
 
 /* 上部 welcome とログアウトをコンパクト化 */
@@ -2147,7 +2147,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.52 — 独自掲載 Instagram DM
+   KBN ADMIN ver1.53 — 独自掲載 Instagram DM
    ============================================================ */
 .shop-provisional-dm{
   border:1px solid #6c5a2b!important;
@@ -2162,7 +2162,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
-<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.52</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
+<section class="admin-welcome"><div><p class="eyebrow">KBN ADMIN ver1.53</p><h1>運営管理</h1><p>店舗・画像・求人・掲載申込みをまとめて管理できます。</p></div><button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button></section>
 
 
 
@@ -2499,7 +2499,7 @@ html,body{max-width:100%;overflow-x:hidden}
   <button type="button" id="refreshExistingBtn" class="admin-secondary-btn">10店舗だけ更新</button>
   <button type="button" id="repairExistingAreasBtn" class="admin-secondary-btn">既存店舗のエリアを修正</button>
   <div id="bulkRevalidateStatus" class="auto-discovery-status"></div>
-  <small class="version-note">※ ver1.52 Google診断版：Google Placesだけを使用し、各検索ごとの生ヒット数・BAR判定数・エラー内容まで管理画面に表示します。</small>
+  <small class="version-note">※ ver1.53 Google診断版：Google Placesだけを使用し、各検索ごとの生ヒット数・BAR判定数・エラー内容まで管理画面に表示します。</small>
   <div id="refreshExistingStatus" class="auto-discovery-status"></div>
   <div id="repairExistingAreasStatus" class="auto-discovery-status"></div>
 </div>
@@ -2587,7 +2587,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <small id="leadSearchConfigNote">検索API設定を確認中...</small><small class="lead-follow-filter-note">✓ フォロー済みアカウントは検索結果から自動除外します。</small>
     <strong>⚡ 自動開拓</strong>
 <small>県内45市町村 × 14ジャンルを順番に検索。1組最大2店舗に抑えて地域を分散し、公開情報に少しでも料金表記があれば、料金・営業時間などをできるだけ自動反映します。</small>
-<button type="button" id="autoDiscoverBtn" class="btn-gold">Google診断つきで自動開拓</button>
+<button type="button" id="autoDiscoverBtn" class="btn-gold">Google優先で高精度自動掲載</button>
 <div id="autoDiscoverStatus" class="auto-discovery-status"></div>
 </div>
 
@@ -6016,9 +6016,9 @@ window.refreshExistingIndependentListings=async function(){
 
 window.runAutoDiscovery=async function(){
   const btn=$("autoDiscoverBtn"), status=$("autoDiscoverStatus");
-  if(!confirm("Google Placesだけで検索し、生ヒット数・BAR判定後・重複除外後・自動掲載数・APIエラーを表示します。補助APIはこの診断版では使用しません。\n\n実行しますか？"))return;
+  if(!confirm("Google Placesで店舗候補を見つけ、Foursquare・Geoapify・OpenStreetMap・店舗公式Webで営業時間・電話・料金・特徴などを補完して自動掲載します。\n\n実行しますか？"))return;
   btn.disabled=true;btn.textContent="自動開拓中...";
-  if(status)status.textContent="Google Places診断中 → 生ヒット数取得 → BAR判定 → 熊本県内住所確認 → 重複確認 → 自動掲載...";
+  if(status)status.textContent="Google Places検索 → Foursquare / Geoapify / OSM照合 → 公式Web補完 → 重複確認 → 自動掲載...";
   try{
     const d=await api("/api/admin/leads/auto-discover",{
       method:"POST",
@@ -6047,7 +6047,7 @@ window.runAutoDiscovery=async function(){
         自動掲載：${c.length}件<br>
         APIエラー：${errRows.length?`${errRows.length}件`:"なし"}<br>重複除外：${Number(d.reject_summary?.DUPLICATE||0)+Number(d.reject_summary?.DUPLICATE_SLUG||0)}件
         <details style="margin-top:10px">
-          <summary style="cursor:pointer;font-weight:800">検索診断を見る</summary>
+          <summary style="cursor:pointer;font-weight:800">検索詳細を見る</summary>
           <div style="margin-top:8px">${diagRows||"診断データなし"}</div>
         </details>`;
     }
@@ -6057,7 +6057,7 @@ window.runAutoDiscovery=async function(){
     if(status)status.textContent="自動開拓に失敗しました: "+(e?.message||"UNKNOWN_ERROR");
     alert("自動開拓できませんでした: "+(e?.message||"UNKNOWN_ERROR"));
   }finally{
-    btn.disabled=false;btn.textContent="Google診断つきで自動開拓";
+    btn.disabled=false;btn.textContent="Google優先で高精度自動掲載";
   }
 };
 
