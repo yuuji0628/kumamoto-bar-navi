@@ -1,4 +1,4 @@
-<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>店舗掲載申込み｜KUMAMOTO BAR NAVI</title><link rel="stylesheet" href="style.css"></head><body>
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>店舗掲載申込み｜KUMAMOTO BAR NAVI</title><link rel="stylesheet" href="style.css?v=197"></head><body>
 <main class="utility-page"><section class="utility-hero"><div class="container"><a class="back-link" href="index.html">← ホーム</a><p class="eyebrow">FREE LISTING</p><h1>店舗掲載申込み</h1><p>送信内容は運営管理画面へ直接届きます。</p></div></section>
 <section class="section"><div class="container"><form id="f" class="admin-shop-form"><div class="admin-form-grid">
 <label><span>店舗名 *</span><input id="shop_name" required></label><label><span>担当者名</span><input id="contact_name"></label>
@@ -8,5 +8,59 @@
 <label class="span-2"><span>特徴</span><input id="features"></label><label class="span-2"><span>店舗紹介文</span><textarea id="description" rows="6"></textarea></label>
 <label><span>平均予算 最低</span><input id="budget_min" type="number"></label><label><span>平均予算 最高</span><input id="budget_max" type="number"></label>
 <label><span>席数</span><input id="seats" type="number"></label><label><span>求人掲載</span><select id="wants_job"><option value="0">希望しない</option><option value="1">希望する</option></select></label>
+
+<div id="job_fields" class="span-2" hidden style="border:1px solid rgba(218,177,68,.45);border-radius:16px;padding:16px;margin-top:8px;background:rgba(218,177,68,.05)">
+  <p style="margin:0 0 12px;color:#dab144;font-weight:900">求人掲載内容</p>
+  <div class="admin-form-grid">
+    <label><span>求人タイトル</span><input id="job_title" placeholder="例：BARスタッフ募集"></label>
+    <label><span>雇用形態</span><input id="job_employment_type" placeholder="例：アルバイト・正社員"></label>
+    <label><span>給与</span><input id="job_salary" placeholder="例：時給1,200円〜"></label>
+    <label><span>勤務時間</span><input id="job_hours" placeholder="例：20:00〜翌3:00"></label>
+    <label class="span-2"><span>仕事内容・募集条件</span><textarea id="job_description" rows="5" placeholder="仕事内容、勤務日数、応募条件、待遇など"></textarea></label>
+    <label class="span-2"><span>応募・問い合わせ先</span><input id="job_contact" placeholder="電話・メール・Instagram DMなど"></label>
+  </div>
+  <p style="margin:10px 0 0;color:#9aa4ae;font-size:.78rem;line-height:1.6">掲載申込みが承認されると、この内容で求人ページにも自動掲載されます。</p>
+</div>
+
 <label class="span-2"><span>備考</span><textarea id="note" rows="4"></textarea></label></div><button class="btn-gold">掲載申込みを送信</button><p id="status"></p></form></div></section></main>
-<script>const $=id=>document.getElementById(id);$("f").onsubmit=async e=>{e.preventDefault();const d={};["shop_name","contact_name","email","phone","address","hours","holiday","instagram","genre","features","description","budget_min","budget_max","seats","note"].forEach(k=>d[k]=$(k).value);d.wants_job=$("wants_job").value==="1";$("status").textContent="送信中...";const r=await fetch("/api/submissions",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(d)});const j=await r.json();$("status").textContent=r.ok?"送信しました。掲載審査後に反映されます。":"送信できませんでした："+(j.error||r.status);if(r.ok)$("f").reset()}</script></body></html>
+<script>
+const $=id=>document.getElementById(id);
+
+function toggleJobFields(){
+  const wants=$("wants_job").value==="1";
+  $("job_fields").hidden=!wants;
+}
+$("wants_job").addEventListener("change",toggleJobFields);
+toggleJobFields();
+
+$("f").onsubmit=async e=>{
+  e.preventDefault();
+  const d={};
+  [
+    "shop_name","contact_name","email","phone","address","hours","holiday","instagram",
+    "genre","features","description","budget_min","budget_max","seats","note",
+    "job_title","job_employment_type","job_salary","job_hours","job_description","job_contact"
+  ].forEach(k=>d[k]=$(k)?.value||"");
+
+  d.wants_job=$("wants_job").value==="1";
+
+  $("status").textContent="送信中...";
+  const r=await fetch("/api/submissions",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(d)
+  });
+  const j=await r.json();
+
+  $("status").textContent=r.ok
+    ?(d.wants_job
+      ?"送信しました。掲載審査後、店舗情報と求人情報を反映します。"
+      :"送信しました。掲載審査後に反映されます。")
+    :"送信できませんでした："+(j.error||r.status);
+
+  if(r.ok){
+    $("f").reset();
+    toggleJobFields();
+  }
+};
+</script></body></html>
