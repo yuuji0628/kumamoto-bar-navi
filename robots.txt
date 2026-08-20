@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+Disallow: /admin.html
+Disallow: /db-status.html
+Disallow: /action-complete.html
+Disallow: /owner-portal.html
+
+Sitemap: https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/sitemap.xml
