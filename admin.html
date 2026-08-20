@@ -1918,7 +1918,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.99 画面圧縮調整
+   KBN ADMIN ver2.00 画面圧縮調整
    ============================================================ */
 
 /* 上部 welcome とログアウトをコンパクト化 */
@@ -3058,6 +3058,58 @@ html,body{max-width:100%;overflow-x:hidden}
 }
 </style>
 
+
+<style id="kbn-jobs-smart-v200">
+#tab-jobs .admin-block-head{margin-bottom:12px}
+.jobs-summary-v200{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0 0 10px}
+.jobs-summary-card-v200{padding:10px 11px;border:1px solid #2d3944;border-radius:12px;background:#0b1219}
+.jobs-summary-card-v200 small{display:block;color:#7d8792;font-size:.56rem;font-weight:800}
+.jobs-summary-card-v200 strong{display:block;margin-top:2px;font-size:1rem;color:#fff}
+.jobs-summary-card-v200 strong.gold{color:#efc45a}
+.jobs-quick-v200{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
+.jobs-quick-v200 button{min-height:38px}
+#tab-jobs .job-auto-panel{padding:12px;border-radius:14px;margin-bottom:9px!important;background:#0b1219}
+#tab-jobs .job-auto-head{align-items:center;gap:10px}
+#tab-jobs .job-auto-head h3{font-size:.92rem;margin:3px 0}
+#tab-jobs .job-auto-head p{font-size:.64rem;line-height:1.45;margin:0;color:#87919c}
+#tab-jobs .job-candidate-head{margin-top:9px;padding-top:8px;border-top:1px solid #242e37}
+#tab-jobs .job-candidate-list{display:grid;gap:7px;margin-top:7px}
+#tab-jobs .job-candidate-card{padding:10px;border-radius:11px;background:#091017}
+#tab-jobs .job-candidate-card h3{margin:6px 0;font-size:.84rem}
+#tab-jobs .job-candidate-facts{display:flex;flex-wrap:wrap;gap:5px}
+#tab-jobs .job-candidate-facts span{padding:5px 7px;border-radius:8px;background:#111922}
+#tab-jobs .job-candidate-facts small{display:block;color:#737e89;font-size:.5rem}
+#tab-jobs .job-candidate-facts b{font-size:.62rem}
+#tab-jobs .job-candidate-snippet{margin:6px 0 0;font-size:.62rem;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+#tab-jobs .job-candidate-actions{display:flex;justify-content:flex-end;gap:5px;margin-top:7px}
+#tab-jobs .job-candidate-actions button{min-height:34px;padding:0 10px;font-size:.61rem}
+
+.jobs-form-shell-v200{border:1px solid #303a45;border-radius:14px;background:#0b1219;margin-bottom:10px;overflow:hidden}
+.jobs-form-toggle-v200{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 13px;border:0;background:#101821;color:#fff;text-align:left;font-weight:900}
+.jobs-form-toggle-v200 small{color:#efc45a;font-size:.6rem}
+.jobs-form-shell-v200.is-collapsed #jobForm{display:none}
+#tab-jobs #jobForm{margin:0;padding:13px;border:0;border-radius:0;background:transparent}
+#tab-jobs #jobForm .admin-form-actions{margin-top:9px}
+
+#tab-jobs #jobList{display:grid;gap:7px}
+#tab-jobs #jobList .admin-shop-item{padding:10px 11px;border-radius:11px;align-items:center}
+#tab-jobs #jobList .admin-shop-item h3{margin:0 0 3px;font-size:.82rem}
+#tab-jobs #jobList .admin-shop-item p{margin:0;color:#9aa4ae;font-size:.62rem}
+#tab-jobs #jobList .admin-shop-item small{display:block;margin-top:4px;color:#7e8893;font-size:.57rem}
+#tab-jobs #jobList .admin-item-actions button{min-height:33px;padding:0 10px;font-size:.6rem}
+
+.jobs-list-head-v200{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:12px 0 7px}
+.jobs-list-head-v200 strong{font-size:.88rem}
+.jobs-list-head-v200 small{color:#7d8792;font-size:.58rem}
+
+@media(max-width:700px){
+  .jobs-summary-v200{grid-template-columns:repeat(2,1fr)}
+  #tab-jobs .job-auto-head{align-items:stretch;flex-direction:column}
+  #tab-jobs .job-auto-head button{width:100%}
+  #tab-jobs #jobList .admin-shop-item{display:grid;grid-template-columns:1fr auto;gap:8px}
+}
+</style>
+
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
 <div id="topMaintenanceResult" class="top-maintenance-result">
@@ -3335,6 +3387,17 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <section id="tab-jobs" class="admin-block" hidden>
 <div class="admin-block-head"><div><p class="eyebrow">JOBS</p><h2>求人管理</h2></div><button id="reloadJobs" class="admin-secondary-btn" type="button">再読み込み</button></div>
+<div class="jobs-summary-v200">
+  <div class="jobs-summary-card-v200"><small>公開中</small><strong id="jobsStatPublished" class="gold">-</strong></div>
+  <div class="jobs-summary-card-v200"><small>非公開</small><strong id="jobsStatHidden">-</strong></div>
+  <div class="jobs-summary-card-v200"><small>Web検索候補</small><strong id="jobsStatCandidates">-</strong></div>
+  <div class="jobs-summary-card-v200"><small>過去申込み候補</small><strong id="jobsStatPast">-</strong></div>
+</div>
+<div class="jobs-quick-v200">
+  <button type="button" id="jobsQuickNew" class="btn-gold">＋ 求人を追加</button>
+  <button type="button" id="jobsQuickReload" class="admin-secondary-btn">↻ 最新表示</button>
+  <button type="button" id="jobsQuickPast" class="admin-secondary-btn">過去申込み再検出</button>
+</div>
 
 
 <div class="job-auto-panel" style="margin-bottom:16px;border-color:rgba(218,177,68,.38)">
@@ -3379,6 +3442,10 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
 </div>
 
+<div id="jobsFormShell" class="jobs-form-shell-v200 is-collapsed">
+<button type="button" id="jobsFormToggle" class="jobs-form-toggle-v200">
+  <span>求人を追加・編集</span><small id="jobsFormToggleLabel">開く ▼</small>
+</button>
 <form id="jobForm" class="admin-shop-form">
 <input type="hidden" id="jobId">
 <div class="admin-form-grid">
@@ -3390,7 +3457,9 @@ html,body{max-width:100%;overflow-x:hidden}
 <label class="span-2"><span>応募先</span><input id="jobContact"></label>
 </div><div class="admin-check-row"><label><input id="jobPublished" type="checkbox" checked>公開</label></div>
 <div class="admin-form-actions"><button class="btn-gold">保存</button></div>
-</form><div id="jobList" class="admin-shop-list"></div>
+</form>
+</div>
+<div class="jobs-list-head-v200"><div><strong>登録済み求人</strong><br><small>公開状態・内容を一覧で確認</small></div><button type="button" id="reloadJobsTop" class="admin-secondary-btn">更新</button></div><div id="jobList" class="admin-shop-list"></div>
 </section>
 
 <section id="tab-subs" class="admin-block" hidden>
@@ -4765,6 +4834,7 @@ window.loadApprovedSubmissionJobCandidates=async function(showStatus=false){
   try{
     const d=await api("/api/admin/jobs/approved-submission-candidates");
     approvedSubmissionJobCandidates=Array.isArray(d.candidates)?d.candidates:[];
+    if($("jobsStatPast"))$("jobsStatPast").textContent=String(approvedSubmissionJobCandidates.length);
 
     if(status){
       status.innerHTML=`<b>${approvedSubmissionJobCandidates.length}件</b>の求人候補を検出しました。`;
@@ -4880,6 +4950,9 @@ window.loadJobs=async function(){
   try{
     const d=await api("/api/admin/jobs");
     jobs=d.jobs||[];
+    const publishedCount=jobs.filter(j=>Number(j.is_published||0)===1).length;
+    if($("jobsStatPublished"))$("jobsStatPublished").textContent=String(publishedCount);
+    if($("jobsStatHidden"))$("jobsStatHidden").textContent=String(jobs.length-publishedCount);
 
     if(!list)return;
 
@@ -4914,6 +4987,9 @@ window.loadJobs=async function(){
 
 window.editJob=function(id){
   const j=jobs.find(x=>Number(x.id)===Number(id));
+  const shell=$("jobsFormShell");
+  if(shell)shell.classList.remove("is-collapsed");
+  if($("jobsFormToggleLabel"))$("jobsFormToggleLabel").textContent="閉じる ▲";
   if(!j)return;
 
   switchAdminTab("jobs");
@@ -8101,6 +8177,29 @@ document.addEventListener("click",e=>{
 loadLeadSearchConfig();
 safeBind("reloadShops","click",()=>window.loadShops?.());
 safeBind("reloadJobs","click",()=>window.loadJobs?.());
+safeBind("reloadJobsTop","click",()=>window.loadJobs?.());
+safeBind("jobsQuickReload","click",async()=>{
+  await Promise.all([
+    window.loadJobs?.(),
+    window.loadJobCandidates?.(),
+    window.loadApprovedSubmissionJobCandidates?.(false)
+  ]);
+});
+safeBind("jobsQuickPast","click",()=>window.scanApprovedSubmissionJobs?.());
+safeBind("jobsFormToggle","click",()=>{
+  const shell=$("jobsFormShell");
+  if(!shell)return;
+  shell.classList.toggle("is-collapsed");
+  if($("jobsFormToggleLabel"))$("jobsFormToggleLabel").textContent=shell.classList.contains("is-collapsed")?"開く ▼":"閉じる ▲";
+});
+safeBind("jobsQuickNew","click",()=>{
+  const shell=$("jobsFormShell");
+  if(shell)shell.classList.remove("is-collapsed");
+  if($("jobsFormToggleLabel"))$("jobsFormToggleLabel").textContent="閉じる ▲";
+  if(typeof window.resetJobForm==="function")window.resetJobForm();
+  $("jobTitle")?.focus();
+  $("jobsFormShell")?.scrollIntoView({behavior:"smooth",block:"start"});
+});
 safeBind("scanApprovedJobBtn","click",()=>window.scanApprovedSubmissionJobs?.());
 safeBind("reloadApprovedJobCandidates","click",()=>window.loadApprovedSubmissionJobCandidates?.(false));
 safeBind("reloadSubs","click",()=>window.loadSubs?.());
