@@ -2398,6 +2398,82 @@ async function googlePlaceDetails(env,placeId){
   }
 }
 
+
+// KBN Google Reviews v1.84
+async function googlePlaceReviewDetails(env,placeId){
+  const cfg=googlePlacesConfig(env);
+  const id=String(placeId||"").trim();
+  if(!cfg.apiKey){
+    return {ok:false,configured:false,error:"GOOGLE_PLACES_NOT_CONFIGURED",place:null};
+  }
+  if(!id){
+    return {ok:false,configured:true,error:"GOOGLE_PLACE_ID_MISSING",place:null};
+  }
+
+  try{
+    const fieldMask=[
+      "id",
+      "displayName",
+      "rating",
+      "userRatingCount",
+      "googleMapsUri",
+      "googleMapsLinks",
+      "reviews"
+    ].join(",");
+
+    const r=await fetch(
+      `https://places.googleapis.com/v1/places/${encodeURIComponent(id)}`,
+      {
+        headers:{
+          "X-Goog-Api-Key":cfg.apiKey,
+          "X-Goog-FieldMask":fieldMask,
+          "Accept-Language":"ja"
+        }
+      }
+    );
+
+    const raw=await r.text();
+    let d={};
+    try{d=raw?JSON.parse(raw):{}}catch{d={raw}};
+
+    if(!r.ok){
+      return {
+        ok:false,
+        configured:true,
+        status:r.status,
+        error:d?.error?.message||`GOOGLE_REVIEW_HTTP_${r.status}`,
+        place:null
+      };
+    }
+
+    return {ok:true,configured:true,place:d};
+  }catch(e){
+    return {
+      ok:false,
+      configured:true,
+      error:String(e?.message||e||"GOOGLE_REVIEW_ERROR"),
+      place:null
+    };
+  }
+}
+
+function publicGoogleReview(review){
+  const a=review?.authorAttribution||{};
+  return {
+    rating:Number(review?.rating||0),
+    text:String(review?.text?.text||review?.originalText?.text||"").slice(0,2000),
+    relative_time:String(review?.relativePublishTimeDescription||""),
+    publish_time:String(review?.publishTime||""),
+    author:{
+      name:String(a?.displayName||"Googleユーザー"),
+      uri:String(a?.uri||""),
+      photo_uri:String(a?.photoUri||"")
+    },
+    google_maps_uri:String(review?.googleMapsUri||""),
+    flag_content_uri:String(review?.flagContentUri||"")
+  };
+}
+
 function googleOpeningHours(place){
   const rows=place?.regularOpeningHours?.weekdayDescriptions;
   if(Array.isArray(rows)&&rows.length)return rows.join(" / ");
@@ -3751,6 +3827,7 @@ async function enrichScheduledCreatedShops(env,created=[]){
   return {images,instagram};
 }
 
+// KBN Google reviews v1.84: public rating + up to 3 reviews
 // KBN admin file create v1.83: missing GitHub file => create, existing => overwrite
 // KBN admin file permission v1.82: allow robots.txt / sitemap.xml
 // KBN scheduled maintenance v1.81:
@@ -4156,6 +4233,86 @@ ${urls.map(x=>`  <url>
       `).bind(s.id,action).run();
 
       return json({ok:true},{status:201});
+    }
+
+    const googleReviewsMatch=url.pathname.match(/^\/api\/shops\/([^/]+)\/google-reviews$/);
+    if(googleReviewsMatch && request.method==="GET"){
+      const slug=decodeURIComponent(googleReviewsMatch[1]);
+      const s=await env.DB.prepare(`
+        SELECT id,slug,name,area,address
+        FROM shops
+        WHERE slug=? AND is_published=1
+        LIMIT 1
+      `).bind(slug).first();
+
+      if(!s){
+        return json({ok:false,error:"NOT_FOUND"},{status:404});
+      }
+
+      const cleanName=String(s.name||"")
+        .replace(/^【KBN独自掲載】/,"")
+        .replace(/\s*[（(]\s*@[A-Za-z0-9._]+\s*[）)]\s*$/,"")
+        .trim();
+
+      const matched=await findGooglePlaceForShop(env,{
+        name:cleanName,
+        area:s.area||"熊本"
+      });
+
+      if(!matched?.ok){
+        return json({
+          ok:false,
+          configured:!!matched?.configured,
+          error:matched?.error||"GOOGLE_PLACE_LOOKUP_FAILED"
+        },{status:matched?.configured===false?503:502});
+      }
+
+      if(!matched?.matched || !matched?.place?.id){
+        return json({
+          ok:true,
+          configured:true,
+          matched:false,
+          rating:null,
+          user_rating_count:0,
+          reviews:[]
+        });
+      }
+
+      const details=await googlePlaceReviewDetails(env,matched.place.id);
+      if(!details.ok){
+        return json({
+          ok:false,
+          configured:!!details.configured,
+          error:details.error||"GOOGLE_REVIEW_FETCH_FAILED"
+        },{status:details.configured===false?503:502});
+      }
+
+      const p=details.place||{};
+      const reviews=(Array.isArray(p.reviews)?p.reviews:[])
+        .slice(0,3)
+        .map(publicGoogleReview);
+
+      return json({
+        ok:true,
+        configured:true,
+        matched:true,
+        source:"Google Maps",
+        place_id:String(p.id||matched.place.id||""),
+        place_name:String(p?.displayName?.text||cleanName),
+        rating:Number.isFinite(Number(p.rating))?Number(p.rating):null,
+        user_rating_count:Number(p.userRatingCount||0),
+        google_maps_uri:String(
+          p?.googleMapsLinks?.reviewsUri||
+          p?.googleMapsLinks?.placeUri||
+          p?.googleMapsUri||
+          ""
+        ),
+        reviews
+      },{
+        headers:{
+          "Cache-Control":"public, max-age=300, stale-while-revalidate=1800"
+        }
+      });
     }
 
     if(url.pathname.startsWith("/api/shops/") && request.method==="GET"){
