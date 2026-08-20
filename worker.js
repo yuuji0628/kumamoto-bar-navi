@@ -3654,26 +3654,150 @@ async function checkClosedShops(env,{limit=20,afterId=0}={}){
   return {ok:true,checked,closed,failed,next_after_id:nextAfterId,has_more:!!more};
 }
 
+
+async function enrichScheduledCreatedShops(env,created=[]){
+  const rows=Array.isArray(created)?created:[];
+  const images={checked:0,updated:[],failed:[]};
+  const instagram={checked:0,updated:[],candidates:[],failed:[]};
+
+  for(const item of rows){
+    const id=Number(item?.shop_id||item?.id||0);
+    if(!id)continue;
+
+    const shop=await env.DB.prepare(`
+      SELECT id,name,area,address,image_url,image_key,instagram
+      FROM shops WHERE id=? LIMIT 1
+    `).bind(id).first();
+    if(!shop)continue;
+
+    const cleanName=String(shop.name||"").replace(/^【KBN独自掲載】/,"").trim();
+
+    // 画像：新規掲載店舗は必ずGoogle Places写真を確認して補完
+    images.checked++;
+    try{
+      const hasGooglePhoto=String(shop.image_key||"").startsWith("google:");
+      if(!hasGooglePhoto){
+        const found=await findGooglePlaceForShop(env,{
+          name:cleanName,
+          area:shop.area||"熊本"
+        });
+        if(found.ok&&found.matched){
+          const details=await googlePlaceDetails(env,found.place?.id);
+          const gp=details.ok&&details.place?details.place:found.place;
+          const photoName=googlePhotoName(gp);
+          if(photoName){
+            const imageUrl=googlePhotoProxyUrl(id);
+            await env.DB.prepare(`
+              UPDATE shops
+              SET image_url=?,image_key=?,updated_at=CURRENT_TIMESTAMP
+              WHERE id=?
+            `).bind(imageUrl,`google:${photoName}`,id).run();
+            images.updated.push({id,name:shop.name,image_url:imageUrl});
+          }
+        }
+      }
+    }catch(e){
+      images.failed.push({id,name:shop.name,error:String(e?.message||e).slice(0,250)});
+    }
+
+    // Instagram：既存値が無い新規掲載店舗のみ高信頼候補を自動掲載
+    instagram.checked++;
+    try{
+      if(!String(shop.instagram||"").trim()){
+        let website="";
+        const found=await findGooglePlaceForShop(env,{
+          name:cleanName,
+          area:shop.area||"熊本"
+        });
+
+        if(found.ok&&found.matched){
+          const details=await googlePlaceDetails(env,found.place?.id);
+          const gp=details.ok&&details.place?details.place:found.place;
+          website=googleWebsite(gp)||"";
+        }
+
+        const ig=await discoverInstagramForShop(env,{
+          name:cleanName,
+          area:shop.area||"熊本",
+          website,
+          existing:""
+        });
+
+        if(ig?.instagram && Number(ig.score||0)>=90){
+          await env.DB.prepare(`
+            UPDATE shops
+            SET instagram=?,updated_at=CURRENT_TIMESTAMP
+            WHERE id=?
+          `).bind(ig.instagram,id).run();
+          instagram.updated.push({
+            id,name:shop.name,instagram:ig.instagram,
+            score:Number(ig.score||0),source:ig.source||""
+          });
+        }else if(ig?.candidates?.[0] && Number(ig.candidates[0].score||0)>=70){
+          instagram.candidates.push({
+            id,name:shop.name,
+            handle:ig.candidates[0].handle||"",
+            score:Number(ig.candidates[0].score||0)
+          });
+        }
+      }
+    }catch(e){
+      instagram.failed.push({id,name:shop.name,error:String(e?.message||e).slice(0,250)});
+    }
+  }
+
+  return {images,instagram};
+}
+
+// KBN scheduled maintenance v1.80: 15 auto listings + image + Instagram enrichment
 async function runScheduledKbnMaintenance(env){
   const fakeRequest=new Request("https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/api/internal/scheduled");
-  const discovery=await autoDiscover(env,fakeRequest,5,5,1);
+
+  // 予約メンテナンス1回につき最大15店舗を自動掲載
+  const discovery=await autoDiscover(env,fakeRequest,15,15,2);
+
+  // 新規掲載した店舗は、画像とInstagramをその場で再確認して補完
+  const createdEnrichment=await enrichScheduledCreatedShops(
+    env,
+    discovery?.created||[]
+  );
+
   if(discovery?.created?.length){
     await notifyCreatedShops(env,discovery.created,"予約自動開拓");
   }
 
+  // 既存のKBN独自掲載店舗も情報補完
   const missing=await refreshIndependentListings(env,{
-    limit:20,afterId:0,revalidate:true,force:false,missingOnly:true
+    limit:30,afterId:0,revalidate:true,force:false,missingOnly:true
   });
 
-  const closed=await checkClosedShops(env,{limit:20,afterId:0});
+  // 既存の画像なし店舗も自動補完（1回最大30店舗）
+  const imageBackfill=await refreshMissingShopImages(env,{
+    limit:30,afterId:0
+  });
+
+  const closed=await checkClosedShops(env,{limit:30,afterId:0});
 
   await createKbnAlert(env,{
     type:"scheduled_summary",
     title:"予約メンテナンス完了",
-    message:`新規掲載 ${discovery?.created?.length||0}店舗 / 情報補完 ${missing?.updated?.length||0}店舗 / 閉業候補 ${closed?.closed?.length||0}店舗`
+    message:[
+      `新規掲載 ${discovery?.created?.length||0}店舗`,
+      `新規画像 ${createdEnrichment?.images?.updated?.length||0}店舗`,
+      `新規Instagram ${createdEnrichment?.instagram?.updated?.length||0}店舗`,
+      `既存画像補完 ${imageBackfill?.updated?.length||0}店舗`,
+      `情報補完 ${missing?.updated?.length||0}店舗`,
+      `閉業候補 ${closed?.closed?.length||0}店舗`
+    ].join(" / ")
   });
 
-  return {discovery,missing,closed};
+  return {
+    discovery,
+    created_enrichment:createdEnrichment,
+    image_backfill:imageBackfill,
+    missing,
+    closed
+  };
 }
 
 export default {
