@@ -4245,6 +4245,7 @@ async function enrichScheduledCreatedShops(env,created=[]){
   return {images,instagram};
 }
 
+// KBN v2.06: 自動掲載店舗の300件上限を撤廃・全件ページ取得対応
 // KBN v2.05: 管理画面で無料会員数・会員情報を確認
 // KBN v2.01: 求人削除APIを追加
 // KBN v1.99: 承認済み申込みから求人を再検出し確認後に公開
@@ -6016,14 +6017,34 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
       }
 
       if(url.pathname==="/api/admin/leads/auto-listed" && request.method==="GET"){
+        const limit=Math.max(1,Math.min(Number(url.searchParams.get("limit")||200),500));
+        const offset=Math.max(0,Number(url.searchParams.get("offset")||0));
+
+        const totalRow=await env.DB.prepare(`
+          SELECT
+            COUNT(*) AS total,
+            SUM(CASE WHEN is_published=1 THEN 1 ELSE 0 END) AS live
+          FROM shops
+          WHERE COALESCE(listing_status,'published')='provisional'
+        `).first();
+
         const r=await env.DB.prepare(`
           SELECT id,slug,name,area,genre,address,instagram,is_published,listing_status,published_at,updated_at
           FROM shops
           WHERE COALESCE(listing_status,'published')='provisional'
           ORDER BY id DESC
-          LIMIT 300
-        `).all();
-        return json({ok:true,shops:r.results||[]});
+          LIMIT ? OFFSET ?
+        `).bind(limit,offset).all();
+
+        return json({
+          ok:true,
+          shops:r.results||[],
+          total:Number(totalRow?.total||0),
+          live:Number(totalRow?.live||0),
+          cancelled:Number(totalRow?.total||0)-Number(totalRow?.live||0),
+          limit,
+          offset
+        });
       }
 
       const autoListedAction=url.pathname.match(/^\/api\/admin\/leads\/auto-listed\/(\d+)\/(unpublish|restore)$/);
