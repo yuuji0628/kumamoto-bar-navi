@@ -4245,6 +4245,7 @@ async function enrichScheduledCreatedShops(env,created=[]){
   return {images,instagram};
 }
 
+// KBN v2.07: 自動掲載店舗一覧スマート化・完全削除
 // KBN v2.06: 自動掲載店舗の300件上限を撤廃・全件ページ取得対応
 // KBN v2.05: 管理画面で無料会員数・会員情報を確認
 // KBN v2.01: 求人削除APIを追加
@@ -6045,6 +6046,22 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
           limit,
           offset
         });
+      }
+
+      const autoListedDelete=url.pathname.match(/^\/api\/admin\/leads\/auto-listed\/(\d+)$/);
+      if(autoListedDelete && request.method==="DELETE"){
+        const id=Number(autoListedDelete[1]);
+        const shop=await env.DB.prepare("SELECT id,name,listing_status FROM shops WHERE id=? LIMIT 1").bind(id).first();
+        if(!shop)return json({ok:false,error:"NOT_FOUND"},{status:404});
+        if(normalizeListingStatus(shop.listing_status)!=="provisional"){
+          return json({ok:false,error:"NOT_PROVISIONAL_LISTING"},{status:400});
+        }
+        try{await env.DB.prepare("DELETE FROM jobs WHERE shop_id=?").bind(id).run();}catch{}
+        try{await env.DB.prepare("DELETE FROM member_favorites WHERE shop_id=?").bind(id).run();}catch{}
+        try{await env.DB.prepare("DELETE FROM shop_images WHERE shop_id=?").bind(id).run();}catch{}
+        try{await env.DB.prepare("DELETE FROM shop_views WHERE shop_id=?").bind(id).run();}catch{}
+        await env.DB.prepare("DELETE FROM shops WHERE id=?").bind(id).run();
+        return json({ok:true,id,name:shop.name||"",deleted:true});
       }
 
       const autoListedAction=url.pathname.match(/^\/api\/admin\/leads\/auto-listed\/(\d+)\/(unpublish|restore)$/);
