@@ -1918,7 +1918,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.81 画面圧縮調整
+   KBN ADMIN ver1.95 画面圧縮調整
    ============================================================ */
 
 /* 上部 welcome とログアウトをコンパクト化 */
@@ -2979,6 +2979,85 @@ html,body{max-width:100%;overflow-x:hidden}
 }
 </style>
 
+
+<style id="kbn-insta-photo-position-v195">
+.insta-photo-position-box{
+  margin:14px 0 18px;
+  padding:14px;
+  border:1px solid #3a4652;
+  border-radius:16px;
+  background:#0b1219;
+}
+.insta-photo-position-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:10px;
+}
+.insta-photo-position-head strong{font-size:.92rem}
+.insta-photo-position-head small{
+  color:#8f99a4;
+  font-size:.66rem;
+  line-height:1.4;
+}
+.insta-photo-position-controls{
+  display:grid;
+  gap:11px;
+}
+.insta-photo-slider{
+  display:grid;
+  grid-template-columns:82px 1fr 48px;
+  gap:8px;
+  align-items:center;
+}
+.insta-photo-slider label{
+  color:#aeb7c0;
+  font-size:.68rem;
+  font-weight:800;
+}
+.insta-photo-slider input[type="range"]{
+  width:100%;
+  accent-color:#efc45a;
+}
+.insta-photo-slider output{
+  color:#efc45a;
+  font-size:.66rem;
+  font-weight:900;
+  text-align:right;
+}
+.insta-photo-position-presets{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:7px;
+  margin-top:3px;
+}
+.insta-photo-position-presets button{
+  min-height:38px;
+  border:1px solid #394550;
+  border-radius:10px;
+  background:#111a23;
+  color:#d5dae0;
+  font-weight:800;
+  font-size:.68rem;
+}
+.insta-photo-position-presets button.gold{
+  border-color:#665421;
+  color:#efc45a;
+}
+.insta-photo-position-note{
+  margin:9px 0 0;
+  color:#7f8994;
+  font-size:.62rem;
+  line-height:1.55;
+}
+@media(max-width:640px){
+  .insta-photo-position-box{padding:12px}
+  .insta-photo-slider{grid-template-columns:72px 1fr 44px}
+  .insta-photo-position-presets{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
 <div id="topMaintenanceResult" class="top-maintenance-result">
@@ -3684,6 +3763,43 @@ html,body{max-width:100%;overflow-x:hidden}
       <canvas id="instaPostCanvas" width="1080" height="1350"></canvas>
       <div id="instaPreviewStatus" class="insta-preview-status">プレビュー生成中...</div>
 <div id="instaPreviewReadyNote" class="insta-preview-ready-note">✓ 画像生成が完了しました</div>
+    </div>
+
+
+    <div class="insta-photo-position-box">
+      <div class="insta-photo-position-head">
+        <div>
+          <strong>店舗画像の位置調整</strong><br>
+          <small>看板や店頭が切れる時に調整できます</small>
+        </div>
+        <button type="button" class="admin-secondary-btn" onclick="resetInstaPhotoPosition()">リセット</button>
+      </div>
+
+      <div class="insta-photo-position-controls">
+        <div class="insta-photo-slider">
+          <label for="instaPhotoX">左右</label>
+          <input id="instaPhotoX" type="range" min="-100" max="100" step="1" value="0">
+          <output id="instaPhotoXValue">0</output>
+        </div>
+        <div class="insta-photo-slider">
+          <label for="instaPhotoY">上下</label>
+          <input id="instaPhotoY" type="range" min="-100" max="100" step="1" value="0">
+          <output id="instaPhotoYValue">0</output>
+        </div>
+        <div class="insta-photo-slider">
+          <label for="instaPhotoZoom">拡大</label>
+          <input id="instaPhotoZoom" type="range" min="100" max="220" step="1" value="100">
+          <output id="instaPhotoZoomValue">100%</output>
+        </div>
+      </div>
+
+      <div class="insta-photo-position-presets">
+        <button type="button" onclick="setInstaPhotoPreset('top')">上を見せる</button>
+        <button type="button" onclick="setInstaPhotoPreset('center')">中央</button>
+        <button type="button" onclick="setInstaPhotoPreset('bottom')">下を見せる</button>
+        <button type="button" class="gold" onclick="saveInstaPhotoPosition()">位置を保存</button>
+      </div>
+      <p class="insta-photo-position-note">店舗ごとに保存され、次回この店舗の紹介画像を開いた時も同じ位置で生成されます。</p>
     </div>
 
     <div id="instaFullPreview" class="insta-full-preview" hidden>
@@ -4883,6 +4999,119 @@ function drawCover(ctx,img,x,y,w,h){
   ctx.drawImage(img,sx,sy,sw,sh,x,y,w,h);
 }
 
+
+function getInstaPhotoPosition(shopId){
+  const fallback={x:0,y:0,zoom:100};
+  const id=Number(shopId||0);
+  if(!id)return fallback;
+  try{
+    const raw=localStorage.getItem(`kbn_insta_photo_pos_${id}`);
+    if(!raw)return fallback;
+    const d=JSON.parse(raw);
+    return {
+      x:Math.max(-100,Math.min(100,Number(d?.x||0))),
+      y:Math.max(-100,Math.min(100,Number(d?.y||0))),
+      zoom:Math.max(100,Math.min(220,Number(d?.zoom||100)))
+    };
+  }catch{return fallback}
+}
+
+function setInstaPhotoControlValues(pos){
+  const p=pos||{x:0,y:0,zoom:100};
+  const x=$("instaPhotoX"),y=$("instaPhotoY"),z=$("instaPhotoZoom");
+  if(x)x.value=String(p.x);
+  if(y)y.value=String(p.y);
+  if(z)z.value=String(p.zoom);
+  if($("instaPhotoXValue"))$("instaPhotoXValue").textContent=String(p.x);
+  if($("instaPhotoYValue"))$("instaPhotoYValue").textContent=String(p.y);
+  if($("instaPhotoZoomValue"))$("instaPhotoZoomValue").textContent=`${p.zoom}%`;
+}
+
+function currentInstaPhotoPosition(){
+  return {
+    x:Number($("instaPhotoX")?.value||0),
+    y:Number($("instaPhotoY")?.value||0),
+    zoom:Number($("instaPhotoZoom")?.value||100)
+  };
+}
+
+function drawCoverPositioned(ctx,img,x,y,w,h,pos={}){
+  const ir=img.width/img.height;
+  const br=w/h;
+  const zoom=Math.max(1,Math.min(2.2,Number(pos.zoom||100)/100));
+
+  let baseSw=img.width,baseSh=img.height;
+  if(ir>br){
+    baseSw=img.height*br;
+  }else{
+    baseSh=img.width/br;
+  }
+
+  const sw=baseSw/zoom;
+  const sh=baseSh/zoom;
+
+  const maxSx=Math.max(0,img.width-sw);
+  const maxSy=Math.max(0,img.height-sh);
+
+  // -100 = left/top, 0 = center, 100 = right/bottom
+  const nx=(Math.max(-100,Math.min(100,Number(pos.x||0)))+100)/200;
+  const ny=(Math.max(-100,Math.min(100,Number(pos.y||0)))+100)/200;
+  const sx=maxSx*nx;
+  const sy=maxSy*ny;
+
+  ctx.drawImage(img,sx,sy,sw,sh,x,y,w,h);
+}
+
+let instaPhotoRerenderTimer=null;
+async function rerenderInstaPhotoPosition(){
+  if(!currentInstaShop)return;
+  const p=currentInstaPhotoPosition();
+  setInstaPhotoControlValues(p);
+  clearTimeout(instaPhotoRerenderTimer);
+  instaPhotoRerenderTimer=setTimeout(async()=>{
+    try{
+      await renderInstaPost(currentInstaShop);
+    }catch(e){
+      console.warn("photo position rerender failed",e);
+    }
+  },120);
+}
+
+window.saveInstaPhotoPosition=function(){
+  if(!currentInstaShop)return;
+  const p=currentInstaPhotoPosition();
+  localStorage.setItem(`kbn_insta_photo_pos_${Number(currentInstaShop.id||0)}`,JSON.stringify(p));
+  setInstaPhotoControlValues(p);
+  const status=$("instaSaveStatus");
+  if(status)status.textContent="店舗画像の位置を保存しました";
+  renderInstaPost(currentInstaShop).catch(()=>{});
+};
+
+window.resetInstaPhotoPosition=function(){
+  if(currentInstaShop){
+    localStorage.removeItem(`kbn_insta_photo_pos_${Number(currentInstaShop.id||0)}`);
+  }
+  setInstaPhotoControlValues({x:0,y:0,zoom:100});
+  renderInstaPost(currentInstaShop).catch(()=>{});
+};
+
+window.setInstaPhotoPreset=function(type){
+  const now=currentInstaPhotoPosition();
+  if(type==="top")setInstaPhotoControlValues({...now,y:-100});
+  else if(type==="bottom")setInstaPhotoControlValues({...now,y:100});
+  else setInstaPhotoControlValues({...now,x:0,y:0});
+  rerenderInstaPhotoPosition();
+};
+
+function bindInstaPhotoPositionControls(){
+  ["instaPhotoX","instaPhotoY","instaPhotoZoom"].forEach(id=>{
+    const el=$(id);
+    if(!el||el.dataset.bound==="1")return;
+    el.dataset.bound="1";
+    el.addEventListener("input",rerenderInstaPhotoPosition);
+  });
+}
+
 function wrapCanvasText(ctx,text,x,y,maxWidth,lineHeight,maxLines=3){
   const chars=Array.from(String(text||""));
   let line="";
@@ -5081,9 +5310,13 @@ function buildInstaSvgDataUrl(shop){
 
   const rawImage=absoluteMediaUrl(shop?.image_url||"");
   const imageUrl=svgXmlEscape(rawImage);
+  const photoPos=currentInstaPhotoPosition();
+  const svgAlignX=photoPos.x<=-34?"xMin":(photoPos.x>=34?"xMax":"xMid");
+  const svgAlignY=photoPos.y<=-34?"YMin":(photoPos.y>=34?"YMax":"YMid");
+  const svgAspect=`${svgAlignX}${svgAlignY} slice`;
   const photoSvg=imageUrl
-    ? `<image href="${imageUrl}" x="70" y="${photoY}" width="940" height="${photoH}" preserveAspectRatio="xMidYMid slice" clip-path="url(#photoClip)"/>\n       <rect x="70" y="${photoY}" width="940" height="${photoH}" rx="24" fill="url(#photoShade)"/>`
-    : `<image href="${svgXmlEscape(INSTA_REALISTIC_FALLBACK_DATA_URL)}" x="70" y="${photoY}" width="940" height="${photoH}" preserveAspectRatio="xMidYMid slice" clip-path="url(#photoClip)"/>\n       <rect x="70" y="${photoY}" width="940" height="${photoH}" rx="24" fill="url(#photoShade)"/>`;
+    ? `<image href="${imageUrl}" x="70" y="${photoY}" width="940" height="${photoH}" preserveAspectRatio="${svgAspect}" clip-path="url(#photoClip)"/>\n       <rect x="70" y="${photoY}" width="940" height="${photoH}" rx="24" fill="url(#photoShade)"/>`
+    : `<image href="${svgXmlEscape(INSTA_REALISTIC_FALLBACK_DATA_URL)}" x="70" y="${photoY}" width="940" height="${photoH}" preserveAspectRatio="${svgAspect}" clip-path="url(#photoClip)"/>\n       <rect x="70" y="${photoY}" width="940" height="${photoH}" rx="24" fill="url(#photoShade)"/>`;
 
   const svg=`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1080" height="1350" viewBox="0 0 1080 1350">
     <defs>
@@ -5281,7 +5514,7 @@ async function renderInstaPost(shop,{forceNoImage=false}={}){
       ctx.arcTo(px,py,px+pw,py,rr);
       ctx.closePath();
       ctx.clip();
-      drawCover(ctx,img,px,py,pw,ph);
+      drawCoverPositioned(ctx,img,px,py,pw,ph,currentInstaPhotoPosition());
       const veil=ctx.createLinearGradient(px,py,px,py+ph);
       veil.addColorStop(0,"rgba(0,0,0,.05)");
       veil.addColorStop(1,"rgba(0,0,0,.38)");
@@ -5309,7 +5542,7 @@ async function renderInstaPost(shop,{forceNoImage=false}={}){
       ctx.arcTo(px,py,px+pw,py,rr);
       ctx.closePath();
       ctx.clip();
-      drawCover(ctx,fallbackPhoto,px,py,pw,ph);
+      drawCoverPositioned(ctx,fallbackPhoto,px,py,pw,ph,currentInstaPhotoPosition());
       const veil=ctx.createLinearGradient(px,py,px,py+ph);
       veil.addColorStop(0,"rgba(0,0,0,.04)");
       veil.addColorStop(1,"rgba(0,0,0,.22)");
@@ -5647,6 +5880,8 @@ window.createInstaPost=async function(shopId){
 
   currentInstaShop=shop;
   resetInstaRenderState();
+  bindInstaPhotoPositionControls();
+  setInstaPhotoControlValues(getInstaPhotoPosition(shop.id));
 
   const modal=$("instaPostModal");
   if(!modal){
