@@ -4245,6 +4245,7 @@ async function enrichScheduledCreatedShops(env,created=[]){
   return {images,instagram};
 }
 
+// KBN v1.99: 承認済み申込みから求人を再検出し確認後に公開
 // KBN v1.98: 備考・説明欄の求人情報も自動判定・抽出して求人掲載
 // KBN v1.97: 求人付き掲載申込みを承認時に求人へ自動反映・公開
 // KBN free member v1.93: PBKDF2 iteration compatibility fix
@@ -6256,6 +6257,96 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
           WHERE id=?
         `).bind(id).run();
         return json({ok:true});
+      }
+
+
+      if(url.pathname==="/api/admin/jobs/approved-submission-candidates" && request.method==="GET"){
+        await ensureSubmissionJobColumns(env);
+        const r=await env.DB.prepare(`
+          SELECT * FROM submissions
+          WHERE status='approved'
+          ORDER BY id DESC
+          LIMIT 300
+        `).all();
+
+        const candidates=[];
+        for(const sub of (r.results||[])){
+          try{
+            if(!kbnJobIntentFromSubmission(sub))continue;
+
+            const duplicate=await findSubmissionDuplicate(env,sub);
+            if(!duplicate?.shop_id)continue;
+
+            const extracted=kbnExtractJobData(sub);
+            const existing=await env.DB.prepare(`
+              SELECT id,title,is_published
+              FROM jobs
+              WHERE shop_id=? AND title=?
+              ORDER BY id DESC LIMIT 1
+            `).bind(Number(duplicate.shop_id),extracted.title).first();
+
+            candidates.push({
+              submission_id:Number(sub.id),
+              shop_id:Number(duplicate.shop_id),
+              shop_name:duplicate.name||sub.shop_name||"",
+              submission_shop_name:sub.shop_name||"",
+              contact_name:sub.contact_name||"",
+              reviewed_at:sub.reviewed_at||"",
+              title:extracted.title,
+              employment_type:extracted.employment,
+              salary:extracted.salary,
+              hours:extracted.hours,
+              description:extracted.description,
+              contact:extracted.contact,
+              source_note:sub.note||"",
+              source_description:sub.description||"",
+              source_features:sub.features||"",
+              wants_job:Number(sub.wants_job||0)===1,
+              auto_detected:Number(sub.wants_job||0)!==1,
+              existing_job_id:existing?.id?Number(existing.id):null,
+              existing_job_published:existing?.id?Number(existing.is_published||0):0,
+              match_score:Number(duplicate.score||0),
+              match_reasons:Array.isArray(duplicate.reasons)?duplicate.reasons:[]
+            });
+          }catch(e){
+            console.error("approved submission job candidate failed",sub?.id,e);
+          }
+        }
+
+        return json({ok:true,candidates,count:candidates.length},{
+          headers:{"Cache-Control":"no-store"}
+        });
+      }
+
+      const approvedJobPublish=url.pathname.match(/^\/api\/admin\/jobs\/approved-submissions\/(\d+)\/publish$/);
+      if(approvedJobPublish && request.method==="POST"){
+        await ensureSubmissionJobColumns(env);
+        const submissionId=Number(approvedJobPublish[1]);
+
+        const sub=await env.DB.prepare(`
+          SELECT * FROM submissions
+          WHERE id=? AND status='approved'
+          LIMIT 1
+        `).bind(submissionId).first();
+
+        if(!sub)return json({ok:false,error:"APPROVED_SUBMISSION_NOT_FOUND"},{status:404});
+        if(!kbnJobIntentFromSubmission(sub)){
+          return json({ok:false,error:"NO_JOB_INFORMATION_DETECTED"},{status:400});
+        }
+
+        const duplicate=await findSubmissionDuplicate(env,sub);
+        if(!duplicate?.shop_id){
+          return json({ok:false,error:"MATCHING_SHOP_NOT_FOUND"},{status:404});
+        }
+
+        const job=await publishJobFromSubmission(env,sub,Number(duplicate.shop_id));
+        return json({
+          ok:true,
+          submission_id:submissionId,
+          shop_id:Number(duplicate.shop_id),
+          shop_name:duplicate.name||sub.shop_name||"",
+          job
+        });
       }
 
       if(url.pathname==="/api/admin/jobs" && request.method==="GET"){
