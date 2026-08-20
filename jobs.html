@@ -6,7 +6,7 @@
   <meta name="description" content="熊本県内のBAR・ラウンジ・スナックなどの求人情報。バーテンダー、ホールスタッフ、アルバイトなど熊本の夜のお仕事を探せます。">
   <meta name="theme-color" content="#080b10">
   <title>BAR求人｜KUMAMOTO BAR NAVI</title>
-  <link rel="stylesheet" href="style.css?v=115">
+  <link rel="stylesheet" href="style.css?v=203">
 <link rel="canonical" href="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/jobs.html">
 <meta property="og:title" content="熊本のBAR求人｜KUMAMOTO BAR NAVI">
 <meta property="og:description" content="熊本県内のBAR・ラウンジ・スナック求人を見やすく掲載。">
@@ -168,13 +168,25 @@ function normalizeSalary(v){
     .replace(/^給料\s*/,"")
     .replace(/\s+/g," ");
 }
+function normalizeHours(v){
+  return String(v||"").replace(/\s+/g,' ').trim();
+}
+function normalizeEmployment(v){
+  return String(v||"").replace(/\s+/g,' ').trim();
+}
+function salaryClassName(v){
+  if(!v)return '';
+  if(v.length>=28)return ' is-compact';
+  if(v.length>=18)return ' is-medium';
+  return '';
+}
 
 function renderJob(j){
   const shop=cleanShopName(j.shop_name);
   const title=cleanJobTitle(j.title);
   const salary=normalizeSalary(j.salary);
-  const employment=String(j.employment_type||"").trim();
-  const hours=String(j.hours||"").trim();
+  const employment=normalizeEmployment(j.employment_type);
+  const hours=normalizeHours(j.hours);
   const desc=cleanDescription(j.description);
   const source=sourceInfo(j.description);
   const area=areaFromText(j);
@@ -183,7 +195,7 @@ function renderJob(j){
     ? `shop.html?slug=${encodeURIComponent(j.shop_slug)}`
     : "bars.html";
 
-  return `<article class="public-job-card">
+  return `<article class="public-job-card public-job-card-v203">
     <div class="public-job-card-top">
       <span class="public-job-type">${esc(title)}</span>
       ${source.url?`<span class="public-job-source-badge">掲載元あり</span>`:""}
@@ -191,16 +203,27 @@ function renderJob(j){
 
     <h3 class="public-job-shop">${esc(shop)}</h3>
 
-    ${salary?`
-    <div class="public-job-salary">
-      <small>給与</small>
-      <strong>${esc(salary)}</strong>
-    </div>`:""}
+    <div class="public-job-facts ${salary && employment && hours ? '' : 'is-short'}">
+      ${salary?`
+      <div class="public-job-fact public-job-fact-salary">
+        <small>給与</small>
+        <b class="${salaryClassName(salary).trim()}">${esc(salary)}</b>
+      </div>`:""}
+      ${employment?`
+      <div class="public-job-fact">
+        <small>雇用形態</small>
+        <b>${esc(employment)}</b>
+      </div>`:""}
+      ${hours?`
+      <div class="public-job-fact">
+        <small>勤務時間</small>
+        <b>${esc(hours)}</b>
+      </div>`:""}
+    </div>
 
     <div class="public-job-tags">
       ${area?`<span>${esc(area)}</span>`:""}
-      ${employment?`<span>${esc(employment)}</span>`:""}
-      ${hours?`<span>${esc(hours)}</span>`:""}
+      ${source.label?`<span>${esc(source.label)}</span>`:""}
     </div>
 
     ${desc?`<p class="public-job-description">${esc(desc)}</p>`:""}
@@ -212,8 +235,6 @@ function renderJob(j){
       }
       ${j.shop_slug?`<a class="public-job-secondary" href="${detailHref}">店舗情報</a>`:""}
     </div>
-
-    ${source.url?`<small class="public-job-source">情報元：${esc(source.label)}</small>`:""}
   </article>`;
 }
 
