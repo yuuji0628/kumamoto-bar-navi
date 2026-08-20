@@ -2542,6 +2542,27 @@ a.directory-card:hover{
   display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:0 16px;
   border-radius:999px;background:var(--kbn-gold);color:#111!important;font-size:12px;font-weight:900
 }
+.public-header-actions{
+  display:flex;align-items:center;gap:8px;margin-left:auto;flex:0 0 auto
+}
+.public-header-actions .public-header-cta{margin-left:0}
+.public-member-cta{
+  min-width:112px;
+  border:2px solid #efc45a;
+  background:linear-gradient(180deg,#fff5d3,#efc45a)!important;
+  color:#151109!important;
+  box-shadow:0 0 0 1px rgba(239,196,90,.14),0 8px 22px rgba(239,196,90,.18);
+  white-space:nowrap
+}
+.public-member-cta:hover{filter:brightness(1.05)}
+.public-member-cta.is-logged-in{
+  background:#101821!important;
+  color:#efc45a!important;
+  border-color:#efc45a;
+  box-shadow:inset 0 0 0 1px rgba(239,196,90,.12),0 8px 20px rgba(0,0,0,.18)
+}
+.member-label-short{display:none}
+.public-search-cta{white-space:nowrap}
 .public-kicker{
   margin:0 0 7px;color:var(--kbn-gold);font-size:10px;font-weight:900;letter-spacing:.18em
 }
@@ -2834,7 +2855,16 @@ a.directory-card:hover{
   .public-brand img{width:38px;height:38px}
   .public-brand b,.public-brand strong{font-size:12px}
   .public-brand small{font-size:6px}
+  .public-brand{min-width:0;gap:7px}
+  .public-brand span{min-width:0}
   .public-header-cta{min-height:36px;padding:0 12px;font-size:10px}
+  .public-header-inner{gap:8px}
+  .public-header-actions{gap:5px}
+  .public-header-actions .public-header-cta{min-height:36px;padding:0 10px;font-size:9px}
+  .public-member-cta{min-width:64px}
+  .member-label-full{display:none}
+  .member-label-short{display:inline}
+  .public-search-cta{padding-left:11px!important;padding-right:11px!important}
 
   .public-hero-inner{padding:56px 0 60px}
   .public-hero h1{font-size:clamp(36px,11vw,48px)}
