@@ -156,32 +156,120 @@ async function ensureSubmissionJobColumns(env){
   }
 }
 
+function kbnSubmissionJobText(sub){
+  return [
+    sub?.job_title,
+    sub?.job_employment_type,
+    sub?.job_salary,
+    sub?.job_hours,
+    sub?.job_description,
+    sub?.job_contact,
+    sub?.note,
+    sub?.description,
+    sub?.features
+  ].filter(Boolean).join("\n").replace(/\r/g,"").trim();
+}
+
+function kbnJobIntentFromSubmission(sub){
+  if(b(sub?.wants_job))return true;
+
+  const text=kbnSubmissionJobText(sub);
+  if(!text)return false;
+
+  // 「求人あり」「スタッフ募集」などは単独でも強い判定
+  if(/(?:求人\s*(?:あり|有|希望|掲載)|スタッフ\s*募集|従業員\s*募集|アルバイト\s*募集|正社員\s*募集|求人情報)/i.test(text)){
+    return true;
+  }
+
+  // 備考などに複数の求人要素が書かれている場合も求人として判定
+  const signals=[
+    /(?:時給|日給|月給|給与|報酬)\s*[:：]?\s*[0-9０-９,，]+/i,
+    /(?:勤務時間|シフト|勤務日|勤務時間帯)\s*[:：]/i,
+    /(?:雇用形態|アルバイト|パート|正社員|業務委託)/i,
+    /(?:応募方法|応募先|連絡先)\s*[:：]/i,
+    /(?:仕事内容|募集職種|職種)\s*[:：]/i
+  ];
+  return signals.filter(rx=>rx.test(text)).length>=2;
+}
+
+function kbnExtractLabeledValue(text,labels,max=500){
+  const src=String(text||"");
+  const escaped=labels.map(x=>String(x).replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|");
+  const rx=new RegExp(`(?:^|\\n)\\s*(?:${escaped})\\s*[:：]\\s*([^\\n]+)`,"i");
+  const m=src.match(rx);
+  return m?t(m[1],max):"";
+}
+
+function kbnExtractJobData(sub){
+  const text=kbnSubmissionJobText(sub);
+
+  let title=t(sub?.job_title,180);
+  if(!title){
+    title=kbnExtractLabeledValue(text,["求人タイトル","募集タイトル","募集職種","職種"],180);
+  }
+  if(!title){
+    const m=text.match(/(?:スタッフ|アルバイト|正社員|パート)\s*募集[^\n]*/i);
+    title=m?t(m[0],180):"スタッフ募集";
+  }
+
+  let employment=t(sub?.job_employment_type,120);
+  if(!employment){
+    employment=kbnExtractLabeledValue(text,["雇用形態","勤務形態"],120);
+  }
+  if(!employment){
+    const types=[];
+    if(/正社員/i.test(text))types.push("正社員");
+    if(/アルバイト/i.test(text))types.push("アルバイト");
+    if(/パート/i.test(text))types.push("パート");
+    if(/業務委託/i.test(text))types.push("業務委託");
+    employment=types.join("・")||"応相談";
+  }
+
+  let salary=t(sub?.job_salary,180);
+  if(!salary){
+    salary=kbnExtractLabeledValue(text,["給与","時給","日給","月給","報酬"],180);
+  }
+  if(!salary){
+    const m=text.match(/(?:時給|日給|月給|給与|報酬)\s*[:：]?\s*[0-9０-９,，]+(?:円)?(?:\s*[〜～~-]\s*[0-9０-９,，]+(?:円)?)?/i);
+    salary=m?t(m[0],180):"詳細は店舗へお問い合わせください";
+  }
+
+  let hours=t(sub?.job_hours,180);
+  if(!hours){
+    hours=kbnExtractLabeledValue(text,["勤務時間","勤務時間帯","シフト","勤務日"],180);
+  }
+  if(!hours){
+    const m=text.match(/(?:勤務時間|シフト)\s*[:：]?\s*([^\n]+)/i);
+    hours=m?t(m[1],180):(t(sub?.hours,180)||"応相談");
+  }
+
+  let contact=t(sub?.job_contact,500);
+  if(!contact){
+    contact=kbnExtractLabeledValue(text,["応募先","応募方法","連絡先","問い合わせ先"],500);
+  }
+  if(!contact){
+    contact=t(sub?.email||sub?.phone||sub?.instagram||"",500);
+  }
+
+  let description=t(sub?.job_description,5000);
+  if(!description){
+    // 備考・説明に求人情報が含まれている場合、その内容を求人本文にそのまま活用
+    const candidate=[sub?.note,sub?.description,sub?.features].filter(Boolean).join("\n\n").trim();
+    description=t(candidate,5000)||"詳しい募集内容は店舗へお問い合わせください。";
+  }
+
+  return {title,employment,salary,hours,description,contact};
+}
+
 async function publishJobFromSubmission(env,sub,shopId){
-  if(!b(sub?.wants_job) || !shopId)return {ok:true,created:false};
+  if(!shopId || !kbnJobIntentFromSubmission(sub)){
+    return {ok:true,created:false,reason:"NO_JOB_INTENT"};
+  }
 
-  const title=t(sub.job_title,180)||"スタッフ募集";
-  const employmentType=t(sub.job_employment_type,120)||"応相談";
-  const salary=t(sub.job_salary,180)||"詳細は店舗へお問い合わせください";
-  const hours=t(sub.job_hours,180)||t(sub.hours,180)||"応相談";
-  const description=t(
-    sub.job_description ||
-    [
-      sub.description ? `店舗紹介：${sub.description}` : "",
-      sub.note ? `備考：${sub.note}` : ""
-    ].filter(Boolean).join("\n\n") ||
-    "詳しい募集内容は店舗へお問い合わせください。",
-    5000
-  );
-  const contact=t(
-    sub.job_contact ||
-    sub.email ||
-    sub.phone ||
-    sub.instagram ||
-    "",
-    500
-  );
+  const job=kbnExtractJobData(sub);
+  const {title,employment,salary,hours,description,contact}=job;
 
-  // 同じ店舗に同名の公開求人がある場合は重複作成せず更新
+  // 同じ店舗に同名の求人がある場合は重複作成せず更新
   const existing=await env.DB.prepare(`
     SELECT id FROM jobs
     WHERE shop_id=? AND title=?
@@ -195,9 +283,12 @@ async function publishJobFromSubmission(env,sub,shopId){
         is_published=1,sort_order=100,updated_at=CURRENT_TIMESTAMP
       WHERE id=?
     `).bind(
-      employmentType,salary,hours,description,contact,Number(existing.id)
+      employment,salary,hours,description,contact,Number(existing.id)
     ).run();
-    return {ok:true,created:false,updated:true,job_id:Number(existing.id)};
+    return {
+      ok:true,created:false,updated:true,job_id:Number(existing.id),
+      auto_detected:!b(sub?.wants_job),extracted:job
+    };
   }
 
   const r=await env.DB.prepare(`
@@ -205,10 +296,13 @@ async function publishJobFromSubmission(env,sub,shopId){
       shop_id,title,employment_type,salary,hours,description,contact,is_published,sort_order
     ) VALUES (?,?,?,?,?,?,?,1,100)
   `).bind(
-    shopId,title,employmentType,salary,hours,description,contact
+    shopId,title,employment,salary,hours,description,contact
   ).run();
 
-  return {ok:true,created:true,job_id:Number(r.meta?.last_row_id||0)};
+  return {
+    ok:true,created:true,job_id:Number(r.meta?.last_row_id||0),
+    auto_detected:!b(sub?.wants_job),extracted:job
+  };
 }
 
 async function mergeSubmissionIntoShop(env,sub,shopId){
@@ -523,7 +617,8 @@ const KBN_GITHUB_EDITABLE_FILES = [
   "areas.html",
   "robots.txt",
   "sitemap.xml",
-  "member.html"
+  "member.html",
+  "listing-form.html"
 ];
 
 function kbnGithubConfig(env){
@@ -4150,6 +4245,7 @@ async function enrichScheduledCreatedShops(env,created=[]){
   return {images,instagram};
 }
 
+// KBN v1.98: 備考・説明欄の求人情報も自動判定・抽出して求人掲載
 // KBN v1.97: 求人付き掲載申込みを承認時に求人へ自動反映・公開
 // KBN free member v1.93: PBKDF2 iteration compatibility fix
 // KBN free member v1.92: D1 schema compatibility + register diagnostics
