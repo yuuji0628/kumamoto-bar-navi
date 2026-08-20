@@ -3205,6 +3205,9 @@ html,body{max-width:100%;overflow-x:hidden}
 }
 </style>
 
+<style id="kbn-auto-listed-smart-v207">
+.auto-listed-toolbar-v207{display:grid;grid-template-columns:minmax(0,1fr) 120px 120px;gap:7px;margin:10px 0 8px}.auto-listed-toolbar-v207 input,.auto-listed-toolbar-v207 select{min-height:40px;border:1px solid #33404c;border-radius:10px;background:#0a1118;color:#fff;padding:0 10px;font-size:16px}.auto-listed-pager-v207{display:flex;align-items:center;justify-content:center;gap:10px;margin:8px 0 10px}.auto-listed-pager-v207 button{min-height:36px;padding:0 12px;border:1px solid #374451;border-radius:9px;background:#0d151d;color:#fff;font-weight:800}.auto-listed-pager-v207 button:disabled{opacity:.4}.auto-listed-pager-v207 span{min-width:74px;text-align:center;color:#9aa5b0;font-size:.65rem}.auto-listed-actions{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px!important}.auto-listed-actions button.delete{border-color:#7b3d44!important;background:#1b0e11!important;color:#ff9aa4!important}@media(max-width:700px){.auto-listed-toolbar-v207{grid-template-columns:1fr}.auto-listed-actions{grid-template-columns:repeat(2,1fr)}}
+</style>
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
 <div id="topMaintenanceResult" class="top-maintenance-result">
@@ -3217,7 +3220,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.06</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.07</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -3626,6 +3629,12 @@ html,body{max-width:100%;overflow-x:hidden}
           <button type="button" id="reloadAutoListedBtn">更新</button>
         </div>
         <div id="autoListedSummary" class="auto-listed-summary">読み込み中...</div>
+        <div class="auto-listed-toolbar-v207">
+          <input id="autoListedSearch" type="search" placeholder="店名・エリアで検索">
+          <select id="autoListedStatusFilter"><option value="">すべて</option><option value="live">掲載中</option><option value="off">取消済み</option></select>
+          <select id="autoListedSort"><option value="new">新しい順</option><option value="old">古い順</option><option value="name">店名順</option></select>
+        </div>
+        <div class="auto-listed-pager-v207"><button id="autoListedPrev" type="button">前へ</button><span id="autoListedPageInfo">1 / 1</span><button id="autoListedNext" type="button">次へ</button></div>
         <div id="autoListedShops" class="auto-listed-list"></div>
       </div>
     </div>
@@ -8902,77 +8911,47 @@ document.addEventListener("click",(e)=>{
 
 
 <script>
+let autoListedAll=[];
+let autoListedPage=1;
+const AUTO_LISTED_PAGE_SIZE=20;
+function renderAutoListedShops(){
+  const wrap=document.getElementById("autoListedShops");
+  const summary=document.getElementById("autoListedSummary");
+  if(!wrap)return;
+  const q=String(document.getElementById("autoListedSearch")?.value||"").trim().toLowerCase();
+  const status=String(document.getElementById("autoListedStatusFilter")?.value||"");
+  const sort=String(document.getElementById("autoListedSort")?.value||"new");
+  let rows=autoListedAll.filter(x=>{
+    const hay=`${x.name||""} ${x.area||""} ${x.genre||""}`.toLowerCase();
+    if(q&&!hay.includes(q))return false;
+    const on=Number(x.is_published||0)===1;
+    if(status==="live"&&!on)return false;
+    if(status==="off"&&on)return false;
+    return true;
+  });
+  rows.sort((a,b)=>sort==="old"?Number(a.id||0)-Number(b.id||0):sort==="name"?String(a.name||"").localeCompare(String(b.name||""),"ja"):Number(b.id||0)-Number(a.id||0));
+  const pages=Math.max(1,Math.ceil(rows.length/AUTO_LISTED_PAGE_SIZE));
+  autoListedPage=Math.min(Math.max(autoListedPage,1),pages);
+  const start=(autoListedPage-1)*AUTO_LISTED_PAGE_SIZE;
+  const pageRows=rows.slice(start,start+AUTO_LISTED_PAGE_SIZE);
+  const prev=document.getElementById("autoListedPrev"),next=document.getElementById("autoListedNext"),info=document.getElementById("autoListedPageInfo");
+  if(info)info.textContent=`${autoListedPage} / ${pages}`;
+  if(prev)prev.disabled=autoListedPage<=1;
+  if(next)next.disabled=autoListedPage>=pages;
+  if(summary){const live=autoListedAll.filter(x=>Number(x.is_published||0)===1).length;summary.textContent=`${autoListedAll.length}店舗 / 掲載中 ${live}店舗 / 取消済み ${autoListedAll.length-live}店舗 / 表示 ${rows.length}件`;}
+  if(!pageRows.length){wrap.innerHTML='<div class="auto-listed-empty">条件に一致する店舗はありません。</div>';return;}
+  wrap.innerHTML=pageRows.map(x=>{const on=Number(x.is_published||0)===1;return `<div class="auto-listed-item"><div class="auto-listed-main"><b>${esc(x.name||"店舗名未設定")}</b><small>${esc([x.area,x.genre].filter(Boolean).join(" / ")||"エリア未設定")}</small><div class="auto-listed-badges"><span class="auto-listed-badge">KBN独自掲載</span><span class="auto-listed-badge ${on?"live":"off"}">${on?"掲載中":"掲載取消済み"}</span></div></div><div class="auto-listed-actions"><button type="button" onclick="openAutoListedDetail(${Number(x.id||0)})">詳細</button><button type="button" onclick="editShop(${Number(x.id||0)})">編集</button>${on?`<button type="button" class="cancel" onclick="cancelAutoListing(${Number(x.id||0)},${JSON.stringify(String(x.name||''))})">掲載取消</button>`:`<button type="button" onclick="restoreAutoListing(${Number(x.id||0)})">再掲載</button>`}<button type="button" class="delete" onclick="deleteAutoListed(${Number(x.id||0)})">完全削除</button></div></div>`;}).join("");
+}
 window.loadAutoListedShops=async function(){
   const wrap=document.getElementById("autoListedShops");
   const summary=document.getElementById("autoListedSummary");
   if(!wrap)return;
-
   wrap.innerHTML='<div class="auto-listed-empty">読み込み中...</div>';
-
   try{
-    const pageSize=200;
-    let offset=0;
-    let total=0;
-    let live=0;
-    let cancelled=0;
-    const rows=[];
-
-    do{
-      const d=await api(`/api/admin/leads/auto-listed?limit=${pageSize}&offset=${offset}`);
-      const page=Array.isArray(d.shops)?d.shops:[];
-      total=Number(d.total||0);
-      live=Number(d.live||0);
-      cancelled=Number(d.cancelled||0);
-
-      rows.push(...page);
-      offset+=page.length;
-
-      if(summary){
-        summary.textContent=total
-          ? `読み込み中 ${Math.min(rows.length,total)} / ${total}店舗`
-          : "0店舗";
-      }
-
-      if(!page.length)break;
-    }while(rows.length<total);
-
-    if(summary){
-      summary.textContent=`${total}店舗 / 掲載中 ${live}店舗 / 取消済み ${cancelled}店舗`;
-    }
-
-    if(!rows.length){
-      wrap.innerHTML='<div class="auto-listed-empty">自動掲載された店舗はまだありません。</div>';
-      return;
-    }
-
-    wrap.innerHTML=rows.map(x=>{
-      const on=Number(x.is_published||0)===1;
-      const ig=x.instagram?String(x.instagram):"";
-      return `<div class="auto-listed-item" data-auto-shop-id="${Number(x.id||0)}">
-        <div class="auto-listed-main">
-          <b>${esc(x.name||"店舗名未設定")}</b>
-          <small>${esc([x.area,x.genre].filter(Boolean).join(" / ")||"エリア未設定")}</small>
-          <div class="auto-listed-badges">
-            <span class="auto-listed-badge">KBN独自掲載</span>
-            <span class="auto-listed-badge ${on?"live":"off"}">${on?"掲載中":"掲載取消済み"}</span>
-          </div>
-        </div>
-        <div class="auto-listed-actions">
-          <button type="button" onclick="openAutoListedDetail(${Number(x.id||0)})">詳細</button>
-          <button type="button" onclick="editShop(${Number(x.id||0)})">編集</button>
-          ${on
-            ? `<button type="button" class="cancel" onclick="unpublishAutoListed(${Number(x.id||0)})">掲載取消</button>`
-            : `<button type="button" onclick="restoreAutoListed(${Number(x.id||0)})">再掲載</button>`
-          }
-        </div>
-      </div>`;
-    }).join("");
-
-  }catch(e){
-    console.error("loadAutoListedShops failed",e);
-    if(summary)summary.textContent="読み込みエラー";
-    wrap.innerHTML=`<div class="auto-listed-empty">${esc(e?.message||"読み込みエラー")}</div>`;
-  }
+    const pageSize=200;let offset=0,total=0;const rows=[];
+    do{const d=await api(`/api/admin/leads/auto-listed?limit=${pageSize}&offset=${offset}`);const page=Array.isArray(d.shops)?d.shops:[];total=Number(d.total||0);rows.push(...page);offset+=page.length;if(summary)summary.textContent=`読み込み中 ${Math.min(rows.length,total)} / ${total}店舗`;if(!page.length)break;}while(rows.length<total);
+    autoListedAll=rows;autoListedPage=1;renderAutoListedShops();
+  }catch(e){if(summary)summary.textContent="読み込みエラー";wrap.innerHTML=`<div class="auto-listed-empty">${esc(e?.message||"読み込みエラー")}</div>`;}
 };
 
 
@@ -9060,6 +9039,13 @@ window.jumpToInstagramDm=function(id){
   window.open(`https://ig.me/m/${encodeURIComponent(handle)}`,"_blank","noopener");
 };
 
+window.deleteAutoListed=async function(id){
+  const shop=autoListedAll.find(x=>Number(x.id)===Number(id));
+  if(!shop)return;
+  if(!confirm(`「${shop.name||"この店舗"}」を完全削除します。\n\n掲載取消ではなく、データベースから削除します。\nこの操作は元に戻せません。\n\n続行しますか？`))return;
+  if(!confirm(`最終確認\n\n「${shop.name||"この店舗"}」を本当に完全削除しますか？`))return;
+  try{await api(`/api/admin/leads/auto-listed/${id}`,{method:"DELETE"});autoListedAll=autoListedAll.filter(x=>Number(x.id)!==Number(id));renderAutoListedShops();alert("店舗を完全削除しました。");}catch(e){alert("完全削除できませんでした: "+(e?.message||"UNKNOWN_ERROR"));}
+};
 window.cancelAutoListing=async function(id,name){
   if(!confirm(`${name||"この店舗"}の掲載を取り消しますか？\
 \
@@ -9514,4 +9500,14 @@ document.addEventListener("DOMContentLoaded",()=>{
 });
 </script>
 
+<script id="kbn-auto-listed-bind-v207">
+document.addEventListener("DOMContentLoaded",()=>{
+  const s=id=>document.getElementById(id);
+  s("autoListedSearch")?.addEventListener("input",()=>{autoListedPage=1;renderAutoListedShops();});
+  s("autoListedStatusFilter")?.addEventListener("change",()=>{autoListedPage=1;renderAutoListedShops();});
+  s("autoListedSort")?.addEventListener("change",()=>{autoListedPage=1;renderAutoListedShops();});
+  s("autoListedPrev")?.addEventListener("click",()=>{if(autoListedPage>1){autoListedPage--;renderAutoListedShops();}});
+  s("autoListedNext")?.addEventListener("click",()=>{autoListedPage++;renderAutoListedShops();});
+});
+</script>
 </body></html>
