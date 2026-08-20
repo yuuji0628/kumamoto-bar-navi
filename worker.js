@@ -262,7 +262,9 @@ function kbnClearSessionCookie(){
   return `${KBN_MEMBER_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
 }
 async function ensureKbnMemberSchema(env){
-  await env.DB.exec(`
+  // D1では複数CREATEを1回のexecにまとめず、1テーブルずつ確実に作成する。
+  // 外部キー制約に依存せず、既存DBとの互換性を優先。
+  await env.DB.prepare(`
     CREATE TABLE IF NOT EXISTS members(
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       email TEXT NOT NULL UNIQUE,
@@ -275,23 +277,36 @@ async function ensureKbnMemberSchema(env){
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       last_login_at TEXT
-    );
+    )
+  `).run();
+
+  await env.DB.prepare(`
     CREATE TABLE IF NOT EXISTS member_sessions(
       token TEXT PRIMARY KEY,
       member_id INTEGER NOT NULL,
       expires_at TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY(member_id) REFERENCES members(id) ON DELETE CASCADE
-    );
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run();
+
+  await env.DB.prepare(`
     CREATE TABLE IF NOT EXISTS member_favorites(
       member_id INTEGER NOT NULL,
       shop_id INTEGER NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY(member_id,shop_id),
-      FOREIGN KEY(member_id) REFERENCES members(id) ON DELETE CASCADE,
-      FOREIGN KEY(shop_id) REFERENCES shops(id) ON DELETE CASCADE
-    );
-  `);
+      PRIMARY KEY(member_id,shop_id)
+    )
+  `).run();
+
+  await env.DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_member_sessions_member
+    ON member_sessions(member_id)
+  `).run();
+
+  await env.DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_member_favorites_member
+    ON member_favorites(member_id)
+  `).run();
 }
 async function kbnCurrentMember(env,request){
   await ensureKbnMemberSchema(env);
@@ -4056,6 +4071,7 @@ async function enrichScheduledCreatedShops(env,created=[]){
   return {images,instagram};
 }
 
+// KBN free member v1.92: D1 schema compatibility + register diagnostics
 // KBN free member v1.91: registration response reliability fix
 // KBN free member v1.90: registration, login, favorites, email opt-in
 // KBN Google reviews v1.84: public rating + up to 3 reviews
@@ -4554,8 +4570,9 @@ ${urls.map(x=>`  <url>
 
     // -------------------- FREE MEMBER API v1.90 --------------------
     if(url.pathname==="/api/member/register" && request.method==="POST"){
-      await ensureKbnMemberSchema(env);
-      let x={};try{x=await request.json()}catch{}
+      try{
+        await ensureKbnMemberSchema(env);
+        let x={};try{x=await request.json()}catch{}
       const email=kbnMemberEmail(x.email);
       const displayName=kbnMemberName(x.display_name);
       const password=String(x.password||"");
@@ -4589,13 +4606,21 @@ ${urls.map(x=>`  <url>
 
       // 登録完了レスポンスを最優先。Welcomeメールは登録処理をブロックしない。
       // 新着BARメール配信は予約メンテナンス時に別処理で送信します。
-      return kbnMemberJson({
-        ok:true,
-        member:kbnPublicMember({
-          ...member,
-          email_notifications:Number(member.email_notifications||0)===1
-        })
-      },201,{"Set-Cookie":kbnSessionCookie(token)});
+        return kbnMemberJson({
+          ok:true,
+          member:kbnPublicMember({
+            ...member,
+            email_notifications:Number(member.email_notifications||0)===1
+          })
+        },201,{"Set-Cookie":kbnSessionCookie(token)});
+      }catch(e){
+        console.error("member register failed",e);
+        return kbnMemberJson({
+          ok:false,
+          error:"REGISTER_FAILED",
+          detail:String(e?.message||e||"UNKNOWN")
+        },500);
+      }
     }
 
     if(url.pathname==="/api/member/login" && request.method==="POST"){
