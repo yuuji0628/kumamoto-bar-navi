@@ -6,7 +6,7 @@
   <meta name="description" content="熊本のBAR店舗情報｜KUMAMOTO BAR NAVI">
   <meta name="theme-color" content="#080b10">
   <title>店舗詳細｜KUMAMOTO BAR NAVI</title>
-  <link rel="stylesheet" href="style.css?v=186">
+  <link rel="stylesheet" href="style.css?v=190">
 <link id="dynamicCanonical" rel="canonical" href="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/shop.html">
 <meta id="dynamicOgTitle" property="og:title" content="店舗詳細｜KUMAMOTO BAR NAVI">
 <meta id="dynamicOgDescription" property="og:description" content="熊本のBAR店舗情報">
@@ -258,7 +258,7 @@ body{
 </style>
 
 </head>
-<body class="public-v109 public-v186">
+<body class="public-v109 public-v190">
 
 <header class="public-header">
   <div class="container public-header-inner">
@@ -266,7 +266,10 @@ body{
       <img src="logo.png" alt="KUMAMOTO BAR NAVI">
       <span><b>KUMAMOTO</b><strong>BAR NAVI</strong><small>BAR & JOB INFORMATION</small></span>
     </a>
-    <a class="public-header-cta" href="bars.html">BARを探す</a>
+    <div style="display:flex;gap:7px;align-items:center">
+      <a class="public-header-cta" href="member.html" style="background:#101821;color:#efc45a;border:1px solid #534829">会員</a>
+      <a class="public-header-cta" href="bars.html">BARを探す</a>
+    </div>
   </div>
 </header>
 
@@ -580,10 +583,47 @@ async function load(){
     const fav=document.querySelector("[data-favorite-shop]");
     if(fav){
       const key="kbn_fav_"+String(s.id||s.slug||name);
-      const paint=()=>fav.textContent=localStorage.getItem(key)==="1"?"♥ お気に入り済み":"♡ お気に入り";
+      let member=null;
+      let serverFav=false;
+
+      try{
+        const mr=await fetch("/api/member/me",{cache:"no-store"});
+        const md=await mr.json();
+        member=md?.member||null;
+        if(member){
+          const fr=await fetch("/api/member/favorites",{cache:"no-store"});
+          const fd=await fr.json();
+          serverFav=Array.isArray(fd?.favorites)&&fd.favorites.some(x=>Number(x.id)===Number(s.id));
+        }
+      }catch{}
+
+      const paint=()=>{
+        const on=member?serverFav:(localStorage.getItem(key)==="1");
+        fav.textContent=on?"♥ お気に入り済み":"♡ お気に入り";
+      };
       paint();
-      fav.addEventListener("click",()=>{
-        localStorage.setItem(key,localStorage.getItem(key)==="1"?"0":"1");paint();
+
+      fav.addEventListener("click",async()=>{
+        if(member){
+          try{
+            const next=!serverFav;
+            const r=await fetch(`/api/member/favorites/${Number(s.id)}`,{method:next?"POST":"DELETE"});
+            if(!r.ok)throw new Error("FAVORITE_FAILED");
+            serverFav=next;
+            paint();
+          }catch{}
+        }else{
+          const next=localStorage.getItem(key)!=="1";
+          localStorage.setItem(key,next?"1":"0");
+          paint();
+          if(next){
+            setTimeout(()=>{
+              if(confirm("無料会員ならお気に入りを端末をまたいで保存できます。会員登録しますか？")){
+                location.href="member.html";
+              }
+            },100);
+          }
+        }
       });
     }
 
