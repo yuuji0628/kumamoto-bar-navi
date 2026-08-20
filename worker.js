@@ -132,6 +132,85 @@ function submissionArea(sub){
   );
 }
 
+
+// KBN v1.97: 求人付き掲載申込みの自動反映
+async function ensureSubmissionJobColumns(env){
+  const cols=[
+    ["job_title","TEXT"],
+    ["job_employment_type","TEXT"],
+    ["job_salary","TEXT"],
+    ["job_hours","TEXT"],
+    ["job_description","TEXT"],
+    ["job_contact","TEXT"]
+  ];
+  const info=await env.DB.prepare("PRAGMA table_info(submissions)").all();
+  const names=new Set((info.results||[]).map(x=>String(x.name||"")));
+  for(const [name,type] of cols){
+    if(names.has(name))continue;
+    try{
+      await env.DB.prepare(`ALTER TABLE submissions ADD COLUMN ${name} ${type}`).run();
+    }catch(e){
+      const msg=String(e?.message||e||"");
+      if(!/duplicate column/i.test(msg))throw e;
+    }
+  }
+}
+
+async function publishJobFromSubmission(env,sub,shopId){
+  if(!b(sub?.wants_job) || !shopId)return {ok:true,created:false};
+
+  const title=t(sub.job_title,180)||"スタッフ募集";
+  const employmentType=t(sub.job_employment_type,120)||"応相談";
+  const salary=t(sub.job_salary,180)||"詳細は店舗へお問い合わせください";
+  const hours=t(sub.job_hours,180)||t(sub.hours,180)||"応相談";
+  const description=t(
+    sub.job_description ||
+    [
+      sub.description ? `店舗紹介：${sub.description}` : "",
+      sub.note ? `備考：${sub.note}` : ""
+    ].filter(Boolean).join("\n\n") ||
+    "詳しい募集内容は店舗へお問い合わせください。",
+    5000
+  );
+  const contact=t(
+    sub.job_contact ||
+    sub.email ||
+    sub.phone ||
+    sub.instagram ||
+    "",
+    500
+  );
+
+  // 同じ店舗に同名の公開求人がある場合は重複作成せず更新
+  const existing=await env.DB.prepare(`
+    SELECT id FROM jobs
+    WHERE shop_id=? AND title=?
+    ORDER BY id DESC LIMIT 1
+  `).bind(shopId,title).first();
+
+  if(existing?.id){
+    await env.DB.prepare(`
+      UPDATE jobs SET
+        employment_type=?,salary=?,hours=?,description=?,contact=?,
+        is_published=1,sort_order=100,updated_at=CURRENT_TIMESTAMP
+      WHERE id=?
+    `).bind(
+      employmentType,salary,hours,description,contact,Number(existing.id)
+    ).run();
+    return {ok:true,created:false,updated:true,job_id:Number(existing.id)};
+  }
+
+  const r=await env.DB.prepare(`
+    INSERT INTO jobs (
+      shop_id,title,employment_type,salary,hours,description,contact,is_published,sort_order
+    ) VALUES (?,?,?,?,?,?,?,1,100)
+  `).bind(
+    shopId,title,employmentType,salary,hours,description,contact
+  ).run();
+
+  return {ok:true,created:true,job_id:Number(r.meta?.last_row_id||0)};
+}
+
 async function mergeSubmissionIntoShop(env,sub,shopId){
   const current=await env.DB.prepare("SELECT * FROM shops WHERE id=?").bind(shopId).first();
   if(!current)throw new Error("DUPLICATE_SHOP_NOT_FOUND");
@@ -4071,6 +4150,7 @@ async function enrichScheduledCreatedShops(env,created=[]){
   return {images,instagram};
 }
 
+// KBN v1.97: 求人付き掲載申込みを承認時に求人へ自動反映・公開
 // KBN free member v1.93: PBKDF2 iteration compatibility fix
 // KBN free member v1.92: D1 schema compatibility + register diagnostics
 // KBN free member v1.91: registration response reliability fix
@@ -4762,16 +4842,20 @@ ${urls.map(x=>`  <url>
     if(url.pathname==="/api/submissions" && request.method==="POST"){
       let x; try{x=await request.json()}catch{return json({ok:false,error:"INVALID_JSON"},{status:400})}
       if(!t(x.shop_name,150)) return json({ok:false,error:"SHOP_NAME_REQUIRED"},{status:400});
+      await ensureSubmissionJobColumns(env);
       await env.DB.prepare(`
         INSERT INTO submissions (
           shop_name, contact_name, email, phone, address, hours, holiday, instagram,
-          genre, features, description, budget_min, budget_max, seats, wants_job, note
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+          genre, features, description, budget_min, budget_max, seats, wants_job, note,
+          job_title,job_employment_type,job_salary,job_hours,job_description,job_contact
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
       `).bind(
         t(x.shop_name,150),t(x.contact_name,150),t(x.email,200),t(x.phone,80),
         t(x.address,300),t(x.hours,150),t(x.holiday,120),t(x.instagram,500),
         t(x.genre,120),t(x.features,1000),t(x.description,5000),ni(x.budget_min),
-        ni(x.budget_max),ni(x.seats),b(x.wants_job),t(x.note,3000)
+        ni(x.budget_max),ni(x.seats),b(x.wants_job),t(x.note,3000),
+        t(x.job_title,180),t(x.job_employment_type,120),t(x.job_salary,180),
+        t(x.job_hours,180),t(x.job_description,5000),t(x.job_contact,500)
       ).run();
 
       let notification={ok:false,error:"NOT_ATTEMPTED"};
@@ -6105,6 +6189,7 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
       }
 
       if(url.pathname==="/api/admin/submissions" && request.method==="GET"){
+        await ensureSubmissionJobColumns(env);
         const r=await env.DB.prepare("SELECT * FROM submissions ORDER BY id DESC").all();
         const rows=r.results||[];
 
@@ -6122,6 +6207,7 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
       const ap=url.pathname.match(/^\/api\/admin\/submissions\/(\d+)\/approve$/);
       if(ap && request.method==="POST"){
         const id=Number(ap[1]);
+        await ensureSubmissionJobColumns(env);
         const sub=await env.DB.prepare("SELECT * FROM submissions WHERE id=?").bind(id).first();
         if(!sub)return json({ok:false,error:"NOT_FOUND"},{status:404});
         if(String(sub.status||"pending")!=="pending"){
@@ -6142,10 +6228,13 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
             "UPDATE submissions SET status='approved',reviewed_at=CURRENT_TIMESTAMP WHERE id=?"
           ).bind(id).run();
 
+          const job=await publishJobFromSubmission(env,sub,Number(merged.id));
+
           return json({
             ok:true,
             shop_id:Number(merged.id),
             merged:true,
+            job,
             converted_from_provisional:String(merged.listing_status||"published")==="published",
             message:"EXISTING_SHOP_MERGED"
           });
@@ -6158,11 +6247,14 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
             "UPDATE submissions SET status='approved',reviewed_at=CURRENT_TIMESTAMP WHERE id=?"
           ).bind(id).run();
 
+          const job=await publishJobFromSubmission(env,sub,Number(merged.id));
+
           return json({
             ok:true,
             shop_id:Number(merged.id),
             merged:true,
             auto_merged:true,
+            job,
             duplicate,
             message:"DUPLICATE_AUTO_MERGED"
           });
@@ -6201,7 +6293,10 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
           "UPDATE submissions SET status='approved',reviewed_at=CURRENT_TIMESTAMP WHERE id=?"
         ).bind(id).run();
 
-        return json({ok:true,shop_id:r.meta?.last_row_id,merged:false});
+        const shopId=Number(r.meta?.last_row_id||0);
+        const job=await publishJobFromSubmission(env,sub,shopId);
+
+        return json({ok:true,shop_id:shopId,merged:false,job});
       }
       const rp=url.pathname.match(/^\/api\/admin\/submissions\/(\d+)\/reject$/);
       if(rp && request.method==="POST"){
