@@ -1918,7 +1918,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.95 画面圧縮調整
+   KBN ADMIN ver1.99 画面圧縮調整
    ============================================================ */
 
 /* 上部 welcome とログアウトをコンパクト化 */
@@ -3336,6 +3336,28 @@ html,body{max-width:100%;overflow-x:hidden}
 <section id="tab-jobs" class="admin-block" hidden>
 <div class="admin-block-head"><div><p class="eyebrow">JOBS</p><h2>求人管理</h2></div><button id="reloadJobs" class="admin-secondary-btn" type="button">再読み込み</button></div>
 
+
+<div class="job-auto-panel" style="margin-bottom:16px;border-color:rgba(218,177,68,.38)">
+  <div class="job-auto-head">
+    <div>
+      <span class="job-auto-badge">PAST</span>
+      <h3>承認済み申込みから求人を再検出</h3>
+      <p>正式掲載済みの申込みを再チェックし、備考・説明・特徴などに求人情報があれば候補表示します。内容を確認してから公開できます。</p>
+    </div>
+    <button type="button" id="scanApprovedJobBtn" class="admin-primary-outline">再検出する</button>
+  </div>
+
+  <div id="approvedJobScanStatus" class="auto-discovery-status"></div>
+
+  <div class="job-candidate-head">
+    <strong>承認済み申込みの求人候補</strong>
+    <button type="button" id="reloadApprovedJobCandidates" class="admin-secondary-btn">再読み込み</button>
+  </div>
+  <div id="approvedJobCandidateList" class="job-candidate-list">
+    <div class="job-candidate-empty">「再検出する」を押すと過去の承認済み申込みを確認します。</div>
+  </div>
+</div>
+
 <div class="job-auto-panel">
   <div class="job-auto-head">
     <div>
@@ -3957,7 +3979,11 @@ document.querySelectorAll(".admin-tabs button").forEach(b=>b.onclick=async()=>{
   try{
     if(b.dataset.tab==="subs" && typeof window.loadSubs==="function")await window.loadSubs();
     else if(b.dataset.tab==="shops" && typeof window.loadShops==="function")await window.loadShops();
-    else if(b.dataset.tab==="jobs"){ if(typeof window.loadJobs==="function")await window.loadJobs(); if(typeof window.loadJobCandidates==="function")await window.loadJobCandidates(); }
+    else if(b.dataset.tab==="jobs"){
+      if(typeof window.loadJobs==="function")await window.loadJobs();
+      if(typeof window.loadJobCandidates==="function")await window.loadJobCandidates();
+      if(typeof window.loadApprovedSubmissionJobCandidates==="function")await window.loadApprovedSubmissionJobCandidates(false);
+    }
     else if(b.dataset.tab==="ownerreq" && typeof window.loadOwnerReq==="function")await window.loadOwnerReq();
     else if(b.dataset.tab==="leads")window.renderLeadList?.();
     else if(b.dataset.tab==="siteupdate" && typeof window.loadKbnGithubStatus==="function")await window.loadKbnGithubStatus();
@@ -4724,6 +4750,128 @@ window.rejectJobCandidate=async function(id){
   }
 };
 
+
+
+let approvedSubmissionJobCandidates=[];
+
+window.loadApprovedSubmissionJobCandidates=async function(showStatus=false){
+  const list=$("approvedJobCandidateList");
+  const status=$("approvedJobScanStatus");
+  if(!list)return;
+
+  list.innerHTML="<p style='color:#8f99a4'>承認済み申込みを確認しています...</p>";
+  if(showStatus && status)status.textContent="過去の承認済み申込みを再検出しています...";
+
+  try{
+    const d=await api("/api/admin/jobs/approved-submission-candidates");
+    approvedSubmissionJobCandidates=Array.isArray(d.candidates)?d.candidates:[];
+
+    if(status){
+      status.innerHTML=`<b>${approvedSubmissionJobCandidates.length}件</b>の求人候補を検出しました。`;
+    }
+
+    if(!approvedSubmissionJobCandidates.length){
+      list.innerHTML="<div class='job-candidate-empty'>求人情報を含む承認済み申込みは見つかりませんでした。</div>";
+      return;
+    }
+
+    list.innerHTML=approvedSubmissionJobCandidates.map(c=>`
+      <article class="job-candidate-card">
+        <div class="job-candidate-main">
+          <div class="job-candidate-title-row">
+            <span class="job-candidate-label">${c.auto_detected?"備考等から自動検出":"求人希望あり"}</span>
+            <small>${esc(c.shop_name||c.submission_shop_name||"店舗未設定")}</small>
+          </div>
+          <h3>${esc(c.title||"スタッフ募集")}</h3>
+
+          <div class="job-candidate-facts">
+            ${c.employment_type?`<span><small>雇用形態</small><b>${esc(c.employment_type)}</b></span>`:""}
+            ${c.salary?`<span><small>給与</small><b>${esc(c.salary)}</b></span>`:""}
+            ${c.hours?`<span><small>勤務時間</small><b>${esc(c.hours)}</b></span>`:""}
+          </div>
+
+          ${c.description?`<p class="job-candidate-snippet">${esc(c.description)}</p>`:""}
+          ${c.contact?`<p class="job-candidate-features">応募先：${esc(c.contact)}</p>`:""}
+
+          ${c.match_reasons?.length?`
+            <div class="job-candidate-source">
+              <small>店舗一致</small>
+              <span>${esc(c.match_reasons.join(" / "))}（一致度 ${Number(c.match_score||0)}）</span>
+            </div>`:""}
+
+          ${c.existing_job_id?`
+            <p style="margin:10px 0 0;color:#efc45a;font-size:.72rem">
+              既存求人あり：${c.existing_job_published?"公開中":"非公開"} / 掲載すると既存求人を更新します
+            </p>`:""}
+        </div>
+
+        <div class="job-candidate-actions">
+          <button type="button" onclick="previewApprovedSubmissionJob(${Number(c.submission_id)})" class="admin-secondary-btn">内容確認</button>
+          <button type="button" onclick="publishApprovedSubmissionJob(${Number(c.submission_id)})" class="btn-gold">求人として掲載</button>
+        </div>
+      </article>
+    `).join("");
+  }catch(e){
+    console.error("loadApprovedSubmissionJobCandidates failed",e);
+    if(status)status.textContent="再検出に失敗しました: "+(e?.message||"UNKNOWN_ERROR");
+    list.innerHTML=`<div class="analytics-error-box"><b>求人候補を読み込めませんでした。</b><p>${esc(e?.message||"UNKNOWN_ERROR")}</p></div>`;
+  }
+};
+
+window.previewApprovedSubmissionJob=function(submissionId){
+  const c=approvedSubmissionJobCandidates.find(x=>Number(x.submission_id)===Number(submissionId));
+  if(!c)return;
+  alert([
+    `店舗：${c.shop_name||c.submission_shop_name||""}`,
+    `求人タイトル：${c.title||"スタッフ募集"}`,
+    `雇用形態：${c.employment_type||"未設定"}`,
+    `給与：${c.salary||"未設定"}`,
+    `勤務時間：${c.hours||"未設定"}`,
+    `応募先：${c.contact||"未設定"}`,
+    "",
+    "仕事内容・備考:",
+    c.description||"未設定"
+  ].join("\n"));
+};
+
+window.publishApprovedSubmissionJob=async function(submissionId){
+  const c=approvedSubmissionJobCandidates.find(x=>Number(x.submission_id)===Number(submissionId));
+  if(!c)return;
+
+  const mode=c.existing_job_id?"既存求人を更新して公開":"新しい求人として公開";
+  if(!confirm(
+    `「${c.shop_name||c.submission_shop_name||"店舗"}」の申込み内容から求人を${mode}します。\n\n`+
+    `タイトル：${c.title||"スタッフ募集"}\n`+
+    `給与：${c.salary||"未設定"}\n`+
+    `勤務時間：${c.hours||"未設定"}\n\n公開してよろしいですか？`
+  ))return;
+
+  try{
+    const d=await api(`/api/admin/jobs/approved-submissions/${submissionId}/publish`,{method:"POST"});
+    await Promise.all([loadApprovedSubmissionJobCandidates(false),loadJobs()]);
+    alert(d?.job?.updated
+      ?"既存求人を申込み内容で更新して公開しました。"
+      :"求人を公開しました。");
+  }catch(e){
+    alert("求人を公開できませんでした: "+(e?.message||"UNKNOWN_ERROR"));
+  }
+};
+
+window.scanApprovedSubmissionJobs=async function(){
+  const btn=$("scanApprovedJobBtn");
+  if(btn){
+    btn.disabled=true;
+    btn.textContent="再検出中...";
+  }
+  try{
+    await loadApprovedSubmissionJobCandidates(true);
+  }finally{
+    if(btn){
+      btn.disabled=false;
+      btn.textContent="再検出する";
+    }
+  }
+};
 
 window.loadJobs=async function(){
   const list=$("jobList");
@@ -7953,6 +8101,8 @@ document.addEventListener("click",e=>{
 loadLeadSearchConfig();
 safeBind("reloadShops","click",()=>window.loadShops?.());
 safeBind("reloadJobs","click",()=>window.loadJobs?.());
+safeBind("scanApprovedJobBtn","click",()=>window.scanApprovedSubmissionJobs?.());
+safeBind("reloadApprovedJobCandidates","click",()=>window.loadApprovedSubmissionJobCandidates?.(false));
 safeBind("reloadSubs","click",()=>window.loadSubs?.());
 safeBind("reloadOwnerReq","click",()=>window.loadOwnerReq?.());
 safeBind("reloadAnalytics","click",()=>window.loadAnalytics?.());
