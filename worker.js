@@ -4056,6 +4056,7 @@ async function enrichScheduledCreatedShops(env,created=[]){
   return {images,instagram};
 }
 
+// KBN free member v1.91: registration response reliability fix
 // KBN free member v1.90: registration, login, favorites, email opt-in
 // KBN Google reviews v1.84: public rating + up to 3 reviews
 // KBN admin file create v1.83: missing GitHub file => create, existing => overwrite
@@ -4586,7 +4587,8 @@ ${urls.map(x=>`  <url>
         FROM members WHERE id=? LIMIT 1
       `).bind(memberId).first();
 
-      try{await kbnSendMemberWelcome(env,member)}catch(e){console.error("member welcome failed",e)}
+      // 登録完了レスポンスを最優先。Welcomeメールは登録処理をブロックしない。
+      // 新着BARメール配信は予約メンテナンス時に別処理で送信します。
       return kbnMemberJson({
         ok:true,
         member:kbnPublicMember({
