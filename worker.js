@@ -198,7 +198,9 @@ const KBN_GITHUB_EDITABLE_FILES = [
   "bars.html",
   "shop.html",
   "jobs.html",
-  "areas.html"
+  "areas.html",
+  "robots.txt",
+  "sitemap.xml"
 ];
 
 function kbnGithubConfig(env){
@@ -3749,6 +3751,7 @@ async function enrichScheduledCreatedShops(env,created=[]){
   return {images,instagram};
 }
 
+// KBN admin file permission v1.82: allow robots.txt / sitemap.xml
 // KBN scheduled maintenance v1.81:
  // target 15 listings, multi-pass discovery + image + Instagram enrichment
 async function runScheduledKbnMaintenance(env){
