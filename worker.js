@@ -188,6 +188,234 @@ const hasAccess=req=>Boolean(req.headers.get("Cf-Access-Authenticated-User-Email
 
 
 
+
+// ============================================================
+// KBN FREE MEMBER v1.90
+// Free registration / login / favorites sync / new-listing email opt-in
+// ============================================================
+const KBN_MEMBER_COOKIE="kbn_member_session";
+const KBN_MEMBER_SESSION_DAYS=30;
+const KBN_MEMBER_PBKDF2_ITERATIONS=120000;
+
+function kbnMemberJson(data,status=200,headers={}){
+  return json(data,{status,headers});
+}
+function kbnMemberEmail(v){
+  return String(v||"").trim().toLowerCase().slice(0,254);
+}
+function kbnMemberName(v){
+  return String(v||"").trim().slice(0,80);
+}
+function kbnRandomToken(bytes=32){
+  const a=new Uint8Array(bytes);
+  crypto.getRandomValues(a);
+  return Array.from(a,b=>b.toString(16).padStart(2,"0")).join("");
+}
+function kbnBytesToBase64(bytes){
+  let s="";
+  for(const b of bytes)s+=String.fromCharCode(b);
+  return btoa(s);
+}
+function kbnBase64ToBytes(s){
+  const bin=atob(String(s||""));
+  return Uint8Array.from(bin,c=>c.charCodeAt(0));
+}
+async function kbnHashPassword(password,saltB64=""){
+  const passwordText=String(password||"");
+  const salt=saltB64?kbnBase64ToBytes(saltB64):crypto.getRandomValues(new Uint8Array(16));
+  const key=await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(passwordText),
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+  const bits=await crypto.subtle.deriveBits(
+    {name:"PBKDF2",salt,iterations:KBN_MEMBER_PBKDF2_ITERATIONS,hash:"SHA-256"},
+    key,
+    256
+  );
+  return {
+    salt:kbnBytesToBase64(salt),
+    hash:kbnBytesToBase64(new Uint8Array(bits))
+  };
+}
+function kbnSafeEqual(a,b){
+  const x=String(a||""),y=String(b||"");
+  if(x.length!==y.length)return false;
+  let diff=0;
+  for(let i=0;i<x.length;i++)diff|=x.charCodeAt(i)^y.charCodeAt(i);
+  return diff===0;
+}
+function kbnCookieValue(request,name){
+  const raw=String(request.headers.get("Cookie")||"");
+  for(const part of raw.split(";")){
+    const [k,...rest]=part.trim().split("=");
+    if(k===name)return decodeURIComponent(rest.join("="));
+  }
+  return "";
+}
+function kbnSessionCookie(token,maxAge=KBN_MEMBER_SESSION_DAYS*86400){
+  return `${KBN_MEMBER_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
+}
+function kbnClearSessionCookie(){
+  return `${KBN_MEMBER_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
+}
+async function ensureKbnMemberSchema(env){
+  await env.DB.exec(`
+    CREATE TABLE IF NOT EXISTS members(
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT NOT NULL UNIQUE,
+      display_name TEXT,
+      password_hash TEXT NOT NULL,
+      password_salt TEXT NOT NULL,
+      email_notifications INTEGER NOT NULL DEFAULT 1,
+      unsubscribe_token TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL DEFAULT 'active',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      last_login_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS member_sessions(
+      token TEXT PRIMARY KEY,
+      member_id INTEGER NOT NULL,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(member_id) REFERENCES members(id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS member_favorites(
+      member_id INTEGER NOT NULL,
+      shop_id INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY(member_id,shop_id),
+      FOREIGN KEY(member_id) REFERENCES members(id) ON DELETE CASCADE,
+      FOREIGN KEY(shop_id) REFERENCES shops(id) ON DELETE CASCADE
+    );
+  `);
+}
+async function kbnCurrentMember(env,request){
+  await ensureKbnMemberSchema(env);
+  const token=kbnCookieValue(request,KBN_MEMBER_COOKIE);
+  if(!token)return null;
+  const row=await env.DB.prepare(`
+    SELECT m.id,m.email,m.display_name,m.email_notifications,m.status,
+           s.token,s.expires_at
+    FROM member_sessions s
+    JOIN members m ON m.id=s.member_id
+    WHERE s.token=? AND m.status='active'
+      AND datetime(s.expires_at)>datetime('now')
+    LIMIT 1
+  `).bind(token).first();
+  if(!row)return null;
+  return {
+    id:Number(row.id),
+    email:String(row.email||""),
+    display_name:String(row.display_name||""),
+    email_notifications:Number(row.email_notifications||0)===1
+  };
+}
+async function kbnCreateMemberSession(env,memberId){
+  const token=kbnRandomToken(32);
+  await env.DB.prepare(`
+    DELETE FROM member_sessions
+    WHERE member_id=? AND datetime(expires_at)<=datetime('now')
+  `).bind(memberId).run();
+  await env.DB.prepare(`
+    INSERT INTO member_sessions(token,member_id,expires_at)
+    VALUES(?,?,datetime('now','+30 days'))
+  `).bind(token,memberId).run();
+  return token;
+}
+function kbnPublicMember(m){
+  if(!m)return null;
+  return {
+    id:Number(m.id),
+    email:String(m.email||""),
+    display_name:String(m.display_name||""),
+    email_notifications:!!m.email_notifications
+  };
+}
+async function kbnSendMemberWelcome(env,member){
+  if(!env.RESEND_API_KEY)return {ok:false,error:"RESEND_API_KEY_NOT_BOUND"};
+  const from=String(env.MAIL_FROM||"KUMAMOTO BAR NAVI <noreply@kumamoto-bar-navi.com>");
+  const unsub=`https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/api/member/unsubscribe?token=${encodeURIComponent(member.unsubscribe_token||"")}`;
+  const body={
+    from,
+    to:[member.email],
+    subject:"BARナビ 無料会員登録ありがとうございます",
+    html:`
+      <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;line-height:1.8;color:#161616">
+        <h2>BARナビへようこそ🍸</h2>
+        <p>${escHtml(member.display_name||"")}さん、無料会員登録ありがとうございます。</p>
+        <p>お気に入りBARをアカウントに保存できるようになりました。</p>
+        ${Number(member.email_notifications||0)===1?`<p>新しく掲載されたBAR情報もメールでお届けします。</p>`:""}
+        <p><a href="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/member.html">マイページを開く</a></p>
+        ${Number(member.email_notifications||0)===1?`<p style="font-size:12px;color:#777"><a href="${unsub}">新着メールを配信停止</a></p>`:""}
+      </div>`
+  };
+  const r=await fetch("https://api.resend.com/emails",{
+    method:"POST",
+    headers:{
+      "Authorization":`Bearer ${env.RESEND_API_KEY}`,
+      "Content-Type":"application/json"
+    },
+    body:JSON.stringify(body)
+  });
+  return {ok:r.ok,status:r.status};
+}
+async function kbnSendNewListingDigest(env,created=[]){
+  if(!env.RESEND_API_KEY)return {ok:false,error:"RESEND_API_KEY_NOT_BOUND"};
+  const shops=(Array.isArray(created)?created:[]).slice(0,15);
+  if(!shops.length)return {ok:true,sent:0};
+
+  await ensureKbnMemberSchema(env);
+  const result=await env.DB.prepare(`
+    SELECT id,email,display_name,unsubscribe_token
+    FROM members
+    WHERE status='active' AND email_notifications=1
+    ORDER BY id ASC
+    LIMIT 500
+  `).all();
+  const members=result.results||[];
+  if(!members.length)return {ok:true,sent:0};
+
+  const from=String(env.MAIL_FROM||"KUMAMOTO BAR NAVI <noreply@kumamoto-bar-navi.com>");
+  const shopRows=shops.map(s=>{
+    const name=escHtml(String(s.name||"").replace(/^【KBN独自掲載】/,"").trim());
+    const slug=encodeURIComponent(String(s.slug||""));
+    return `<li style="margin:8px 0"><a href="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/shop.html?slug=${slug}">${name}</a></li>`;
+  }).join("");
+
+  let sent=0,failed=0;
+  for(const m of members){
+    const unsub=`https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/api/member/unsubscribe?token=${encodeURIComponent(m.unsubscribe_token||"")}`;
+    try{
+      const r=await fetch("https://api.resend.com/emails",{
+        method:"POST",
+        headers:{
+          "Authorization":`Bearer ${env.RESEND_API_KEY}`,
+          "Content-Type":"application/json"
+        },
+        body:JSON.stringify({
+          from,
+          to:[m.email],
+          subject:`BARナビ 新着BAR ${shops.length}店舗を掲載しました`,
+          html:`
+            <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;line-height:1.8;color:#161616">
+              <h2>新しいBARが掲載されました🍸</h2>
+              <p>${escHtml(m.display_name||"")}さん、BARナビの新着店舗です。</p>
+              <ul>${shopRows}</ul>
+              <p><a href="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/bars.html">BARをもっと探す</a></p>
+              <p style="font-size:12px;color:#777"><a href="${unsub}">新着メールを配信停止</a></p>
+            </div>`
+        })
+      });
+      if(r.ok)sent++; else failed++;
+    }catch{failed++}
+  }
+  return {ok:true,sent,failed};
+}
+
 const KBN_GITHUB_EDITABLE_FILES = [
   "index.html",
   "style.css",
@@ -200,7 +428,8 @@ const KBN_GITHUB_EDITABLE_FILES = [
   "jobs.html",
   "areas.html",
   "robots.txt",
-  "sitemap.xml"
+  "sitemap.xml",
+  "member.html"
 ];
 
 function kbnGithubConfig(env){
@@ -3827,6 +4056,7 @@ async function enrichScheduledCreatedShops(env,created=[]){
   return {images,instagram};
 }
 
+// KBN free member v1.90: registration, login, favorites, email opt-in
 // KBN Google reviews v1.84: public rating + up to 3 reviews
 // KBN admin file create v1.83: missing GitHub file => create, existing => overwrite
 // KBN admin file permission v1.82: allow robots.txt / sitemap.xml
@@ -3901,6 +4131,11 @@ async function runScheduledKbnMaintenance(env){
 
   if(discovery.created.length){
     await notifyCreatedShops(env,discovery.created,"予約自動開拓");
+    try{
+      await kbnSendNewListingDigest(env,discovery.created);
+    }catch(e){
+      console.error("member new listing digest failed",e);
+    }
   }
 
   // 既存のKBN独自掲載店舗も情報補完
@@ -4312,6 +4547,154 @@ ${urls.map(x=>`  <url>
         headers:{
           "Cache-Control":"public, max-age=300, stale-while-revalidate=1800"
         }
+      });
+    }
+
+
+    // -------------------- FREE MEMBER API v1.90 --------------------
+    if(url.pathname==="/api/member/register" && request.method==="POST"){
+      await ensureKbnMemberSchema(env);
+      let x={};try{x=await request.json()}catch{}
+      const email=kbnMemberEmail(x.email);
+      const displayName=kbnMemberName(x.display_name);
+      const password=String(x.password||"");
+      const emailNotifications=x.email_notifications===false?0:1;
+
+      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+        return kbnMemberJson({ok:false,error:"INVALID_EMAIL"},400);
+      }
+      if(password.length<8||password.length>128){
+        return kbnMemberJson({ok:false,error:"PASSWORD_MIN_8"},400);
+      }
+
+      const exists=await env.DB.prepare("SELECT id FROM members WHERE email=? LIMIT 1").bind(email).first();
+      if(exists)return kbnMemberJson({ok:false,error:"EMAIL_ALREADY_REGISTERED"},409);
+
+      const ph=await kbnHashPassword(password);
+      const unsub=kbnRandomToken(24);
+      const r=await env.DB.prepare(`
+        INSERT INTO members(
+          email,display_name,password_hash,password_salt,
+          email_notifications,unsubscribe_token,status
+        ) VALUES(?,?,?,?,?,?,'active')
+      `).bind(email,displayName,ph.hash,ph.salt,emailNotifications,unsub).run();
+
+      const memberId=Number(r.meta?.last_row_id||0);
+      const token=await kbnCreateMemberSession(env,memberId);
+      const member=await env.DB.prepare(`
+        SELECT id,email,display_name,email_notifications,unsubscribe_token
+        FROM members WHERE id=? LIMIT 1
+      `).bind(memberId).first();
+
+      try{await kbnSendMemberWelcome(env,member)}catch(e){console.error("member welcome failed",e)}
+      return kbnMemberJson({
+        ok:true,
+        member:kbnPublicMember({
+          ...member,
+          email_notifications:Number(member.email_notifications||0)===1
+        })
+      },201,{"Set-Cookie":kbnSessionCookie(token)});
+    }
+
+    if(url.pathname==="/api/member/login" && request.method==="POST"){
+      await ensureKbnMemberSchema(env);
+      let x={};try{x=await request.json()}catch{}
+      const email=kbnMemberEmail(x.email);
+      const password=String(x.password||"");
+      const row=await env.DB.prepare(`
+        SELECT id,email,display_name,password_hash,password_salt,email_notifications,status
+        FROM members WHERE email=? LIMIT 1
+      `).bind(email).first();
+
+      if(!row||String(row.status)!=="active"){
+        return kbnMemberJson({ok:false,error:"LOGIN_FAILED"},401);
+      }
+      const ph=await kbnHashPassword(password,row.password_salt);
+      if(!kbnSafeEqual(ph.hash,row.password_hash)){
+        return kbnMemberJson({ok:false,error:"LOGIN_FAILED"},401);
+      }
+
+      const token=await kbnCreateMemberSession(env,Number(row.id));
+      await env.DB.prepare("UPDATE members SET last_login_at=CURRENT_TIMESTAMP WHERE id=?").bind(row.id).run();
+      return kbnMemberJson({
+        ok:true,
+        member:kbnPublicMember({
+          ...row,
+          email_notifications:Number(row.email_notifications||0)===1
+        })
+      },200,{"Set-Cookie":kbnSessionCookie(token)});
+    }
+
+    if(url.pathname==="/api/member/logout" && request.method==="POST"){
+      await ensureKbnMemberSchema(env);
+      const token=kbnCookieValue(request,KBN_MEMBER_COOKIE);
+      if(token)await env.DB.prepare("DELETE FROM member_sessions WHERE token=?").bind(token).run();
+      return kbnMemberJson({ok:true},200,{"Set-Cookie":kbnClearSessionCookie()});
+    }
+
+    if(url.pathname==="/api/member/me" && request.method==="GET"){
+      const member=await kbnCurrentMember(env,request);
+      return kbnMemberJson({ok:true,member:kbnPublicMember(member)});
+    }
+
+    if(url.pathname==="/api/member/preferences" && request.method==="PUT"){
+      const member=await kbnCurrentMember(env,request);
+      if(!member)return kbnMemberJson({ok:false,error:"LOGIN_REQUIRED"},401);
+      let x={};try{x=await request.json()}catch{}
+      const value=x.email_notifications===true?1:0;
+      await env.DB.prepare(`
+        UPDATE members SET email_notifications=?,updated_at=CURRENT_TIMESTAMP WHERE id=?
+      `).bind(value,member.id).run();
+      return kbnMemberJson({ok:true,email_notifications:!!value});
+    }
+
+    if(url.pathname==="/api/member/favorites" && request.method==="GET"){
+      const member=await kbnCurrentMember(env,request);
+      if(!member)return kbnMemberJson({ok:false,error:"LOGIN_REQUIRED"},401);
+      const r=await env.DB.prepare(`
+        SELECT s.id,s.slug,s.name,s.area,s.genre,s.image_url,f.created_at
+        FROM member_favorites f
+        JOIN shops s ON s.id=f.shop_id
+        WHERE f.member_id=? AND s.is_published=1
+        ORDER BY f.created_at DESC
+      `).bind(member.id).all();
+      return kbnMemberJson({ok:true,favorites:r.results||[]});
+    }
+
+    const favoriteMatch=url.pathname.match(/^\/api\/member\/favorites\/(\d+)$/);
+    if(favoriteMatch && request.method==="POST"){
+      const member=await kbnCurrentMember(env,request);
+      if(!member)return kbnMemberJson({ok:false,error:"LOGIN_REQUIRED"},401);
+      const shopId=Number(favoriteMatch[1]);
+      const shopRow=await env.DB.prepare("SELECT id FROM shops WHERE id=? AND is_published=1").bind(shopId).first();
+      if(!shopRow)return kbnMemberJson({ok:false,error:"SHOP_NOT_FOUND"},404);
+      await env.DB.prepare(`
+        INSERT OR IGNORE INTO member_favorites(member_id,shop_id) VALUES(?,?)
+      `).bind(member.id,shopId).run();
+      return kbnMemberJson({ok:true,favorited:true});
+    }
+
+    if(favoriteMatch && request.method==="DELETE"){
+      const member=await kbnCurrentMember(env,request);
+      if(!member)return kbnMemberJson({ok:false,error:"LOGIN_REQUIRED"},401);
+      const shopId=Number(favoriteMatch[1]);
+      await env.DB.prepare(`
+        DELETE FROM member_favorites WHERE member_id=? AND shop_id=?
+      `).bind(member.id,shopId).run();
+      return kbnMemberJson({ok:true,favorited:false});
+    }
+
+    if(url.pathname==="/api/member/unsubscribe" && request.method==="GET"){
+      await ensureKbnMemberSchema(env);
+      const token=String(url.searchParams.get("token")||"").trim();
+      if(token){
+        await env.DB.prepare(`
+          UPDATE members SET email_notifications=0,updated_at=CURRENT_TIMESTAMP
+          WHERE unsubscribe_token=?
+        `).bind(token).run();
+      }
+      return new Response(`<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>配信停止｜BARナビ</title><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#080b10;color:#fff;padding:40px 20px"><main style="max-width:520px;margin:auto"><h1>新着メールを配信停止しました</h1><p style="color:#b7c0ca">いつでもマイページから再開できます。</p><a href="/member.html" style="color:#efc45a">マイページへ</a></main></body></html>`,{
+        headers:{"content-type":"text/html; charset=utf-8"}
       });
     }
 
