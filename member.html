@@ -6,45 +6,175 @@
 <meta name="robots" content="noindex,follow">
 <meta name="theme-color" content="#080b10">
 <title>無料会員｜KUMAMOTO BAR NAVI</title>
-<link rel="stylesheet" href="style.css?v=192">
+<link rel="stylesheet" href="style.css?v=194">
 <style>
 :root{color-scheme:dark}
-body{background:#080b10;color:#fff}
-.member-page{padding:24px 0 100px}
-.member-wrap{max-width:620px;margin:auto}
+*{box-sizing:border-box}
+html,body{max-width:100%;overflow-x:hidden}
+body{margin:0;background:#080b10;color:#fff}
+.member-page{padding:24px 0 110px}
+.member-wrap{max-width:680px;margin:auto}
 .member-head{margin:10px 0 18px}
 .member-head a{color:#efc45a;text-decoration:none;font-weight:800;font-size:.78rem}
-.member-head h1{margin:12px 0 5px;font-size:1.7rem}
-.member-head p{margin:0;color:#929ca7;font-size:.82rem;line-height:1.6}
-.member-card{padding:16px;border:1px solid #303a45;border-radius:18px;background:#0d141c;margin-bottom:12px}
+.member-head h1{margin:12px 0 6px;font-size:clamp(1.7rem,7vw,2.35rem);line-height:1.15}
+.member-head p{margin:0;color:#929ca7;font-size:.82rem;line-height:1.65}
+
+.member-card{
+  padding:16px;
+  border:1px solid #303a45;
+  border-radius:18px;
+  background:#0d141c;
+  margin-bottom:12px
+}
 .member-card h2{margin:0 0 12px;font-size:1.05rem}
-.member-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:13px}
-.member-tabs button{min-height:40px;border:1px solid #36414c;border-radius:10px;background:#101821;color:#b9c2cb;font-weight:800}
+.member-tabs{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:13px}
+.member-tabs button{
+  min-height:44px;
+  border:1px solid #36414c;
+  border-radius:11px;
+  background:#101821;
+  color:#b9c2cb;
+  font-weight:900;
+  font-size:.82rem
+}
 .member-tabs button.active{background:#efc45a;color:#111;border-color:#efc45a}
-.member-form{display:grid;gap:9px}
-.member-form label{display:grid;gap:5px;color:#aeb6bf;font-size:.7rem;font-weight:800}
-.member-form input{min-height:46px;border:1px solid #384450;border-radius:10px;background:#080e14;color:#fff;padding:0 12px;font:inherit}
-.member-check{display:flex!important;grid-template-columns:none!important;align-items:flex-start;gap:8px!important;font-weight:500!important;line-height:1.5}
-.member-check input{min-height:0;width:18px;height:18px;margin-top:1px}
-.member-submit{min-height:48px;border:0;border-radius:11px;background:#efc45a;color:#111;font-weight:900;font-size:.9rem}.member-submit:disabled{opacity:.65;cursor:wait}
-.member-status{min-height:22px;margin:8px 0 0;color:#9aa4ae;font-size:.72rem}
+
+.member-form{display:grid;gap:10px}
+.member-form label{display:grid;gap:5px;color:#aeb6bf;font-size:.72rem;font-weight:800}
+.member-form input{
+  min-height:48px;
+  border:1px solid #384450;
+  border-radius:11px;
+  background:#080e14;
+  color:#fff;
+  padding:0 12px;
+  font:inherit;
+  font-size:16px
+}
+.member-form input:focus{outline:2px solid rgba(239,196,90,.42);border-color:#efc45a}
+.member-check{
+  display:flex!important;
+  align-items:flex-start;
+  gap:8px!important;
+  font-weight:500!important;
+  line-height:1.5
+}
+.member-check input{min-height:0;width:18px;height:18px;margin-top:1px;accent-color:#efc45a}
+
+.member-submit{
+  width:100%;
+  min-height:52px;
+  border:1px solid #efc45a;
+  border-radius:12px;
+  background:#efc45a!important;
+  color:#111!important;
+  font-weight:950;
+  font-size:.95rem;
+  opacity:1!important;
+  -webkit-appearance:none;
+  appearance:none;
+  cursor:pointer
+}
+.member-submit:not(:disabled):active{transform:translateY(1px)}
+.member-submit:disabled{
+  background:#b6943f!important;
+  border-color:#b6943f!important;
+  color:#151515!important;
+  opacity:.82!important;
+  cursor:wait
+}
+.member-status{min-height:22px;margin:9px 0 0;color:#9aa4ae;font-size:.72rem;line-height:1.5}
 .member-status.error{color:#ff8c8c}
-.member-status.ok{color:#efc45a}
+.member-status.ok{color:#74dca4}
+.member-note{margin:11px 0 0;color:#75808b;font-size:.64rem;line-height:1.6}
+
+/* My page */
+.member-profile-hero{
+  padding:18px;
+  border:1px solid #5a4b24;
+  border-radius:18px;
+  background:
+    radial-gradient(circle at top right,rgba(239,196,90,.12),transparent 42%),
+    linear-gradient(180deg,#121820,#0c131a);
+  margin-bottom:12px
+}
+.member-profile-kicker{
+  margin:0 0 4px;
+  color:#efc45a;
+  font-weight:900;
+  font-size:.62rem;
+  letter-spacing:.15em
+}
+.member-profile-hero h2{margin:0;font-size:1.35rem}
+.member-profile-hero p{margin:5px 0 0;color:#929ca7;font-size:.72rem}
+
+.member-dashboard-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:12px 0}
+.member-stat{
+  padding:12px;
+  border:1px solid #2e3944;
+  border-radius:13px;
+  background:#0a1118
+}
+.member-stat span{display:block;color:#818b96;font-size:.6rem}
+.member-stat strong{display:block;margin-top:2px;color:#fff;font-size:1.1rem}
+.member-stat strong.gold{color:#efc45a}
+
 .member-profile{display:grid;gap:10px}
-.member-profile-row{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid #252f38}
+.member-profile-row{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  padding:10px 0;
+  border-bottom:1px solid #252f38
+}
 .member-profile-row span{color:#8f99a4;font-size:.7rem}
 .member-profile-row b{font-size:.78rem;text-align:right;overflow-wrap:anywhere}
-.member-action{min-height:43px;border:1px solid #394550;border-radius:10px;background:#101821;color:#fff;font-weight:800}
+.member-action{
+  min-height:44px;
+  border:1px solid #394550;
+  border-radius:10px;
+  background:#101821;
+  color:#fff;
+  font-weight:850
+}
 .member-action.gold{border-color:#665421;color:#efc45a}
+.member-action.danger{border-color:#5e3434;color:#ff9a9a;background:#130d0d}
+
+.member-section-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  margin-bottom:10px
+}
+.member-section-head h2{margin:0}
+.member-section-head a{font-size:.65rem;color:#efc45a;text-decoration:none;font-weight:850}
+
 .member-favs{display:grid;gap:8px}
-.member-fav{display:grid;grid-template-columns:54px 1fr auto;gap:9px;align-items:center;padding:8px;border:1px solid #2d3742;border-radius:12px;background:#0a1017;text-decoration:none;color:#fff}
-.member-fav img{width:54px;height:54px;border-radius:9px;object-fit:cover;background:#111}
+.member-fav{
+  display:grid;
+  grid-template-columns:58px 1fr auto;
+  gap:10px;
+  align-items:center;
+  padding:9px;
+  border:1px solid #2d3742;
+  border-radius:13px;
+  background:#0a1017;
+  text-decoration:none;
+  color:#fff
+}
+.member-fav img{width:58px;height:58px;border-radius:10px;object-fit:cover;background:#111}
 .member-fav b{display:block;font-size:.78rem}
-.member-fav small{color:#89939e;font-size:.62rem}
-.member-fav i{color:#efc45a;font-style:normal}
-.member-empty{color:#87919c;font-size:.74rem}
-.member-note{margin:11px 0 0;color:#75808b;font-size:.64rem;line-height:1.6}
+.member-fav small{display:block;margin-top:3px;color:#89939e;font-size:.62rem}
+.member-fav i{color:#efc45a;font-style:normal;font-size:1.2rem}
+.member-empty{color:#87919c;font-size:.74rem;line-height:1.65}
 [hidden]{display:none!important}
+
+@media(max-width:640px){
+  .member-page{padding-top:14px}
+  .member-card{padding:14px}
+  .member-dashboard-grid{grid-template-columns:1fr 1fr}
+}
 </style>
 </head>
 <body>
@@ -102,21 +232,45 @@ body{background:#080b10;color:#fff}
     <p class="member-note">パスワードはハッシュ化して保存されます。閲覧は会員登録なしでもこれまで通り利用できます。</p>
   </section>
 
-  <section id="profileCard" class="member-card" hidden>
-    <h2>マイページ</h2>
-    <div class="member-profile">
-      <div class="member-profile-row"><span>ニックネーム</span><b id="memberName">-</b></div>
-      <div class="member-profile-row"><span>メール</span><b id="memberEmail">-</b></div>
-      <label class="member-check">
-        <input id="memberNotify" type="checkbox">
-        <span>新着BAR情報をメールで受け取る</span>
-      </label>
-      <button id="logoutBtn" class="member-action" type="button">ログアウト</button>
+  <section id="profileCard" hidden>
+    <div class="member-profile-hero">
+      <p class="member-profile-kicker">MY BAR NAVI</p>
+      <h2><span id="memberNameHero">会員</span>さんのマイページ</h2>
+      <p>お気に入りや新着メール設定をここで管理できます。</p>
+
+      <div class="member-dashboard-grid">
+        <div class="member-stat">
+          <span>お気に入り</span>
+          <strong id="favoriteCount" class="gold">0</strong>
+        </div>
+        <div class="member-stat">
+          <span>新着メール</span>
+          <strong id="notifyState">OFF</strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="member-card">
+      <div class="member-section-head">
+        <h2>アカウント</h2>
+      </div>
+      <div class="member-profile">
+        <div class="member-profile-row"><span>ニックネーム</span><b id="memberName">-</b></div>
+        <div class="member-profile-row"><span>メール</span><b id="memberEmail">-</b></div>
+        <label class="member-check">
+          <input id="memberNotify" type="checkbox">
+          <span>新しく掲載されたBAR情報をメールで受け取る</span>
+        </label>
+        <button id="logoutBtn" class="member-action danger" type="button">ログアウト</button>
+      </div>
     </div>
   </section>
 
   <section id="favoritesCard" class="member-card" hidden>
-    <h2>お気に入りBAR</h2>
+    <div class="member-section-head">
+      <h2>お気に入りBAR</h2>
+      <a href="bars.html">BARを探す →</a>
+    </div>
     <div id="favoriteList" class="member-favs"></div>
   </section>
 </div>
@@ -127,6 +281,14 @@ const qs=s=>document.querySelector(s);
 const esc=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 const authCard=qs("#authCard"),profileCard=qs("#profileCard"),favoritesCard=qs("#favoritesCard");
 const status=qs("#authStatus");
+const resetSubmitButtons=()=>{
+  document.querySelectorAll(".member-submit").forEach(btn=>{
+    btn.disabled=false;
+    btn.textContent=btn.closest("#loginForm")?"ログイン":"無料会員登録";
+  });
+};
+window.addEventListener("pageshow",resetSubmitButtons);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)resetSubmitButtons()});
 
 function showStatus(text,type=""){
   status.textContent=text||"";
@@ -168,9 +330,13 @@ async function refreshMe(){
     authCard.hidden=true;
     profileCard.hidden=false;
     favoritesCard.hidden=false;
-    qs("#memberName").textContent=m.display_name||"未設定";
+    const displayName=m.display_name||"会員";
+    qs("#memberName").textContent=displayName;
+    qs("#memberNameHero").textContent=displayName;
     qs("#memberEmail").textContent=m.email||"";
     qs("#memberNotify").checked=!!m.email_notifications;
+    qs("#notifyState").textContent=m.email_notifications?"ON":"OFF";
+    qs("#notifyState").classList.toggle("gold",!!m.email_notifications);
     await loadFavorites();
   }catch{}
 }
@@ -179,6 +345,8 @@ async function loadFavorites(){
   const r=await fetch("/api/member/favorites",{cache:"no-store"});
   const d=await r.json();
   const rows=Array.isArray(d.favorites)?d.favorites:[];
+  const countEl=qs("#favoriteCount");
+  if(countEl)countEl.textContent=String(rows.length);
   if(!rows.length){
     box.innerHTML='<p class="member-empty">まだお気に入りはありません。店舗詳細の「♡ お気に入り」から追加できます。</p>';
     return;
@@ -227,7 +395,8 @@ qs("#registerForm").addEventListener("submit",async e=>{
     }
 
     showStatus("登録しました。マイページを表示します。","ok");
-    await refreshMe();
+    await resetSubmitButtons();
+refreshMe();
   }catch(err){
     if(err?.name==="AbortError"){
       showStatus("登録処理がタイムアウトしました。もう一度お試しください。","error");
@@ -280,11 +449,20 @@ qs("#logoutBtn").onclick=async()=>{
   await refreshMe();
 };
 qs("#memberNotify").onchange=async e=>{
+  const next=e.target.checked;
   const r=await fetch("/api/member/preferences",{
     method:"PUT",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({email_notifications:e.target.checked})
+    body:JSON.stringify({email_notifications:next})
   });
-  if(!r.ok)e.target.checked=!e.target.checked;
+  if(!r.ok){
+    e.target.checked=!next;
+    return;
+  }
+  const state=qs("#notifyState");
+  if(state){
+    state.textContent=next?"ON":"OFF";
+    state.classList.toggle("gold",next);
+  }
 };
 refreshMe();
 </script>
