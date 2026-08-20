@@ -4245,6 +4245,7 @@ async function enrichScheduledCreatedShops(env,created=[]){
   return {images,instagram};
 }
 
+// KBN v2.01: 求人削除APIを追加
 // KBN v1.99: 承認済み申込みから求人を再検出し確認後に公開
 // KBN v1.98: 備考・説明欄の求人情報も自動判定・抽出して求人掲載
 // KBN v1.97: 求人付き掲載申込みを承認時に求人へ自動反映・公開
@@ -6366,6 +6367,14 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
         return json({ok:true,id:r.meta?.last_row_id},{status:201});
       }
       const jm=url.pathname.match(/^\/api\/admin\/jobs\/(\d+)$/);
+      if(jm && request.method==="DELETE"){
+        const id=Number(jm[1]);
+        const existing=await env.DB.prepare("SELECT id,title FROM jobs WHERE id=?").bind(id).first();
+        if(!existing)return json({ok:false,error:"JOB_NOT_FOUND"},{status:404});
+
+        await env.DB.prepare("DELETE FROM jobs WHERE id=?").bind(id).run();
+        return json({ok:true,id,title:existing.title||""});
+      }
       if(jm && request.method==="PUT"){
         const id=Number(jm[1]); let x;try{x=await request.json()}catch{return json({ok:false,error:"INVALID_JSON"},{status:400})}
         await env.DB.prepare(`
