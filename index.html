@@ -137,23 +137,36 @@
 }
 </style>
 
-<style id="kbn-home-stats-v210">
-.public-hero-stats-v210{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:18px 0 20px;padding:18px 20px;border:1px solid rgba(239,196,90,.28);border-radius:22px;background:linear-gradient(135deg,rgba(239,196,90,.16),rgba(255,255,255,.045) 52%,rgba(255,255,255,.02));box-shadow:0 18px 42px rgba(0,0,0,.26);backdrop-filter:blur(8px)}
-.public-hero-total-v210{display:flex;align-items:center;gap:16px;min-width:0}
-.public-hero-total-icon-v210{width:44px;height:44px;flex:0 0 44px;display:grid;place-items:center;border-radius:14px;border:1px solid rgba(239,196,90,.36);background:rgba(8,11,16,.5);color:#efc45a;font-size:1.1rem;font-weight:900}
-.public-hero-total-copy-v210{min-width:0}
-.public-hero-total-copy-v210 small{display:block;color:#efc45a;font-size:.7rem;font-weight:900;letter-spacing:.08em}
-.public-hero-total-row-v210{display:flex;align-items:baseline;gap:6px;margin-top:3px}
-.public-hero-total-row-v210 strong{color:#fff;font-size:clamp(36px,7vw,54px);line-height:1;font-weight:1000;letter-spacing:-.035em}
-.public-hero-total-row-v210 b{color:#efc45a;font-size:.9rem;font-weight:900}
-.public-hero-total-copy-v210 p{margin:5px 0 0;color:rgba(255,255,255,.68);font-size:.72rem;white-space:nowrap}
-.public-hero-area-v210{flex:0 0 auto;min-width:126px;padding-left:18px;border-left:1px solid rgba(255,255,255,.12);text-align:right}
-.public-hero-area-v210 small{display:block;color:rgba(255,255,255,.58);font-size:.62rem;font-weight:800;letter-spacing:.04em}
-.public-hero-area-v210 strong{display:inline-block;margin-top:5px;color:#fff;font-size:1.7rem;line-height:1;font-weight:950}
-.public-hero-area-v210 b{margin-left:4px;color:#efc45a;font-size:.68rem}
-@media(max-width:700px){.public-hero-stats-v210{gap:10px;margin:14px 0 17px;padding:13px 14px;border-radius:17px}.public-hero-total-v210{gap:10px}.public-hero-total-icon-v210{width:36px;height:36px;flex-basis:36px;border-radius:11px;font-size:.9rem}.public-hero-total-copy-v210 small{font-size:.56rem}.public-hero-total-row-v210{gap:4px;margin-top:2px}.public-hero-total-row-v210 strong{font-size:clamp(30px,11vw,42px)}.public-hero-total-row-v210 b{font-size:.68rem}.public-hero-total-copy-v210 p{font-size:.58rem;white-space:normal;line-height:1.35}.public-hero-area-v210{min-width:82px;padding-left:10px}.public-hero-area-v210 small{font-size:.52rem}.public-hero-area-v210 strong{font-size:1.35rem}.public-hero-area-v210 b{font-size:.55rem}}
-</style>
 
+
+<style id="kbn-home-stats-v211">
+.public-hero-stats-v211{margin:18px 0 22px}
+.public-hero-statbar-v211{position:relative;display:grid;grid-template-columns:minmax(0,1.45fr) 1px minmax(150px,.7fr);align-items:center;gap:18px;overflow:hidden;padding:14px 18px;border:1px solid rgba(239,196,90,.58);border-radius:999px;background:linear-gradient(110deg,rgba(10,18,27,.92),rgba(24,22,18,.88));box-shadow:0 12px 34px rgba(0,0,0,.26),inset 0 1px 0 rgba(255,255,255,.04)}
+.public-hero-statbar-v211::after{content:"";position:absolute;right:-35px;top:-50px;width:180px;height:180px;border-radius:50%;background:radial-gradient(circle,rgba(239,196,90,.17),rgba(239,196,90,0) 68%);pointer-events:none}
+.public-hero-total-v211{display:grid;grid-template-columns:56px auto minmax(0,1fr);align-items:center;gap:12px;min-width:0}
+.public-hero-icon-v211{width:56px;height:56px;border:1px solid rgba(239,196,90,.55);border-radius:50%;display:grid;place-items:center;color:#efc45a;background:rgba(239,196,90,.05);font-size:25px;box-shadow:inset 0 0 0 5px rgba(239,196,90,.03)}
+.public-hero-total-copy-v211 small,.public-hero-area-copy-v211 small{display:block;color:#efc45a;font-size:.68rem;font-weight:900;letter-spacing:.05em;white-space:nowrap}
+.public-hero-total-copy-v211 strong{display:flex;align-items:baseline;gap:5px;margin-top:2px;color:#fff;font-size:clamp(34px,6vw,50px);line-height:.95;font-weight:1000;letter-spacing:-.035em}
+.public-hero-unit-v211{color:#efc45a;font-size:.36em;font-weight:900;letter-spacing:0}
+.public-hero-total-sub-v211{align-self:end;padding-bottom:2px;color:rgba(255,255,255,.58);font-size:.68rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.public-hero-divider-v211{width:1px;height:50px;background:linear-gradient(180deg,transparent,rgba(239,196,90,.5),transparent)}
+.public-hero-area-v211{display:grid;grid-template-columns:44px minmax(0,1fr);align-items:center;gap:10px;min-width:0}
+.public-hero-area-icon-v211{width:44px;height:44px;border:1px solid rgba(239,196,90,.48);border-radius:50%;display:grid;place-items:center;color:#efc45a;font-size:20px;background:rgba(239,196,90,.04)}
+.public-hero-area-copy-v211 strong{display:flex;align-items:baseline;gap:4px;margin-top:3px;color:#fff;font-size:clamp(27px,4.5vw,38px);line-height:1;font-weight:950}
+@media(max-width:700px){
+  .public-hero-stats-v211{margin:14px 0 18px}
+  .public-hero-statbar-v211{grid-template-columns:minmax(0,1.3fr) 1px minmax(105px,.72fr);gap:10px;padding:11px 12px;border-radius:24px}
+  .public-hero-total-v211{grid-template-columns:44px auto;gap:9px}
+  .public-hero-icon-v211{width:44px;height:44px;font-size:20px}
+  .public-hero-total-copy-v211 small,.public-hero-area-copy-v211 small{font-size:.55rem}
+  .public-hero-total-copy-v211 strong{font-size:clamp(29px,10vw,40px)}
+  .public-hero-total-sub-v211{display:none}
+  .public-hero-divider-v211{height:42px}
+  .public-hero-area-v211{grid-template-columns:34px minmax(0,1fr);gap:7px}
+  .public-hero-area-icon-v211{width:34px;height:34px;font-size:16px}
+  .public-hero-area-copy-v211 strong{font-size:clamp(23px,8vw,31px)}
+}
+</style>
 </head>
 <body class="public-v109">
 
@@ -190,18 +203,24 @@
       <p class="public-kicker">KUMAMOTO NIGHT GUIDE</p>
       <h1>今夜行きたいBARを、<br><em>熊本で見つける。</em></h1>
       <p class="public-hero-lead">エリア・ジャンルから、あなたに合う一軒をすぐ探せます。</p>
-      <div class="public-hero-stats-v210" id="publicHeroStats">
-        <div class="public-hero-total-v210">
-          <div class="public-hero-total-icon-v210">KBN</div>
-          <div class="public-hero-total-copy-v210">
-            <small>熊本県内・総掲載店舗数</small>
-            <div class="public-hero-total-row-v210"><strong id="heroTotalShopCount">--</strong><b>店舗掲載中</b></div>
-            <p>掲載店舗を随時更新しています</p>
+      <div class="public-hero-stats-v211" id="publicHeroStats">
+        <div class="public-hero-statbar-v211">
+          <div class="public-hero-total-v211">
+            <div class="public-hero-icon-v211" aria-hidden="true">◇</div>
+            <div class="public-hero-total-copy-v211">
+              <small>掲載店舗数</small>
+              <strong id="heroTotalShopCount">--<span class="public-hero-unit-v211">店舗</span></strong>
+            </div>
+            <span class="public-hero-total-sub-v211">熊本県内のBAR情報を随時更新</span>
           </div>
-        </div>
-        <div class="public-hero-area-v210">
-          <small>掲載エリア</small>
-          <strong id="heroAreaCount">--</strong><b>地域</b>
+          <div class="public-hero-divider-v211" aria-hidden="true"></div>
+          <div class="public-hero-area-v211">
+            <div class="public-hero-area-icon-v211" aria-hidden="true">⌖</div>
+            <div class="public-hero-area-copy-v211">
+              <small>対応エリア</small>
+              <strong id="heroAreaCount">--<span class="public-hero-unit-v211">地域</span></strong>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -439,28 +458,29 @@
 <script src="script.js?v=122"></script>
 
 
-<script id="kbn-home-stats-script-v210">
+
+
+<script id="kbn-home-stats-script-v211">
 (async()=>{
   const totalEl=document.getElementById("heroTotalShopCount");
   const areaEl=document.getElementById("heroAreaCount");
   const noticeEl=document.getElementById("publicNoticeCountText");
   try{
-    const shopsRes=await fetch("/api/shops",{cache:"no-store"});
-    const shopsData=await shopsRes.json();
-    const shops=Array.isArray(shopsData?.shops)?shopsData.shops:[];
-    const areas=new Set(shops.map(x=>String(x?.area||"").trim()).filter(Boolean));
-    if(totalEl) totalEl.textContent=String(shops.length);
-    if(areaEl) areaEl.textContent=String(areas.size);
-    if(noticeEl) noticeEl.textContent=`熊本県内のBARを ${shops.length} 店舗掲載中`;
+    const r=await fetch("/api/shops",{cache:"no-store"});
+    const d=await r.json();
+    const shops=Array.isArray(d?.shops)?d.shops:[];
+    const areaCount=new Set(shops.map(x=>String(x?.area||"").trim()).filter(Boolean)).size;
+    if(totalEl)totalEl.innerHTML=`${shops.length}<span class="public-hero-unit-v211">店舗</span>`;
+    if(areaEl)areaEl.innerHTML=`${areaCount}<span class="public-hero-unit-v211">地域</span>`;
+    if(noticeEl)noticeEl.textContent=`熊本県内のBARを ${shops.length} 店舗掲載中`;
   }catch(e){
-    if(totalEl) totalEl.textContent="掲載中";
-    if(areaEl) areaEl.textContent="熊本全域";
-    if(noticeEl) noticeEl.textContent="熊本県内のBARを掲載中";
+    if(totalEl)totalEl.textContent="掲載中";
+    if(areaEl)areaEl.textContent="熊本全域";
+    if(noticeEl)noticeEl.textContent="熊本県内のBARを掲載中";
     console.error("home stats load failed",e);
   }
 })();
 </script>
-
 <script id="kbn-public-member-state-v196">
 (async()=>{
   const cta=document.getElementById("publicMemberCta");
