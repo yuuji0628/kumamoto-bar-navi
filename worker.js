@@ -3751,6 +3751,7 @@ async function enrichScheduledCreatedShops(env,created=[]){
   return {images,instagram};
 }
 
+// KBN admin file create v1.83: missing GitHub file => create, existing => overwrite
 // KBN admin file permission v1.82: allow robots.txt / sitemap.xml
 // KBN scheduled maintenance v1.81:
  // target 15 listings, multi-pass discovery + image + Instagram enrichment
@@ -4578,6 +4579,7 @@ ${urls.map(x=>`  <url>
           }
           return json({
             ok:true,
+            exists:true,
             path,
             sha:d.sha,
             size:d.size,
@@ -4586,6 +4588,18 @@ ${urls.map(x=>`  <url>
             ref
           });
         }catch(e){
+          if(Number(e?.status)===404){
+            return json({
+              ok:true,
+              exists:false,
+              path,
+              sha:"",
+              size:0,
+              content:"",
+              html_url:"",
+              ref
+            });
+          }
           return json({
             ok:false,
             error:"GITHUB_READ_FAILED",
@@ -4700,26 +4714,25 @@ ${urls.map(x=>`  <url>
         if(confirmation!=="GITHUBへ反映"){
           return json({ok:false,error:"CONFIRM_REQUIRED"},{status:400});
         }
-        if(!sha){
-          return json({ok:false,error:"SHA_REQUIRED"},{status:400});
-        }
         if(content.length>900000){
           return json({ok:false,error:"FILE_TOO_LARGE"},{status:413});
         }
 
         try{
+          const body={
+            message,
+            content:kbnUtf8ToBase64(content),
+            branch:c.branch
+          };
+          if(sha)body.sha=sha;
+
           const result=await kbnGithubApi(
             env,
             `/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/${encodeURIComponent(path)}`,
             {
               method:"PUT",
               headers:{"content-type":"application/json"},
-              body:JSON.stringify({
-                message,
-                content:kbnUtf8ToBase64(content),
-                sha,
-                branch:c.branch
-              })
+              body:JSON.stringify(body)
             }
           );
 
