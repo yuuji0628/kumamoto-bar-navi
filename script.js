@@ -1,3 +1,32 @@
+// Public member CTA: switches from free registration to My Page when logged in.
+async function kbnUpdateMemberCtas(){
+  const ctas=[...document.querySelectorAll("[data-kbn-member-cta]")];
+  if(!ctas.length)return;
+
+  let member=null;
+  try{
+    const r=await fetch("/api/member/me",{cache:"no-store",credentials:"same-origin"});
+    if(r.ok){
+      const d=await r.json();
+      member=d?.member||null;
+    }
+  }catch{}
+
+  ctas.forEach(a=>{
+    const loggedIn=!!member;
+    a.href="member.html";
+    a.classList.toggle("is-logged-in",loggedIn);
+    a.setAttribute("aria-label",loggedIn?"マイページ":"無料会員登録");
+    const full=a.querySelector(".member-label-full");
+    const short=a.querySelector(".member-label-short");
+    if(full)full.textContent=loggedIn?"マイページ":"無料会員登録";
+    if(short)short.textContent=loggedIn?"マイページ":"無料登録";
+  });
+}
+
+kbnUpdateMemberCtas();
+window.addEventListener("pageshow",()=>kbnUpdateMemberCtas());
+
 const escHtml=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 
 function kbnCleanName(v){
