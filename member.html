@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,follow">
 <meta name="theme-color" content="#080b10">
-<title>無料会員｜KUMAMOTO BAR NAVI</title>
-<link rel="stylesheet" href="style.css?v=194">
+<title>無料会員登録｜KUMAMOTO BAR NAVI</title>
+<link rel="stylesheet" href="style.css?v=196">
 <style>
 :root{color-scheme:dark}
 *{box-sizing:border-box}
@@ -175,6 +175,25 @@ body{margin:0;background:#080b10;color:#fff}
   .member-card{padding:14px}
   .member-dashboard-grid{grid-template-columns:1fr 1fr}
 }
+
+.member-free-badge{
+  display:inline-flex;
+  align-items:center;
+  min-height:27px;
+  margin:10px 0 0;
+  padding:0 11px;
+  border:1px solid #6b5720;
+  border-radius:999px;
+  background:rgba(239,196,90,.1);
+  color:#efc45a;
+  font-size:.67rem;
+  font-weight:950;
+  letter-spacing:.04em;
+}
+.member-submit{
+  box-shadow:0 10px 26px rgba(239,196,90,.17);
+}
+
 </style>
 </head>
 <body>
@@ -192,13 +211,13 @@ body{margin:0;background:#080b10;color:#fff}
 <div class="container member-wrap">
   <div class="member-head">
     <a href="index.html">← ホームへ</a>
-    <h1>BARナビ無料会員</h1>
-    <p>お気に入りをアカウントに保存。希望する方には新しく掲載されたBAR情報もメールでお届けします。</p>
+    <p class="member-free-badge">登録無料</p><h1>無料会員登録</h1>
+    <p>登録料・月額料金は0円。お気に入りをアカウントに保存でき、希望する方には新しく掲載されたBAR情報もメールでお届けします。</p>
   </div>
 
   <section id="authCard" class="member-card">
     <div class="member-tabs">
-      <button id="tabRegister" class="active" type="button">新規登録</button>
+      <button id="tabRegister" class="active" type="button">無料会員登録</button>
       <button id="tabLogin" type="button">ログイン</button>
     </div>
 
