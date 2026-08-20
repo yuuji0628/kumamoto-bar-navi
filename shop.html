@@ -6,15 +6,132 @@
   <meta name="description" content="熊本のBAR店舗情報｜KUMAMOTO BAR NAVI">
   <meta name="theme-color" content="#080b10">
   <title>店舗詳細｜KUMAMOTO BAR NAVI</title>
-  <link rel="stylesheet" href="style.css?v=147">
+  <link rel="stylesheet" href="style.css?v=184">
 <link id="dynamicCanonical" rel="canonical" href="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/shop.html">
 <meta id="dynamicOgTitle" property="og:title" content="店舗詳細｜KUMAMOTO BAR NAVI">
 <meta id="dynamicOgDescription" property="og:description" content="熊本のBAR店舗情報">
 <meta id="dynamicOgUrl" property="og:url" content="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/shop.html">
 <meta property="og:type" content="website">
 <script id="shopJsonLd" type="application/ld+json">{}</script>
+
+<style id="kbn-google-reviews-v184">
+.public-google-reviews{
+  margin-top:22px;
+  padding:18px;
+  border:1px solid #303b47;
+  border-radius:18px;
+  background:linear-gradient(180deg,#101821,#0b1118);
+}
+.public-google-reviews[hidden]{display:none!important}
+.google-review-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:13px;
+}
+.google-review-head .public-kicker{margin:0 0 3px}
+.google-review-head h2{margin:0;font-size:1.3rem}
+.google-rating-box{
+  flex:0 0 auto;
+  min-width:118px;
+  padding:9px 11px;
+  border:1px solid #51462b;
+  border-radius:12px;
+  background:#151208;
+  text-align:right;
+}
+.google-rating-box strong{
+  display:block;
+  color:#efc45a;
+  font-size:1.35rem;
+  line-height:1.1;
+}
+.google-rating-box span{color:#b9c1ca;font-size:.66rem}
+.google-review-grid{display:grid;gap:9px}
+.google-review-card{
+  padding:12px;
+  border:1px solid #303a45;
+  border-radius:13px;
+  background:#0a1017;
+}
+.google-review-author{
+  display:flex;
+  align-items:center;
+  gap:9px;
+  min-width:0;
+}
+.google-review-avatar{
+  width:34px;height:34px;flex:0 0 34px;
+  border-radius:50%;object-fit:cover;
+  background:#18212a;
+}
+.google-review-author-copy{min-width:0;flex:1}
+.google-review-author-copy a,
+.google-review-author-copy b{
+  display:block;
+  color:#edf0f4;
+  font-size:.78rem;
+  font-weight:800;
+  text-decoration:none;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.google-review-stars{color:#efc45a;font-size:.72rem;letter-spacing:.04em}
+.google-review-time{color:#818b96;font-size:.61rem}
+.google-review-text{
+  margin:9px 0 0;
+  color:#c6cdd5;
+  font-size:.75rem;
+  line-height:1.65;
+  display:-webkit-box;
+  -webkit-line-clamp:4;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+}
+.google-review-links{
+  display:flex;flex-wrap:wrap;gap:8px;margin-top:9px
+}
+.google-review-links a{
+  color:#d9b754;
+  font-size:.65rem;
+  font-weight:800;
+  text-decoration:none
+}
+.google-review-footer{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-top:12px;
+  padding-top:11px;
+  border-top:1px solid #27313b;
+}
+.google-review-footer span{
+  color:#8f99a4;
+  font-size:.63rem;
+  line-height:1.5;
+}
+.google-review-footer a{
+  flex:0 0 auto;
+  color:#efc45a;
+  font-size:.68rem;
+  font-weight:900;
+  text-decoration:none;
+}
+@media(max-width:640px){
+  .public-google-reviews{padding:14px;margin-top:16px}
+  .google-review-head{align-items:center}
+  .google-review-head h2{font-size:1.12rem}
+  .google-rating-box{min-width:103px;padding:8px 9px}
+  .google-rating-box strong{font-size:1.18rem}
+  .google-review-footer{align-items:flex-start;flex-direction:column}
+}
+</style>
+
 </head>
-<body class="public-v109 public-v147">
+<body class="public-v109 public-v184">
 
 <header class="public-header">
   <div class="container public-header-inner">
@@ -136,6 +253,91 @@ function updateShopSeo(s,name,desc){
   }
 }
 
+
+function googleStars(rating){
+  const n=Math.max(0,Math.min(5,Math.round(Number(rating||0))));
+  return "★".repeat(n)+"☆".repeat(5-n);
+}
+function googleReviewText(v){
+  return String(v||"").trim();
+}
+async function loadGoogleReviews(){
+  const section=document.getElementById("googleReviewsSection");
+  if(!section||!slug)return;
+  try{
+    const r=await fetch(
+      `/api/shops/${encodeURIComponent(slug)}/google-reviews`,
+      {cache:"no-store"}
+    );
+    const d=await r.json();
+    if(!r.ok||!d.ok||!d.matched){
+      section.hidden=true;
+      return;
+    }
+
+    const reviews=Array.isArray(d.reviews)?d.reviews:[];
+    const rating=Number(d.rating||0);
+    const count=Number(d.user_rating_count||0);
+    if(!rating && !reviews.length){
+      section.hidden=true;
+      return;
+    }
+
+    const cards=reviews.map(rv=>{
+      const author=rv.author||{};
+      const authorName=author.name||"Googleユーザー";
+      const authorPhoto=author.photo_uri||"";
+      const authorUri=author.uri||"";
+      const reviewUri=rv.google_maps_uri||"";
+      const reportUri=rv.flag_content_uri||"";
+      const txt=googleReviewText(rv.text);
+
+      return `
+        <article class="google-review-card">
+          <div class="google-review-author">
+            ${authorPhoto
+              ?`<img class="google-review-avatar" src="${esc(authorPhoto)}" alt="" loading="lazy" referrerpolicy="no-referrer">`
+              :`<span class="google-review-avatar"></span>`}
+            <div class="google-review-author-copy">
+              ${authorUri
+                ?`<a href="${esc(authorUri)}" target="_blank" rel="noopener">${esc(authorName)}</a>`
+                :`<b>${esc(authorName)}</b>`}
+              <span class="google-review-stars">${esc(googleStars(rv.rating))}</span>
+              <span class="google-review-time">${esc(rv.relative_time||"")}</span>
+            </div>
+          </div>
+          ${txt?`<p class="google-review-text">${esc(txt)}</p>`:""}
+          ${(reviewUri||reportUri)?`
+            <div class="google-review-links">
+              ${reviewUri?`<a href="${esc(reviewUri)}" target="_blank" rel="noopener">Google Mapsでこのクチコミを見る ↗</a>`:""}
+              ${reportUri?`<a href="${esc(reportUri)}" target="_blank" rel="noopener">問題を報告</a>`:""}
+            </div>`:""}
+        </article>`;
+    }).join("");
+
+    section.innerHTML=`
+      <div class="google-review-head">
+        <div>
+          <p class="public-kicker">GOOGLE REVIEWS</p>
+          <h2>Googleの評価・クチコミ</h2>
+        </div>
+        <div class="google-rating-box">
+          <strong>★ ${rating?rating.toFixed(1):"-"}</strong>
+          <span>${count.toLocaleString()}件の評価</span>
+        </div>
+      </div>
+      ${cards?`<div class="google-review-grid">${cards}</div>`:""}
+      <div class="google-review-footer">
+        <span>クチコミ・評価はGoogle Mapsから取得しています。内容は投稿者個人の意見です。</span>
+        ${d.google_maps_uri?`<a href="${esc(d.google_maps_uri)}" target="_blank" rel="noopener">Google Mapsで全て見る ↗</a>`:""}
+      </div>
+    `;
+    section.hidden=false;
+  }catch(e){
+    section.hidden=true;
+  }
+}
+
 async function load(){
   const box=document.getElementById("shopDetail");
   if(!slug){box.innerHTML='<div class="public-empty"><b>店舗が指定されていません。</b></div>';return;}
@@ -219,6 +421,8 @@ async function load(){
             </dl>
           </div>
 
+          <section id="googleReviewsSection" class="public-google-reviews" hidden></section>
+
           ${editorial?`
           <div class="public-editorial-note">
             <b>KBN独自掲載について</b>
@@ -238,6 +442,7 @@ async function load(){
     `;
 
     track("view");
+    loadGoogleReviews();
     document.querySelectorAll("[data-track]").forEach(el=>el.addEventListener("click",()=>track(el.dataset.track)));
 
     const copy=document.querySelector("[data-copy-address]");
