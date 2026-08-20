@@ -3749,20 +3749,76 @@ async function enrichScheduledCreatedShops(env,created=[]){
   return {images,instagram};
 }
 
-// KBN scheduled maintenance v1.80: 15 auto listings + image + Instagram enrichment
+// KBN scheduled maintenance v1.81:
+ // target 15 listings, multi-pass discovery + image + Instagram enrichment
 async function runScheduledKbnMaintenance(env){
   const fakeRequest=new Request("https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/api/internal/scheduled");
 
-  // 予約メンテナンス1回につき最大15店舗を自動掲載
-  const discovery=await autoDiscover(env,fakeRequest,15,15,2);
+  // 15件に届くまで検索範囲を自動で広げる。
+  // 1回だけの探索で候補が少なくても、カーソルを進めながら最大6巡する。
+  const targetListings=15;
+  const maxPasses=6;
+  const allCreated=[];
+  const allSearched=[];
+  const allRejected=[];
+  const passStats=[];
+
+  for(let pass=1;pass<=maxPasses && allCreated.length<targetListings;pass++){
+    const remaining=targetListings-allCreated.length;
+    const result=await autoDiscover(
+      env,
+      fakeRequest,
+      remaining,
+      20, // 1巡で最大20エリア×ジャンルを検索
+      3   // 1ペア最大3店舗
+    );
+
+    const created=Array.isArray(result?.created)?result.created:[];
+    const searched=Array.isArray(result?.searched)?result.searched:[];
+    const rejected=Array.isArray(result?.rejected)?result.rejected:[];
+
+    for(const x of created){
+      const key=Number(x?.shop_id||x?.id||0)||`${x?.name||""}|${x?.area||""}`;
+      if(!allCreated.some(y=>{
+        const yk=Number(y?.shop_id||y?.id||0)||`${y?.name||""}|${y?.area||""}`;
+        return yk===key;
+      })){
+        allCreated.push(x);
+      }
+      if(allCreated.length>=targetListings)break;
+    }
+
+    allSearched.push(...searched);
+    allRejected.push(...rejected);
+    passStats.push({
+      pass,
+      created:created.length,
+      total:allCreated.length,
+      searched:searched.length,
+      rejected:rejected.length
+    });
+
+    // 探索ソース自体が利用不可なら無限に回さない
+    if(result?.ok===false && result?.error==="DISCOVERY_SOURCES_UNAVAILABLE")break;
+  }
+
+  const discovery={
+    ok:true,
+    created:allCreated.slice(0,targetListings),
+    searched:allSearched,
+    rejected:allRejected,
+    target:targetListings,
+    passes:passStats.length,
+    pass_stats:passStats
+  };
 
   // 新規掲載した店舗は、画像とInstagramをその場で再確認して補完
   const createdEnrichment=await enrichScheduledCreatedShops(
     env,
-    discovery?.created||[]
+    discovery.created
   );
 
-  if(discovery?.created?.length){
+  if(discovery.created.length){
     await notifyCreatedShops(env,discovery.created,"予約自動開拓");
   }
 
@@ -3771,23 +3827,26 @@ async function runScheduledKbnMaintenance(env){
     limit:30,afterId:0,revalidate:true,force:false,missingOnly:true
   });
 
-  // 既存の画像なし店舗も自動補完（1回最大30店舗）
+  // 既存の画像なし店舗も自動補完
   const imageBackfill=await refreshMissingShopImages(env,{
     limit:30,afterId:0
   });
 
   const closed=await checkClosedShops(env,{limit:30,afterId:0});
 
+  const shortfall=Math.max(0,targetListings-discovery.created.length);
   await createKbnAlert(env,{
     type:"scheduled_summary",
     title:"予約メンテナンス完了",
     message:[
-      `新規掲載 ${discovery?.created?.length||0}店舗`,
-      `新規画像 ${createdEnrichment?.images?.updated?.length||0}店舗`,
-      `新規Instagram ${createdEnrichment?.instagram?.updated?.length||0}店舗`,
-      `既存画像補完 ${imageBackfill?.updated?.length||0}店舗`,
-      `情報補完 ${missing?.updated?.length||0}店舗`,
-      `閉業候補 ${closed?.closed?.length||0}店舗`
+      `新規掲載 ${discovery.created.length}/${targetListings}店舗`,
+      `探索 ${discovery.passes}巡`,
+      `画像 ${createdEnrichment?.images?.updated?.length||0}件`,
+      `Instagram ${createdEnrichment?.instagram?.updated?.length||0}件`,
+      `既存画像 ${imageBackfill?.updated?.length||0}件`,
+      `情報補完 ${missing?.updated?.length||0}件`,
+      `閉業候補 ${closed?.closed?.length||0}件`,
+      shortfall?`有効候補不足 ${shortfall}件`:"目標達成"
     ].join(" / ")
   });
 
