@@ -4245,6 +4245,7 @@ async function enrichScheduledCreatedShops(env,created=[]){
   return {images,instagram};
 }
 
+// KBN v2.05: 管理画面で無料会員数・会員情報を確認
 // KBN v2.01: 求人削除APIを追加
 // KBN v1.99: 承認済み申込みから求人を再検出し確認後に公開
 // KBN v1.98: 備考・説明欄の求人情報も自動判定・抽出して求人掲載
@@ -5184,6 +5185,68 @@ ${urls.map(x=>`  <url>
       if(!(await validAdminRequest(request,env))) return json({ok:false,error:"ADMIN_AUTH_REQUIRED"},{status:401});
 
 
+
+
+      // ---------- Free members dashboard v2.05 ----------
+      if(url.pathname==="/api/admin/members" && request.method==="GET"){
+        await ensureKbnMemberSchema(env);
+
+        const summary=await env.DB.prepare(`
+          SELECT
+            COUNT(*) AS total,
+            SUM(CASE WHEN status='active' THEN 1 ELSE 0 END) AS active,
+            SUM(CASE WHEN status='active' AND email_notifications=1 THEN 1 ELSE 0 END) AS notifications_on,
+            SUM(CASE WHEN datetime(created_at)>=datetime('now','-7 days') THEN 1 ELSE 0 END) AS new_7d
+          FROM members
+        `).first();
+
+        const favSummary=await env.DB.prepare(`
+          SELECT COUNT(*) AS total_favorites
+          FROM member_favorites
+        `).first();
+
+        const rows=await env.DB.prepare(`
+          SELECT
+            m.id,
+            m.email,
+            m.display_name,
+            m.email_notifications,
+            m.status,
+            m.created_at,
+            m.updated_at,
+            m.last_login_at,
+            COUNT(f.shop_id) AS favorite_count
+          FROM members m
+          LEFT JOIN member_favorites f ON f.member_id=m.id
+          GROUP BY
+            m.id,m.email,m.display_name,m.email_notifications,m.status,
+            m.created_at,m.updated_at,m.last_login_at
+          ORDER BY m.id DESC
+          LIMIT 500
+        `).all();
+
+        return json({
+          ok:true,
+          summary:{
+            total:Number(summary?.total||0),
+            active:Number(summary?.active||0),
+            notifications_on:Number(summary?.notifications_on||0),
+            new_7d:Number(summary?.new_7d||0),
+            total_favorites:Number(favSummary?.total_favorites||0)
+          },
+          members:(rows.results||[]).map(m=>({
+            id:Number(m.id),
+            email:String(m.email||""),
+            display_name:String(m.display_name||""),
+            email_notifications:Number(m.email_notifications||0)===1,
+            status:String(m.status||"active"),
+            created_at:m.created_at||"",
+            updated_at:m.updated_at||"",
+            last_login_at:m.last_login_at||"",
+            favorite_count:Number(m.favorite_count||0)
+          }))
+        },{headers:{"Cache-Control":"no-store"}});
+      }
 
       // ---------- GitHub site update ----------
 
