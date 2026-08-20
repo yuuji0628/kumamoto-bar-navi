@@ -3205,50 +3205,6 @@ html,body{max-width:100%;overflow-x:hidden}
 }
 </style>
 
-
-<style id="kbn-auto-listed-compact-v206">
-.auto-listed-toggle-v206{
-  width:100%;
-  min-height:42px;
-  margin-top:8px;
-  border:1px solid #665323;
-  border-radius:11px;
-  background:rgba(228,187,85,.08);
-  color:#efc45a;
-  font-size:.72rem;
-  font-weight:900;
-}
-.auto-listed-toggle-v206 span{
-  margin-left:6px;
-  color:#d4ae4d;
-}
-.auto-listed-more-row-v206{
-  display:grid;
-  grid-template-columns:1fr auto;
-  gap:7px;
-  margin-top:9px;
-}
-.auto-listed-more-v206,
-.auto-listed-close-v206{
-  min-height:39px;
-  border:1px solid #384550;
-  border-radius:10px;
-  background:#101821;
-  color:#e5e9ed;
-  font-size:.66rem;
-  font-weight:850;
-}
-.auto-listed-more-v206{
-  border-color:#665323;
-  color:#efc45a;
-}
-.auto-listed-close-v206{padding:0 14px}
-@media(max-width:640px){
-  .auto-listed-more-row-v206{grid-template-columns:1fr}
-  .auto-listed-close-v206{width:100%}
-}
-</style>
-
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
 <div id="topMaintenanceResult" class="top-maintenance-result">
@@ -3665,23 +3621,12 @@ html,body{max-width:100%;overflow-x:hidden}
         <div class="auto-listed-head">
           <div>
             <b>自動掲載した店舗</b>
-            <small>KBN独自掲載中の店舗。普段は閉じて、必要な時だけ確認できます。</small>
+            <small>KBN独自掲載中の全店舗を確認・編集・掲載取り消しできます。</small>
           </div>
           <button type="button" id="reloadAutoListedBtn">更新</button>
         </div>
         <div id="autoListedSummary" class="auto-listed-summary">読み込み中...</div>
-
-        <button type="button" id="toggleAutoListedBtn" class="auto-listed-toggle-v206">
-          最新3件を見る <span>▼</span>
-        </button>
-
-        <div id="autoListedBody" hidden>
-          <div id="autoListedShops" class="auto-listed-list"></div>
-          <div class="auto-listed-more-row-v206">
-            <button type="button" id="showAllAutoListedBtn" class="auto-listed-more-v206" hidden>残りを表示</button>
-            <button type="button" id="closeAutoListedBtn" class="auto-listed-close-v206">閉じる</button>
-          </div>
-        </div>
+        <div id="autoListedShops" class="auto-listed-list"></div>
       </div>
     </div>
   </div>
@@ -8957,100 +8902,78 @@ document.addEventListener("click",(e)=>{
 
 
 <script>
-let kbnAutoListedRows=[];
-let kbnAutoListedShowAll=false;
-
-function renderAutoListedShops(){
-  const wrap=document.getElementById("autoListedShops");
-  const moreBtn=document.getElementById("showAllAutoListedBtn");
-  if(!wrap)return;
-
-  const rows=Array.isArray(kbnAutoListedRows)?kbnAutoListedRows:[];
-  const visible=kbnAutoListedShowAll?rows:rows.slice(0,3);
-
-  if(!rows.length){
-    wrap.innerHTML='<div class="auto-listed-empty">自動掲載された店舗はまだありません。</div>';
-    if(moreBtn)moreBtn.hidden=true;
-    return;
-  }
-
-  wrap.innerHTML=visible.map(x=>{
-    const on=Number(x.is_published||0)===1;
-    const publicUrl=`/shop.html?slug=${encodeURIComponent(x.slug||"")}`;
-    return `<div class="auto-listed-item" data-auto-shop-id="${Number(x.id||0)}">
-      <div class="auto-listed-main">
-        <b>${esc(x.name||"名称未設定")}</b>
-        <small>${esc(x.area||"エリア未設定")} / ${esc(x.genre||"BAR")}</small>
-        <div class="auto-listed-badges">
-          <span class="auto-listed-badge">KBN独自掲載</span>
-          <span class="auto-listed-badge ${on?"live":"off"}">${on?"掲載中":"掲載取消済み"}</span>
-        </div>
-      </div>
-      <div class="auto-listed-actions">
-        <button type="button" onclick="window.open('${publicUrl}','_blank','noopener')" ${on?"":"disabled"}>詳細</button>
-        ${cleanInstagramHandle(x.instagram||"")?`
-          <button type="button" class="dm-create" onclick="openAutoListedDm(${Number(x.id||0)})">DM作成</button>
-          <button type="button" class="dm-jump" onclick="jumpToInstagramDm(${Number(x.id||0)})">DMへ</button>
-        `:""}
-        <button type="button" onclick="editAutoListedShop(${Number(x.id||0)})">編集</button>
-        ${on?`<button type="button" class="cancel" onclick="cancelAutoListing(${Number(x.id||0)},'${esc(String(x.name||"").replace(/'/g,"&#39;"))}')">掲載取消</button>`:`<button type="button" onclick="restoreAutoListing(${Number(x.id||0)})">再掲載</button>`}
-      </div>
-    </div>`;
-  }).join("");
-
-  if(moreBtn){
-    if(rows.length<=3){
-      moreBtn.hidden=true;
-    }else{
-      moreBtn.hidden=false;
-      moreBtn.textContent=kbnAutoListedShowAll
-        ? "最新3件だけ表示"
-        : `＋残り${rows.length-3}件を表示`;
-    }
-  }
-}
-
 window.loadAutoListedShops=async function(){
   const wrap=document.getElementById("autoListedShops");
   const summary=document.getElementById("autoListedSummary");
   if(!wrap)return;
 
-  try{
-    const d=await api("/api/admin/leads/auto-listed");
-    const rows=Array.isArray(d.shops)?d.shops:[];
-    const live=rows.filter(x=>Number(x.is_published||0)===1).length;
+  wrap.innerHTML='<div class="auto-listed-empty">読み込み中...</div>';
 
-    kbnAutoListedRows=rows;
-    kbnAutoListedShowAll=false;
+  try{
+    const pageSize=200;
+    let offset=0;
+    let total=0;
+    let live=0;
+    let cancelled=0;
+    const rows=[];
+
+    do{
+      const d=await api(`/api/admin/leads/auto-listed?limit=${pageSize}&offset=${offset}`);
+      const page=Array.isArray(d.shops)?d.shops:[];
+      total=Number(d.total||0);
+      live=Number(d.live||0);
+      cancelled=Number(d.cancelled||0);
+
+      rows.push(...page);
+      offset+=page.length;
+
+      if(summary){
+        summary.textContent=total
+          ? `読み込み中 ${Math.min(rows.length,total)} / ${total}店舗`
+          : "0店舗";
+      }
+
+      if(!page.length)break;
+    }while(rows.length<total);
 
     if(summary){
-      summary.textContent=`${rows.length}店舗 / 掲載中 ${live}店舗 / 取消済み ${rows.length-live}店舗`;
+      summary.textContent=`${total}店舗 / 掲載中 ${live}店舗 / 取消済み ${cancelled}店舗`;
     }
 
-    renderAutoListedShops();
+    if(!rows.length){
+      wrap.innerHTML='<div class="auto-listed-empty">自動掲載された店舗はまだありません。</div>';
+      return;
+    }
+
+    wrap.innerHTML=rows.map(x=>{
+      const on=Number(x.is_published||0)===1;
+      const ig=x.instagram?String(x.instagram):"";
+      return `<div class="auto-listed-item" data-auto-shop-id="${Number(x.id||0)}">
+        <div class="auto-listed-main">
+          <b>${esc(x.name||"店舗名未設定")}</b>
+          <small>${esc([x.area,x.genre].filter(Boolean).join(" / ")||"エリア未設定")}</small>
+          <div class="auto-listed-badges">
+            <span class="auto-listed-badge">KBN独自掲載</span>
+            <span class="auto-listed-badge ${on?"live":"off"}">${on?"掲載中":"掲載取消済み"}</span>
+          </div>
+        </div>
+        <div class="auto-listed-actions">
+          <button type="button" onclick="openAutoListedDetail(${Number(x.id||0)})">詳細</button>
+          <button type="button" onclick="editShop(${Number(x.id||0)})">編集</button>
+          ${on
+            ? `<button type="button" class="cancel" onclick="unpublishAutoListed(${Number(x.id||0)})">掲載取消</button>`
+            : `<button type="button" onclick="restoreAutoListed(${Number(x.id||0)})">再掲載</button>`
+          }
+        </div>
+      </div>`;
+    }).join("");
+
   }catch(e){
-    kbnAutoListedRows=[];
-    if(summary)summary.textContent="一覧を取得できませんでした";
+    console.error("loadAutoListedShops failed",e);
+    if(summary)summary.textContent="読み込みエラー";
     wrap.innerHTML=`<div class="auto-listed-empty">${esc(e?.message||"読み込みエラー")}</div>`;
   }
 };
-
-function setAutoListedOpen(open){
-  const body=document.getElementById("autoListedBody");
-  const toggle=document.getElementById("toggleAutoListedBtn");
-  if(!body||!toggle)return;
-
-  body.hidden=!open;
-  toggle.innerHTML=open
-    ? '一覧を閉じる <span>▲</span>'
-    : '最新3件を見る <span>▼</span>';
-
-  if(open){
-    kbnAutoListedShowAll=false;
-    renderAutoListedShops();
-  }
-}
-
 
 
 function findAutoListedShop(id){
@@ -9166,18 +9089,6 @@ window.editAutoListedShop=function(id){
 
 document.addEventListener("click",e=>{
   if(e.target?.id==="reloadAutoListedBtn")window.loadAutoListedShops();
-  if(e.target?.id==="toggleAutoListedBtn"){
-    const body=document.getElementById("autoListedBody");
-    setAutoListedOpen(!!body?.hidden);
-  }
-  if(e.target?.id==="showAllAutoListedBtn"){
-    kbnAutoListedShowAll=!kbnAutoListedShowAll;
-    renderAutoListedShops();
-  }
-  if(e.target?.id==="closeAutoListedBtn"){
-    setAutoListedOpen(false);
-    document.querySelector(".auto-listed-panel")?.scrollIntoView({behavior:"smooth",block:"nearest"});
-  }
 });
 
 // 初回表示・自動開拓後に一覧を更新
