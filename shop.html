@@ -6,7 +6,7 @@
   <meta name="description" content="熊本のBAR店舗情報｜KUMAMOTO BAR NAVI">
   <meta name="theme-color" content="#080b10">
   <title>店舗詳細｜KUMAMOTO BAR NAVI</title>
-  <link rel="stylesheet" href="style.css?v=195">
+  <link rel="stylesheet" href="style.css?v=196">
 <link id="dynamicCanonical" rel="canonical" href="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/shop.html">
 <meta id="dynamicOgTitle" property="og:title" content="店舗詳細｜KUMAMOTO BAR NAVI">
 <meta id="dynamicOgDescription" property="og:description" content="熊本のBAR店舗情報">
@@ -257,8 +257,63 @@ body{
 
 </style>
 
+<style>
+/* v1.96 public member CTA */
+.public-header-actions-v196{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-left:auto;
+}
+.public-member-cta-v196{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:42px;
+  padding:0 17px;
+  border:1px solid #efc45a;
+  border-radius:999px;
+  background:#efc45a;
+  color:#111!important;
+  text-decoration:none!important;
+  font-weight:950;
+  font-size:.76rem;
+  line-height:1;
+  white-space:nowrap;
+  box-shadow:0 8px 24px rgba(239,196,90,.15);
+}
+.public-member-cta-v196.is-member{
+  background:#101821;
+  color:#efc45a!important;
+  border-color:#665421;
+}
+.public-member-cta-v196 .member-icon-v196{
+  margin-right:6px;
+  font-size:.85rem;
+}
+@media(max-width:700px){
+  .public-header-actions-v196{gap:6px}
+  .public-member-cta-v196{
+    min-height:38px;
+    padding:0 11px;
+    font-size:.68rem;
+  }
+  .public-header-actions-v196 .public-header-cta{
+    min-height:38px;
+    padding-left:12px;
+    padding-right:12px;
+  }
+}
+@media(max-width:430px){
+  .public-member-cta-v196{
+    padding:0 9px;
+    font-size:.64rem;
+  }
+  .public-member-cta-v196 .member-icon-v196{display:none}
+}
+</style>
 </head>
-<body class="public-v109 public-v190">
+<body class="public-v109 public-v196">
 
 <header class="public-header">
   <div class="container public-header-inner">
@@ -266,11 +321,11 @@ body{
       <img src="logo.png" alt="KUMAMOTO BAR NAVI">
       <span><b>KUMAMOTO</b><strong>BAR NAVI</strong><small>BAR & JOB INFORMATION</small></span>
     </a>
-    <div class="public-header-actions">
-      <a class="public-header-cta public-member-cta" href="member.html" data-kbn-member-cta aria-label="無料会員登録">
-        <span class="member-label-full">無料会員登録</span><span class="member-label-short">無料登録</span>
+    <div class="public-header-actions-v196">
+      <a id="publicMemberCta" class="public-member-cta-v196" href="member.html">
+        <span class="member-icon-v196">👤</span><span>無料会員登録</span>
       </a>
-      <a class="public-header-cta public-search-cta" href="bars.html">BARを探す</a>
+      <a class="public-header-cta" href="bars.html">BARを探す</a>
     </div>
   </div>
 </header>
@@ -289,7 +344,6 @@ body{
   <a href="listing-form.html"><span>＋</span><b>店舗掲載</b></a>
 </nav>
 
-<script src="script.js?v=195"></script>
 <script>
 const esc=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 const slug=new URLSearchParams(location.search).get("slug");
@@ -643,5 +697,30 @@ async function load(){
 }
 load();
 </script>
+
+<script id="kbn-public-member-state-v196">
+(async()=>{
+  const cta=document.getElementById("publicMemberCta");
+  if(!cta)return;
+  try{
+    const r=await fetch("/api/member/me",{cache:"no-store"});
+    const d=await r.json();
+    if(d?.member){
+      cta.classList.add("is-member");
+      cta.href="member.html";
+      cta.innerHTML='<span class="member-icon-v196">👤</span><span>マイページ</span>';
+      cta.setAttribute("aria-label","マイページ");
+    }else{
+      cta.classList.remove("is-member");
+      cta.href="member.html";
+      cta.innerHTML='<span class="member-icon-v196">👤</span><span>無料会員登録</span>';
+      cta.setAttribute("aria-label","無料会員登録");
+    }
+  }catch{
+    cta.href="member.html";
+  }
+})();
+</script>
+
 </body>
 </html>
