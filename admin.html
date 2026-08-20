@@ -1918,7 +1918,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.79 画面圧縮調整
+   KBN ADMIN ver1.81 画面圧縮調整
    ============================================================ */
 
 /* 上部 welcome とログアウトをコンパクト化 */
@@ -2147,7 +2147,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver1.79 — 独自掲載 Instagram DM
+   KBN ADMIN ver1.81 — 独自掲載 Instagram DM
    ============================================================ */
 .shop-provisional-dm{
   border:1px solid #6c5a2b!important;
@@ -2913,6 +2913,72 @@ html,body{max-width:100%;overflow-x:hidden}
 }
 </style>
 
+
+<style id="kbn-maintenance-notice-smart-v181">
+/* v1.81 メンテナンス通知をスマート化 */
+.kbn-alert-list{
+  gap:6px!important;
+  max-height:220px!important;
+}
+.kbn-alert-item{
+  padding:8px 10px!important;
+  border-radius:10px!important;
+}
+.kbn-alert-item b{
+  font-size:.72rem!important;
+  line-height:1.3!important;
+}
+.kbn-alert-item p{
+  margin:3px 0!important;
+  font-size:.64rem!important;
+  line-height:1.4!important;
+}
+.kbn-alert-item small{
+  font-size:.58rem!important;
+}
+.kbn-alert-item.kbn-newshops-group{
+  border-color:#66521f!important;
+  background:rgba(239,196,90,.045)!important;
+}
+.kbn-newshops-inline{
+  display:flex;
+  flex-wrap:wrap;
+  gap:4px;
+  margin-top:6px;
+}
+.kbn-newshops-inline span{
+  display:inline-flex;
+  align-items:center;
+  max-width:100%;
+  padding:3px 7px;
+  border:1px solid #394551;
+  border-radius:999px;
+  color:#bbc3cc;
+  background:#0b1219;
+  font-size:.59rem;
+  line-height:1.25;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.kbn-summary-metrics{
+  display:flex;
+  flex-wrap:wrap;
+  gap:4px;
+  margin-top:5px;
+}
+.kbn-summary-metrics span{
+  padding:3px 6px;
+  border-radius:7px;
+  background:#121b24;
+  color:#aeb7c1;
+  font-size:.59rem;
+}
+@media(max-width:640px){
+  #kbnAlertsList{max-height:190px!important}
+}
+</style>
+
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
 <div id="topMaintenanceResult" class="top-maintenance-result">
@@ -3320,7 +3386,6 @@ html,body{max-width:100%;overflow-x:hidden}
       <button type="button" id="refreshMissingInfoBtn">情報不足を補完</button>
       <button type="button" id="checkClosedShopsBtn">閉業チェック</button>
       <button type="button" id="refreshInstagramBtn">Instagram補完</button>
-      <button type="button" id="refreshImagesBtn">画像補完</button>
     </div>
     <div class="kbn-schedule-note kbn-schedule-editor">
       <div class="kbn-schedule-title">
@@ -8310,30 +8375,73 @@ window.loadKbnAlerts=async function(){
   try{
     const d=await api("/api/admin/alerts");
     const rows=Array.isArray(d.alerts)?d.alerts:[];
-    const visibleRows=rows.filter(x=>{
+
+    const baseRows=rows.filter(x=>{
       if(x.alert_type==="maintenance_action")return false;
       if(x.alert_type==="closed_shop" && Number(x.is_read))return false;
       return true;
     });
-    window.renderTopMaintenanceResult(visibleRows);
+
+    window.renderTopMaintenanceResult(baseRows);
 
     if(!box)return;
-    box.innerHTML=visibleRows.length?visibleRows.slice(0,15).map(x=>{
+
+    // 新店舗通知は1店舗ずつ縦に並べず、1枚にまとめる
+    const newShopRows=baseRows.filter(x=>x.alert_type==="new_shop").slice(0,15);
+    const otherRows=baseRows.filter(x=>x.alert_type!=="new_shop").slice(0,8);
+
+    const cards=[];
+
+    if(newShopRows.length){
+      const names=newShopRows.map(x=>
+        String(x.title||"")
+          .replace(/^新店舗を自動掲載:\s*/,"")
+          .trim()
+      ).filter(Boolean);
+
+      cards.push(`
+        <div class="kbn-alert-item kbn-newshops-group">
+          <b>自動掲載 ${newShopRows.length}店舗</b>
+          <p>直近の自動メンテナンスで追加した店舗をまとめて表示しています。</p>
+          <div class="kbn-newshops-inline">
+            ${names.slice(0,5).map(n=>`<span>${esc(n)}</span>`).join("")}
+            ${names.length>5?`<span>＋${names.length-5}店舗</span>`:""}
+          </div>
+          <small>${esc(kbnAlertTime(newShopRows[0]?.created_at))}</small>
+        </div>
+      `);
+    }
+
+    for(const x of otherRows){
       const closed=x.alert_type==="closed_shop"&&x.shop_id;
-      return `
-      <div class="kbn-alert-item ${Number(x.is_read)?"":"unread"}" data-alert-id="${x.id}" data-shop-id="${x.shop_id||""}">
-        <b>${esc(x.title||"お知らせ")}</b>
-        <p>${esc(x.message||"")}</p>
-        <small>${esc(kbnAlertTime(x.created_at))}</small>
-        ${closed?`
-          <div class="kbn-alert-actions">
-            <button type="button" class="alert-detail" data-alert-detail="${x.shop_id}">詳細確認</button>
-            <button type="button" class="alert-active" data-maint-action="operational" data-shop-id="${x.shop_id}">営業中</button>
-            <button type="button" class="alert-temp" data-maint-action="temporary_closed" data-shop-id="${x.shop_id}">一時休業</button>
-            <button type="button" class="alert-unpublish" data-maint-action="unpublish" data-shop-id="${x.shop_id}">掲載取消</button>
-          </div>`:""}
-      </div>`;
-    }).join(""):"<small>新しい通知はありません。</small>";
+      const isSummary=x.alert_type==="scheduled_summary";
+      let summaryHtml="";
+
+      if(isSummary){
+        const parts=String(x.message||"").split(" / ").filter(Boolean);
+        summaryHtml=`
+          <div class="kbn-summary-metrics">
+            ${parts.slice(0,8).map(p=>`<span>${esc(p)}</span>`).join("")}
+          </div>`;
+      }
+
+      cards.push(`
+        <div class="kbn-alert-item ${Number(x.is_read)?"":"unread"}" data-alert-id="${x.id}" data-shop-id="${x.shop_id||""}">
+          <b>${esc(x.title||"お知らせ")}</b>
+          ${isSummary?summaryHtml:`<p>${esc(x.message||"")}</p>`}
+          <small>${esc(kbnAlertTime(x.created_at))}</small>
+          ${closed?`
+            <div class="kbn-alert-actions">
+              <button type="button" class="alert-detail" data-alert-detail="${x.shop_id}">詳細確認</button>
+              <button type="button" class="alert-active" data-maint-action="operational" data-shop-id="${x.shop_id}">営業中</button>
+              <button type="button" class="alert-temp" data-maint-action="temporary_closed" data-shop-id="${x.shop_id}">一時休業</button>
+              <button type="button" class="alert-unpublish" data-maint-action="unpublish" data-shop-id="${x.shop_id}">掲載取消</button>
+            </div>`:""}
+        </div>
+      `);
+    }
+
+    box.innerHTML=cards.length?cards.join(""):"<small>新しい通知はありません。</small>";
   }catch(e){
     if(box)box.innerHTML=`<small>通知を取得できませんでした: ${esc(e?.message||"")}</small>`;
     const text=document.getElementById("topMaintenanceText");
@@ -8408,30 +8516,6 @@ document.addEventListener("click",async(e)=>{
       actionBtn.disabled=false;
       actionBtn.textContent=oldText;
     }
-    return;
-  }
-
-
-  if(e.target?.id==="refreshImagesBtn"){
-    const btn=e.target,st=document.getElementById("maintenanceStatus");
-    btn.disabled=true;btn.textContent="画像検索中...";
-    try{
-      let after=0,checked=0,updated=0,loops=0;
-      while(loops<50){
-        const d=await api("/api/admin/leads/refresh-images",{
-          method:"POST",headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({limit:20,after_id:after})
-        });
-        checked+=Number(d.checked||0); updated+=(d.updated||[]).length;
-        after=Number(d.next_after_id||after); loops++;
-        if(st)st.textContent=`画像補完中… ${checked}店舗確認 / ${updated}店舗に画像追加`;
-        if(!d.has_more)break;
-      }
-      if(st)st.textContent=`画像補完完了：${checked}店舗確認 / ${updated}店舗に画像を追加`;
-      await window.loadShops?.(); await window.loadAutoListedShops?.();
-    }catch(err){
-      if(st)st.textContent="画像補完に失敗: "+(err?.message||"");
-    }finally{btn.disabled=false;btn.textContent="画像補完";}
     return;
   }
 
