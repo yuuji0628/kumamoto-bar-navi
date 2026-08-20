@@ -1918,7 +1918,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver2.00 画面圧縮調整
+   KBN ADMIN ver2.01 画面圧縮調整
    ============================================================ */
 
 /* 上部 welcome とログアウトをコンパクト化 */
@@ -3097,6 +3097,7 @@ html,body{max-width:100%;overflow-x:hidden}
 #tab-jobs #jobList .admin-shop-item p{margin:0;color:#9aa4ae;font-size:.62rem}
 #tab-jobs #jobList .admin-shop-item small{display:block;margin-top:4px;color:#7e8893;font-size:.57rem}
 #tab-jobs #jobList .admin-item-actions button{min-height:33px;padding:0 10px;font-size:.6rem}
+#tab-jobs #jobList .admin-item-actions button.danger{border-color:#63383d;color:#ff9da6;background:#170d0f}
 
 .jobs-list-head-v200{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:12px 0 7px}
 .jobs-list-head-v200 strong{font-size:.88rem}
@@ -4974,6 +4975,7 @@ window.loadJobs=async function(){
         </div>
         <div class="admin-item-actions">
           <button type="button" onclick="editJob(${Number(j.id)})">編集</button>
+          <button type="button" onclick="deleteJob(${Number(j.id)})" class="danger">削除</button>
         </div>
       </article>
     `).join("");
@@ -4982,6 +4984,36 @@ window.loadJobs=async function(){
     if(list){
       list.innerHTML=`<div class="analytics-error-box"><b>求人を読み込めませんでした。</b><p>${esc(e?.message||"UNKNOWN_ERROR")}</p></div>`;
     }
+  }
+};
+
+
+window.deleteJob=async function(id){
+  const j=jobs.find(x=>Number(x.id)===Number(id));
+  if(!j)return;
+
+  const name=j.title||"この求人";
+  if(!confirm(
+    `求人「${name}」を削除します。\n\n`+
+    `店舗：${j.shop_name||"店舗未設定"}\n\n`+
+    "削除すると求人ページからも消えます。よろしいですか？"
+  ))return;
+
+  try{
+    await api(`/api/admin/jobs/${id}`,{method:"DELETE"});
+
+    // 編集中の求人を消した場合はフォームもリセット
+    if(Number($("jobId")?.value||0)===Number(id)){
+      if(typeof window.resetJobForm==="function")window.resetJobForm();
+      const shell=$("jobsFormShell");
+      if(shell)shell.classList.add("is-collapsed");
+      if($("jobsFormToggleLabel"))$("jobsFormToggleLabel").textContent="開く ▼";
+    }
+
+    await window.loadJobs?.();
+    alert("求人を削除しました。");
+  }catch(e){
+    alert("求人を削除できませんでした: "+(e?.message||"UNKNOWN_ERROR"));
   }
 };
 
