@@ -195,7 +195,7 @@ const hasAccess=req=>Boolean(req.headers.get("Cf-Access-Authenticated-User-Email
 // ============================================================
 const KBN_MEMBER_COOKIE="kbn_member_session";
 const KBN_MEMBER_SESSION_DAYS=30;
-const KBN_MEMBER_PBKDF2_ITERATIONS=120000;
+const KBN_MEMBER_PBKDF2_ITERATIONS=100000;
 
 function kbnMemberJson(data,status=200,headers={}){
   return json(data,{status,headers});
@@ -4071,6 +4071,7 @@ async function enrichScheduledCreatedShops(env,created=[]){
   return {images,instagram};
 }
 
+// KBN free member v1.93: PBKDF2 iteration compatibility fix
 // KBN free member v1.92: D1 schema compatibility + register diagnostics
 // KBN free member v1.91: registration response reliability fix
 // KBN free member v1.90: registration, login, favorites, email opt-in
