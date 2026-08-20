@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex,follow">
 <meta name="theme-color" content="#080b10">
 <title>無料会員｜KUMAMOTO BAR NAVI</title>
-<link rel="stylesheet" href="style.css?v=191">
+<link rel="stylesheet" href="style.css?v=192">
 <style>
 :root{color-scheme:dark}
 body{background:#080b10;color:#fff}
@@ -132,13 +132,16 @@ function showStatus(text,type=""){
   status.textContent=text||"";
   status.className="member-status"+(type?` ${type}`:"");
 }
-function errorMessage(code){
-  return ({
+function errorMessage(code,detail=""){
+  const known=({
     INVALID_EMAIL:"メールアドレスを確認してください。",
     PASSWORD_MIN_8:"パスワードは8文字以上にしてください。",
-    EMAIL_ALREADY_REGISTERED:"このメールアドレスは登録済みです。",
+    EMAIL_ALREADY_REGISTERED:"このメールアドレスは登録済みです。ログインをお試しください。",
     LOGIN_FAILED:"メールアドレスまたはパスワードが違います。"
-  })[code]||"処理に失敗しました。";
+  })[code];
+  if(known)return known;
+  if(code==="REGISTER_FAILED"&&detail)return `登録処理エラー：${detail}`;
+  return `処理に失敗しました${code?`（${code}）`:""}。`;
 }
 function setTab(mode){
   const reg=mode==="register";
@@ -219,7 +222,7 @@ qs("#registerForm").addEventListener("submit",async e=>{
     try{d=await r.json()}catch{}
 
     if(!r.ok){
-      showStatus(errorMessage(d.error||`HTTP_${r.status}`),"error");
+      showStatus(errorMessage(d.error||`HTTP_${r.status}`,d.detail||""),"error");
       return;
     }
 
