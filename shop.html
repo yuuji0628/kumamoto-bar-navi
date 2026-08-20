@@ -6,7 +6,7 @@
   <meta name="description" content="熊本のBAR店舗情報｜KUMAMOTO BAR NAVI">
   <meta name="theme-color" content="#080b10">
   <title>店舗詳細｜KUMAMOTO BAR NAVI</title>
-  <link rel="stylesheet" href="style.css?v=190">
+  <link rel="stylesheet" href="style.css?v=195">
 <link id="dynamicCanonical" rel="canonical" href="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/shop.html">
 <meta id="dynamicOgTitle" property="og:title" content="店舗詳細｜KUMAMOTO BAR NAVI">
 <meta id="dynamicOgDescription" property="og:description" content="熊本のBAR店舗情報">
@@ -266,9 +266,11 @@ body{
       <img src="logo.png" alt="KUMAMOTO BAR NAVI">
       <span><b>KUMAMOTO</b><strong>BAR NAVI</strong><small>BAR & JOB INFORMATION</small></span>
     </a>
-    <div style="display:flex;gap:7px;align-items:center">
-      <a class="public-header-cta" href="member.html" style="background:#101821;color:#efc45a;border:1px solid #534829">会員</a>
-      <a class="public-header-cta" href="bars.html">BARを探す</a>
+    <div class="public-header-actions">
+      <a class="public-header-cta public-member-cta" href="member.html" data-kbn-member-cta aria-label="無料会員登録">
+        <span class="member-label-full">無料会員登録</span><span class="member-label-short">無料登録</span>
+      </a>
+      <a class="public-header-cta public-search-cta" href="bars.html">BARを探す</a>
     </div>
   </div>
 </header>
@@ -287,6 +289,7 @@ body{
   <a href="listing-form.html"><span>＋</span><b>店舗掲載</b></a>
 </nav>
 
+<script src="script.js?v=195"></script>
 <script>
 const esc=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 const slug=new URLSearchParams(location.search).get("slug");
