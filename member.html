@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex,follow">
 <meta name="theme-color" content="#080b10">
 <title>無料会員｜KUMAMOTO BAR NAVI</title>
-<link rel="stylesheet" href="style.css?v=190">
+<link rel="stylesheet" href="style.css?v=191">
 <style>
 :root{color-scheme:dark}
 body{background:#080b10;color:#fff}
@@ -26,7 +26,7 @@ body{background:#080b10;color:#fff}
 .member-form input{min-height:46px;border:1px solid #384450;border-radius:10px;background:#080e14;color:#fff;padding:0 12px;font:inherit}
 .member-check{display:flex!important;grid-template-columns:none!important;align-items:flex-start;gap:8px!important;font-weight:500!important;line-height:1.5}
 .member-check input{min-height:0;width:18px;height:18px;margin-top:1px}
-.member-submit{min-height:48px;border:0;border-radius:11px;background:#efc45a;color:#111;font-weight:900;font-size:.9rem}
+.member-submit{min-height:48px;border:0;border-radius:11px;background:#efc45a;color:#111;font-weight:900;font-size:.9rem}.member-submit:disabled{opacity:.65;cursor:wait}
 .member-status{min-height:22px;margin:8px 0 0;color:#9aa4ae;font-size:.72rem}
 .member-status.error{color:#ff8c8c}
 .member-status.ok{color:#efc45a}
@@ -74,7 +74,7 @@ body{background:#080b10;color:#fff}
 
     <form id="registerForm" class="member-form">
       <label>ニックネーム
-        <input name="display_name" maxlength="80" autocomplete="nickname" placeholder="例：まっつん">
+        <input name="display_name" maxlength="80" autocomplete="nickname" placeholder="ニックネームを入力">
       </label>
       <label>メールアドレス
         <input name="email" type="email" required autocomplete="email" placeholder="mail@example.com">
@@ -190,34 +190,87 @@ async function loadFavorites(){
 }
 qs("#registerForm").addEventListener("submit",async e=>{
   e.preventDefault();
+  const form=e.currentTarget;
+  const btn=form.querySelector('button[type="submit"]');
+  if(btn.disabled)return;
+
+  btn.disabled=true;
+  btn.textContent="登録中…";
   showStatus("登録しています...");
-  const f=new FormData(e.currentTarget);
-  const r=await fetch("/api/member/register",{
-    method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({
-      display_name:f.get("display_name"),
-      email:f.get("email"),
-      password:f.get("password"),
-      email_notifications:f.get("email_notifications")==="on"
-    })
-  });
-  const d=await r.json();
-  if(!r.ok){showStatus(errorMessage(d.error),"error");return}
-  showStatus("登録しました。","ok");
-  await refreshMe();
+
+  const f=new FormData(form);
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),15000);
+
+  try{
+    const r=await fetch("/api/member/register",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      signal:controller.signal,
+      body:JSON.stringify({
+        display_name:f.get("display_name"),
+        email:f.get("email"),
+        password:f.get("password"),
+        email_notifications:f.get("email_notifications")==="on"
+      })
+    });
+
+    let d={};
+    try{d=await r.json()}catch{}
+
+    if(!r.ok){
+      showStatus(errorMessage(d.error||`HTTP_${r.status}`),"error");
+      return;
+    }
+
+    showStatus("登録しました。マイページを表示します。","ok");
+    await refreshMe();
+  }catch(err){
+    if(err?.name==="AbortError"){
+      showStatus("登録処理がタイムアウトしました。もう一度お試しください。","error");
+    }else{
+      showStatus("通信エラーが発生しました。もう一度お試しください。","error");
+    }
+  }finally{
+    clearTimeout(timer);
+    btn.disabled=false;
+    btn.textContent="無料会員登録";
+  }
 });
 qs("#loginForm").addEventListener("submit",async e=>{
   e.preventDefault();
+  const form=e.currentTarget;
+  const btn=form.querySelector('button[type="submit"]');
+  if(btn.disabled)return;
+
+  btn.disabled=true;
+  btn.textContent="ログイン中…";
   showStatus("ログインしています...");
-  const f=new FormData(e.currentTarget);
-  const r=await fetch("/api/member/login",{
-    method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({email:f.get("email"),password:f.get("password")})
-  });
-  const d=await r.json();
-  if(!r.ok){showStatus(errorMessage(d.error),"error");return}
-  showStatus("ログインしました。","ok");
-  await refreshMe();
+
+  const f=new FormData(form);
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),15000);
+
+  try{
+    const r=await fetch("/api/member/login",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      signal:controller.signal,
+      body:JSON.stringify({email:f.get("email"),password:f.get("password")})
+    });
+    let d={};try{d=await r.json()}catch{}
+    if(!r.ok){showStatus(errorMessage(d.error||`HTTP_${r.status}`),"error");return}
+    showStatus("ログインしました。","ok");
+    await refreshMe();
+  }catch(err){
+    showStatus(err?.name==="AbortError"
+      ?"ログイン処理がタイムアウトしました。"
+      :"通信エラーが発生しました。","error");
+  }finally{
+    clearTimeout(timer);
+    btn.disabled=false;
+    btn.textContent="ログイン";
+  }
 });
 qs("#logoutBtn").onclick=async()=>{
   await fetch("/api/member/logout",{method:"POST"});
