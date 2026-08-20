@@ -1918,7 +1918,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <style>
 /* ============================================================
-   KBN ADMIN ver2.01 画面圧縮調整
+   KBN ADMIN ver2.04 画面圧縮調整
    ============================================================ */
 
 /* 上部 welcome とログアウトをコンパクト化 */
@@ -3487,16 +3487,56 @@ html,body{max-width:100%;overflow-x:hidden}
   <div class="lead-smart-head">
     <p class="eyebrow">LEAD FINDER</p>
     <h2>BAR開拓</h2>
-    <p>自動開拓・手動検索・既存店舗更新を、使いやすく3つに整理しました。</p>
+    <p>自動開拓を最上部に配置し、メンテナンス・手動検索の順で使いやすく整理しました。</p>
   </div>
 
   <div class="lead-smart-tabs" role="tablist" aria-label="BAR開拓メニュー">
-    <button type="button" class="lead-smart-tab" data-lead-jump="auto">⚡ 自動開拓</button>
+    <button type="button" class="lead-smart-tab active" data-lead-jump="auto">⚡ 自動開拓</button>
     <button type="button" class="lead-smart-tab" data-lead-jump="manual">⌕ 手動検索</button>
-    <button type="button" class="lead-smart-tab active" data-lead-jump="refresh">↻ 既存更新</button>
+    <button type="button" class="lead-smart-tab" data-lead-jump="refresh">↻ 既存更新</button>
   </div>
 
-  <div class="kbn-lead-section-label">02 自動メンテナンス <span>掲載後の情報管理</span></div>
+  <div class="kbn-lead-section-label">01 自動開拓 <span>普段はここだけでOK</span></div>
+<div id="leadSmartAuto" class="lead-smart-card">
+    <button type="button" class="lead-smart-collapse-head" data-lead-collapse="auto" aria-expanded="true">
+      <span class="lead-smart-icon">⚡</span>
+      <span>
+        <b>自動開拓</b>
+        <small>Google優先で県内のBAR候補を自動検索・掲載</small>
+      </span>
+      <i>›</i>
+    </button>
+    <div class="lead-smart-collapse-body" data-lead-panel="auto">
+      <p class="lead-smart-helper">県内を順番に検索し、重複を避けながら高精度で自動掲載します。</p>
+      <button type="button" id="autoDiscoverBtn" class="btn-gold lead-smart-primary">Google優先で高精度自動掲載</button>
+      <div id="autoDiscoverStatus" class="auto-discovery-status"></div>
+      <div id="autoDiscoverProgress" class="kbn-work-progress" hidden>
+        <div class="kbn-work-progress-head"><b>自動開拓の進捗</b><strong id="autoProgressPct">0%</strong></div>
+        <div class="kbn-progress-track"><div id="autoProgressBar" class="kbn-progress-bar"></div></div>
+        <div class="kbn-progress-grid">
+          <div class="kbn-progress-stat"><span>検索</span><b id="autoProgressSearch">0 / 15</b></div>
+          <div class="kbn-progress-stat"><span>候補</span><b id="autoProgressCandidates">0件</b></div>
+          <div class="kbn-progress-stat"><span>掲載</span><b id="autoProgressCreated">0店舗</b></div>
+        </div>
+        <div id="autoProgressCurrent" class="kbn-progress-current">開始待ち</div>
+      </div>
+
+      <div class="auto-listed-panel">
+        <div class="auto-listed-head">
+          <div>
+            <b>自動掲載した店舗</b>
+            <small>KBN独自掲載中の店舗を確認・編集・掲載取り消しできます。</small>
+          </div>
+          <button type="button" id="reloadAutoListedBtn">更新</button>
+        </div>
+        <div id="autoListedSummary" class="auto-listed-summary">読み込み中...</div>
+        <div id="autoListedShops" class="auto-listed-list"></div>
+      </div>
+    </div>
+  </div>
+
+
+<div class="kbn-lead-section-label">02 自動メンテナンス <span>掲載後の情報管理</span></div>
 <div id="leadSmartRefresh" class="lead-smart-card lead-smart-featured">
     <div class="lead-smart-card-head">
       <div class="lead-smart-icon">↻</div>
@@ -3615,46 +3655,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
   </div>
 
-  <div class="kbn-lead-section-label">01 自動開拓 <span>普段はここだけでOK</span></div>
-<div id="leadSmartAuto" class="lead-smart-card">
-    <button type="button" class="lead-smart-collapse-head" data-lead-collapse="auto" aria-expanded="false">
-      <span class="lead-smart-icon">⚡</span>
-      <span>
-        <b>自動開拓</b>
-        <small>Google優先で県内のBAR候補を自動検索・掲載</small>
-      </span>
-      <i>›</i>
-    </button>
-    <div class="lead-smart-collapse-body" data-lead-panel="auto" hidden>
-      <p class="lead-smart-helper">県内を順番に検索し、重複を避けながら高精度で自動掲載します。</p>
-      <button type="button" id="autoDiscoverBtn" class="btn-gold lead-smart-primary">Google優先で高精度自動掲載</button>
-      <div id="autoDiscoverStatus" class="auto-discovery-status"></div>
-      <div id="autoDiscoverProgress" class="kbn-work-progress" hidden>
-        <div class="kbn-work-progress-head"><b>自動開拓の進捗</b><strong id="autoProgressPct">0%</strong></div>
-        <div class="kbn-progress-track"><div id="autoProgressBar" class="kbn-progress-bar"></div></div>
-        <div class="kbn-progress-grid">
-          <div class="kbn-progress-stat"><span>検索</span><b id="autoProgressSearch">0 / 15</b></div>
-          <div class="kbn-progress-stat"><span>候補</span><b id="autoProgressCandidates">0件</b></div>
-          <div class="kbn-progress-stat"><span>掲載</span><b id="autoProgressCreated">0店舗</b></div>
-        </div>
-        <div id="autoProgressCurrent" class="kbn-progress-current">開始待ち</div>
-      </div>
-
-      <div class="auto-listed-panel">
-        <div class="auto-listed-head">
-          <div>
-            <b>自動掲載した店舗</b>
-            <small>KBN独自掲載中の店舗を確認・編集・掲載取り消しできます。</small>
-          </div>
-          <button type="button" id="reloadAutoListedBtn">更新</button>
-        </div>
-        <div id="autoListedSummary" class="auto-listed-summary">読み込み中...</div>
-        <div id="autoListedShops" class="auto-listed-list"></div>
-      </div>
-    </div>
-  </div>
-
-<div id="leadSearchStatus" class="lead-search-status"></div>
+  <div id="leadSearchStatus" class="lead-search-status"></div>
   </div>
 <div class="lead-results-card">
   <div class="lead-results-head">
