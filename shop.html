@@ -6,7 +6,7 @@
   <meta name="description" content="熊本のBAR店舗情報｜KUMAMOTO BAR NAVI">
   <meta name="theme-color" content="#080b10">
   <title>店舗詳細｜KUMAMOTO BAR NAVI</title>
-  <link rel="stylesheet" href="style.css?v=185">
+  <link rel="stylesheet" href="style.css?v=186">
 <link id="dynamicCanonical" rel="canonical" href="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/shop.html">
 <meta id="dynamicOgTitle" property="og:title" content="店舗詳細｜KUMAMOTO BAR NAVI">
 <meta id="dynamicOgDescription" property="og:description" content="熊本のBAR店舗情報">
@@ -177,10 +177,88 @@
   }
   .google-review-card{min-width:0}
 }
+
+/* v1.86 mobile width fix */
+html,body{
+  width:100%;
+  max-width:100%;
+  overflow-x:hidden;
+}
+body{
+  position:relative;
+}
+.container,
+.public-shop-page,
+.public-shop-layout,
+.public-shop-visual,
+.public-shop-summary,
+.public-shop-content,
+.public-shop-info,
+.public-shop-description,
+.public-google-reviews{
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  box-sizing:border-box;
+}
+.public-shop-page .container{
+  padding-left:16px;
+  padding-right:16px;
+}
+.public-shop-layout{
+  overflow:hidden;
+}
+.public-google-reviews{
+  overflow:hidden;
+}
+.google-review-head,
+.google-review-footer{
+  min-width:0;
+}
+.google-review-grid{
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  overflow-y:hidden;
+  overscroll-behavior-inline:contain;
+  -webkit-overflow-scrolling:touch;
+}
+.google-review-card{
+  flex:0 0 min(82%,280px);
+  width:min(82%,280px);
+  max-width:280px;
+  min-width:0;
+  box-sizing:border-box;
+}
+.google-review-author-copy,
+.google-review-text{
+  min-width:0;
+  max-width:100%;
+}
+@media(max-width:640px){
+  .public-shop-page .container{
+    padding-left:14px;
+    padding-right:14px;
+  }
+  .public-google-reviews{
+    padding:12px;
+    border-radius:14px;
+  }
+  .google-review-grid{
+    gap:7px;
+  }
+  .google-review-card{
+    flex-basis:84%;
+    width:84%;
+    max-width:272px;
+  }
+}
+
 </style>
 
 </head>
-<body class="public-v109 public-v185">
+<body class="public-v109 public-v186">
 
 <header class="public-header">
   <div class="container public-header-inner">
