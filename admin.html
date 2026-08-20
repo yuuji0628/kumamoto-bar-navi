@@ -3111,6 +3111,100 @@ html,body{max-width:100%;overflow-x:hidden}
 }
 </style>
 
+
+<style id="kbn-members-admin-v205">
+.member-admin-lead-v205{margin:0 0 14px;color:#929da8;font-size:.72rem;line-height:1.65}
+.member-admin-summary-v205{
+  display:grid;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  gap:8px;
+  margin-bottom:14px
+}
+.member-admin-summary-v205>div{
+  padding:12px;
+  border:1px solid #303b46;
+  border-radius:13px;
+  background:#0b1219
+}
+.member-admin-summary-v205 small{display:block;color:#7f8994;font-size:.57rem;font-weight:850}
+.member-admin-summary-v205 strong{display:block;margin-top:4px;color:#fff;font-size:1.18rem}
+.member-admin-summary-v205 strong.gold{color:#efc45a}
+.member-admin-toolbar-v205{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 150px;
+  gap:8px;
+  margin-bottom:10px
+}
+.member-admin-toolbar-v205 label{display:grid;gap:5px}
+.member-admin-toolbar-v205 label span{color:#89949f;font-size:.58rem;font-weight:800}
+.member-admin-toolbar-v205 input,
+.member-admin-toolbar-v205 select{
+  min-height:42px;
+  border:1px solid #34404b;
+  border-radius:10px;
+  background:#0a1017;
+  color:#fff;
+  padding:0 11px;
+  font-size:16px
+}
+.member-admin-count-v205{margin:0 0 8px;color:#89949f;font-size:.62rem}
+.member-admin-list-v205{display:grid;gap:8px}
+.member-admin-card-v205{
+  display:grid;
+  grid-template-columns:minmax(0,1.2fr) minmax(0,.9fr) auto;
+  gap:12px;
+  align-items:center;
+  padding:12px 13px;
+  border:1px solid #2d3944;
+  border-radius:13px;
+  background:#0b1219
+}
+.member-admin-main-v205{min-width:0}
+.member-admin-main-v205 b{
+  display:block;
+  color:#fff;
+  font-size:.78rem;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap
+}
+.member-admin-main-v205 a{
+  display:block;
+  margin-top:3px;
+  color:#aab4be;
+  font-size:.64rem;
+  text-decoration:none;
+  overflow-wrap:anywhere
+}
+.member-admin-meta-v205{display:flex;flex-wrap:wrap;gap:5px}
+.member-admin-meta-v205 span{
+  padding:5px 7px;
+  border:1px solid #2d3944;
+  border-radius:8px;
+  background:#101821;
+  color:#aab4be;
+  font-size:.56rem
+}
+.member-admin-meta-v205 span.on{border-color:#5b4b20;color:#efc45a}
+.member-admin-dates-v205{text-align:right}
+.member-admin-dates-v205 small{display:block;color:#74808b;font-size:.54rem;line-height:1.55}
+.member-admin-empty-v205{
+  padding:22px;
+  border:1px dashed #35414d;
+  border-radius:13px;
+  color:#87929d;
+  text-align:center;
+  font-size:.68rem
+}
+@media(max-width:760px){
+  .member-admin-summary-v205{grid-template-columns:repeat(2,1fr)}
+  .member-admin-summary-v205>div:last-child{grid-column:1/-1}
+  .member-admin-toolbar-v205{grid-template-columns:1fr}
+  .member-admin-card-v205{grid-template-columns:1fr;gap:8px}
+  .member-admin-dates-v205{text-align:left;display:flex;flex-wrap:wrap;gap:8px}
+}
+</style>
+
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
 <div id="topMaintenanceResult" class="top-maintenance-result">
@@ -3123,7 +3217,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver1.79</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.05</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -3141,6 +3235,7 @@ html,body{max-width:100%;overflow-x:hidden}
       <button data-tab="jobs">求人</button>
       <button data-tab="ownerreq">店舗申請 <span id="ownerReqTabBadge" class="tab-notify-badge" hidden>0</span></button>
       <button data-tab="analytics">アクセス</button>
+      <button data-tab="members">無料会員</button>
       <button data-tab="siteupdate">サイト更新</button>
 </div>
   </details>
@@ -3195,6 +3290,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <summary>その他の管理メニュー</summary>
     <div class="dashboard-more-grid">
       <button type="button" data-go-tab="jobs">求人管理</button>
+      <button type="button" data-go-tab="members">無料会員管理</button>
       <button type="button" data-go-tab="ownerreq">店舗申請</button>
       <button type="button" data-go-tab="analytics">アクセス確認</button>
     </div>
@@ -3809,6 +3905,45 @@ html,body{max-width:100%;overflow-x:hidden}
 </section>
 
 
+
+<section id="tab-members" class="admin-block" hidden>
+  <div class="admin-block-head">
+    <div>
+      <p class="eyebrow">FREE MEMBERS</p>
+      <h2>無料会員管理</h2>
+    </div>
+    <button id="reloadMembers" class="admin-secondary-btn" type="button">再読み込み</button>
+  </div>
+
+  <p class="member-admin-lead-v205">無料会員の登録人数、メール配信設定、お気に入り数、最終ログインなどを確認できます。</p>
+
+  <div class="member-admin-summary-v205">
+    <div><small>登録会員</small><strong id="memberStatTotal">-</strong></div>
+    <div><small>有効会員</small><strong id="memberStatActive" class="gold">-</strong></div>
+    <div><small>新着メールON</small><strong id="memberStatNotify">-</strong></div>
+    <div><small>直近7日登録</small><strong id="memberStatNew7">-</strong></div>
+    <div><small>お気に入り総数</small><strong id="memberStatFavorites">-</strong></div>
+  </div>
+
+  <div class="member-admin-toolbar-v205">
+    <label>
+      <span>会員検索</span>
+      <input id="memberAdminSearch" type="search" placeholder="ニックネーム・メールアドレス">
+    </label>
+    <select id="memberAdminFilter">
+      <option value="">すべて</option>
+      <option value="notify">新着メールON</option>
+      <option value="favorite">お気に入りあり</option>
+      <option value="active">有効会員</option>
+    </select>
+  </div>
+
+  <div id="memberAdminCount" class="member-admin-count-v205"></div>
+  <div id="memberAdminList" class="member-admin-list-v205">
+    <div class="member-admin-empty-v205">会員情報を読み込んでいます...</div>
+  </div>
+</section>
+
 <section id="tab-analytics" class="admin-block" hidden>
 <div class="admin-block-head"><div><p class="eyebrow">ANALYTICS</p><h2>店舗アクセス集計</h2></div><button id="reloadAnalytics" class="admin-secondary-btn" type="button">再読み込み</button></div>
 <p style="color:#aeb4bd">店舗ページの閲覧数と、地図・Instagram・電話などのクリック数を確認できます。</p>
@@ -4046,7 +4181,7 @@ document.querySelectorAll(".admin-tabs button").forEach(b=>b.onclick=async()=>{
   document.querySelector(".admin-more-menu")?.removeAttribute("open");
   document.querySelectorAll(".admin-tabs button").forEach(x=>x.classList.remove("active"));
   b.classList.add("active");
-  ["shops","jobs","subs","ownerreq","leads","siteupdate","analytics"].forEach(x=>$("tab-"+x).hidden=x!==b.dataset.tab);
+  ["shops","jobs","subs","ownerreq","leads","siteupdate","analytics","members"].forEach(x=>$("tab-"+x).hidden=x!==b.dataset.tab);
   try{
     if(b.dataset.tab==="subs" && typeof window.loadSubs==="function")await window.loadSubs();
     else if(b.dataset.tab==="shops" && typeof window.loadShops==="function")await window.loadShops();
@@ -4059,6 +4194,7 @@ document.querySelectorAll(".admin-tabs button").forEach(b=>b.onclick=async()=>{
     else if(b.dataset.tab==="leads")window.renderLeadList?.();
     else if(b.dataset.tab==="siteupdate" && typeof window.loadKbnGithubStatus==="function")await window.loadKbnGithubStatus();
     else if(b.dataset.tab==="analytics" && typeof window.loadAnalytics==="function")await window.loadAnalytics();
+    else if(b.dataset.tab==="members" && typeof window.loadMembers==="function")await window.loadMembers();
   }catch(e){console.error(e)}
 });
 
@@ -6699,6 +6835,86 @@ window.loadDailyAnalytics=async function(){
   }
 }
 
+
+let kbnAdminMembers=[];
+
+function kbnMemberDate(v){
+  if(!v)return "-";
+  const d=new Date(String(v).replace(" ","T")+"Z");
+  if(Number.isNaN(d.getTime()))return String(v);
+  return new Intl.DateTimeFormat("ja-JP",{
+    timeZone:"Asia/Tokyo",
+    year:"numeric",month:"2-digit",day:"2-digit",
+    hour:"2-digit",minute:"2-digit"
+  }).format(d);
+}
+
+function renderAdminMembers(){
+  const list=$("memberAdminList");
+  if(!list)return;
+
+  const q=String($("memberAdminSearch")?.value||"").trim().toLowerCase();
+  const filter=String($("memberAdminFilter")?.value||"");
+
+  let rows=kbnAdminMembers.filter(m=>{
+    const hay=`${m.display_name||""} ${m.email||""}`.toLowerCase();
+    if(q && !hay.includes(q))return false;
+    if(filter==="notify" && !m.email_notifications)return false;
+    if(filter==="favorite" && Number(m.favorite_count||0)<=0)return false;
+    if(filter==="active" && String(m.status)!=="active")return false;
+    return true;
+  });
+
+  if($("memberAdminCount")){
+    $("memberAdminCount").textContent=`表示 ${rows.length}人 / 全 ${kbnAdminMembers.length}人`;
+  }
+
+  if(!rows.length){
+    list.innerHTML='<div class="member-admin-empty-v205">条件に一致する会員はいません。</div>';
+    return;
+  }
+
+  list.innerHTML=rows.map(m=>`
+    <article class="member-admin-card-v205">
+      <div class="member-admin-main-v205">
+        <b>${esc(m.display_name||"ニックネーム未設定")}</b>
+        <a href="mailto:${esc(m.email)}">${esc(m.email)}</a>
+      </div>
+      <div class="member-admin-meta-v205">
+        <span class="${m.email_notifications?"on":""}">新着メール ${m.email_notifications?"ON":"OFF"}</span>
+        <span>♡ ${Number(m.favorite_count||0)}</span>
+        <span>${String(m.status)==="active"?"有効":"停止"}</span>
+      </div>
+      <div class="member-admin-dates-v205">
+        <small>登録 ${esc(kbnMemberDate(m.created_at))}</small>
+        <small>最終ログイン ${esc(kbnMemberDate(m.last_login_at))}</small>
+      </div>
+    </article>
+  `).join("");
+}
+
+window.loadMembers=async function(){
+  const list=$("memberAdminList");
+  if(list)list.innerHTML='<div class="member-admin-empty-v205">会員情報を読み込んでいます...</div>';
+
+  try{
+    const d=await api("/api/admin/members");
+    const s=d.summary||{};
+    kbnAdminMembers=Array.isArray(d.members)?d.members:[];
+
+    if($("memberStatTotal"))$("memberStatTotal").textContent=String(s.total||0);
+    if($("memberStatActive"))$("memberStatActive").textContent=String(s.active||0);
+    if($("memberStatNotify"))$("memberStatNotify").textContent=String(s.notifications_on||0);
+    if($("memberStatNew7"))$("memberStatNew7").textContent=String(s.new_7d||0);
+    if($("memberStatFavorites"))$("memberStatFavorites").textContent=String(s.total_favorites||0);
+
+    renderAdminMembers();
+  }catch(e){
+    console.error("loadMembers failed",e);
+    if(list)list.innerHTML=`<div class="member-admin-empty-v205">会員情報を読み込めませんでした。<br>${esc(e?.message||"UNKNOWN_ERROR")}</div>`;
+  }
+};
+
 window.loadAnalytics=async function(){
   const summary=$("analyticsSummary");
   const list=$("analyticsList");
@@ -8238,6 +8454,9 @@ safeBind("reloadApprovedJobCandidates","click",()=>window.loadApprovedSubmission
 safeBind("reloadSubs","click",()=>window.loadSubs?.());
 safeBind("reloadOwnerReq","click",()=>window.loadOwnerReq?.());
 safeBind("reloadAnalytics","click",()=>window.loadAnalytics?.());
+safeBind("reloadMembers","click",()=>window.loadMembers?.());
+safeBind("memberAdminSearch","input",()=>renderAdminMembers());
+safeBind("memberAdminFilter","change",()=>renderAdminMembers());
 safeBind("opsReloadAllBtn","click",()=>reloadAllAdminData());
 safeBind("dailyDaysFilter","change",()=>window.loadDailyAnalytics?.());
 safeBind("dailyShopFilter","change",()=>window.loadDailyAnalytics?.());
