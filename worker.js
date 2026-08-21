@@ -1374,6 +1374,65 @@ async function ensureLeadDiscoveryTables(env){
       status TEXT NOT NULL DEFAULT 'seen'
     )
   `).run();
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS auto_listing_deleted_history(
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      original_shop_id INTEGER,
+      slug TEXT,
+      name TEXT NOT NULL,
+      area TEXT,
+      address TEXT,
+      phone TEXT,
+      instagram TEXT,
+      genre TEXT,
+      snapshot_json TEXT,
+      deleted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(original_shop_id)
+    )
+  `).run();
+  await env.DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_auto_deleted_name
+    ON auto_listing_deleted_history(name)
+  `).run();
+}
+
+async function archiveDeletedAutoListing(env,shop){
+  if(!shop||!shop.id)return;
+  await ensureLeadDiscoveryTables(env);
+  await env.DB.prepare(`
+    INSERT INTO auto_listing_deleted_history(
+      original_shop_id,slug,name,area,address,phone,instagram,genre,snapshot_json,deleted_at
+    ) VALUES(?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
+    ON CONFLICT(original_shop_id) DO UPDATE SET
+      slug=excluded.slug,
+      name=excluded.name,
+      area=excluded.area,
+      address=excluded.address,
+      phone=excluded.phone,
+      instagram=excluded.instagram,
+      genre=excluded.genre,
+      snapshot_json=excluded.snapshot_json,
+      deleted_at=CURRENT_TIMESTAMP
+  `).bind(
+    Number(shop.id),
+    t(shop.slug||"",220),
+    t(shop.name||"",150),
+    t(shop.area||"",120),
+    t(shop.address||"",500),
+    t(shop.phone||"",80),
+    t(shop.instagram||"",220),
+    t(shop.genre||"",120),
+    JSON.stringify(shop)
+  ).run();
+}
+
+async function loadDeletedAutoListings(env){
+  await ensureLeadDiscoveryTables(env);
+  const r=await env.DB.prepare(`
+    SELECT original_shop_id AS id,slug,name,area,address,phone,instagram,genre
+    FROM auto_listing_deleted_history
+  `).all();
+  return r.results||[];
 }
 
 function kbnHandle(v){
@@ -1392,7 +1451,7 @@ async function autoDiscoveryPairs(env,limit=4){
   for(const area of KBN_AREAS)for(const [type,label] of KBN_LEAD_TYPES)
     p.push({area,type,label,last:m.get(`${area}||${type}`)||""});
   p.sort((a,b)=>(!a.last&&b.last)?-1:(a.last&&!b.last)?1:String(a.last).localeCompare(String(b.last)));
-  return p.slice(0,Math.max(1,Math.min(Number(limit)||4,8)));
+  return p.slice(0,Math.max(1,Math.min(Number(limit)||4,40)));
 }
 
 function likelyBar(x){
@@ -3349,6 +3408,7 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
     "SELECT id,name,address,phone,instagram FROM shops"
   ).all();
   const existing=existingR.results||[];
+  const deletedHistory=await loadDeletedAutoListings(env);
 
   for(const pair of pairs){
     if(created.length>=maxListings)break;
@@ -3497,6 +3557,12 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
         name:gName,address,phone,instagram
       })){
         rejected.push({name:gName,reason:"DUPLICATE",source:sourceKind});
+        continue;
+      }
+      if(autoListingDuplicateScore(deletedHistory,{
+        name:gName,address,phone,instagram
+      })){
+        rejected.push({name:gName,reason:"DELETED_HISTORY",source:sourceKind});
         continue;
       }
 
@@ -3656,6 +3722,10 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
         }
 
         if(autoListingDuplicateScore(existing,{name,address,phone,instagram}))continue;
+        if(autoListingDuplicateScore(deletedHistory,{name,address,phone,instagram})){
+          rejected.push({name,reason:"DELETED_HISTORY",source:item.kind});
+          continue;
+        }
 
         const slug=slugify(name);
         if(await shopSlugExists(env,slug)){
@@ -4245,6 +4315,7 @@ async function enrichScheduledCreatedShops(env,created=[]){
   return {images,instagram};
 }
 
+// KBN v2.12: 自動開拓上限50店舗・完全削除履歴を保存して再掲載防止
 // KBN v2.07: 自動掲載店舗一覧スマート化・完全削除
 // KBN v2.06: 自動掲載店舗の300件上限を撤廃・全件ページ取得対応
 // KBN v2.05: 管理画面で無料会員数・会員情報を確認
@@ -5706,8 +5777,8 @@ ${urls.map(x=>`  <url>
 
       if(url.pathname==="/api/admin/leads/auto-discover" && request.method==="POST"){
         let x={}; try{x=await request.json()}catch{}
-        const max=Math.max(1,Math.min(Number(x.max_listings)||10,20));
-        const pairs=Math.max(1,Math.min(Number(x.pair_limit)||15,20));
+        const max=Math.max(1,Math.min(Number(x.max_listings)||10,50));
+        const pairs=Math.max(1,Math.min(Number(x.pair_limit)||15,40));
         const perPair=Math.max(1,Math.min(Number(x.per_pair_limit)||2,3));
 
         try{
@@ -6051,11 +6122,12 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
       const autoListedDelete=url.pathname.match(/^\/api\/admin\/leads\/auto-listed\/(\d+)$/);
       if(autoListedDelete && request.method==="DELETE"){
         const id=Number(autoListedDelete[1]);
-        const shop=await env.DB.prepare("SELECT id,name,listing_status FROM shops WHERE id=? LIMIT 1").bind(id).first();
+        const shop=await env.DB.prepare("SELECT * FROM shops WHERE id=? LIMIT 1").bind(id).first();
         if(!shop)return json({ok:false,error:"NOT_FOUND"},{status:404});
         if(normalizeListingStatus(shop.listing_status)!=="provisional"){
           return json({ok:false,error:"NOT_PROVISIONAL_LISTING"},{status:400});
         }
+        await archiveDeletedAutoListing(env,shop);
         try{await env.DB.prepare("DELETE FROM jobs WHERE shop_id=?").bind(id).run();}catch{}
         try{await env.DB.prepare("DELETE FROM member_favorites WHERE shop_id=?").bind(id).run();}catch{}
         try{await env.DB.prepare("DELETE FROM shop_images WHERE shop_id=?").bind(id).run();}catch{}
@@ -6131,8 +6203,11 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
         const id=Number(sm[1]);
         const deleted=[];
         try{
-          const shop=await env.DB.prepare("SELECT id,name FROM shops WHERE id=?").bind(id).first();
+          const shop=await env.DB.prepare("SELECT * FROM shops WHERE id=?").bind(id).first();
           if(!shop)return json({ok:false,error:"NOT_FOUND"},{status:404});
+          if(normalizeListingStatus(shop.listing_status)==="provisional"){
+            await archiveDeletedAutoListing(env,shop);
+          }
 
           const tableExists=async(name)=>{
             const row=await env.DB.prepare(
