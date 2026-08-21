@@ -3236,7 +3236,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.33</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.34</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -3676,17 +3676,11 @@ html,body{max-width:100%;overflow-x:hidden}
         <div class="auto-listed-head">
           <div>
             <b>自動掲載した店舗</b>
-            <small>KBN独自掲載中の全店舗を確認・編集・掲載取り消しできます。</small>
+            <small>直近に自動掲載した3店舗だけ表示します。全店舗は「店舗管理」から確認できます。</small>
           </div>
           <button type="button" id="reloadAutoListedBtn">更新</button>
         </div>
         <div id="autoListedSummary" class="auto-listed-summary">読み込み中...</div>
-        <div class="auto-listed-toolbar-v207">
-          <input id="autoListedSearch" type="search" placeholder="店名・エリアで検索">
-          <select id="autoListedStatusFilter"><option value="">すべて</option><option value="live">掲載中</option><option value="off">取消済み</option></select>
-          <select id="autoListedSort"><option value="new">新しい順</option><option value="old">古い順</option><option value="name">店名順</option></select>
-        </div>
-        <div class="auto-listed-pager-v207"><button id="autoListedPrev" type="button">前へ</button><span id="autoListedPageInfo">1 / 1</span><button id="autoListedNext" type="button">次へ</button></div>
         <div id="autoListedShops" class="auto-listed-list"></div>
       </div>
     </div>
@@ -3738,7 +3732,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div id="refreshExistingStatus" class="auto-discovery-status lead-smart-message"></div>
     <div id="repairExistingAreasStatus" class="auto-discovery-status lead-smart-message"></div>
-    <small class="version-note">ver2.33：予約時間は保存するだけで即反映。Cronの複雑な設定・テスト画面を廃止しました。</small>
+    <small class="version-note">ver2.34：予約時間は保存するだけで即反映。Cronの複雑な設定・テスト画面を廃止しました。</small>
   </div>
 
   
@@ -9073,35 +9067,48 @@ document.addEventListener("click",(e)=>{
 
 <script>
 let autoListedAll=[];
-let autoListedPage=1;
-const AUTO_LISTED_PAGE_SIZE=20;
+const AUTO_LISTED_PREVIEW_SIZE=3;
+
 function renderAutoListedShops(){
   const wrap=document.getElementById("autoListedShops");
   const summary=document.getElementById("autoListedSummary");
   if(!wrap)return;
-  const q=String(document.getElementById("autoListedSearch")?.value||"").trim().toLowerCase();
-  const status=String(document.getElementById("autoListedStatusFilter")?.value||"");
-  const sort=String(document.getElementById("autoListedSort")?.value||"new");
-  let rows=autoListedAll.filter(x=>{
-    const hay=`${x.name||""} ${x.area||""} ${x.genre||""}`.toLowerCase();
-    if(q&&!hay.includes(q))return false;
+
+  const rows=[...autoListedAll]
+    .sort((a,b)=>Number(b.id||0)-Number(a.id||0))
+    .slice(0,AUTO_LISTED_PREVIEW_SIZE);
+
+  if(summary){
+    const live=autoListedAll.filter(x=>Number(x.is_published||0)===1).length;
+    summary.textContent=`直近3店舗を表示 / 全${autoListedAll.length}店舗 / 掲載中 ${live}店舗`;
+  }
+
+  if(!rows.length){
+    wrap.innerHTML='<div class="auto-listed-empty">自動掲載した店舗はまだありません。</div>';
+    return;
+  }
+
+  wrap.innerHTML=rows.map(x=>{
     const on=Number(x.is_published||0)===1;
-    if(status==="live"&&!on)return false;
-    if(status==="off"&&on)return false;
-    return true;
-  });
-  rows.sort((a,b)=>sort==="old"?Number(a.id||0)-Number(b.id||0):sort==="name"?String(a.name||"").localeCompare(String(b.name||""),"ja"):Number(b.id||0)-Number(a.id||0));
-  const pages=Math.max(1,Math.ceil(rows.length/AUTO_LISTED_PAGE_SIZE));
-  autoListedPage=Math.min(Math.max(autoListedPage,1),pages);
-  const start=(autoListedPage-1)*AUTO_LISTED_PAGE_SIZE;
-  const pageRows=rows.slice(start,start+AUTO_LISTED_PAGE_SIZE);
-  const prev=document.getElementById("autoListedPrev"),next=document.getElementById("autoListedNext"),info=document.getElementById("autoListedPageInfo");
-  if(info)info.textContent=`${autoListedPage} / ${pages}`;
-  if(prev)prev.disabled=autoListedPage<=1;
-  if(next)next.disabled=autoListedPage>=pages;
-  if(summary){const live=autoListedAll.filter(x=>Number(x.is_published||0)===1).length;summary.textContent=`${autoListedAll.length}店舗 / 掲載中 ${live}店舗 / 取消済み ${autoListedAll.length-live}店舗 / 表示 ${rows.length}件`;}
-  if(!pageRows.length){wrap.innerHTML='<div class="auto-listed-empty">条件に一致する店舗はありません。</div>';return;}
-  wrap.innerHTML=pageRows.map(x=>{const on=Number(x.is_published||0)===1;return `<div class="auto-listed-item"><div class="auto-listed-main"><b>${esc(x.name||"店舗名未設定")}</b><small>${esc([x.area,x.genre].filter(Boolean).join(" / ")||"エリア未設定")}</small><div class="auto-listed-badges"><span class="auto-listed-badge">KBN独自掲載</span><span class="auto-listed-badge ${on?"live":"off"}">${on?"掲載中":"掲載取消済み"}</span></div></div><div class="auto-listed-actions"><button type="button" onclick="openAutoListedDetail(${Number(x.id||0)})">詳細</button><button type="button" onclick="editShop(${Number(x.id||0)})">編集</button>${on?`<button type="button" class="cancel" onclick="cancelAutoListing(${Number(x.id||0)},${JSON.stringify(String(x.name||''))})">掲載取消</button>`:`<button type="button" onclick="restoreAutoListing(${Number(x.id||0)})">再掲載</button>`}<button type="button" class="delete" onclick="deleteAutoListed(${Number(x.id||0)})">完全削除</button></div></div>`;}).join("");
+    return `<div class="auto-listed-item">
+      <div class="auto-listed-main">
+        <b>${esc(x.name||"店舗名未設定")}</b>
+        <small>${esc([x.area,x.genre].filter(Boolean).join(" / ")||"エリア未設定")}</small>
+        <div class="auto-listed-badges">
+          <span class="auto-listed-badge">KBN独自掲載</span>
+          <span class="auto-listed-badge ${on?"live":"off"}">${on?"掲載中":"掲載取消済み"}</span>
+        </div>
+      </div>
+      <div class="auto-listed-actions">
+        <button type="button" onclick="openAutoListedDetail(${Number(x.id||0)})">詳細</button>
+        <button type="button" onclick="editShop(${Number(x.id||0)})">編集</button>
+        ${on
+          ? `<button type="button" class="cancel" onclick="cancelAutoListing(${Number(x.id||0)},${JSON.stringify(String(x.name||''))})">掲載取消</button>`
+          : `<button type="button" onclick="restoreAutoListing(${Number(x.id||0)})">再掲載</button>`}
+        <button type="button" class="delete" onclick="deleteAutoListed(${Number(x.id||0)})">完全削除</button>
+      </div>
+    </div>`;
+  }).join("");
 }
 window.loadAutoListedShops=async function(){
   const wrap=document.getElementById("autoListedShops");
@@ -9111,7 +9118,7 @@ window.loadAutoListedShops=async function(){
   try{
     const pageSize=200;let offset=0,total=0;const rows=[];
     do{const d=await api(`/api/admin/leads/auto-listed?limit=${pageSize}&offset=${offset}`);const page=Array.isArray(d.shops)?d.shops:[];total=Number(d.total||0);rows.push(...page);offset+=page.length;if(summary)summary.textContent=`読み込み中 ${Math.min(rows.length,total)} / ${total}店舗`;if(!page.length)break;}while(rows.length<total);
-    autoListedAll=rows;autoListedPage=1;renderAutoListedShops();
+    autoListedAll=rows;renderAutoListedShops();
   }catch(e){if(summary)summary.textContent="読み込みエラー";wrap.innerHTML=`<div class="auto-listed-empty">${esc(e?.message||"読み込みエラー")}</div>`;}
 };
 
@@ -9691,11 +9698,6 @@ document.addEventListener("DOMContentLoaded",()=>setTimeout(kbnLoadSimpleSchedul
 <script id="kbn-auto-listed-bind-v207">
 document.addEventListener("DOMContentLoaded",()=>{
   const s=id=>document.getElementById(id);
-  s("autoListedSearch")?.addEventListener("input",()=>{autoListedPage=1;renderAutoListedShops();});
-  s("autoListedStatusFilter")?.addEventListener("change",()=>{autoListedPage=1;renderAutoListedShops();});
-  s("autoListedSort")?.addEventListener("change",()=>{autoListedPage=1;renderAutoListedShops();});
-  s("autoListedPrev")?.addEventListener("click",()=>{if(autoListedPage>1){autoListedPage--;renderAutoListedShops();}});
-  s("autoListedNext")?.addEventListener("click",()=>{autoListedPage++;renderAutoListedShops();});
 });
 </script>
 </body></html>
