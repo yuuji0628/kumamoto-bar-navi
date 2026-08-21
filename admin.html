@@ -3212,22 +3212,6 @@ html,body{max-width:100%;overflow-x:hidden}
 </style>
 
 
-<style id="kbn-cron-status-v224-css">
-.kbn-cron-status-v224{margin-top:12px;padding:12px;border:1px solid #394653;border-radius:14px;background:#0b1219}
-.kbn-cron-status-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
-.kbn-cron-status-head b{color:#fff;font-size:.82rem}
-.kbn-cron-status-head button{border:1px solid #475462;background:#111a23;color:#dfe5eb;border-radius:9px;padding:8px 10px;font-weight:800}
-.kbn-cron-actions-v225{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.kbn-cron-actions-v225 button{min-height:42px;border-radius:10px;font-weight:900}.kbn-cron-test-btn{border:1px solid #8a6d21;background:#30270f;color:#f4c957}.kbn-cron-sync-btn{border:1px solid #475462;background:#111a23;color:#eef2f5}@media(max-width:640px){.kbn-cron-actions-v225{grid-template-columns:1fr}}
-.kbn-cron-status-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.kbn-cron-status-item{padding:10px;border:1px solid #2f3a45;border-radius:10px;background:#0e161f}
-.kbn-cron-status-item small{display:block;color:#88939e;font-size:.64rem;margin-bottom:4px}
-.kbn-cron-status-item strong{display:block;color:#eef2f5;font-size:.76rem;line-height:1.55;word-break:break-word}
-.kbn-cron-state{margin-top:9px;padding:9px 10px;border-radius:10px;font-size:.72rem;font-weight:900;line-height:1.5}
-.kbn-cron-state.ok{border:1px solid #376748;background:rgba(71,155,95,.08);color:#8ddd9f}
-.kbn-cron-state.warn{border:1px solid #7a642a;background:rgba(232,190,85,.07);color:#efca69}
-.kbn-cron-state.ng{border:1px solid #713b3b;background:rgba(202,86,86,.08);color:#ef9999}
-@media(max-width:640px){.kbn-cron-status-grid{grid-template-columns:1fr}}
-</style>
 <style id="kbn-schedule-v217-css">
 .kbn-auto-times-v217{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:10px 0 12px}
 .kbn-auto-times-v217 label{display:grid;gap:5px}
@@ -3252,7 +3236,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.29</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.30</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -3754,7 +3738,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div id="refreshExistingStatus" class="auto-discovery-status lead-smart-message"></div>
     <div id="repairExistingAreasStatus" class="auto-discovery-status lead-smart-message"></div>
-    <small class="version-note">ver2.25：Cronの実稼働状態を確認できるようにし、管理メニュー配置を修正しました。</small>
+    <small class="version-note">ver2.30：予約時間は保存するだけで即反映。Cronの複雑な設定・テスト画面を廃止しました。</small>
   </div>
 
   
@@ -3778,7 +3762,7 @@ html,body{max-width:100%;overflow-x:hidden}
       </div>
 
       <small style="display:block;margin:4px 0 8px;color:#9aa4af">
-        自動掲載は1日6回。6つすべて変更できます。Cloudflare Free対策で同じ「分」の時刻は1つのCronにまとめます。
+        自動掲載は1日6回。好きな時間を設定して保存するだけで、そのまま反映されます。
       </small>
 
       <div class="kbn-auto-times-v217">
@@ -3802,42 +3786,13 @@ html,body{max-width:100%;overflow-x:hidden}
             <option value="6">自動掲載 6</option>
           </select>
         </label>
-        <small>選んだ1回だけ、閉業確認・既存情報補完などの通常メンテナンスも実行します。<br>※6つすべて違う「分」（例 00/05/10/15/20/25）にするとFree枠のCron上限5を超えるため保存できません。</small>
+        <small>選んだ1回だけ、閉業確認・既存情報補完などの通常メンテナンスも実行します。</small>
       </div>
 
       <button type="button" id="autoScheduleSaveBtn" class="kbn-schedule-save-v217">予約時間を更新</button>
       <small id="autoScheduleStatus">現在の予約時間を読み込み中...</small>
-      <div class="kbn-cron-status-v224" id="cronRuntimeStatusBox">
-        <div class="kbn-cron-status-head">
-          <b>⚙️ Cron 稼働確認</b>
-          <button type="button" id="cronRuntimeRefreshBtn">再確認</button>
-        </div>
-        <div class="kbn-cron-status-grid">
-          <div class="kbn-cron-status-item"><small>GitHubに保存中</small><strong id="cronDesiredTimes">読み込み中...</strong></div>
-          <div class="kbn-cron-status-item"><small>Worker環境変数</small><strong id="cronEffectiveTimes">読み込み中...</strong></div>
-          <div class="kbn-cron-status-item"><small>Cloudflare実Cron Trigger</small><strong id="cronActualTriggerTimes">読み込み中...</strong></div>
-          <div class="kbn-cron-status-item"><small>通常メンテナンス</small><strong id="cronMaintenanceTime">-</strong></div>
-          <div class="kbn-cron-status-item"><small>直近の予約Cron</small><strong id="cronLastScheduledRun">-</strong></div>
-          <div class="kbn-cron-status-item"><small>scheduled() 受信記録</small><strong id="cronLastReceipt">-</strong></div>
-          <div class="kbn-cron-status-item"><small>設定反映待ち</small><strong id="cronPropagationState">-</strong></div>
-          <div class="kbn-cron-status-item"><small>直近の手動テスト</small><strong id="cronLastManualRun">-</strong></div>
-        </div>
-        <div id="cronRuntimeState" class="kbn-cron-state warn">現在の稼働状態を確認中...</div>
-        <div class="kbn-cron-diag-v226">
-          <h4>🔎 自動掲載の診断 <small style="display:block;color:#8f99a4;font-size:.72rem;margin-top:4px">v2.28：重複店を詳細取得前に除外し、未開拓エリア・新規候補を優先して探します。</small></h4>
-          <div class="kbn-cron-diag-grid-v226">
-            <div class="kbn-cron-diag-card-v226"><small>検索ペア数</small><strong id="cronDiagPairs">-</strong></div>
-            <div class="kbn-cron-diag-card-v226"><small>候補取得</small><strong id="cronDiagSources">-</strong></div>
-            <div class="kbn-cron-diag-card-v226"><small>除外件数</small><strong id="cronDiagRejected">-</strong></div>
-            <div class="kbn-cron-diag-card-v226"><small>新規掲載</small><strong id="cronDiagCreated">-</strong></div>
-          </div>
-          <div id="cronDiagReasons" class="kbn-cron-reasons-v226">直近の実行後に、候補が除外された理由を表示します。</div>
-          <div id="cronDiagExamples" class="kbn-cron-reasons-v226" style="margin-top:8px">除外された店舗例もここに表示します。</div>
-        </div>
-        <div class="kbn-cron-actions-v225">
-          <button type="button" id="cronDirectSyncBtn" class="kbn-cron-sync-btn">Cloudflareへ再同期</button>
-          <button type="button" id="cronManualTestBtn" class="kbn-cron-test-btn">今すぐ自動掲載をテスト</button>
-        </div>
+      <div class="kbn-simple-schedule-ok" style="margin-top:10px;padding:10px 12px;border:1px solid #315b45;border-radius:12px;background:#0d1b15;color:#7ee2a8;font-size:.78rem;line-height:1.6">
+        ✓ 時間を保存するだけでOK。デプロイやCron再同期は不要です。
       </div>
 
       <small id="autoListingSixTimesStatus" style="display:block;margin-top:6px;color:#efc45a">
@@ -9619,281 +9574,82 @@ document.addEventListener("click",async(e)=>{
 </script>
 
 
-<script id="kbn-schedule-editor-v217-js">
-function kbnScheduleTimesV217(){
-  return [1,2,3,4,5,6].map(i=>document.getElementById(`autoListingTime${i}`)?.value||"");
-}
-
+<script id="kbn-schedule-editor-v230-js">
 function kbnMaintenanceSlotV217(){
-  const n=Number(document.getElementById("maintenanceScheduleSelect")?.value||1);
-  return Math.max(1,Math.min(6,n));
+  const select=document.getElementById("maintenanceScheduleSelect");
+  return Math.max(1,Math.min(6,Number(select?.value||1)));
 }
-
 function kbnRefreshMaintenanceOptionsV217(){
   const select=document.getElementById("maintenanceScheduleSelect");
   if(!select)return;
   const selected=String(kbnMaintenanceSlotV217());
-  const times=kbnScheduleTimesV217();
-  [...select.options].forEach((opt,i)=>{
-    opt.textContent=`自動掲載 ${i+1}（${times[i]||"--:--"}）`;
-  });
+  for(let i=1;i<=6;i++){
+    const opt=select.querySelector(`option[value="${i}"]`);
+    const time=String(document.getElementById(`autoListingTime${i}`)?.value||"");
+    if(opt)opt.textContent=`自動掲載 ${i}${time?`（${time}）`:""}`;
+  }
   select.value=selected;
 }
-
-window.loadAutoSchedule=async function(){
+function kbnNormalizeAdminTimeV230(v){
+  const m=String(v||"").match(/^(\d{1,2}):(\d{2})$/);
+  if(!m)return "";
+  const h=Number(m[1]),mi=Number(m[2]);
+  if(h<0||h>23||mi<0||mi>59)return "";
+  return `${String(h).padStart(2,"0")}:${String(mi).padStart(2,"0")}`;
+}
+async function kbnLoadSimpleScheduleV230(){
   const status=document.getElementById("autoScheduleStatus");
   try{
     const d=await api("/api/admin/auto-schedule");
-    const listingTimes=Array.isArray(d.auto_listing_times_jst)?d.auto_listing_times_jst:[];
-    const maintenanceTime=String(d.full_maintenance_time_jst||d.full_maintenance_times_jst?.[0]||"");
-
-    if(listingTimes.length!==6){
-      throw new Error("AUTO_LISTING_SCHEDULE_NOT_6");
+    const times=Array.isArray(d.auto_listing_times_jst)?d.auto_listing_times_jst:[];
+    if(times.length===6){
+      times.forEach((v,i)=>{const el=document.getElementById(`autoListingTime${i+1}`);if(el)el.value=v;});
     }
-
-    listingTimes.forEach((v,i)=>{
-      const el=document.getElementById(`autoListingTime${i+1}`);
-      if(el)el.value=v;
-    });
-
-    let slot=listingTimes.indexOf(maintenanceTime)+1;
-    if(slot<1)slot=1;
+    const mt=String(d.full_maintenance_time_jst||times[0]||"");
+    const idx=Math.max(0,times.indexOf(mt));
     const select=document.getElementById("maintenanceScheduleSelect");
-    if(select)select.value=String(slot);
+    if(select)select.value=String(idx+1);
     kbnRefreshMaintenanceOptionsV217();
-
-    if(status){
-      status.dataset.state="ok";
-      status.textContent=`現在：自動掲載 ${listingTimes.join(" / ")} ｜ 通常メンテナンス ${maintenanceTime||listingTimes[slot-1]}`;
-    }
-
+    if(status){status.dataset.state="ok";status.textContent=`現在：自動掲載 ${times.join(" / ")} ｜ 通常メンテナンス ${mt}`;}
     const six=document.getElementById("autoListingSixTimesStatus");
-    if(six){
-      six.textContent=`自動掲載：1日6回（${listingTimes.join(" / ")}） / 通常メンテナンス：${maintenanceTime||listingTimes[slot-1]}`;
-    }
-  }catch(e){
-    if(status){
-      status.dataset.state="error";
-      status.textContent=`予約時間を取得できませんでした：${e?.message||"UNKNOWN_ERROR"}`;
-    }
-  }
-};
-
-// v2.19: 画面表示時にGitHub上の現在設定を自動読込する。
-// これが無いと入力欄がHTMLの初期値(00:00/03:00/...)のまま表示され、
-// 保存済みの予約時間へ更新されない。
-if(document.readyState === "loading"){
-  document.addEventListener("DOMContentLoaded",()=>window.loadAutoSchedule());
-}else{
-  window.loadAutoSchedule();
+    if(six)six.textContent=`自動掲載：1日6回（${times.join(" / ")}） / 通常メンテナンス：${mt}`;
+  }catch(e){if(status){status.dataset.state="error";status.textContent=`予約時間を読み込めませんでした：${e?.message||"UNKNOWN_ERROR"}`;}}
 }
 
-document.addEventListener("input",(e)=>{
-  if(/^autoListingTime[1-6]$/.test(e.target?.id||"")){
-    kbnRefreshMaintenanceOptionsV217();
-  }
+document.addEventListener("change",e=>{
+  if(e.target?.matches?.('[id^="autoListingTime"]')||e.target?.id==="maintenanceScheduleSelect")kbnRefreshMaintenanceOptionsV217();
 });
 
-document.addEventListener("click",async(e)=>{
-  if(e.target?.id!=="autoScheduleSaveBtn")return;
-
-  const btn=e.target;
+document.addEventListener("click",async e=>{
+  const btn=e.target.closest?.("#autoScheduleSaveBtn");
+  if(!btn)return;
   const status=document.getElementById("autoScheduleStatus");
-  const listingTimes=kbnScheduleTimesV217();
-
-  if(listingTimes.some(v=>!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(v))){
-    if(status){
-      status.dataset.state="error";
-      status.textContent="自動掲載6回の時間をすべて入力してください。";
-    }
-    return;
+  const listingTimes=[1,2,3,4,5,6].map(i=>kbnNormalizeAdminTimeV230(document.getElementById(`autoListingTime${i}`)?.value));
+  if(listingTimes.some(v=>!v)){
+    if(status){status.dataset.state="error";status.textContent="自動掲載6回の時間をすべて入力してください。";}return;
   }
   if(new Set(listingTimes).size!==6){
-    if(status){
-      status.dataset.state="error";
-      status.textContent="自動掲載の6つの時間は重複できません。";
-    }
-    return;
+    if(status){status.dataset.state="error";status.textContent="6つの時間は重複できません。";}return;
   }
-
   const slot=kbnMaintenanceSlotV217();
   const maintenanceTime=listingTimes[slot-1];
-
-  btn.disabled=true;
-  btn.textContent="反映中...";
-  if(status){
-    status.dataset.state="";
-    status.textContent="GitHubへ予約設定を反映しています...";
-  }
-
+  btn.disabled=true;btn.textContent="保存中...";
+  if(status){status.dataset.state="";status.textContent="予約時間を保存しています...";}
   try{
-    const d=await api("/api/admin/auto-schedule",{
-      method:"PUT",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({
-        auto_listing_times_jst:listingTimes,
-        full_maintenance_time_jst:maintenanceTime
-      })
-    });
-
+    const d=await api("/api/admin/auto-schedule",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({auto_listing_times_jst:listingTimes,full_maintenance_time_jst:maintenanceTime})});
     const saved=Array.isArray(d.auto_listing_times_jst)?d.auto_listing_times_jst:listingTimes;
-    saved.forEach((v,i)=>{
-      const el=document.getElementById(`autoListingTime${i+1}`);
-      if(el)el.value=v;
-    });
-
-    const savedMaintenance=String(d.full_maintenance_time_jst||maintenanceTime);
-    const savedSlot=saved.indexOf(savedMaintenance)+1;
-    const select=document.getElementById("maintenanceScheduleSelect");
-    if(select)select.value=String(savedSlot>0?savedSlot:1);
+    saved.forEach((v,i)=>{const el=document.getElementById(`autoListingTime${i+1}`);if(el)el.value=v;});
+    const mt=String(d.full_maintenance_time_jst||maintenanceTime);
+    const idx=Math.max(0,saved.indexOf(mt));
+    const select=document.getElementById("maintenanceScheduleSelect");if(select)select.value=String(idx+1);
     kbnRefreshMaintenanceOptionsV217();
-
-    if(status){
-      status.dataset.state="ok";
-      status.textContent=`✓ 自動掲載 ${saved.join(" / ")} ｜ 通常メンテナンス ${savedMaintenance} に更新しました。Cloudflareデプロイ後に有効になります。`;
-    }
-    const six=document.getElementById("autoListingSixTimesStatus");
-    if(six){
-      six.textContent=`自動掲載：1日6回（${saved.join(" / ")}） / 通常メンテナンス：${savedMaintenance}`;
-      setTimeout(()=>window.loadCronRuntimeStatusV224?.(),800);
-    }
-  }catch(err){
-    const raw=String(err?.message||"UNKNOWN_ERROR");
-    let message=raw;
-    if(raw.includes("CLOUDFLARE_FREE_CRON_LIMIT_5_DISTINCT_MINUTES")){
-      message="Cloudflare FreeではCronは最大5個です。6つの時刻のうち、少なくとも2つは同じ「分」にしてください（例：00分に統一すると1個のCronで6回実行できます）。";
-    }
-    if(status){
-      status.dataset.state="error";
-      status.textContent=`更新できませんでした：${message}`;
-    }
-  }finally{
-    btn.disabled=false;
-    btn.textContent="予約時間を更新";
-  }
+    if(status){status.dataset.state="ok";status.textContent=`✓ 保存しました。自動掲載 ${saved.join(" / ")} ｜ 通常メンテナンス ${mt}`;}
+    const six=document.getElementById("autoListingSixTimesStatus");if(six)six.textContent=`自動掲載：1日6回（${saved.join(" / ")}） / 通常メンテナンス：${mt}`;
+  }catch(err){if(status){status.dataset.state="error";status.textContent=`保存できませんでした：${err?.message||"UNKNOWN_ERROR"}`;}}
+  finally{btn.disabled=false;btn.textContent="予約時間を更新";}
 });
 
-function kbnFormatJstDateV224(v){
-  if(!v)return "実行記録なし";
-  try{
-    const d=new Date(v);
-    if(Number.isNaN(d.getTime()))return String(v);
-    return new Intl.DateTimeFormat("ja-JP",{timeZone:"Asia/Tokyo",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false}).format(d);
-  }catch{return String(v)}
-}
-
-window.loadCronRuntimeStatusV224=async function(){
-  const desired=$("cronDesiredTimes"), effective=$("cronEffectiveTimes"), actual=$("cronActualTriggerTimes"), maintenance=$("cronMaintenanceTime"), lastScheduled=$("cronLastScheduledRun"), lastReceipt=$("cronLastReceipt"), propagationEl=$("cronPropagationState"), lastManual=$("cronLastManualRun"), state=$("cronRuntimeState");
-  if(!state)return;
-  state.className="kbn-cron-state warn";
-  state.textContent="現在の稼働状態を確認中...";
-  try{
-    const d=await api("/api/admin/auto-schedule-status");
-    const want=Array.isArray(d.desired?.auto_listing_times_jst)?d.desired.auto_listing_times_jst:[];
-    const live=Array.isArray(d.effective?.auto_listing_times_jst)?d.effective.auto_listing_times_jst:[];
-    const trigger=Array.isArray(d.cloudflare?.times_jst)?d.cloudflare.times_jst:[];
-    if(desired)desired.textContent=want.length?want.join(" / "):"取得できません";
-    if(effective)effective.textContent=live.length?live.join(" / "):"取得できません";
-    if(actual)actual.textContent=d.cloudflare?.error?`取得失敗：${d.cloudflare.error}`:(trigger.length?trigger.join(" / "):"Triggerなし");
-    if(maintenance)maintenance.textContent=`GitHub ${d.desired?.full_maintenance_time_jst||"-"} / Worker ${d.effective?.full_maintenance_time_jst||"-"}`;
-    const fmtRun=(r)=>r?`${kbnFormatJstDateV224(r.started_at||r.created_at)} / ${r.status||"-"}${r.created_count!=null?` / 新規${r.created_count}件`:""}`:"実行記録なし";
-    if(lastScheduled)lastScheduled.textContent=fmtRun(d.last_scheduled_run||null);
-    if(lastReceipt){
-      const r=d.last_receipt||null;
-      lastReceipt.textContent=r
-        ? `${kbnFormatJstDateV224(r.received_at)} / ${r.scheduled_jst||"-"}${r.cron_expression?` / ${r.cron_expression}`:""}`
-        : "受信記録なし";
-    }
-    if(propagationEl){
-      const p=d.propagation||{};
-      if(p.within_window){
-        propagationEl.textContent=`反映待ちの可能性あり（更新から約${p.minutes_since??"-"}分 / 最大15分）`;
-      }else{
-        propagationEl.textContent="反映待ち時間外";
-      }
-    }
-    if(lastManual)lastManual.textContent=fmtRun(d.last_manual_run||null);
-    const diagRun=d.last_scheduled_run||d.last_manual_run||d.last_run||null;
-    let diag={};
-    try{diag=diagRun?.diagnostic_json?JSON.parse(diagRun.diagnostic_json):{}}catch{}
-    if($("cronDiagPairs"))$("cronDiagPairs").textContent=diag.searched_pairs!=null?`${diag.searched_pairs} ペア`:"記録なし";
-    if($("cronDiagSources")){
-      const s=diag.source_found||{};
-      $("cronDiagSources").textContent=diag.source_found?`Google ${s.google||0} / FSQ ${s.foursquare||0} / Geo ${s.geoapify||0} / OSM ${s.osm||0}`:"記録なし";
-    }
-    if($("cronDiagRejected"))$("cronDiagRejected").textContent=diag.rejected_total!=null?`${diag.rejected_total} 件`:"記録なし";
-    if($("cronDiagCreated"))$("cronDiagCreated").textContent=diag.created_count!=null?`${diag.created_count} 件`:"記録なし";
-    if($("cronDiagReasons")){
-      const rs=Array.isArray(diag.rejection_reasons)?diag.rejection_reasons:[];
-      const errors=Array.isArray(diag.source_errors)?diag.source_errors:[];
-      const scanned=Number(diag.candidate_scan_count||0);
-      const details=Number(diag.detail_checks||0);
-      $("cronDiagReasons").textContent=rs.length
-        ? `主な除外理由：${rs.map(x=>`${x.reason} ${x.count}件`).join(" / ")}${scanned?` ｜ 候補確認 ${scanned}件`:""}${details?` ｜ Details取得 ${details}件`:""}${errors.length?` ｜ 検索エラー ${errors.length}件`:""}`
-        : (diag.searched_pairs!=null?`除外理由の記録はありません。${scanned?` 候補確認 ${scanned}件。`:""}`:"直近の実行後に診断結果を表示します。");
-    }
-    if($("cronDiagExamples")){
-      const examples=Array.isArray(diag.rejected_examples)?diag.rejected_examples:[];
-      $("cronDiagExamples").textContent=examples.length
-        ? `除外例：${examples.map(x=>`${x.name}［${x.reason}］`).join(" / ")}`
-        : (diag.searched_pairs!=null?"除外店舗例はありません。":"除外された店舗例もここに表示します。");
-    }
-    if(d.propagation?.within_window){
-      state.className="kbn-cron-state warn";
-      state.textContent=`⏳ 設定変更から約${d.propagation.minutes_since??"-"}分です。CloudflareのCron変更は最大15分ほど反映に時間がかかるため、この間の予約実行は旧設定の可能性があります。`;
-    }else if(d.in_sync){
-      state.className="kbn-cron-state ok";
-      state.textContent="✓ GitHub・Worker・Cloudflare実Cron Triggerがすべて一致しています。";
-    }else if(!d.trigger_in_sync){
-      state.className="kbn-cron-state ng";
-      state.textContent="⚠ Cloudflareの実Cron Triggerが設定と一致していません。『Cloudflareへ再同期』を押してください。";
-    }else{
-      state.className="kbn-cron-state ng";
-      state.textContent="⚠ Worker環境変数がGitHub設定と一致していません。デプロイ完了を確認してください。";
-    }
-    if(d.last_run?.status==="failed"){
-      state.className="kbn-cron-state ng";
-      state.textContent+=` 直近Cronは失敗：${d.last_run.error||"原因不明"}`;
-    }
-  }catch(e){
-    state.className="kbn-cron-state ng";
-    state.textContent=`Cron状態を取得できませんでした：${e?.message||"UNKNOWN_ERROR"}`;
-  }
-};
-
-async function kbnCronDirectSyncV225(){
-  const btn=$("cronDirectSyncBtn"), state=$("cronRuntimeState");
-  if(btn){btn.disabled=true;btn.textContent="再同期中..."}
-  try{
-    const times=[1,2,3,4,5,6].map(i=>String($("autoListingTime"+i)?.value||""));
-    const slot=Math.max(1,Math.min(6,Number($("autoMaintenanceSlot")?.value||1)));
-    await api("/api/admin/auto-schedule",{method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({auto_listing_times_jst:times,full_maintenance_time_jst:times[slot-1]||times[0]})});
-    if(state){state.className="kbn-cron-state ok";state.textContent="Cloudflareの実Cron Triggerへ再同期しました。"}
-    setTimeout(()=>window.loadCronRuntimeStatusV224?.(),700);
-  }catch(e){if(state){state.className="kbn-cron-state ng";state.textContent=`再同期に失敗：${e?.message||"UNKNOWN_ERROR"}`}}
-  finally{if(btn){btn.disabled=false;btn.textContent="Cloudflareへ再同期"}}
-}
-
-async function kbnCronManualTestV225(){
-  const btn=$("cronManualTestBtn"), state=$("cronRuntimeState");
-  if(!confirm("自動掲載処理を今すぐ1回テスト実行します。新しい店舗が見つかれば実際に掲載されます。実行しますか？"))return;
-  if(btn){btn.disabled=true;btn.textContent="テスト実行中..."}
-  try{
-    const d=await api("/api/admin/cron-test",{method:"POST"});
-    if(state){state.className="kbn-cron-state ok";state.textContent=`✓ テスト実行成功：新規掲載 ${Number(d.created_count||0)}件。診断結果を更新しました。`}
-    try{await window.loadShops?.()}catch{}
-    setTimeout(()=>window.loadCronRuntimeStatusV224?.(),500);
-  }catch(e){if(state){state.className="kbn-cron-state ng";state.textContent=`テスト実行失敗：${e?.message||"UNKNOWN_ERROR"}`}}
-  finally{if(btn){btn.disabled=false;btn.textContent="今すぐ自動掲載をテスト"}}
-}
-
-document.addEventListener("click",e=>{
-  if(e.target?.id==="cronRuntimeRefreshBtn")window.loadCronRuntimeStatusV224?.();
-  if(e.target?.id==="cronDirectSyncBtn")kbnCronDirectSyncV225();
-  if(e.target?.id==="cronManualTestBtn")kbnCronManualTestV225();
-});
-document.addEventListener("DOMContentLoaded",()=>setTimeout(()=>window.loadCronRuntimeStatusV224?.(),700));
-
+document.addEventListener("DOMContentLoaded",()=>setTimeout(kbnLoadSimpleScheduleV230,450));
 </script>
 
 <script id="kbn-auto-listed-bind-v207">
