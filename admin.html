@@ -130,6 +130,8 @@
   }
 }
 
+
+.kbn-cron-diag-v226{margin-top:12px;padding:14px;border:1px solid #384552;border-radius:14px;background:#0d151d}.kbn-cron-diag-v226 h4{margin:0 0 10px;color:#f1c75b}.kbn-cron-diag-grid-v226{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.kbn-cron-diag-card-v226{padding:11px;border:1px solid #303d49;border-radius:10px;background:#111a23}.kbn-cron-diag-card-v226 small{display:block;color:#8794a1;margin-bottom:4px}.kbn-cron-diag-card-v226 strong{display:block;color:#f1f4f7;line-height:1.45}.kbn-cron-reasons-v226{margin-top:10px;color:#d3d9df;font-size:.88rem;line-height:1.6}@media(max-width:640px){.kbn-cron-diag-grid-v226{grid-template-columns:1fr 1fr}}
 </style>
 
 
@@ -3250,7 +3252,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.25</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.26</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -3815,9 +3817,20 @@ html,body{max-width:100%;overflow-x:hidden}
           <div class="kbn-cron-status-item"><small>Worker環境変数</small><strong id="cronEffectiveTimes">読み込み中...</strong></div>
           <div class="kbn-cron-status-item"><small>Cloudflare実Cron Trigger</small><strong id="cronActualTriggerTimes">読み込み中...</strong></div>
           <div class="kbn-cron-status-item"><small>通常メンテナンス</small><strong id="cronMaintenanceTime">-</strong></div>
-          <div class="kbn-cron-status-item"><small>直近Cron実行</small><strong id="cronLastRun">-</strong></div>
+          <div class="kbn-cron-status-item"><small>直近の予約Cron</small><strong id="cronLastScheduledRun">-</strong></div>
+          <div class="kbn-cron-status-item"><small>直近の手動テスト</small><strong id="cronLastManualRun">-</strong></div>
         </div>
         <div id="cronRuntimeState" class="kbn-cron-state warn">現在の稼働状態を確認中...</div>
+        <div class="kbn-cron-diag-v226">
+          <h4>🔎 自動掲載の診断</h4>
+          <div class="kbn-cron-diag-grid-v226">
+            <div class="kbn-cron-diag-card-v226"><small>検索ペア数</small><strong id="cronDiagPairs">-</strong></div>
+            <div class="kbn-cron-diag-card-v226"><small>候補取得</small><strong id="cronDiagSources">-</strong></div>
+            <div class="kbn-cron-diag-card-v226"><small>除外件数</small><strong id="cronDiagRejected">-</strong></div>
+            <div class="kbn-cron-diag-card-v226"><small>新規掲載</small><strong id="cronDiagCreated">-</strong></div>
+          </div>
+          <div id="cronDiagReasons" class="kbn-cron-reasons-v226">直近の実行後に、候補が除外された理由を表示します。</div>
+        </div>
         <div class="kbn-cron-actions-v225">
           <button type="button" id="cronDirectSyncBtn" class="kbn-cron-sync-btn">Cloudflareへ再同期</button>
           <button type="button" id="cronManualTestBtn" class="kbn-cron-test-btn">今すぐ自動掲載をテスト</button>
@@ -9767,7 +9780,7 @@ function kbnFormatJstDateV224(v){
 }
 
 window.loadCronRuntimeStatusV224=async function(){
-  const desired=$("cronDesiredTimes"), effective=$("cronEffectiveTimes"), actual=$("cronActualTriggerTimes"), maintenance=$("cronMaintenanceTime"), last=$("cronLastRun"), state=$("cronRuntimeState");
+  const desired=$("cronDesiredTimes"), effective=$("cronEffectiveTimes"), actual=$("cronActualTriggerTimes"), maintenance=$("cronMaintenanceTime"), lastScheduled=$("cronLastScheduledRun"), lastManual=$("cronLastManualRun"), state=$("cronRuntimeState");
   if(!state)return;
   state.className="kbn-cron-state warn";
   state.textContent="現在の稼働状態を確認中...";
@@ -9780,9 +9793,25 @@ window.loadCronRuntimeStatusV224=async function(){
     if(effective)effective.textContent=live.length?live.join(" / "):"取得できません";
     if(actual)actual.textContent=d.cloudflare?.error?`取得失敗：${d.cloudflare.error}`:(trigger.length?trigger.join(" / "):"Triggerなし");
     if(maintenance)maintenance.textContent=`GitHub ${d.desired?.full_maintenance_time_jst||"-"} / Worker ${d.effective?.full_maintenance_time_jst||"-"}`;
-    if(last){
-      const r=d.last_run||null;
-      last.textContent=r?`${kbnFormatJstDateV224(r.started_at||r.created_at)} / ${r.status||"-"}${r.created_count!=null?` / 新規${r.created_count}件`:""}`:"実行記録なし";
+    const fmtRun=(r)=>r?`${kbnFormatJstDateV224(r.started_at||r.created_at)} / ${r.status||"-"}${r.created_count!=null?` / 新規${r.created_count}件`:""}`:"実行記録なし";
+    if(lastScheduled)lastScheduled.textContent=fmtRun(d.last_scheduled_run||null);
+    if(lastManual)lastManual.textContent=fmtRun(d.last_manual_run||null);
+    const diagRun=d.last_scheduled_run||d.last_manual_run||d.last_run||null;
+    let diag={};
+    try{diag=diagRun?.diagnostic_json?JSON.parse(diagRun.diagnostic_json):{}}catch{}
+    if($("cronDiagPairs"))$("cronDiagPairs").textContent=diag.searched_pairs!=null?`${diag.searched_pairs} ペア`:"記録なし";
+    if($("cronDiagSources")){
+      const s=diag.source_found||{};
+      $("cronDiagSources").textContent=diag.source_found?`Google ${s.google||0} / FSQ ${s.foursquare||0} / Geo ${s.geoapify||0} / OSM ${s.osm||0}`:"記録なし";
+    }
+    if($("cronDiagRejected"))$("cronDiagRejected").textContent=diag.rejected_total!=null?`${diag.rejected_total} 件`:"記録なし";
+    if($("cronDiagCreated"))$("cronDiagCreated").textContent=diag.created_count!=null?`${diag.created_count} 件`:"記録なし";
+    if($("cronDiagReasons")){
+      const rs=Array.isArray(diag.rejection_reasons)?diag.rejection_reasons:[];
+      const errors=Array.isArray(diag.source_errors)?diag.source_errors:[];
+      $("cronDiagReasons").textContent=rs.length
+        ? `主な除外理由：${rs.map(x=>`${x.reason} ${x.count}件`).join(" / ")}${errors.length?` ｜ 検索エラー ${errors.length}件`:""}`
+        : (diag.searched_pairs!=null?"除外理由の記録はありません。":"直近の実行後に診断結果を表示します。");
     }
     if(d.in_sync){
       state.className="kbn-cron-state ok";
@@ -9823,7 +9852,7 @@ async function kbnCronManualTestV225(){
   if(btn){btn.disabled=true;btn.textContent="テスト実行中..."}
   try{
     const d=await api("/api/admin/cron-test",{method:"POST"});
-    if(state){state.className="kbn-cron-state ok";state.textContent=`✓ テスト実行成功：新規掲載 ${Number(d.created_count||0)}件。Cron処理本体は正常です。`}
+    if(state){state.className="kbn-cron-state ok";state.textContent=`✓ テスト実行成功：新規掲載 ${Number(d.created_count||0)}件。診断結果を更新しました。`}
     try{await window.loadShops?.()}catch{}
     setTimeout(()=>window.loadCronRuntimeStatusV224?.(),500);
   }catch(e){if(state){state.className="kbn-cron-state ng";state.textContent=`テスト実行失敗：${e?.message||"UNKNOWN_ERROR"}`}}
