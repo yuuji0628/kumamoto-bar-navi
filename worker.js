@@ -1007,11 +1007,11 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="2.36";
+      config.vars.KBN_CONFIG_VERSION="2.37";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
-          message:"admin: switch KBN scheduler to fixed every-minute trigger (v2.36)",
+          message:"admin: switch KBN scheduler to fixed every-minute trigger (v2.37)",
           content:kbnUtf8ToBase64(content),sha,branch:c.branch
         })
       });
@@ -5698,65 +5698,21 @@ ${urls.map(x=>`  <url>
         return json({ok:false,error:"INVALID_REQUEST_TYPE"},{status:400});
       }
 
-      // 店舗情報変更は即時反映
+      // v2.37: 店舗情報変更も自動反映せず、必ず管理者の承認待ちにする
       if(requestType==="profile"){
         const p=x.payload||{};
 
         const current=await env.DB.prepare("SELECT * FROM shops WHERE id=?").bind(shop.id).first();
         if(!current)return json({ok:false,error:"SHOP_NOT_FOUND"},{status:404});
 
-        const merged={
-          ...current,
-          name: p.name ?? current.name,
-          name_kana: p.name_kana ?? current.name_kana,
-          area: p.area ?? current.area,
-          address: p.address ?? current.address,
-          hours: p.hours ?? current.hours,
-          holiday: p.holiday ?? current.holiday,
-          instagram: p.instagram ?? current.instagram,
-          genre: p.genre ?? current.genre,
-          features: p.features ?? current.features,
-          description: p.description ?? current.description,
-          budget_min: p.budget_min ?? current.budget_min,
-          budget_max: p.budget_max ?? current.budget_max,
-          seats: p.seats ?? current.seats,
-          phone: p.phone ?? current.phone
-        };
-
-        await env.DB.prepare(`
-          UPDATE shops SET
-            name=?,name_kana=?,area=?,address=?,hours=?,holiday=?,
-            instagram=?,genre=?,features=?,description=?,
-            budget_min=?,budget_max=?,seats=?,phone=?,
-            updated_at=CURRENT_TIMESTAMP
-          WHERE id=?
-        `).bind(
-          t(merged.name,180),
-          t(merged.name_kana,180),
-          t(merged.area,120),
-          t(merged.address,500),
-          t(merged.hours,180),
-          t(merged.holiday,180),
-          t(merged.instagram,500),
-          t(merged.genre,500),
-          t(merged.features,1000),
-          t(merged.description,5000),
-          ni(merged.budget_min),
-          ni(merged.budget_max),
-          ni(merged.seats),
-          t(merged.phone,120),
-          shop.id
-        ).run();
-
         const r=await env.DB.prepare(`
-          INSERT INTO owner_requests (shop_id,request_type,payload,status,reviewed_at)
-          VALUES (?,?,?,'reviewed',CURRENT_TIMESTAMP)
+          INSERT INTO owner_requests (shop_id,request_type,payload,status)
+          VALUES (?,?,?,'pending')
         `).bind(shop.id,requestType,payload).run();
 
-        // メール通知は申請処理を止めないようバックグラウンド送信
         if(ctx?.waitUntil){
           ctx.waitUntil(
-            notifyOwnerRequest(env,current,requestType,p,true)
+            notifyOwnerRequest(env,current,requestType,p,false)
               .catch(e=>console.error("owner profile notification failed",e))
           );
         }
@@ -5764,8 +5720,8 @@ ${urls.map(x=>`  <url>
         return json({
           ok:true,
           id:r.meta?.last_row_id,
-          auto_applied:true,
-          status:"reviewed"
+          auto_applied:false,
+          status:"pending"
         },{status:201});
       }
 
@@ -6899,6 +6855,90 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
         `).all();
         return json({ok:true,requests:r.results||[]});
       }
+
+
+      const orProfile=url.pathname.match(/^\/api\/admin\/owner-requests\/(\d+)\/apply-profile$/);
+      if(orProfile && request.method==="POST"){
+        const id=Number(orProfile[1]);
+
+        const req=await env.DB.prepare(`
+          SELECT owner_requests.*,shops.id AS target_shop_id
+          FROM owner_requests
+          JOIN shops ON shops.id=owner_requests.shop_id
+          WHERE owner_requests.id=?
+        `).bind(id).first();
+
+        if(!req)return json({ok:false,error:"NOT_FOUND"},{status:404});
+        if(req.request_type!=="profile")return json({ok:false,error:"NOT_PROFILE_REQUEST"},{status:400});
+        if(req.status!=="pending")return json({ok:false,error:"REQUEST_ALREADY_REVIEWED"},{status:409});
+
+        let p={};
+        try{p=JSON.parse(req.payload||"{}")}catch{
+          return json({ok:false,error:"INVALID_PAYLOAD"},{status:400});
+        }
+
+        const current=await env.DB.prepare("SELECT * FROM shops WHERE id=?")
+          .bind(req.target_shop_id).first();
+        if(!current)return json({ok:false,error:"SHOP_NOT_FOUND"},{status:404});
+
+        // 申請された項目だけを反映。未申請項目は現在値を維持。
+        const merged={
+          name: p.name ?? current.name,
+          name_kana: p.name_kana ?? current.name_kana,
+          area: p.area ?? current.area,
+          address: p.address ?? current.address,
+          hours: p.hours ?? current.hours,
+          holiday: p.holiday ?? current.holiday,
+          instagram: p.instagram ?? current.instagram,
+          genre: p.genre ?? current.genre,
+          features: p.features ?? current.features,
+          description: p.description ?? current.description,
+          budget_min: p.budget_min ?? current.budget_min,
+          budget_max: p.budget_max ?? current.budget_max,
+          seats: p.seats ?? current.seats,
+          phone: p.phone ?? current.phone
+        };
+
+        await env.DB.batch([
+          env.DB.prepare(`
+            UPDATE shops SET
+              name=?,name_kana=?,area=?,address=?,hours=?,holiday=?,
+              instagram=?,genre=?,features=?,description=?,
+              budget_min=?,budget_max=?,seats=?,phone=?,
+              updated_at=CURRENT_TIMESTAMP
+            WHERE id=?
+          `).bind(
+            t(merged.name,180),
+            t(merged.name_kana,180),
+            t(merged.area,120),
+            t(merged.address,500),
+            t(merged.hours,180),
+            t(merged.holiday,180),
+            t(merged.instagram,500),
+            t(merged.genre,500),
+            t(merged.features,1000),
+            t(merged.description,5000),
+            ni(merged.budget_min),
+            ni(merged.budget_max),
+            ni(merged.seats),
+            t(merged.phone,120),
+            req.target_shop_id
+          ),
+          env.DB.prepare(`
+            UPDATE owner_requests
+            SET status='reviewed',reviewed_at=CURRENT_TIMESTAMP
+            WHERE id=? AND status='pending'
+          `).bind(id)
+        ]);
+
+        return json({
+          ok:true,
+          applied:true,
+          shop_id:req.target_shop_id,
+          status:"reviewed"
+        });
+      }
+
 
       const orPhoto=url.pathname.match(/^\/api\/admin\/owner-requests\/(\d+)\/apply-photo$/);
       if(orPhoto && request.method==="POST"){
