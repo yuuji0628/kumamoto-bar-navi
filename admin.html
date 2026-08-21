@@ -3236,7 +3236,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.36</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.37</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -3732,7 +3732,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div id="refreshExistingStatus" class="auto-discovery-status lead-smart-message"></div>
     <div id="repairExistingAreasStatus" class="auto-discovery-status lead-smart-message"></div>
-    <small class="version-note">ver2.36：管理メニューの「メンテナンス」が自動メンテナンスへ直接移動するよう修正しました。</small>
+    <small class="version-note">ver2.37：管理メニューの「メンテナンス」が自動メンテナンスへ直接移動するよう修正しました。</small>
   </div>
 
   
@@ -7129,11 +7129,14 @@ window.loadOwnerReq=async function(){
       : "";
 
     let statusText=reqStatusLabel[r.status]||r.status;
-    if(r.request_type==="profile" && r.status==="reviewed")statusText="自動反映済み";
 
     let actions="";
     if(r.status==="pending"){
-      if(r.request_type==="photo" && imageUrl){
+      if(r.request_type==="profile"){
+        actions=`
+          <button class="owner-apply-photo" onclick="applyOwnerProfile(${r.id})">承認して反映</button>
+          <button onclick="finishOwnerReq(${r.id},'rejected')">却下</button>`;
+      }else if(r.request_type==="photo" && imageUrl){
         actions=`
           <button class="owner-apply-photo" onclick="applyOwnerPhoto(${r.id},'main')">メイン画像に反映</button>
           <button onclick="applyOwnerPhoto(${r.id},'gallery')">ギャラリーに追加</button>
@@ -7156,6 +7159,25 @@ window.loadOwnerReq=async function(){
     </article>`;
   }).join(""):'<p>申請はありません。</p>';
 }
+
+
+window.applyOwnerProfile=async(id)=>{
+  if(!confirm("この店舗情報変更を承認して、公開店舗情報へ反映しますか？"))return;
+
+  try{
+    await api(`/api/admin/owner-requests/${id}/apply-profile`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:"{}"
+    });
+
+    alert("店舗情報を承認して反映しました");
+    await Promise.allSettled([loadOwnerReq(),loadShops()]);
+  }catch(e){
+    console.error(e);
+    alert("店舗情報を反映できませんでした: "+(e?.message||"UNKNOWN_ERROR"));
+  }
+};
 
 window.applyOwnerPhoto=async(id,mode="main")=>{
   const label=mode==="gallery"?"ギャラリーに追加":"メイン画像として反映";
