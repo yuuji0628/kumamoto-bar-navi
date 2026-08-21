@@ -691,7 +691,42 @@ function kbnSortJstTimes(times){
   });
 }
 
-// KBN v2.17: 自動掲載6回＋そのうち1回を通常メンテナンスとして管理画面から自由設定。
+function kbnCompileDailyCronsV218(timesJst){
+  const groups=new Map();
+  for(const time of timesJst){
+    const normalized=kbnNormalizeJstTime(time);
+    if(!normalized)continue;
+    const [jh,jm]=normalized.split(":").map(Number);
+    const uh=(jh+24-9)%24;
+    const key=jm;
+    if(!groups.has(key))groups.set(key,[]);
+    groups.get(key).push(uh);
+  }
+  return [...groups.entries()]
+    .sort((a,b)=>a[0]-b[0])
+    .map(([minute,hours])=>{
+      const hs=[...new Set(hours)].sort((a,b)=>a-b).join(",");
+      return `${minute} ${hs} * * *`;
+    });
+}
+
+function kbnScheduledJstTimeV218(event){
+  const ms=Number(event?.scheduledTime||Date.now());
+  const d=new Date(ms+9*60*60*1000);
+  return `${String(d.getUTCHours()).padStart(2,"0")}:${String(d.getUTCMinutes()).padStart(2,"0")}`;
+}
+
+function kbnMaintenanceTimeJstV218(env){
+  const direct=kbnNormalizeJstTime(env?.KBN_FULL_MAINTENANCE_TIME_JST);
+  if(direct)return direct;
+  return KBN_DEFAULT_FULL_MAINTENANCE_TIMES_JST_V215[0]||"00:00";
+}
+
+function kbnIsFullMaintenanceEventV218(env,event){
+  return kbnScheduledJstTimeV218(event)===kbnMaintenanceTimeJstV218(env);
+}
+
+// KBN v2.18: Cloudflare FreeのCron上限(5/account)に対応。6回の時刻をCron式へまとめて保存。
 const KBN_DEFAULT_AUTO_LISTING_TIMES_JST_V217=["00:00","03:00","06:00","09:00","12:00","18:00"];
 const KBN_DEFAULT_FULL_MAINTENANCE_TIMES_JST_V215=["00:00"];
 
@@ -771,17 +806,24 @@ async function kbnUpdateAutoSchedule(env,scheduleInput){
 
   const sortedListingTimes=kbnSortJstTimes(listingTimes);
   const autoOnlyTimes=sortedListingTimes.filter(x=>x!==maintenanceTime);
+  const crons=kbnCompileDailyCronsV218(sortedListingTimes);
+  if(crons.length>5){
+    const e=new Error("CLOUDFLARE_FREE_CRON_LIMIT_5_DISTINCT_MINUTES");
+    e.status=400;
+    throw e;
+  }
   const fullCrons=[kbnJstTimeToCron(maintenanceTime)];
   const autoOnlyCrons=autoOnlyTimes.map(kbnJstTimeToCron);
-  const crons=[...fullCrons,...autoOnlyCrons];
 
   const {config,sha,c}=await kbnReadWranglerFromGithub(env);
   config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
   config.triggers.crons=crons;
   config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-  config.vars.KBN_CONFIG_VERSION="2.17";
+  config.vars.KBN_CONFIG_VERSION="2.18";
   config.vars.KBN_FULL_MAINTENANCE_CRONS=fullCrons.join("|");
+  config.vars.KBN_FULL_MAINTENANCE_TIME_JST=maintenanceTime;
   config.vars.KBN_AUTO_ONLY_CRONS=autoOnlyCrons.join("|");
+  config.vars.KBN_AUTO_LISTING_TIMES_JST=sortedListingTimes.join("|");
   config.vars.KBN_SCHEDULE_UPDATED_AT=new Date().toISOString();
 
   const content=JSON.stringify(config,null,2)+"\n";
@@ -792,7 +834,7 @@ async function kbnUpdateAutoSchedule(env,scheduleInput){
       method:"PUT",
       headers:{"content-type":"application/json"},
       body:JSON.stringify({
-        message:`admin: set auto listing ${sortedListingTimes.join(" / ")} JST; maintenance ${maintenanceTime}`,
+        message:`admin: set auto listing ${sortedListingTimes.join(" / ")} JST; maintenance ${maintenanceTime} (v2.18 grouped crons)`,
         content:kbnUtf8ToBase64(content),
         sha,
         branch:c.branch
@@ -5564,33 +5606,24 @@ ${urls.map(x=>`  <url>
         try{
           const {config}=await kbnReadWranglerFromGithub(env);
           const raw=Array.isArray(config?.triggers?.crons)?config.triggers.crons:[];
-          const configuredFull=String(config?.vars?.KBN_FULL_MAINTENANCE_CRONS||"")
-            .split("|").map(x=>x.trim()).filter(Boolean);
-          const configuredAutoOnly=String(config?.vars?.KBN_AUTO_ONLY_CRONS||"")
-            .split("|").map(x=>x.trim()).filter(Boolean);
-
-          const fullCrons=configuredFull.length===1
-            ?configuredFull
-            :raw.slice(0,1);
-
-          const autoOnlyCrons=configuredAutoOnly.length===5
-            ?configuredAutoOnly
-            :raw.filter(x=>!fullCrons.includes(x)).slice(0,5);
-
-          const fullTimes=kbnSortJstTimes(fullCrons.map(kbnCronToJstTime).filter(Boolean));
-          const autoOnlyTimes=kbnSortJstTimes(autoOnlyCrons.map(kbnCronToJstTime).filter(Boolean));
-          let listingTimes=kbnSortJstTimes([...fullTimes,...autoOnlyTimes]);
-
-          if(listingTimes.length!==6){
-            listingTimes=[...KBN_DEFAULT_AUTO_LISTING_TIMES_JST_V217];
-          }
+          const configuredListing=String(config?.vars?.KBN_AUTO_LISTING_TIMES_JST||"")
+            .split("|").map(kbnNormalizeJstTime).filter(Boolean);
+          const configuredMaintenance=kbnNormalizeJstTime(config?.vars?.KBN_FULL_MAINTENANCE_TIME_JST);
+          let listingTimes=configuredListing.length===6
+            ?kbnSortJstTimes(configuredListing)
+            :[...KBN_DEFAULT_AUTO_LISTING_TIMES_JST_V217];
+          const maintenanceTime=(
+            configuredMaintenance && listingTimes.includes(configuredMaintenance)
+          )?configuredMaintenance:listingTimes[0];
+          const fullTimes=[maintenanceTime];
+          const autoOnlyTimes=listingTimes.filter(x=>x!==maintenanceTime);
 
           return json({
             ok:true,
             timezone:"Asia/Tokyo",
             times_jst:fullTimes,
             full_maintenance_times_jst:fullTimes,
-            full_maintenance_time_jst:fullTimes[0]||listingTimes[0],
+            full_maintenance_time_jst:maintenanceTime,
             auto_only_times_jst:autoOnlyTimes,
             auto_listing_times_jst:listingTimes,
             crons:raw
@@ -6875,7 +6908,7 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
   },
 
   async scheduled(event, env, ctx){
-    const fullMaintenance=kbnIsFullMaintenanceCron(env,event?.cron);
+    const fullMaintenance=kbnIsFullMaintenanceEventV218(env,event);
     ctx.waitUntil(
       (fullMaintenance
         ? runScheduledKbnMaintenance(env)
