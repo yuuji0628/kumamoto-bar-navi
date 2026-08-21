@@ -819,7 +819,7 @@ async function kbnUpdateAutoSchedule(env,scheduleInput){
   config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
   config.triggers.crons=crons;
   config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-  config.vars.KBN_CONFIG_VERSION="2.24";
+  config.vars.KBN_CONFIG_VERSION="2.25";
   config.vars.KBN_FULL_MAINTENANCE_CRONS=fullCrons.join("|");
   config.vars.KBN_FULL_MAINTENANCE_TIME_JST=maintenanceTime;
   config.vars.KBN_AUTO_ONLY_CRONS=autoOnlyCrons.join("|");
@@ -834,7 +834,7 @@ async function kbnUpdateAutoSchedule(env,scheduleInput){
       method:"PUT",
       headers:{"content-type":"application/json"},
       body:JSON.stringify({
-        message:`admin: set auto listing ${sortedListingTimes.join(" / ")} JST; maintenance ${maintenanceTime} (v2.24 grouped crons)`,
+        message:`admin: set auto listing ${sortedListingTimes.join(" / ")} JST; maintenance ${maintenanceTime} (v2.25 direct schedule sync)`,
         content:kbnUtf8ToBase64(content),
         sha,
         branch:c.branch
@@ -917,6 +917,60 @@ function kbnEffectiveScheduleV224(env){
     schedule_updated_at:String(env?.KBN_SCHEDULE_UPDATED_AT||""),
     config_version:String(env?.KBN_CONFIG_VERSION||"")
   };
+}
+
+
+function kbnCronsToJstTimesV225(crons){
+  const out=[];
+  for(const raw of Array.isArray(crons)?crons:[]){
+    const m=String(raw||"").trim().match(/^(\d{1,2})\s+([0-9,]+)\s+\*\s+\*\s+\*$/);
+    if(!m)continue;
+    const minute=Number(m[1]);
+    if(minute<0||minute>59)continue;
+    for(const hRaw of m[2].split(",")){
+      const hour=Number(hRaw);
+      if(hour<0||hour>23)continue;
+      const jstMinutes=(hour*60+minute+9*60)%(24*60);
+      const jh=Math.floor(jstMinutes/60), jm=jstMinutes%60;
+      out.push(`${String(jh).padStart(2,"0")}:${String(jm).padStart(2,"0")}`);
+    }
+  }
+  return kbnSortJstTimes([...new Set(out)]);
+}
+
+async function kbnCloudflareSchedulesV225(env){
+  const accountId=String(env?.CLOUDFLARE_ACCOUNT_ID||"").trim();
+  const apiToken=String(env?.CLOUDFLARE_API_TOKEN||"").trim();
+  const workerName=String(env?.CLOUDFLARE_WORKER_NAME||"").trim();
+  if(!accountId||!apiToken||!workerName){
+    return {configured:false,missing:[!accountId&&"CLOUDFLARE_ACCOUNT_ID",!apiToken&&"CLOUDFLARE_API_TOKEN",!workerName&&"CLOUDFLARE_WORKER_NAME"].filter(Boolean),crons:[],times_jst:[]};
+  }
+  const r=await fetch(`https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/workers/scripts/${encodeURIComponent(workerName)}/schedules`,{
+    headers:{"Authorization":`Bearer ${apiToken}`,"Accept":"application/json"}
+  });
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok||!d?.success)throw new Error(d?.errors?.[0]?.message||`CLOUDFLARE_SCHEDULE_GET_HTTP_${r.status}`);
+  const schedules=Array.isArray(d?.result?.schedules)?d.result.schedules:[];
+  const crons=schedules.map(x=>String(x?.cron||"").trim()).filter(Boolean);
+  return {configured:true,crons,times_jst:kbnCronsToJstTimesV225(crons),schedules};
+}
+
+async function kbnCloudflareSetSchedulesV225(env,crons){
+  const accountId=String(env?.CLOUDFLARE_ACCOUNT_ID||"").trim();
+  const apiToken=String(env?.CLOUDFLARE_API_TOKEN||"").trim();
+  const workerName=String(env?.CLOUDFLARE_WORKER_NAME||"").trim();
+  if(!accountId||!apiToken||!workerName)throw new Error("CLOUDFLARE_SCHEDULE_API_NOT_CONFIGURED");
+  const body=(Array.isArray(crons)?crons:[]).map(cron=>({cron:String(cron||"").trim()})).filter(x=>x.cron);
+  const r=await fetch(`https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/workers/scripts/${encodeURIComponent(workerName)}/schedules`,{
+    method:"PUT",
+    headers:{"Authorization":`Bearer ${apiToken}`,"Accept":"application/json","Content-Type":"application/json"},
+    body:JSON.stringify(body)
+  });
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok||!d?.success)throw new Error(d?.errors?.[0]?.message||`CLOUDFLARE_SCHEDULE_PUT_HTTP_${r.status}`);
+  const schedules=Array.isArray(d?.result?.schedules)?d.result.schedules:[];
+  const liveCrons=schedules.map(x=>String(x?.cron||"").trim()).filter(Boolean);
+  return {ok:true,crons:liveCrons,times_jst:kbnCronsToJstTimesV225(liveCrons),schedules};
 }
 
 async function kbnGithubApi(env,path,init={}){
@@ -5676,13 +5730,18 @@ ${urls.map(x=>`  <url>
           const effective=kbnEffectiveScheduleV224(env);
           let lastRun=null;
           try{lastRun=await kbnLastCronRunV224(env)}catch(e){console.error("cron history read failed",e)}
-          const inSync=
+          let cloudflare={configured:false,crons:[],times_jst:[],error:""};
+          try{cloudflare=await kbnCloudflareSchedulesV225(env)}catch(e){cloudflare={configured:true,crons:[],times_jst:[],error:String(e?.message||e)}}
+          const envInSync=
             desiredTimes.join("|")===effective.auto_listing_times_jst.join("|") &&
             desiredMaintenance===effective.full_maintenance_time_jst;
+          const triggerInSync=cloudflare.configured && !cloudflare.error && desiredTimes.join("|")===cloudflare.times_jst.join("|");
           return json({
             ok:true,
             timezone:"Asia/Tokyo",
-            in_sync:inSync,
+            in_sync:envInSync && triggerInSync,
+            env_in_sync:envInSync,
+            trigger_in_sync:triggerInSync,
             desired:{
               auto_listing_times_jst:desiredTimes,
               full_maintenance_time_jst:desiredMaintenance,
@@ -5690,10 +5749,26 @@ ${urls.map(x=>`  <url>
               crons:Array.isArray(config?.triggers?.crons)?config.triggers.crons:[]
             },
             effective,
+            cloudflare,
             last_run:lastRun||null
           });
         }catch(e){
           return json({ok:false,error:"AUTO_SCHEDULE_STATUS_FAILED",message:String(e?.message||e).slice(0,500)},{status:e?.status||502});
+        }
+      }
+
+      if(url.pathname==="/api/admin/cron-test" && request.method==="POST"){
+        let runId=0;
+        const fakeEvent={scheduledTime:Date.now()};
+        try{
+          runId=await kbnCronRunStartV224(env,fakeEvent,"manual_test");
+          const result=await runScheduledKbnAutoDiscoveryOnly(env);
+          const createdCount=Number(result?.discovery?.created?.length||0);
+          await kbnCronRunFinishV224(env,runId,{status:"success",createdCount});
+          return json({ok:true,status:"success",created_count:createdCount,result});
+        }catch(e){
+          try{await kbnCronRunFinishV224(env,runId,{status:"failed",error:String(e?.message||e)})}catch{}
+          return json({ok:false,error:"CRON_TEST_FAILED",message:String(e?.message||e).slice(0,1000)},{status:500});
         }
       }
 
@@ -5744,7 +5819,12 @@ ${urls.map(x=>`  <url>
             auto_listing_times_jst:listingTimes,
             full_maintenance_time_jst:maintenanceTime
           });
-          return json(result);
+          let cloudflare_sync={ok:false,error:""};
+          try{cloudflare_sync=await kbnCloudflareSetSchedulesV225(env,result.crons)}
+          catch(syncErr){cloudflare_sync={ok:false,error:String(syncErr?.message||syncErr)}}
+          return json({...result,cloudflare_sync,message:cloudflare_sync.ok
+            ?"予約時間をGitHubへ保存し、Cloudflareの実Cron Triggerにも直接反映しました。"
+            :`${result.message} Cloudflare実Triggerの直接更新は失敗しました: ${cloudflare_sync.error}`});
         }catch(e){
           return json({
             ok:false,
