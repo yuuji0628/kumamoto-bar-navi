@@ -3233,7 +3233,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.17</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.18</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -3724,7 +3724,7 @@ html,body{max-width:100%;overflow-x:hidden}
       </div>
 
       <small style="display:block;margin:4px 0 8px;color:#9aa4af">
-        自動掲載は1日6回。下の6つすべて自由に変更できます。
+        自動掲載は1日6回。6つすべて変更できます。Cloudflare Free対策で同じ「分」の時刻は1つのCronにまとめます。
       </small>
 
       <div class="kbn-auto-times-v217">
@@ -3748,7 +3748,7 @@ html,body{max-width:100%;overflow-x:hidden}
             <option value="6">自動掲載 6</option>
           </select>
         </label>
-        <small>選んだ1回だけ、閉業確認・既存情報補完などの通常メンテナンスも実行します。</small>
+        <small>選んだ1回だけ、閉業確認・既存情報補完などの通常メンテナンスも実行します。<br>※6つすべて違う「分」（例 00/05/10/15/20/25）にするとFree枠のCron上限5を超えるため保存できません。</small>
       </div>
 
       <button type="button" id="autoScheduleSaveBtn" class="kbn-schedule-save-v217">予約時間を更新</button>
@@ -9615,9 +9615,14 @@ document.addEventListener("click",async(e)=>{
       six.textContent=`自動掲載：1日6回（${saved.join(" / ")}） / 通常メンテナンス：${savedMaintenance}`;
     }
   }catch(err){
+    const raw=String(err?.message||"UNKNOWN_ERROR");
+    let message=raw;
+    if(raw.includes("CLOUDFLARE_FREE_CRON_LIMIT_5_DISTINCT_MINUTES")){
+      message="Cloudflare FreeではCronは最大5個です。6つの時刻のうち、少なくとも2つは同じ「分」にしてください（例：00分に統一すると1個のCronで6回実行できます）。";
+    }
     if(status){
       status.dataset.state="error";
-      status.textContent=`更新できませんでした：${err?.message||"UNKNOWN_ERROR"}`;
+      status.textContent=`更新できませんでした：${message}`;
     }
   }finally{
     btn.disabled=false;
