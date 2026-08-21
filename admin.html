@@ -3283,7 +3283,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.41</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.42</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -3779,7 +3779,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div id="refreshExistingStatus" class="auto-discovery-status lead-smart-message"></div>
     <div id="repairExistingAreasStatus" class="auto-discovery-status lead-smart-message"></div>
-    <small class="version-note">ver2.41：管理メニューの「メンテナンス」が自動メンテナンスへ直接移動するよう修正しました。</small>
+    <small class="version-note">ver2.42：管理メニューの「メンテナンス」が自動メンテナンスへ直接移動するよう修正しました。</small>
   </div>
 
   
@@ -3788,13 +3788,13 @@ html,body{max-width:100%;overflow-x:hidden}
       <div class="lead-smart-icon">✓</div>
       <div>
         <h3>自動メンテナンス</h3>
-        <p>掲載後の情報補完・閉業確認・予約実行・通知をまとめて管理。</p>
+        <p>掲載中の店舗を20件ずつ順番に確認。次回は前回の続きから自動で進みます。</p>
       </div>
     </div>
     <div class="kbn-maintenance-grid">
-      <button type="button" id="refreshMissingInfoBtn">情報不足を補完</button>
-      <button type="button" id="checkClosedShopsBtn">閉業チェック</button>
-      <button type="button" id="refreshInstagramBtn">Instagram補完</button>
+      <button type="button" id="refreshMissingInfoBtn">情報不足を補完（20件）</button>
+      <button type="button" id="checkClosedShopsBtn">閉業チェック（20件）</button>
+      <button type="button" id="refreshInstagramBtn">Instagram補完（20件）</button>
     </div>
     <div class="kbn-schedule-note kbn-schedule-editor">
       <div class="kbn-schedule-title">
@@ -9545,23 +9545,18 @@ document.addEventListener("click",async(e)=>{
 
   if(e.target?.id==="refreshInstagramBtn"){
     const btn=e.target,st=document.getElementById("maintenanceStatus");
-    btn.disabled=true;btn.textContent="検索中...";
+    btn.disabled=true;btn.textContent="20店舗確認中...";
     try{
-      let after=0,checked=0,updated=0,candidates=0,loops=0;
-      while(loops<30){
-        const d=await api("/api/admin/leads/refresh-instagram",{
-          method:"POST",headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({limit:20,after_id:after})
-        });
-        checked+=Number(d.checked||0);
-        updated+=(d.updated||[]).length;
-        candidates+=(d.candidates||[]).length;
-        after=Number(d.next_after_id||after);
-        loops++;
-        if(st)st.textContent=`Instagram確認中… ${checked}店舗 / 自動保存 ${updated} / 要確認 ${candidates}`;
-        if(!d.has_more)break;
-      }
-      if(st)st.textContent=`Instagram補完完了：${checked}店舗確認 / ${updated}店舗を自動保存 / ${candidates}件は要確認`;
+      const d=await api("/api/admin/leads/refresh-instagram",{
+        method:"POST",headers:{"Content-Type":"application/json"},body:"{}"
+      });
+      const checked=Number(d.checked||0);
+      const updated=(d.updated||[]).length;
+      const candidates=(d.candidates||[]).length;
+      const tail=d.cycle_completed
+        ? ` / 全対象を一巡しました。次回は先頭から`
+        : ` / 次回は続きから`;
+      if(st)st.textContent=`Instagram補完：${checked}店舗確認 / ${updated}店舗を自動保存 / ${candidates}件は要確認${tail}`;
       await window.loadShops?.();
       await window.loadAutoListedShops?.();
     }catch(err){
@@ -9574,22 +9569,17 @@ document.addEventListener("click",async(e)=>{
 
   if(e.target?.id==="refreshMissingInfoBtn"){
     const btn=e.target,st=document.getElementById("maintenanceStatus");
-    btn.disabled=true;btn.textContent="補完中...";
+    btn.disabled=true;btn.textContent="20店舗確認中...";
     try{
-      let after=0,updated=0,checked=0,loops=0;
-      while(loops<30){
-        const d=await api("/api/admin/leads/refresh-missing",{
-          method:"POST",headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({limit:20,after_id:after})
-        });
-        checked+=Number(d.checked||0);
-        updated+=(d.updated||[]).length;
-        after=Number(d.next_after_id||after);
-        loops++;
-        if(st)st.textContent=`情報不足を確認中… ${checked}店舗確認 / ${updated}店舗補完`;
-        if(!d.has_more)break;
-      }
-      if(st)st.textContent=`情報不足チェック完了：${checked}店舗確認 / ${updated}店舗を補完`;
+      const d=await api("/api/admin/leads/refresh-missing",{
+        method:"POST",headers:{"Content-Type":"application/json"},body:"{}"
+      });
+      const checked=Number(d.checked||0);
+      const updated=(d.updated||[]).length;
+      const tail=d.cycle_completed
+        ? ` / 全対象を一巡しました。次回は先頭から`
+        : ` / 次回は続きから`;
+      if(st)st.textContent=`情報不足チェック：${checked}店舗確認 / ${updated}店舗を補完${tail}`;
       await window.loadKbnAlerts();
     }catch(err){
       if(st)st.textContent="情報補完に失敗: "+(err?.message||"");
@@ -9599,22 +9589,17 @@ document.addEventListener("click",async(e)=>{
 
   if(e.target?.id==="checkClosedShopsBtn"){
     const btn=e.target,st=document.getElementById("maintenanceStatus");
-    btn.disabled=true;btn.textContent="確認中...";
+    btn.disabled=true;btn.textContent="20店舗確認中...";
     try{
-      let after=0,checked=0,closed=0,loops=0;
-      while(loops<30){
-        const d=await api("/api/admin/leads/check-closed",{
-          method:"POST",headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({limit:20,after_id:after})
-        });
-        checked+=(d.checked||[]).length;
-        closed+=(d.closed||[]).length;
-        after=Number(d.next_after_id||after);
-        loops++;
-        if(st)st.textContent=`閉業チェック中… ${checked}店舗確認 / ${closed}件検出`;
-        if(!d.has_more)break;
-      }
-      if(st)st.textContent=`閉業チェック完了：${checked}店舗確認 / ${closed}件を通知`;
+      const d=await api("/api/admin/leads/check-closed",{
+        method:"POST",headers:{"Content-Type":"application/json"},body:"{}"
+      });
+      const checked=(d.checked||[]).length;
+      const closed=(d.closed||[]).length;
+      const tail=d.cycle_completed
+        ? ` / 掲載中店舗を一巡しました。次回は先頭から`
+        : ` / 次回は続きから`;
+      if(st)st.textContent=`閉業チェック：${checked}店舗確認 / ${closed}件を通知${tail}`;
       await window.loadKbnAlerts();
     }catch(err){
       if(st)st.textContent="閉業チェックに失敗: "+(err?.message||"");
