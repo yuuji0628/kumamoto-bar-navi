@@ -9,9 +9,9 @@
     "KBN_CONFIG_VERSION": "2.18",
     "KBN_FULL_MAINTENANCE_CRONS": "0 19 * * *",
     "KBN_FULL_MAINTENANCE_TIME_JST": "04:00",
-    "KBN_AUTO_ONLY_CRONS": "0 23 * * *|0 4 * * *|0 7 * * *|0 11 * * *|0 13 * * *",
-    "KBN_AUTO_LISTING_TIMES_JST": "04:00|08:00|13:00|16:00|20:00|22:00",
-    "KBN_SCHEDULE_UPDATED_AT": "2026-08-21T12:37:46.199Z"
+    "KBN_AUTO_ONLY_CRONS": "0 23 * * *|0 3 * * *|0 7 * * *|0 10 * * *|0 13 * * *",
+    "KBN_AUTO_LISTING_TIMES_JST": "04:00|08:00|12:00|16:00|19:00|22:00",
+    "KBN_SCHEDULE_UPDATED_AT": "2026-08-21T12:38:25.843Z"
   },
   "assets": {
     "directory": ".",
@@ -36,7 +36,7 @@
   ],
   "triggers": {
     "crons": [
-      "0 4,7,11,13,19,23 * * *"
+      "0 3,7,10,13,19,23 * * *"
     ]
   }
 }
