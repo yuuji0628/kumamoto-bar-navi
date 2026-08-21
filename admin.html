@@ -3215,6 +3215,7 @@ html,body{max-width:100%;overflow-x:hidden}
 .kbn-cron-status-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
 .kbn-cron-status-head b{color:#fff;font-size:.82rem}
 .kbn-cron-status-head button{border:1px solid #475462;background:#111a23;color:#dfe5eb;border-radius:9px;padding:8px 10px;font-weight:800}
+.kbn-cron-actions-v225{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.kbn-cron-actions-v225 button{min-height:42px;border-radius:10px;font-weight:900}.kbn-cron-test-btn{border:1px solid #8a6d21;background:#30270f;color:#f4c957}.kbn-cron-sync-btn{border:1px solid #475462;background:#111a23;color:#eef2f5}@media(max-width:640px){.kbn-cron-actions-v225{grid-template-columns:1fr}}
 .kbn-cron-status-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .kbn-cron-status-item{padding:10px;border:1px solid #2f3a45;border-radius:10px;background:#0e161f}
 .kbn-cron-status-item small{display:block;color:#88939e;font-size:.64rem;margin-bottom:4px}
@@ -3249,7 +3250,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.24</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.25</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -3366,7 +3367,7 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
 
   <div id="buttonHealthNote" class="version-note">
-    ver2.24：Cron稼働確認を追加・管理メニュー配置を修正
+    ver2.25：Cron稼働確認を追加・管理メニュー配置を修正
   </div>
 </section>
 
@@ -3751,7 +3752,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div id="refreshExistingStatus" class="auto-discovery-status lead-smart-message"></div>
     <div id="repairExistingAreasStatus" class="auto-discovery-status lead-smart-message"></div>
-    <small class="version-note">ver2.24：Cronの実稼働状態を確認できるようにし、管理メニュー配置を修正しました。</small>
+    <small class="version-note">ver2.25：Cronの実稼働状態を確認できるようにし、管理メニュー配置を修正しました。</small>
   </div>
 
   
@@ -3811,11 +3812,16 @@ html,body{max-width:100%;overflow-x:hidden}
         </div>
         <div class="kbn-cron-status-grid">
           <div class="kbn-cron-status-item"><small>GitHubに保存中</small><strong id="cronDesiredTimes">読み込み中...</strong></div>
-          <div class="kbn-cron-status-item"><small>現在Workerで有効</small><strong id="cronEffectiveTimes">読み込み中...</strong></div>
+          <div class="kbn-cron-status-item"><small>Worker環境変数</small><strong id="cronEffectiveTimes">読み込み中...</strong></div>
+          <div class="kbn-cron-status-item"><small>Cloudflare実Cron Trigger</small><strong id="cronActualTriggerTimes">読み込み中...</strong></div>
           <div class="kbn-cron-status-item"><small>通常メンテナンス</small><strong id="cronMaintenanceTime">-</strong></div>
           <div class="kbn-cron-status-item"><small>直近Cron実行</small><strong id="cronLastRun">-</strong></div>
         </div>
         <div id="cronRuntimeState" class="kbn-cron-state warn">現在の稼働状態を確認中...</div>
+        <div class="kbn-cron-actions-v225">
+          <button type="button" id="cronDirectSyncBtn" class="kbn-cron-sync-btn">Cloudflareへ再同期</button>
+          <button type="button" id="cronManualTestBtn" class="kbn-cron-test-btn">今すぐ自動掲載をテスト</button>
+        </div>
       </div>
 
       <small id="autoListingSixTimesStatus" style="display:block;margin-top:6px;color:#efc45a">
@@ -9761,7 +9767,7 @@ function kbnFormatJstDateV224(v){
 }
 
 window.loadCronRuntimeStatusV224=async function(){
-  const desired=$("cronDesiredTimes"), effective=$("cronEffectiveTimes"), maintenance=$("cronMaintenanceTime"), last=$("cronLastRun"), state=$("cronRuntimeState");
+  const desired=$("cronDesiredTimes"), effective=$("cronEffectiveTimes"), actual=$("cronActualTriggerTimes"), maintenance=$("cronMaintenanceTime"), last=$("cronLastRun"), state=$("cronRuntimeState");
   if(!state)return;
   state.className="kbn-cron-state warn";
   state.textContent="現在の稼働状態を確認中...";
@@ -9769,19 +9775,24 @@ window.loadCronRuntimeStatusV224=async function(){
     const d=await api("/api/admin/auto-schedule-status");
     const want=Array.isArray(d.desired?.auto_listing_times_jst)?d.desired.auto_listing_times_jst:[];
     const live=Array.isArray(d.effective?.auto_listing_times_jst)?d.effective.auto_listing_times_jst:[];
+    const trigger=Array.isArray(d.cloudflare?.times_jst)?d.cloudflare.times_jst:[];
     if(desired)desired.textContent=want.length?want.join(" / "):"取得できません";
     if(effective)effective.textContent=live.length?live.join(" / "):"取得できません";
-    if(maintenance)maintenance.textContent=`GitHub ${d.desired?.full_maintenance_time_jst||"-"} / 稼働中 ${d.effective?.full_maintenance_time_jst||"-"}`;
+    if(actual)actual.textContent=d.cloudflare?.error?`取得失敗：${d.cloudflare.error}`:(trigger.length?trigger.join(" / "):"Triggerなし");
+    if(maintenance)maintenance.textContent=`GitHub ${d.desired?.full_maintenance_time_jst||"-"} / Worker ${d.effective?.full_maintenance_time_jst||"-"}`;
     if(last){
       const r=d.last_run||null;
       last.textContent=r?`${kbnFormatJstDateV224(r.started_at||r.created_at)} / ${r.status||"-"}${r.created_count!=null?` / 新規${r.created_count}件`:""}`:"実行記録なし";
     }
     if(d.in_sync){
       state.className="kbn-cron-state ok";
-      state.textContent="✓ GitHub設定と現在稼働中のWorker設定が一致しています。";
+      state.textContent="✓ GitHub・Worker・Cloudflare実Cron Triggerがすべて一致しています。";
+    }else if(!d.trigger_in_sync){
+      state.className="kbn-cron-state ng";
+      state.textContent="⚠ Cloudflareの実Cron Triggerが設定と一致していません。『Cloudflareへ再同期』を押してください。";
     }else{
       state.className="kbn-cron-state ng";
-      state.textContent="⚠ GitHub設定と現在稼働中のWorker設定が一致していません。Cloudflareのデプロイ未反映の可能性があります。";
+      state.textContent="⚠ Worker環境変数がGitHub設定と一致していません。デプロイ完了を確認してください。";
     }
     if(d.last_run?.status==="failed"){
       state.className="kbn-cron-state ng";
@@ -9793,7 +9804,37 @@ window.loadCronRuntimeStatusV224=async function(){
   }
 };
 
-document.addEventListener("click",e=>{if(e.target?.id==="cronRuntimeRefreshBtn")window.loadCronRuntimeStatusV224?.()});
+async function kbnCronDirectSyncV225(){
+  const btn=$("cronDirectSyncBtn"), state=$("cronRuntimeState");
+  if(btn){btn.disabled=true;btn.textContent="再同期中..."}
+  try{
+    const times=[1,2,3,4,5,6].map(i=>String($("autoListingTime"+i)?.value||""));
+    const slot=Math.max(1,Math.min(6,Number($("autoMaintenanceSlot")?.value||1)));
+    await api("/api/admin/auto-schedule",{method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({auto_listing_times_jst:times,full_maintenance_time_jst:times[slot-1]||times[0]})});
+    if(state){state.className="kbn-cron-state ok";state.textContent="Cloudflareの実Cron Triggerへ再同期しました。"}
+    setTimeout(()=>window.loadCronRuntimeStatusV224?.(),700);
+  }catch(e){if(state){state.className="kbn-cron-state ng";state.textContent=`再同期に失敗：${e?.message||"UNKNOWN_ERROR"}`}}
+  finally{if(btn){btn.disabled=false;btn.textContent="Cloudflareへ再同期"}}
+}
+
+async function kbnCronManualTestV225(){
+  const btn=$("cronManualTestBtn"), state=$("cronRuntimeState");
+  if(!confirm("自動掲載処理を今すぐ1回テスト実行します。新しい店舗が見つかれば実際に掲載されます。実行しますか？"))return;
+  if(btn){btn.disabled=true;btn.textContent="テスト実行中..."}
+  try{
+    const d=await api("/api/admin/cron-test",{method:"POST"});
+    if(state){state.className="kbn-cron-state ok";state.textContent=`✓ テスト実行成功：新規掲載 ${Number(d.created_count||0)}件。Cron処理本体は正常です。`}
+    try{await window.loadShops?.()}catch{}
+    setTimeout(()=>window.loadCronRuntimeStatusV224?.(),500);
+  }catch(e){if(state){state.className="kbn-cron-state ng";state.textContent=`テスト実行失敗：${e?.message||"UNKNOWN_ERROR"}`}}
+  finally{if(btn){btn.disabled=false;btn.textContent="今すぐ自動掲載をテスト"}}
+}
+
+document.addEventListener("click",e=>{
+  if(e.target?.id==="cronRuntimeRefreshBtn")window.loadCronRuntimeStatusV224?.();
+  if(e.target?.id==="cronDirectSyncBtn")kbnCronDirectSyncV225();
+  if(e.target?.id==="cronManualTestBtn")kbnCronManualTestV225();
+});
 document.addEventListener("DOMContentLoaded",()=>setTimeout(()=>window.loadCronRuntimeStatusV224?.(),700));
 
 </script>
