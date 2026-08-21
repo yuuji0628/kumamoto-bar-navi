@@ -819,7 +819,7 @@ async function kbnUpdateAutoSchedule(env,scheduleInput){
   config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
   config.triggers.crons=crons;
   config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-  config.vars.KBN_CONFIG_VERSION="2.25";
+  config.vars.KBN_CONFIG_VERSION="2.29";
   config.vars.KBN_FULL_MAINTENANCE_CRONS=fullCrons.join("|");
   config.vars.KBN_FULL_MAINTENANCE_TIME_JST=maintenanceTime;
   config.vars.KBN_AUTO_ONLY_CRONS=autoOnlyCrons.join("|");
@@ -834,7 +834,7 @@ async function kbnUpdateAutoSchedule(env,scheduleInput){
       method:"PUT",
       headers:{"content-type":"application/json"},
       body:JSON.stringify({
-        message:`admin: set auto listing ${sortedListingTimes.join(" / ")} JST; maintenance ${maintenanceTime} (v2.25 direct schedule sync)`,
+        message:`admin: set auto listing ${sortedListingTimes.join(" / ")} JST; maintenance ${maintenanceTime} (v2.29 receipt monitor)`,
         content:kbnUtf8ToBase64(content),
         sha,
         branch:c.branch
@@ -857,6 +857,56 @@ async function kbnUpdateAutoSchedule(env,scheduleInput){
   };
 }
 
+
+
+async function ensureKbnCronReceiptsTableV229(env){
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS kbn_cron_receipts(
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      scheduled_time TEXT,
+      scheduled_jst TEXT,
+      cron_expression TEXT,
+      received_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      handler_version TEXT,
+      note TEXT
+    )
+  `).run();
+}
+
+async function kbnCronReceiptV229(env,event,note="received"){
+  await ensureKbnCronReceiptsTableV229(env);
+  const scheduledMs=Number(event?.scheduledTime||Date.now());
+  const scheduledIso=new Date(scheduledMs).toISOString();
+  const scheduledJst=kbnScheduledJstTimeV218(event);
+  const cronExpression=String(event?.cron||"");
+  await env.DB.prepare(`
+    INSERT INTO kbn_cron_receipts(
+      scheduled_time,scheduled_jst,cron_expression,received_at,handler_version,note
+    ) VALUES(?,?,?,CURRENT_TIMESTAMP,'2.29',?)
+  `).bind(scheduledIso,scheduledJst,cronExpression,String(note||"received")).run();
+}
+
+async function kbnLastCronReceiptV229(env){
+  await ensureKbnCronReceiptsTableV229(env);
+  return await env.DB.prepare(`
+    SELECT id,scheduled_time,scheduled_jst,cron_expression,received_at,handler_version,note
+    FROM kbn_cron_receipts
+    ORDER BY id DESC LIMIT 1
+  `).first();
+}
+
+function kbnSchedulePropagationStateV229(updatedAt){
+  const raw=String(updatedAt||"").trim();
+  if(!raw)return {within_window:false,minutes_since:null};
+  const ms=Date.parse(raw);
+  if(!Number.isFinite(ms))return {within_window:false,minutes_since:null};
+  const minutes=Math.max(0,(Date.now()-ms)/60000);
+  return {
+    within_window:minutes<15,
+    minutes_since:Math.round(minutes*10)/10,
+    ready_after_iso:new Date(ms+15*60000).toISOString()
+  };
+}
 
 async function ensureKbnCronRunsTableV224(env){
   await env.DB.prepare(`
@@ -5817,6 +5867,9 @@ ${urls.map(x=>`  <url>
           const effective=kbnEffectiveScheduleV224(env);
           let lastRun=null;
           try{lastRun=await kbnLastCronRunV224(env)}catch(e){console.error("cron history read failed",e)}
+          let lastReceipt=null;
+          try{lastReceipt=await kbnLastCronReceiptV229(env)}catch(e){console.error("cron receipt read failed",e)}
+          const propagation=kbnSchedulePropagationStateV229(config?.vars?.KBN_SCHEDULE_UPDATED_AT);
           let lastScheduled=null,lastManual=null;
           try{
             const auto=await kbnLastCronRunV224(env,"auto_listing");
@@ -5845,6 +5898,8 @@ ${urls.map(x=>`  <url>
             },
             effective,
             cloudflare,
+            propagation,
+            last_receipt:lastReceipt||null,
             last_run:lastRun||null,
             last_scheduled_run:lastScheduled||null,
             last_manual_run:lastManual||null
@@ -7182,9 +7237,18 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
 
   async scheduled(event, env, ctx){
     const fullMaintenance=kbnIsFullMaintenanceEventV218(env,event);
-    ctx.waitUntil((async()=>{
+    const task=(async()=>{
       let runId=0;
       const runType=fullMaintenance?"maintenance":"auto_listing";
+
+      // v2.29: scheduled() に入った瞬間の受信記録を、本処理より先に保存。
+      // これが残れば Cloudflare -> scheduled() までは到達したと判断できる。
+      try{
+        await kbnCronReceiptV229(env,event,fullMaintenance?"maintenance_received":"auto_listing_received");
+      }catch(receiptErr){
+        console.error("scheduled receipt log failed",receiptErr);
+      }
+
       try{
         runId=await kbnCronRunStartV224(env,event,runType);
         const result=fullMaintenance
@@ -7196,6 +7260,11 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
         console.error(fullMaintenance?"scheduled KBN maintenance failed":"scheduled KBN auto discovery only failed",e);
         try{await kbnCronRunFinishV224(env,runId,{status:"failed",error:String(e?.message||e)})}catch(logErr){console.error("cron run log failed",logErr)}
       }
-    })());
+    })();
+
+    // Cloudflare は scheduled() が返す Promise も待つため、明示的に await する。
+    // waitUntil も併用して Past Events 上で失敗が見えやすい形にする。
+    ctx.waitUntil(task);
+    await task;
   }
 };
