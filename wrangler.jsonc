@@ -6,12 +6,12 @@
   "vars": {
     "CLOUDFLARE_ACCOUNT_ID": "5f2c9effa39dd7b9001b18cf64d65836",
     "CLOUDFLARE_WORKER_NAME": "kumamoto-bar-navi",
-    "KBN_CONFIG_VERSION": "2.24",
+    "KBN_CONFIG_VERSION": "2.25",
     "KBN_FULL_MAINTENANCE_CRONS": "0 19 * * *",
     "KBN_FULL_MAINTENANCE_TIME_JST": "04:00",
     "KBN_AUTO_ONLY_CRONS": "0 23 * * *|0 3 * * *|0 7 * * *|0 10 * * *|35 14 * * *",
     "KBN_AUTO_LISTING_TIMES_JST": "04:00|08:00|12:00|16:00|19:00|23:35",
-    "KBN_SCHEDULE_UPDATED_AT": "2026-08-21T14:32:27.259Z"
+    "KBN_SCHEDULE_UPDATED_AT": "2026-08-21T16:03:45.296Z"
   },
   "assets": {
     "directory": ".",
