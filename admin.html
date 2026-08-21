@@ -3233,7 +3233,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.20</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.21</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -3241,21 +3241,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 
 
-<nav class="admin-tabs admin-tabs-v108">
-  <button data-tab="shops" class="active">店舗</button>
-  <button type="button" data-tab="leads">開拓</button>
-  <button data-tab="subs">申込み <span id="subTabBadge" class="tab-notify-badge" hidden>0</span></button>
-  <details class="admin-more-menu">
-    <summary>その他</summary>
-    <div class="admin-more-menu-panel">
-      <button data-tab="jobs">求人</button>
-      <button data-tab="ownerreq">店舗申請 <span id="ownerReqTabBadge" class="tab-notify-badge" hidden>0</span></button>
-      <button data-tab="analytics">アクセス</button>
-      <button data-tab="members">無料会員</button>
-      <button data-tab="siteupdate">サイト更新</button>
-</div>
-  </details>
-</nav>
+<!-- 上部タブは廃止し、下の管理メニューへ統合 -->
 
 <div class="ops-status-strip">
   <div><span>公開店舗 <small style="display:inline;color:#6f7a86;font-size:.58rem">（現在公開中）</small></span><strong id="opsShopCount">-</strong></div>
@@ -3269,7 +3255,8 @@ html,body{max-width:100%;overflow-x:hidden}
 <section class="admin-dashboard admin-dashboard-v108" id="adminDashboard">
   <div class="dashboard-head dashboard-head-mini">
     <div>
-      <b>よく使う操作</b>
+      <b>管理メニュー</b>
+      <small style="display:block;margin-top:6px;color:#92a0af">上部タブの代わりに、ここから各管理機能へ移動できます。</small>
     </div>
   </div>
 
@@ -3277,8 +3264,8 @@ html,body{max-width:100%;overflow-x:hidden}
     <button type="button" class="dashboard-primary-card dashboard-auto-discover-card" data-go-tab="leads" data-open-lead-auto="1">
       <span class="dashboard-icon">⚡</span>
       <span class="dashboard-copy">
-        <b>自動開拓</b>
-        <small>Google優先でBAR候補を自動検索・掲載</small>
+        <b>BAR開拓</b>
+        <small>自動開拓・メンテナンス・手動検索</small>
       </span>
       <span class="dashboard-arrow">›</span>
     </button>
@@ -3295,7 +3282,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <button type="button" class="dashboard-primary-card" data-go-tab="shops">
       <span class="dashboard-icon">🏪</span>
       <span class="dashboard-copy">
-        <b>店舗を管理</b>
+        <b>店舗管理</b>
         <small><strong id="dashShopCount">-</strong> 店舗</small>
       </span>
       <span class="dashboard-arrow">›</span>
@@ -3304,7 +3291,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <button type="button" class="dashboard-primary-card" data-go-tab="subs">
       <span class="dashboard-icon">📥</span>
       <span class="dashboard-copy">
-        <b>申込み・申請を確認</b>
+        <b>申込み確認</b>
         <small>未対応 <strong id="dashSubCount">-</strong> 件</small>
       </span>
       <span class="dashboard-arrow">›</span>
@@ -3312,12 +3299,13 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
 
   <details class="dashboard-more">
-    <summary>その他の管理メニュー</summary>
+    <summary>追加メニューを開く</summary>
     <div class="dashboard-more-grid">
+      <button type="button" data-go-tab="ownerreq">店舗申請</button>
       <button type="button" data-go-tab="jobs">求人管理</button>
       <button type="button" data-go-tab="members">無料会員管理</button>
-      <button type="button" data-go-tab="ownerreq">店舗申請</button>
       <button type="button" data-go-tab="analytics">アクセス確認</button>
+      <button type="button" data-go-tab="siteupdate">サイト更新</button>
     </div>
   </details>
 
@@ -3328,7 +3316,7 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
 
   <div id="buttonHealthNote" class="version-note">
-    ver1.79：よく使う操作の先頭に自動開拓を配置
+    ver2.21：上部タブを廃止し、管理メニューに集約
   </div>
 </section>
 
@@ -3709,7 +3697,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div id="refreshExistingStatus" class="auto-discovery-status lead-smart-message"></div>
     <div id="repairExistingAreasStatus" class="auto-discovery-status lead-smart-message"></div>
-    <small class="version-note">ver2.20：よく使う操作に「メンテナンス」を追加しました。</small>
+    <small class="version-note">ver2.21：上部タブを廃止し、管理メニューへ統合しました。</small>
   </div>
 
   
