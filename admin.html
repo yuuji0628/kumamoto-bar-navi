@@ -3236,7 +3236,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.30</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.33</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -3738,7 +3738,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div id="refreshExistingStatus" class="auto-discovery-status lead-smart-message"></div>
     <div id="repairExistingAreasStatus" class="auto-discovery-status lead-smart-message"></div>
-    <small class="version-note">ver2.30：予約時間は保存するだけで即反映。Cronの複雑な設定・テスト画面を廃止しました。</small>
+    <small class="version-note">ver2.33：予約時間は保存するだけで即反映。Cronの複雑な設定・テスト画面を廃止しました。</small>
   </div>
 
   
@@ -3792,7 +3792,11 @@ html,body{max-width:100%;overflow-x:hidden}
       <button type="button" id="autoScheduleSaveBtn" class="kbn-schedule-save-v217">予約時間を更新</button>
       <small id="autoScheduleStatus">現在の予約時間を読み込み中...</small>
       <div class="kbn-simple-schedule-ok" style="margin-top:10px;padding:10px 12px;border:1px solid #315b45;border-radius:12px;background:#0d1b15;color:#7ee2a8;font-size:.78rem;line-height:1.6">
-        ✓ 時間を保存するだけでOK。デプロイやCron再同期は不要です。
+        ✓ 時間を保存するだけでOK。遅れても5分以内なら自動で取りこぼしを補完します。
+      </div>
+
+      <div id="lastAutomaticRunStatus" style="margin-top:10px;padding:10px 12px;border:1px solid #394653;border-radius:12px;background:#101820;color:#d9e1e8;font-size:.78rem;line-height:1.55">
+        最終自動実行：読み込み中...
       </div>
 
       <small id="autoListingSixTimesStatus" style="display:block;margin-top:6px;color:#efc45a">
@@ -9597,6 +9601,31 @@ function kbnNormalizeAdminTimeV230(v){
   if(h<0||h>23||mi<0||mi>59)return "";
   return `${String(h).padStart(2,"0")}:${String(mi).padStart(2,"0")}`;
 }
+
+function kbnFormatLastAutomaticRunV233(run){
+  if(!run)return "最終自動実行：まだ記録がありません";
+  const raw=String(run.finished_at||run.started_at||"").trim();
+  let when="日時不明";
+  if(raw){
+    try{
+      const iso=/Z$|[+-]\d\d:\d\d$/.test(raw)?raw:raw.replace(" ","T")+"Z";
+      const d=new Date(iso);
+      if(!Number.isNaN(d.getTime())){
+        when=new Intl.DateTimeFormat("ja-JP",{
+          timeZone:"Asia/Tokyo",
+          month:"2-digit",day:"2-digit",
+          hour:"2-digit",minute:"2-digit",second:"2-digit",
+          hour12:false
+        }).format(d);
+      }
+    }catch{}
+  }
+  const status=String(run.status||"").toLowerCase();
+  const label=status==="success"?"成功":status==="failed"?"失敗":status||"不明";
+  const created=Number(run.created_count||0);
+  return `最終自動実行：${when} / ${label} / 新規${created}件`;
+}
+
 async function kbnLoadSimpleScheduleV230(){
   const status=document.getElementById("autoScheduleStatus");
   try{
@@ -9611,6 +9640,13 @@ async function kbnLoadSimpleScheduleV230(){
     if(select)select.value=String(idx+1);
     kbnRefreshMaintenanceOptionsV217();
     if(status){status.dataset.state="ok";status.textContent=`現在：自動掲載 ${times.join(" / ")} ｜ 通常メンテナンス ${mt}`;}
+    const lastRunEl=document.getElementById("lastAutomaticRunStatus");
+    if(lastRunEl){
+      lastRunEl.textContent=kbnFormatLastAutomaticRunV233(d.last_automatic_run||null);
+      const st=String(d.last_automatic_run?.status||"").toLowerCase();
+      lastRunEl.style.borderColor=st==="success"?"#315b45":st==="failed"?"#7d3535":"#394653";
+      lastRunEl.style.color=st==="success"?"#7ee2a8":st==="failed"?"#ff9b9b":"#d9e1e8";
+    }
     const six=document.getElementById("autoListingSixTimesStatus");
     if(six)six.textContent=`自動掲載：1日6回（${times.join(" / ")}） / 通常メンテナンス：${mt}`;
   }catch(e){if(status){status.dataset.state="error";status.textContent=`予約時間を読み込めませんでした：${e?.message||"UNKNOWN_ERROR"}`;}}
