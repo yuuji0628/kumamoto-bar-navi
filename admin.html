@@ -3252,7 +3252,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.27</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.28</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -3822,7 +3822,7 @@ html,body{max-width:100%;overflow-x:hidden}
         </div>
         <div id="cronRuntimeState" class="kbn-cron-state warn">現在の稼働状態を確認中...</div>
         <div class="kbn-cron-diag-v226">
-          <h4>🔎 自動掲載の診断 <small style="display:block;color:#8f99a4;font-size:.72rem;margin-top:4px">v2.27：Cloudflare Free枠の50 subrequests上限を超えないよう自動開拓を小分け実行します。</small></h4>
+          <h4>🔎 自動掲載の診断 <small style="display:block;color:#8f99a4;font-size:.72rem;margin-top:4px">v2.28：重複店を詳細取得前に除外し、未開拓エリア・新規候補を優先して探します。</small></h4>
           <div class="kbn-cron-diag-grid-v226">
             <div class="kbn-cron-diag-card-v226"><small>検索ペア数</small><strong id="cronDiagPairs">-</strong></div>
             <div class="kbn-cron-diag-card-v226"><small>候補取得</small><strong id="cronDiagSources">-</strong></div>
@@ -3830,6 +3830,7 @@ html,body{max-width:100%;overflow-x:hidden}
             <div class="kbn-cron-diag-card-v226"><small>新規掲載</small><strong id="cronDiagCreated">-</strong></div>
           </div>
           <div id="cronDiagReasons" class="kbn-cron-reasons-v226">直近の実行後に、候補が除外された理由を表示します。</div>
+          <div id="cronDiagExamples" class="kbn-cron-reasons-v226" style="margin-top:8px">除外された店舗例もここに表示します。</div>
         </div>
         <div class="kbn-cron-actions-v225">
           <button type="button" id="cronDirectSyncBtn" class="kbn-cron-sync-btn">Cloudflareへ再同期</button>
@@ -9809,9 +9810,17 @@ window.loadCronRuntimeStatusV224=async function(){
     if($("cronDiagReasons")){
       const rs=Array.isArray(diag.rejection_reasons)?diag.rejection_reasons:[];
       const errors=Array.isArray(diag.source_errors)?diag.source_errors:[];
+      const scanned=Number(diag.candidate_scan_count||0);
+      const details=Number(diag.detail_checks||0);
       $("cronDiagReasons").textContent=rs.length
-        ? `主な除外理由：${rs.map(x=>`${x.reason} ${x.count}件`).join(" / ")}${errors.length?` ｜ 検索エラー ${errors.length}件`:""}`
-        : (diag.searched_pairs!=null?"除外理由の記録はありません。":"直近の実行後に診断結果を表示します。");
+        ? `主な除外理由：${rs.map(x=>`${x.reason} ${x.count}件`).join(" / ")}${scanned?` ｜ 候補確認 ${scanned}件`:""}${details?` ｜ Details取得 ${details}件`:""}${errors.length?` ｜ 検索エラー ${errors.length}件`:""}`
+        : (diag.searched_pairs!=null?`除外理由の記録はありません。${scanned?` 候補確認 ${scanned}件。`:""}`:"直近の実行後に診断結果を表示します。");
+    }
+    if($("cronDiagExamples")){
+      const examples=Array.isArray(diag.rejected_examples)?diag.rejected_examples:[];
+      $("cronDiagExamples").textContent=examples.length
+        ? `除外例：${examples.map(x=>`${x.name}［${x.reason}］`).join(" / ")}`
+        : (diag.searched_pairs!=null?"除外店舗例はありません。":"除外された店舗例もここに表示します。");
     }
     if(d.in_sync){
       state.className="kbn-cron-state ok";
