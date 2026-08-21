@@ -933,12 +933,26 @@ function kbnDiscoveryDiagnosticV226(result){
     for(const reason of raw)reasonCounts[reason]=(reasonCounts[reason]||0)+1;
   }
   const topReasons=Object.entries(reasonCounts).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([reason,count])=>({reason,count}));
+  const rejectedExamples=[];
+  const seenExamples=new Set();
+  for(const r of rejected){
+    const name=String(r?.name||"").trim();
+    const reason=String(r?.reason||"UNKNOWN").trim();
+    const key=`${name}|${reason}`;
+    if(!name||seenExamples.has(key))continue;
+    seenExamples.add(key);
+    rejectedExamples.push({name,reason,source:String(r?.source||"")});
+    if(rejectedExamples.length>=8)break;
+  }
   return {
     searched_pairs:searched.length,
     raw_google_found:rawGoogle,
     source_found:sourceFound,
+    candidate_scan_count:searched.reduce((n,s)=>n+Number(s?.candidate_scan_count||0),0),
+    detail_checks:searched.reduce((n,s)=>n+Number(s?.detail_checks||0),0),
     rejected_total:rejected.length,
     rejection_reasons:topReasons,
+    rejected_examples:rejectedExamples,
     created_count:Array.isArray(d.created)?d.created.length:0,
     passes:Number(d.passes||d.pass_stats?.length||0),
     source_errors:searched.filter(s=>s?.error).slice(0,10).map(s=>({area:s.area,type:s.type,error:s.error}))
@@ -1612,7 +1626,7 @@ async function ownerShop(request,env){
 
 
 const KBN_AREAS=["熊本市", "八代市", "人吉市", "荒尾市", "水俣市", "玉名市", "山鹿市", "菊池市", "宇土市", "上天草市", "宇城市", "阿蘇市", "天草市", "合志市", "美里町", "玉東町", "南関町", "長洲町", "和水町", "大津町", "菊陽町", "南小国町", "小国町", "産山村", "高森町", "西原村", "南阿蘇村", "御船町", "嘉島町", "益城町", "甲佐町", "山都町", "氷川町", "芦北町", "津奈木町", "錦町", "多良木町", "湯前町", "水上村", "相良村", "五木村", "山江村", "球磨村", "あさぎり町", "苓北町"];
-const KBN_LEAD_TYPES=[["bar", "BAR"], ["darts", "ダーツバー"], ["karaoke", "カラオケバー"], ["snack", "スナック"], ["lounge", "ラウンジ"], ["girls", "ガールズバー"], ["shot", "ショットバー"], ["sports", "スポーツバー"], ["wine", "ワインバー"], ["beer", "ビアバー"], ["cocktail", "カクテルバー"], ["music", "ミュージックバー"], ["shisha", "シーシャバー"], ["concept", "コンセプトバー"]];
+const KBN_LEAD_TYPES=[["bar", "BAR"], ["darts", "ダーツバー"], ["karaoke", "カラオケバー"], ["snack", "スナック"], ["lounge", "ラウンジ"], ["girls", "ガールズバー"], ["shot", "ショットバー"], ["sports", "スポーツバー"], ["wine", "ワインバー"], ["beer", "ビアバー"], ["cocktail", "カクテルバー"], ["music", "ミュージックバー"], ["shisha", "シーシャバー"], ["concept", "コンセプトバー"], ["cafebar", "カフェバー"], ["pub", "パブ"], ["night", "ナイトバー"], ["standing", "立ち飲みバー"], ["craft", "クラフトビール"], ["whisky", "ウイスキーバー"]];
 
 async function ensureLeadDiscoveryTables(env){
   await env.DB.prepare(`
@@ -1706,10 +1720,26 @@ async function autoDiscoveryPairs(env,limit=4){
     FROM lead_discovery_runs GROUP BY area,lead_type
   `).all();
   const m=new Map((r.results||[]).map(x=>[`${x.area}||${x.lead_type}`,x.last_searched||""]));
+
+  // v2.28: 掲載数が少ないエリアを優先しつつ、同じ検索ペアの連続実行を避ける。
+  let areaCountRows=[];
+  try{
+    const c=await env.DB.prepare(`SELECT area,COUNT(*) shop_count FROM shops WHERE is_published=1 GROUP BY area`).all();
+    areaCountRows=c.results||[];
+  }catch{}
+  const areaCounts=new Map(areaCountRows.map(x=>[String(x.area||""),Number(x.shop_count||0)]));
+
   const p=[];
   for(const area of KBN_AREAS)for(const [type,label] of KBN_LEAD_TYPES)
-    p.push({area,type,label,last:m.get(`${area}||${type}`)||""});
-  p.sort((a,b)=>(!a.last&&b.last)?-1:(a.last&&!b.last)?1:String(a.last).localeCompare(String(b.last)));
+    p.push({area,type,label,last:m.get(`${area}||${type}`)||"",shop_count:areaCounts.get(area)||0});
+
+  p.sort((a,b)=>{
+    // 未検索を優先。同条件なら掲載数の少ないエリア、その後に最終検索が古い順。
+    if(!a.last&&b.last)return -1;
+    if(a.last&&!b.last)return 1;
+    if(a.shop_count!==b.shop_count)return a.shop_count-b.shop_count;
+    return String(a.last).localeCompare(String(b.last));
+  });
   return p.slice(0,Math.max(1,Math.min(Number(limit)||4,40)));
 }
 
@@ -3547,10 +3577,14 @@ function autoListingBarStrength({name="",genre="",categories=[],amenity=""}={}){
     "不動産","建設","学校","塾","コンビニ","スーパー"
   ];
 
-  if(strong.some(x=>text.includes(x)))score+=3;
+  const strongHit=strong.some(x=>text.includes(x));
+  if(strongHit)score+=3;
   if(/catering\.(bar|pub)/.test(text))score+=3;
   if(/^(bar|pub|nightclub|karaoke_box)$/.test(String(amenity||"")))score+=3;
-  if(bad.some(x=>text.includes(x)))score-=5;
+
+  // v2.28: "Cafe Bar" やフード提供のあるBARまで cafe/restaurant の語だけで落とさない。
+  // BAR系シグナルが一切ない場合だけ除外方向へ強く寄せる。
+  if(!strongHit && bad.some(x=>text.includes(x)))score-=5;
 
   return score;
 }
@@ -3682,8 +3716,10 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
     // Google + 事前取得したGeoapify/OSMを使い、1 invocation 50 subrequests以内に収める。
     const fsqSearch={ok:false,configured:fsqConfigured,results:[],error:"FOURSQUARE_SKIPPED_FREE_SAFE"};
 
+    // v2.28: 上位4件だけでは既存店に偏るため、最大10件まで候補を見る。
+    // 重複はPlace Details取得前に落とすので、subrequestは増えにくい。
     const googleCandidates=googleSearch.ok
-      ? (googleSearch.places||[]).filter(googlePlaceLooksLikeBar).slice(0,4)
+      ? (googleSearch.places||[]).filter(googlePlaceLooksLikeBar).slice(0,10)
       : [];
 
     const fsqCandidates=fsqSearch.ok
@@ -3730,6 +3766,8 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
     ).bind(pair.area,pair.type).run();
 
     let made=0;
+    let detailChecks=0;
+    const detailCheckLimit=Math.max(2,Math.min(4,Number(perPairLimit||2)+2));
 
     // --------------------------------------------------------
     // 1) Google candidates first
@@ -3745,8 +3783,23 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
         continue;
       }
 
-      // 候補として通った店舗だけPlace Detailsを取得（コスト節約）
-      const gDetails=await googlePlaceDetails(env,g.id);
+      // v2.28: Googleの基本情報だけで既存店と分かる候補はDetails取得前に除外。
+      // これによりDUPLICATEが多い回でもFree枠のsubrequestを浪費しない。
+      if(autoListingDuplicateScore(existing,{name:gName,address:gAddress,phone:"",instagram:""})){
+        rejected.push({name:gName,reason:"DUPLICATE_EARLY",source:"google_places"});
+        continue;
+      }
+      if(autoListingDuplicateScore(deletedHistory,{name:gName,address:gAddress,phone:"",instagram:""})){
+        rejected.push({name:gName,reason:"DELETED_HISTORY_EARLY",source:"google_places"});
+        continue;
+      }
+
+      // 新規候補だけPlace Detailsを少量取得。上限到達後はText Search情報で判定を続行する。
+      let gDetails={ok:false,place:null,error:"DETAIL_BUDGET_SKIPPED"};
+      if(detailChecks<detailCheckLimit){
+        detailChecks++;
+        gDetails=await googlePlaceDetails(env,g.id);
+      }
       const gp=gDetails.ok&&gDetails.place?gDetails.place:g;
       gName=t(googlePlaceName(gp)||gName,150);
       gAddress=t(googlePlaceAddress(gp)||gAddress,500);
@@ -3827,7 +3880,8 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
         area,
         address,
         genre,
-        categories:googlePlaceTypes(g),
+        // v2.28: 検索カテゴリ自体も補助シグナルとして利用（Google候補は既にBAR系判定済み）。
+        categories:[...googlePlaceTypes(g),pair.label,pair.type],
         amenity:"",
         phone,
         website,
@@ -3938,6 +3992,12 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
         public_url:`${origin}/shop.html?slug=${encodeURIComponent(slug)}`
       });
       made++;
+    }
+
+    // v2.28 診断用: 実際にDetailsへ進んだ件数を記録。
+    if(searched.length){
+      searched[searched.length-1].detail_checks=detailChecks;
+      searched[searched.length-1].candidate_scan_count=googleCandidates.length;
     }
 
     // --------------------------------------------------------
@@ -4688,6 +4748,7 @@ async function runScheduledKbnMaintenance(env){
 }
 
 
+// KBN v2.28: 重複をDetails前に除外し、新規候補探索を強化。
 // KBN v2.27: Cloudflare Workers Free 50 subrequests/invocation 対策。
 // KBN v2.15: 追加Cronでは「自動掲載」に関係する処理だけを実行。
 // 既存店舗の情報補完・画像補完・Instagram補完・閉業チェックは実行しない。
@@ -4708,7 +4769,7 @@ async function runScheduledKbnAutoDiscoveryOnly(env){
       env,
       fakeRequest,
       remaining,
-      6,
+      8,
       2
     );
 
