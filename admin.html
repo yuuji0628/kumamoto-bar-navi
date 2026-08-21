@@ -3233,7 +3233,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.22</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.23</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -3256,7 +3256,7 @@ html,body{max-width:100%;overflow-x:hidden}
   <div class="dashboard-head dashboard-head-mini">
     <div>
       <b>管理メニュー</b>
-      <small style="display:block;margin-top:6px;color:#92a0af">上部タブの代わりに、ここから各管理機能へ移動できます。</small>
+      <small style="display:block;margin-top:6px;color:#92a0af">上部タブの代わりに、ここからすべての管理機能へ移動できます。</small>
     </div>
   </div>
 
@@ -3316,14 +3316,32 @@ html,body{max-width:100%;overflow-x:hidden}
     </button>
   </div>
 
-  <details class="dashboard-more">
-    <summary>その他のメニューを開く</summary>
-    <div class="dashboard-more-grid">
-      <button type="button" data-go-tab="ownerreq">店舗申請</button>
-      <button type="button" data-go-tab="analytics">アクセス確認</button>
-      <button type="button" data-go-tab="siteupdate">サイト更新</button>
-    </div>
-  </details>
+    <button type="button" class="dashboard-primary-card" data-go-tab="ownerreq">
+      <span class="dashboard-icon">📝</span>
+      <span class="dashboard-copy">
+        <b>店舗申請</b>
+        <small>店舗からの申請内容を確認</small>
+      </span>
+      <span class="dashboard-arrow">›</span>
+    </button>
+
+    <button type="button" class="dashboard-primary-card" data-go-tab="analytics">
+      <span class="dashboard-icon">📊</span>
+      <span class="dashboard-copy">
+        <b>アクセス確認</b>
+        <small>閲覧数やクリック数を確認</small>
+      </span>
+      <span class="dashboard-arrow">›</span>
+    </button>
+
+    <button type="button" class="dashboard-primary-card" data-go-tab="siteupdate">
+      <span class="dashboard-icon">🔄</span>
+      <span class="dashboard-copy">
+        <b>サイト更新</b>
+        <small>GitHub・反映状況を確認</small>
+      </span>
+      <span class="dashboard-arrow">›</span>
+    </button>
 
   <div class="dashboard-status-line">
     <span>未対応申込み <b id="opsSubCount">-</b></span>
@@ -3332,7 +3350,7 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
 
   <div id="buttonHealthNote" class="version-note">
-    ver2.22：求人・会員を管理メニューへ追加、店舗一覧は3件表示
+    ver2.23：管理メニューに全項目を常時表示
   </div>
 </section>
 
@@ -3717,7 +3735,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div id="refreshExistingStatus" class="auto-discovery-status lead-smart-message"></div>
     <div id="repairExistingAreasStatus" class="auto-discovery-status lead-smart-message"></div>
-    <small class="version-note">ver2.22：管理メニューに求人・会員を追加し、店舗一覧は3件表示にしました。</small>
+    <small class="version-note">ver2.23：その他メニューを廃止し、全管理項目を最初から表示するようにしました。</small>
   </div>
 
   
