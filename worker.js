@@ -3678,16 +3678,12 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
       ? await googlePlacesTextSearch(env,{query,pageSize:20})
       : {ok:false,configured:false,places:[],error:"GOOGLE_PLACES_NOT_CONFIGURED"};
 
-    const fsqSearch=fsqConfigured
-      ? await foursquareSearch(env,{
-          query:pair.label||"BAR",
-          near:[pair.area,"熊本県","日本"].filter(Boolean).join(", "),
-          limit:20
-        })
-      : {ok:false,configured:false,results:[],error:"FOURSQUARE_NOT_CONFIGURED"};
+    // v2.27 Free枠対策: ペアごとのFoursquare外部fetchは停止。
+    // Google + 事前取得したGeoapify/OSMを使い、1 invocation 50 subrequests以内に収める。
+    const fsqSearch={ok:false,configured:fsqConfigured,results:[],error:"FOURSQUARE_SKIPPED_FREE_SAFE"};
 
     const googleCandidates=googleSearch.ok
-      ? (googleSearch.places||[]).filter(googlePlaceLooksLikeBar)
+      ? (googleSearch.places||[]).filter(googlePlaceLooksLikeBar).slice(0,4)
       : [];
 
     const fsqCandidates=fsqSearch.ok
@@ -3862,17 +3858,9 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
         continue;
       }
 
-      const webMeta=website?await fetchOfficialWebsiteMetadata(website):
-        {ok:false,price:{min:null,max:null},hours:"",holiday:"",features:"",instagram:""};
-
-      if(!instagram && webMeta.instagram)instagram=webMeta.instagram;
-      if(!instagram){
-        const ig=await discoverInstagramForShop(env,{name:gName,area,website,existing:""});
-        if(ig?.instagram && Number(ig.score||0)>=90){
-          instagram=ig.instagram;
-          sourceKind+=`+instagram:${ig.source}`;
-        }
-      }
+      // v2.27 Free枠対策: 自動掲載の同一invocation内では公式サイト/Instagramの追加fetchをしない。
+      // まず掲載を成立させ、情報補完は通常メンテナンス側で少量ずつ行う。
+      const webMeta={ok:false,price:{min:null,max:null},hours:"",holiday:"",features:"",instagram:""};
 
       const googlePrice=googlePriceInfo(gp);
       let sourceMin=googlePrice.min,sourceMax=googlePrice.max;
@@ -3975,10 +3963,7 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
         let instagram=isFsq?fsqInstagram(place):(isGeo?geoInstagram(place):osmInstagram(place));
         if(!name||!address||!address.includes("熊本"))continue;
 
-        if(!instagram){
-          const ig=await discoverInstagramForShop(env,{name,area:pair.area,website,existing:""});
-          if(ig?.instagram && Number(ig.score||0)>=90)instagram=ig.instagram;
-        }
+        // v2.27 Free枠対策: Instagram探索は後続メンテナンスへ回す。
 
         if(autoListingDuplicateScore(existing,{name,address,phone,instagram}))continue;
         if(autoListingDuplicateScore(deletedHistory,{name,address,phone,instagram})){
@@ -4015,8 +4000,7 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
             ? extractFeaturesInfo(`${categories.join(" ")} ${name}`)
             :osmFeatures(place);
 
-        const webMeta=website?await fetchOfficialWebsiteMetadata(website):
-          {ok:false,price:{min:null,max:null},hours:"",holiday:"",features:""};
+        const webMeta={ok:false,price:{min:null,max:null},hours:"",holiday:"",features:""};
 
         const sourcePrice=isFsq
           ? extractPriceInfo(JSON.stringify(place))
@@ -4596,8 +4580,9 @@ async function runScheduledKbnMaintenance(env){
 
   // 15件に届くまで検索範囲を自動で広げる。
   // 1回だけの探索で候補が少なくても、カーソルを進めながら最大6巡する。
-  const targetListings=15;
-  const maxPasses=6;
+  // v2.27 Free枠: 1回のCronで大量探索せず、1日6回に分散する。
+  const targetListings=5;
+  const maxPasses=1;
   const allCreated=[];
   const allSearched=[];
   const allRejected=[];
@@ -4609,8 +4594,8 @@ async function runScheduledKbnMaintenance(env){
       env,
       fakeRequest,
       remaining,
-      20, // 1巡で最大20エリア×ジャンルを検索
-      3   // 1ペア最大3店舗
+      4,  // Free枠: 1巡4ペアまで
+      2   // 1ペア最大2店舗
     );
 
     const created=Array.isArray(result?.created)?result.created:[];
@@ -4653,10 +4638,8 @@ async function runScheduledKbnMaintenance(env){
   };
 
   // 新規掲載した店舗は、画像とInstagramをその場で再確認して補完
-  const createdEnrichment=await enrichScheduledCreatedShops(
-    env,
-    discovery.created
-  );
+  // v2.27 Free枠: 同一Cron内の外部fetchを抑えるため新規直後の追加補完は省略。
+  const createdEnrichment={images:{updated:[]},instagram:{updated:[]}};
 
   if(discovery.created.length){
     await notifyCreatedShops(env,discovery.created,"予約自動開拓");
@@ -4669,15 +4652,15 @@ async function runScheduledKbnMaintenance(env){
 
   // 既存のKBN独自掲載店舗も情報補完
   const missing=await refreshIndependentListings(env,{
-    limit:30,afterId:0,revalidate:true,force:false,missingOnly:true
+    limit:4,afterId:0,revalidate:true,force:false,missingOnly:true
   });
 
   // 既存の画像なし店舗も自動補完
   const imageBackfill=await refreshMissingShopImages(env,{
-    limit:30,afterId:0
+    limit:4,afterId:0
   });
 
-  const closed=await checkClosedShops(env,{limit:30,afterId:0});
+  const closed=await checkClosedShops(env,{limit:4,afterId:0});
 
   const shortfall=Math.max(0,targetListings-discovery.created.length);
   await createKbnAlert(env,{
@@ -4705,12 +4688,15 @@ async function runScheduledKbnMaintenance(env){
 }
 
 
+// KBN v2.27: Cloudflare Workers Free 50 subrequests/invocation 対策。
 // KBN v2.15: 追加Cronでは「自動掲載」に関係する処理だけを実行。
 // 既存店舗の情報補完・画像補完・Instagram補完・閉業チェックは実行しない。
 async function runScheduledKbnAutoDiscoveryOnly(env){
   const fakeRequest=new Request("https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/api/internal/scheduled-auto-only");
-  const targetListings=15;
-  const maxPasses=6;
+  // v2.27 Free枠: 50 subrequests/invocation を超えないよう1回を小分け。
+  // 1日6回あるため、1回5店舗目標で分散して増やす。
+  const targetListings=5;
+  const maxPasses=1;
   const allCreated=[];
   const allSearched=[];
   const allRejected=[];
@@ -4722,8 +4708,8 @@ async function runScheduledKbnAutoDiscoveryOnly(env){
       env,
       fakeRequest,
       remaining,
-      20,
-      3
+      6,
+      2
     );
 
     const created=Array.isArray(result?.created)?result.created:[];
@@ -4756,8 +4742,8 @@ async function runScheduledKbnAutoDiscoveryOnly(env){
 
   const created=allCreated.slice(0,targetListings);
 
-  // 新規掲載直後の最低限の品質確保だけ実施。既存店舗メンテナンスは回さない。
-  const createdEnrichment=await enrichScheduledCreatedShops(env,created);
+  // v2.27 Free枠: 新規直後の画像/Instagram追加fetchは通常メンテナンスへ分離。
+  const createdEnrichment={images:{updated:[]},instagram:{updated:[]}};
 
   if(created.length){
     await notifyCreatedShops(env,created,"予約自動開拓（追加枠）");
