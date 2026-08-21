@@ -3700,7 +3700,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div id="refreshExistingStatus" class="auto-discovery-status lead-smart-message"></div>
     <div id="repairExistingAreasStatus" class="auto-discovery-status lead-smart-message"></div>
-    <small class="version-note">ver1.79：予約時間欄をカード幅いっぱい使う3列横並びに修正しました。</small>
+    <small class="version-note">ver2.19：予約時間設定を画面表示時に自動読込するよう修正しました。</small>
   </div>
 
   
@@ -9545,6 +9545,15 @@ window.loadAutoSchedule=async function(){
     }
   }
 };
+
+// v2.19: 画面表示時にGitHub上の現在設定を自動読込する。
+// これが無いと入力欄がHTMLの初期値(00:00/03:00/...)のまま表示され、
+// 保存済みの予約時間へ更新されない。
+if(document.readyState === "loading"){
+  document.addEventListener("DOMContentLoaded",()=>window.loadAutoSchedule());
+}else{
+  window.loadAutoSchedule();
+}
 
 document.addEventListener("input",(e)=>{
   if(/^autoListingTime[1-6]$/.test(e.target?.id||"")){
