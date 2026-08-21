@@ -2468,7 +2468,7 @@ html,body{max-width:100%;overflow-x:hidden}
   font-size:.72rem;color:#aab2bb;letter-spacing:.02em
 }
 .dashboard-primary-grid{
-  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
   gap:6px!important;
   margin-top:0!important;
 }
@@ -2520,7 +2520,7 @@ html,body{max-width:100%;overflow-x:hidden}
     min-height:34px!important
   }
   .dashboard-primary-grid{
-    grid-template-columns:repeat(3,minmax(0,1fr))!important
+    grid-template-columns:repeat(2,minmax(0,1fr))!important
   }
   .dashboard-primary-card{
     min-height:56px!important;padding:7px!important
@@ -3233,7 +3233,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.18</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.20</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -3279,6 +3279,15 @@ html,body{max-width:100%;overflow-x:hidden}
       <span class="dashboard-copy">
         <b>自動開拓</b>
         <small>Google優先でBAR候補を自動検索・掲載</small>
+      </span>
+      <span class="dashboard-arrow">›</span>
+    </button>
+
+    <button type="button" class="dashboard-primary-card" data-go-tab="leads" data-open-lead-maintenance="1">
+      <span class="dashboard-icon">🛠️</span>
+      <span class="dashboard-copy">
+        <b>メンテナンス</b>
+        <small>情報補完・閉業確認・予約時間を管理</small>
       </span>
       <span class="dashboard-arrow">›</span>
     </button>
@@ -3700,7 +3709,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div id="refreshExistingStatus" class="auto-discovery-status lead-smart-message"></div>
     <div id="repairExistingAreasStatus" class="auto-discovery-status lead-smart-message"></div>
-    <small class="version-note">ver2.19：予約時間設定を画面表示時に自動読込するよう修正しました。</small>
+    <small class="version-note">ver2.20：よく使う操作に「メンテナンス」を追加しました。</small>
   </div>
 
   
@@ -9168,6 +9177,14 @@ document.addEventListener("click",(e)=>{
     if(panel)panel.removeAttribute("hidden");
     if(head)head.setAttribute("aria-expanded","true");
     document.getElementById("leadSmartAuto")?.scrollIntoView({behavior:"smooth",block:"start"});
+  },80);
+});
+
+document.addEventListener("click",(e)=>{
+  const btn=e.target.closest("[data-open-lead-maintenance='1']");
+  if(!btn)return;
+  setTimeout(()=>{
+    document.getElementById("leadSmartRefresh")?.scrollIntoView({behavior:"smooth",block:"start"});
   },80);
 });
 </script>
