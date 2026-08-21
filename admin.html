@@ -3252,7 +3252,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.28</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.29</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -3818,6 +3818,8 @@ html,body{max-width:100%;overflow-x:hidden}
           <div class="kbn-cron-status-item"><small>Cloudflare実Cron Trigger</small><strong id="cronActualTriggerTimes">読み込み中...</strong></div>
           <div class="kbn-cron-status-item"><small>通常メンテナンス</small><strong id="cronMaintenanceTime">-</strong></div>
           <div class="kbn-cron-status-item"><small>直近の予約Cron</small><strong id="cronLastScheduledRun">-</strong></div>
+          <div class="kbn-cron-status-item"><small>scheduled() 受信記録</small><strong id="cronLastReceipt">-</strong></div>
+          <div class="kbn-cron-status-item"><small>設定反映待ち</small><strong id="cronPropagationState">-</strong></div>
           <div class="kbn-cron-status-item"><small>直近の手動テスト</small><strong id="cronLastManualRun">-</strong></div>
         </div>
         <div id="cronRuntimeState" class="kbn-cron-state warn">現在の稼働状態を確認中...</div>
@@ -9781,7 +9783,7 @@ function kbnFormatJstDateV224(v){
 }
 
 window.loadCronRuntimeStatusV224=async function(){
-  const desired=$("cronDesiredTimes"), effective=$("cronEffectiveTimes"), actual=$("cronActualTriggerTimes"), maintenance=$("cronMaintenanceTime"), lastScheduled=$("cronLastScheduledRun"), lastManual=$("cronLastManualRun"), state=$("cronRuntimeState");
+  const desired=$("cronDesiredTimes"), effective=$("cronEffectiveTimes"), actual=$("cronActualTriggerTimes"), maintenance=$("cronMaintenanceTime"), lastScheduled=$("cronLastScheduledRun"), lastReceipt=$("cronLastReceipt"), propagationEl=$("cronPropagationState"), lastManual=$("cronLastManualRun"), state=$("cronRuntimeState");
   if(!state)return;
   state.className="kbn-cron-state warn";
   state.textContent="現在の稼働状態を確認中...";
@@ -9796,6 +9798,20 @@ window.loadCronRuntimeStatusV224=async function(){
     if(maintenance)maintenance.textContent=`GitHub ${d.desired?.full_maintenance_time_jst||"-"} / Worker ${d.effective?.full_maintenance_time_jst||"-"}`;
     const fmtRun=(r)=>r?`${kbnFormatJstDateV224(r.started_at||r.created_at)} / ${r.status||"-"}${r.created_count!=null?` / 新規${r.created_count}件`:""}`:"実行記録なし";
     if(lastScheduled)lastScheduled.textContent=fmtRun(d.last_scheduled_run||null);
+    if(lastReceipt){
+      const r=d.last_receipt||null;
+      lastReceipt.textContent=r
+        ? `${kbnFormatJstDateV224(r.received_at)} / ${r.scheduled_jst||"-"}${r.cron_expression?` / ${r.cron_expression}`:""}`
+        : "受信記録なし";
+    }
+    if(propagationEl){
+      const p=d.propagation||{};
+      if(p.within_window){
+        propagationEl.textContent=`反映待ちの可能性あり（更新から約${p.minutes_since??"-"}分 / 最大15分）`;
+      }else{
+        propagationEl.textContent="反映待ち時間外";
+      }
+    }
     if(lastManual)lastManual.textContent=fmtRun(d.last_manual_run||null);
     const diagRun=d.last_scheduled_run||d.last_manual_run||d.last_run||null;
     let diag={};
@@ -9822,7 +9838,10 @@ window.loadCronRuntimeStatusV224=async function(){
         ? `除外例：${examples.map(x=>`${x.name}［${x.reason}］`).join(" / ")}`
         : (diag.searched_pairs!=null?"除外店舗例はありません。":"除外された店舗例もここに表示します。");
     }
-    if(d.in_sync){
+    if(d.propagation?.within_window){
+      state.className="kbn-cron-state warn";
+      state.textContent=`⏳ 設定変更から約${d.propagation.minutes_since??"-"}分です。CloudflareのCron変更は最大15分ほど反映に時間がかかるため、この間の予約実行は旧設定の可能性があります。`;
+    }else if(d.in_sync){
       state.className="kbn-cron-state ok";
       state.textContent="✓ GitHub・Worker・Cloudflare実Cron Triggerがすべて一致しています。";
     }else if(!d.trigger_in_sync){
