@@ -3236,7 +3236,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.35</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.36</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -3732,7 +3732,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div id="refreshExistingStatus" class="auto-discovery-status lead-smart-message"></div>
     <div id="repairExistingAreasStatus" class="auto-discovery-status lead-smart-message"></div>
-    <small class="version-note">ver2.35：予約時間は保存するだけで即反映。Cronの複雑な設定・テスト画面を廃止しました。</small>
+    <small class="version-note">ver2.36：管理メニューの「メンテナンス」が自動メンテナンスへ直接移動するよう修正しました。</small>
   </div>
 
   
@@ -7196,6 +7196,33 @@ window.finishOwnerReq=async(id,status)=>{
 function runLegacyButtonAction(btn,e){
   const raw=(btn.getAttribute("onclick")||"").trim();
 
+  // v2.36: 管理メニューの「BAR開拓」「メンテナンス」は
+  // capture phase でここが先に拾うため、専用遷移をこの中で直接実行する。
+  if(btn.dataset?.openLeadMaintenance==="1"){
+    e.preventDefault();
+    switchAdminTab("leads");
+    setTimeout(()=>{
+      const target=document.getElementById("kbnMaintenanceCard");
+      if(target){
+        target.scrollIntoView({behavior:"auto",block:"start"});
+      }
+    },120);
+    return true;
+  }
+
+  if(btn.dataset?.openLeadAuto==="1"){
+    e.preventDefault();
+    switchAdminTab("leads");
+    setTimeout(()=>{
+      const head=document.querySelector('[data-lead-collapse="auto"]');
+      const panel=document.querySelector('[data-lead-panel="auto"]');
+      if(panel)panel.removeAttribute("hidden");
+      if(head)head.setAttribute("aria-expanded","true");
+      document.getElementById("leadSmartAuto")?.scrollIntoView({behavior:"auto",block:"start"});
+    },120);
+    return true;
+  }
+
   if(btn.dataset?.tab){
     e.preventDefault();
     switchAdminTab(btn.dataset.tab);
@@ -9249,27 +9276,9 @@ document.addEventListener("click",e=>{
 document.addEventListener("DOMContentLoaded",()=>setTimeout(()=>window.loadAutoListedShops?.(),500));
 </script>
 
-<script id="kbn-dashboard-auto-v157-js">
-document.addEventListener("click",(e)=>{
-  const btn=e.target.closest("[data-open-lead-auto='1']");
-  if(!btn)return;
-  setTimeout(()=>{
-    const head=document.querySelector('[data-lead-collapse="auto"]');
-    const panel=document.querySelector('[data-lead-panel="auto"]');
-    if(panel)panel.removeAttribute("hidden");
-    if(head)head.setAttribute("aria-expanded","true");
-    document.getElementById("leadSmartAuto")?.scrollIntoView({behavior:"smooth",block:"start"});
-  },80);
-});
-
-document.addEventListener("click",(e)=>{
-  const btn=e.target.closest("[data-open-lead-maintenance='1']");
-  if(!btn)return;
-  setTimeout(()=>{
-    // v2.35: 非表示の「既存更新」ではなく、実際の自動メンテナンスカードへ移動
-    document.getElementById("kbnMaintenanceCard")?.scrollIntoView({behavior:"smooth",block:"start"});
-  },80);
-});
+<script id="kbn-dashboard-auto-v236-js">
+// v2.36: 管理メニューからのBAR開拓/メンテナンス遷移は
+// capture-phase の runLegacyButtonAction 内で処理します。
 </script>
 
 
