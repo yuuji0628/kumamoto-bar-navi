@@ -1007,11 +1007,11 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="2.41";
+      config.vars.KBN_CONFIG_VERSION="2.42";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
-          message:"admin: switch KBN scheduler to fixed every-minute trigger (v2.41)",
+          message:"admin: switch KBN scheduler to fixed every-minute trigger (v2.42)",
           content:kbnUtf8ToBase64(content),sha,branch:c.branch
         })
       });
@@ -4689,6 +4689,293 @@ async function notifyCreatedShops(env,created,sourceLabel="自動開拓"){
   }
 }
 
+
+async function ensureKbnMaintenanceCursorTableV242(env){
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS kbn_maintenance_cursors(
+      task TEXT PRIMARY KEY,
+      after_id INTEGER NOT NULL DEFAULT 0,
+      cycle_count INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run();
+}
+
+async function kbnMaintenanceCursorV242(env,task){
+  await ensureKbnMaintenanceCursorTableV242(env);
+  const key=String(task||"");
+  const row=await env.DB.prepare(`
+    SELECT task,after_id,cycle_count,updated_at
+    FROM kbn_maintenance_cursors WHERE task=? LIMIT 1
+  `).bind(key).first();
+  return row||{task:key,after_id:0,cycle_count:0,updated_at:""};
+}
+
+async function kbnSaveMaintenanceCursorV242(env,task,nextAfterId,cycleCompleted=false){
+  await ensureKbnMaintenanceCursorTableV242(env);
+  const current=await kbnMaintenanceCursorV242(env,task);
+  const next=cycleCompleted?0:Math.max(0,Number(nextAfterId)||0);
+  const cycles=Number(current?.cycle_count||0)+(cycleCompleted?1:0);
+  await env.DB.prepare(`
+    INSERT INTO kbn_maintenance_cursors(task,after_id,cycle_count,updated_at)
+    VALUES(?,?,?,CURRENT_TIMESTAMP)
+    ON CONFLICT(task) DO UPDATE SET
+      after_id=excluded.after_id,
+      cycle_count=excluded.cycle_count,
+      updated_at=CURRENT_TIMESTAMP
+  `).bind(String(task),next,cycles).run();
+  return {after_id:next,cycle_count:cycles};
+}
+
+async function refreshMissingPublishedLiteV242(env,{limit=20,afterId=0}={}){
+  const max=Math.max(1,Math.min(Number(limit)||20,20));
+  const cursor=Math.max(0,Number(afterId)||0);
+  const r=await env.DB.prepare(`
+    SELECT id,name,area,address,hours,holiday,instagram,features,
+           budget_min,budget_max,phone,is_published
+    FROM shops
+    WHERE COALESCE(is_published,1)=1
+      AND id>?
+      AND (
+        COALESCE(TRIM(hours),'')='' OR
+        COALESCE(TRIM(phone),'')='' OR
+        budget_min IS NULL OR budget_max IS NULL OR
+        COALESCE(TRIM(address),'')='' OR
+        COALESCE(TRIM(features),'')=''
+      )
+    ORDER BY id ASC
+    LIMIT ?
+  `).bind(cursor,max).all();
+
+  const rows=r.results||[];
+  const updated=[],unchanged=[],failed=[];
+
+  for(const shop of rows){
+    try{
+      const cleanName=String(shop.name||"").replace(/^【KBN独自掲載】/,"").trim();
+      const found=await findGooglePlaceForShop(env,{name:cleanName,area:shop.area||"熊本"});
+      if(!found.ok||!found.matched){
+        unchanged.push({id:shop.id,name:shop.name,reason:found.error||"GOOGLE_MATCH_NOT_FOUND"});
+        continue;
+      }
+
+      const details=await googlePlaceDetails(env,found.place?.id);
+      const gp=details.ok&&details.place?details.place:found.place;
+
+      const next={
+        address:String(shop.address||"").trim() || t(googlePlaceAddress(gp)||"",500),
+        hours:String(shop.hours||"").trim() || t(googleOpeningHours(gp)||"",800),
+        holiday:String(shop.holiday||"").trim() || t(googleHolidayFromHours(gp)||"",180),
+        phone:String(shop.phone||"").trim() || t(googlePhone(gp)||"",80),
+        features:String(shop.features||"").trim() || t(googleDetailFeatures(gp)||"",1000),
+        budget_min:shop.budget_min,
+        budget_max:shop.budget_max
+      };
+
+      const price=googlePriceInfo(gp);
+      if(next.budget_min==null && price?.min!=null)next.budget_min=price.min;
+      if(next.budget_max==null && price?.max!=null)next.budget_max=price.max;
+
+      const changed=
+        String(next.address)!==String(shop.address||"") ||
+        String(next.hours)!==String(shop.hours||"") ||
+        String(next.holiday)!==String(shop.holiday||"") ||
+        String(next.phone)!==String(shop.phone||"") ||
+        String(next.features)!==String(shop.features||"") ||
+        Number(next.budget_min??-1)!==Number(shop.budget_min??-1) ||
+        Number(next.budget_max??-1)!==Number(shop.budget_max??-1);
+
+      if(!changed){
+        unchanged.push({id:shop.id,name:shop.name,reason:"NO_CHANGE"});
+        continue;
+      }
+
+      await env.DB.prepare(`
+        UPDATE shops SET
+          address=?,hours=?,holiday=?,phone=?,features=?,
+          budget_min=?,budget_max=?,updated_at=CURRENT_TIMESTAMP
+        WHERE id=?
+      `).bind(
+        next.address,next.hours,next.holiday,next.phone,next.features,
+        next.budget_min,next.budget_max,shop.id
+      ).run();
+
+      updated.push({id:shop.id,name:shop.name});
+    }catch(e){
+      failed.push({id:shop.id,name:shop.name,reason:String(e?.message||e).slice(0,250)});
+    }
+  }
+
+  const nextAfterId=rows.length?Number(rows[rows.length-1].id||0):cursor;
+  const more=await env.DB.prepare(`
+    SELECT id FROM shops
+    WHERE COALESCE(is_published,1)=1
+      AND id>?
+      AND (
+        COALESCE(TRIM(hours),'')='' OR
+        COALESCE(TRIM(phone),'')='' OR
+        budget_min IS NULL OR budget_max IS NULL OR
+        COALESCE(TRIM(address),'')='' OR
+        COALESCE(TRIM(features),'')=''
+      )
+    ORDER BY id ASC LIMIT 1
+  `).bind(nextAfterId).first();
+
+  return {
+    ok:true,checked:rows.length,updated,unchanged,failed,
+    next_after_id:nextAfterId,has_more:!!more
+  };
+}
+
+async function refreshInstagramPublishedV242(env,{limit=20,afterId=0}={}){
+  const max=Math.max(1,Math.min(Number(limit)||20,20));
+  const cursor=Math.max(0,Number(afterId)||0);
+
+  const r=await env.DB.prepare(`
+    SELECT id,name,area,instagram
+    FROM shops
+    WHERE COALESCE(is_published,1)=1
+      AND COALESCE(TRIM(instagram),'')=''
+      AND id>?
+    ORDER BY id ASC
+    LIMIT ?
+  `).bind(cursor,max).all();
+
+  const rows=r.results||[];
+  const updated=[],candidates=[],failed=[];
+
+  for(const shop of rows){
+    try{
+      const ig=await discoverInstagramForShop(env,{
+        name:String(shop.name||"").replace(/^【KBN独自掲載】/,"").trim(),
+        area:shop.area||"熊本",
+        website:"",
+        existing:""
+      });
+
+      if(ig?.instagram && Number(ig.score||0)>=90){
+        await env.DB.prepare(`
+          UPDATE shops SET instagram=?,updated_at=CURRENT_TIMESTAMP WHERE id=?
+        `).bind(ig.instagram,shop.id).run();
+        updated.push({id:shop.id,name:shop.name,instagram:ig.instagram,score:ig.score});
+      }else if(ig?.candidates?.[0] && Number(ig.candidates[0].score||0)>=70){
+        const c=ig.candidates[0];
+        candidates.push({id:shop.id,name:shop.name,handle:c.handle,score:c.score});
+      }
+    }catch(e){
+      failed.push({id:shop.id,name:shop.name,error:String(e?.message||e).slice(0,250)});
+    }
+  }
+
+  const nextAfterId=rows.length?Number(rows[rows.length-1].id||0):cursor;
+  const more=await env.DB.prepare(`
+    SELECT id FROM shops
+    WHERE COALESCE(is_published,1)=1
+      AND COALESCE(TRIM(instagram),'')=''
+      AND id>?
+    ORDER BY id ASC LIMIT 1
+  `).bind(nextAfterId).first();
+
+  return {
+    ok:true,checked:rows.length,updated,candidates,failed,
+    next_after_id:nextAfterId,has_more:!!more
+  };
+}
+
+async function runMaintenanceBatchV242(env,task,{limit=20}={}){
+  const key=String(task||"");
+  const cursor=await kbnMaintenanceCursorV242(env,key);
+  const afterId=Math.max(0,Number(cursor?.after_id)||0);
+
+  let result;
+  if(key==="missing"){
+    result=await refreshMissingPublishedLiteV242(env,{limit,afterId});
+  }else if(key==="closed"){
+    result=await checkClosedShops(env,{limit,afterId});
+  }else if(key==="instagram"){
+    result=await refreshInstagramPublishedV242(env,{limit,afterId});
+  }else{
+    throw new Error("INVALID_MAINTENANCE_TASK");
+  }
+
+  const cycleCompleted=!result.has_more;
+  const saved=await kbnSaveMaintenanceCursorV242(
+    env,key,result.next_after_id,cycleCompleted
+  );
+
+  return {
+    ...result,
+    cursor_from:afterId,
+    cursor_next:saved.after_id,
+    cycle_completed:cycleCompleted,
+    cycle_count:saved.cycle_count,
+    task:key
+  };
+}
+
+async function ensureKbnMaintenanceQueueV242(env){
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS kbn_maintenance_queue(
+      id INTEGER PRIMARY KEY CHECK(id=1),
+      phase INTEGER NOT NULL DEFAULT 0,
+      run_date TEXT,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run();
+}
+
+async function kbnQueueMaintenanceV242(env,runDate){
+  await ensureKbnMaintenanceQueueV242(env);
+  await env.DB.prepare(`
+    INSERT INTO kbn_maintenance_queue(id,phase,run_date,updated_at)
+    VALUES(1,1,?,CURRENT_TIMESTAMP)
+    ON CONFLICT(id) DO UPDATE SET
+      phase=1,run_date=excluded.run_date,updated_at=CURRENT_TIMESTAMP
+  `).bind(String(runDate||"")).run();
+}
+
+async function kbnProcessQueuedMaintenanceV242(env){
+  await ensureKbnMaintenanceQueueV242(env);
+  const q=await env.DB.prepare(`
+    SELECT phase,run_date,updated_at FROM kbn_maintenance_queue WHERE id=1
+  `).first();
+
+  const phase=Number(q?.phase||0);
+  if(!phase)return {ok:true,processed:false};
+
+  const task=phase===1?"missing":phase===2?"closed":phase===3?"instagram":"";
+  if(!task){
+    await env.DB.prepare(`UPDATE kbn_maintenance_queue SET phase=0,updated_at=CURRENT_TIMESTAMP WHERE id=1`).run();
+    return {ok:true,processed:false};
+  }
+
+  let result;
+  try{
+    result=await runMaintenanceBatchV242(env,task,{limit:20});
+  }catch(e){
+    console.error("queued maintenance failed",task,e);
+    result={ok:false,error:String(e?.message||e),task};
+  }
+
+  const nextPhase=phase>=3?0:phase+1;
+  await env.DB.prepare(`
+    UPDATE kbn_maintenance_queue SET phase=?,updated_at=CURRENT_TIMESTAMP WHERE id=1
+  `).bind(nextPhase).run();
+
+  try{
+    const checked=Number(result?.checked||0);
+    const updated=Array.isArray(result?.updated)?result.updated.length:0;
+    const closed=Array.isArray(result?.closed)?result.closed.length:0;
+    await createKbnAlert(env,{
+      type:"maintenance_batch",
+      title:`自動メンテナンス: ${task}`,
+      message:`${checked}店舗を確認 / 更新${updated}件${task==="closed"?` / 閉業候補${closed}件`:""} / 次回は続きから`
+    });
+  }catch{}
+
+  return {ok:true,processed:true,phase,task,result};
+}
+
 async function checkClosedShops(env,{limit=20,afterId=0}={}){
   await ensureKbnAlertsTable(env);
   await ensureShopMaintenanceStatusColumn(env);
@@ -4859,114 +5146,26 @@ async function enrichScheduledCreatedShops(env,created=[]){
 // KBN scheduled maintenance v1.81:
  // target 15 listings, multi-pass discovery + image + Instagram enrichment
 async function runScheduledKbnMaintenance(env){
-  const fakeRequest=new Request("https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/api/internal/scheduled");
+  // v2.42:
+  // 選択した通常メンテナンス回では、まず通常の自動掲載を実行。
+  // 情報不足20件 → 閉業20件 → Instagram20件 は、
+  // 毎分Cronの次の3回に分けて実行しFree枠のsubrequest超過を避ける。
+  const discoveryResult=await runScheduledKbnAutoDiscoveryOnly(env);
 
-  // 15件に届くまで検索範囲を自動で広げる。
-  // 1回だけの探索で候補が少なくても、カーソルを進めながら最大6巡する。
-  // v2.27 Free枠: 1回のCronで大量探索せず、1日6回に分散する。
-  const targetListings=5;
-  const maxPasses=1;
-  const allCreated=[];
-  const allSearched=[];
-  const allRejected=[];
-  const passStats=[];
+  const now=new Date(Date.now()+9*60*60*1000);
+  const runDate=`${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,"0")}-${String(now.getUTCDate()).padStart(2,"0")}`;
+  await kbnQueueMaintenanceV242(env,runDate);
 
-  for(let pass=1;pass<=maxPasses && allCreated.length<targetListings;pass++){
-    const remaining=targetListings-allCreated.length;
-    const result=await autoDiscover(
-      env,
-      fakeRequest,
-      remaining,
-      4,  // Free枠: 1巡4ペアまで
-      2   // 1ペア最大2店舗
-    );
-
-    const created=Array.isArray(result?.created)?result.created:[];
-    const searched=Array.isArray(result?.searched)?result.searched:[];
-    const rejected=Array.isArray(result?.rejected)?result.rejected:[];
-
-    for(const x of created){
-      const key=Number(x?.shop_id||x?.id||0)||`${x?.name||""}|${x?.area||""}`;
-      if(!allCreated.some(y=>{
-        const yk=Number(y?.shop_id||y?.id||0)||`${y?.name||""}|${y?.area||""}`;
-        return yk===key;
-      })){
-        allCreated.push(x);
-      }
-      if(allCreated.length>=targetListings)break;
-    }
-
-    allSearched.push(...searched);
-    allRejected.push(...rejected);
-    passStats.push({
-      pass,
-      created:created.length,
-      total:allCreated.length,
-      searched:searched.length,
-      rejected:rejected.length
-    });
-
-    // 探索ソース自体が利用不可なら無限に回さない
-    if(result?.ok===false && result?.error==="DISCOVERY_SOURCES_UNAVAILABLE")break;
-  }
-
-  const discovery={
-    ok:true,
-    created:allCreated.slice(0,targetListings),
-    searched:allSearched,
-    rejected:allRejected,
-    target:targetListings,
-    passes:passStats.length,
-    pass_stats:passStats
-  };
-
-  // 新規掲載した店舗は、画像とInstagramをその場で再確認して補完
-  // v2.27 Free枠: 同一Cron内の外部fetchを抑えるため新規直後の追加補完は省略。
-  const createdEnrichment={images:{updated:[]},instagram:{updated:[]}};
-
-  if(discovery.created.length){
-    await notifyCreatedShops(env,discovery.created,"予約自動開拓");
-    try{
-      await kbnSendNewListingDigest(env,discovery.created);
-    }catch(e){
-      console.error("member new listing digest failed",e);
-    }
-  }
-
-  // 既存のKBN独自掲載店舗も情報補完
-  const missing=await refreshIndependentListings(env,{
-    limit:4,afterId:0,revalidate:true,force:false,missingOnly:true
-  });
-
-  // 既存の画像なし店舗も自動補完
-  const imageBackfill=await refreshMissingShopImages(env,{
-    limit:4,afterId:0
-  });
-
-  const closed=await checkClosedShops(env,{limit:4,afterId:0});
-
-  const shortfall=Math.max(0,targetListings-discovery.created.length);
   await createKbnAlert(env,{
     type:"scheduled_summary",
-    title:"予約メンテナンス完了",
-    message:[
-      `新規掲載 ${discovery.created.length}/${targetListings}店舗`,
-      `探索 ${discovery.passes}巡`,
-      `画像 ${createdEnrichment?.images?.updated?.length||0}件`,
-      `Instagram ${createdEnrichment?.instagram?.updated?.length||0}件`,
-      `既存画像 ${imageBackfill?.updated?.length||0}件`,
-      `情報補完 ${missing?.updated?.length||0}件`,
-      `閉業候補 ${closed?.closed?.length||0}件`,
-      shortfall?`有効候補不足 ${shortfall}件`:"目標達成"
-    ].join(" / ")
+    title:"予約メンテナンス開始",
+    message:"自動掲載後、情報不足20店舗 → 閉業20店舗 → Instagram20店舗を順番に続きから確認します。"
   });
 
   return {
-    discovery,
-    created_enrichment:createdEnrichment,
-    image_backfill:imageBackfill,
-    missing,
-    closed
+    ...discoveryResult,
+    maintenance_queued:true,
+    maintenance_batch_size:20
   };
 }
 
@@ -6375,14 +6574,8 @@ ${urls.map(x=>`  <url>
       }
 
       if(url.pathname==="/api/admin/leads/refresh-missing" && request.method==="POST"){
-        let x={};try{x=await request.json()}catch{}
         try{
-          const result=await refreshIndependentListings(env,{
-            limit:Math.max(1,Math.min(Number(x.limit)||20,30)),
-            afterId:Math.max(0,Number(x.after_id)||0),
-            revalidate:true,
-            missingOnly:true
-          });
+          const result=await runMaintenanceBatchV242(env,"missing",{limit:20});
           return json(result,{headers:{"Cache-Control":"no-store"}});
         }catch(e){
           return json({ok:false,error:"REFRESH_MISSING_FAILED",message:String(e?.message||e).slice(0,500)},{status:500});
@@ -6390,12 +6583,8 @@ ${urls.map(x=>`  <url>
       }
 
       if(url.pathname==="/api/admin/leads/check-closed" && request.method==="POST"){
-        let x={};try{x=await request.json()}catch{}
         try{
-          const result=await checkClosedShops(env,{
-            limit:Math.max(1,Math.min(Number(x.limit)||20,50)),
-            afterId:Math.max(0,Number(x.after_id)||0)
-          });
+          const result=await runMaintenanceBatchV242(env,"closed",{limit:20});
           return json(result,{headers:{"Cache-Control":"no-store"}});
         }catch(e){
           return json({ok:false,error:"CLOSED_CHECK_FAILED",message:String(e?.message||e).slice(0,500)},{status:500});
@@ -6459,68 +6648,14 @@ ${urls.map(x=>`  <url>
       }
 
       if(url.pathname==="/api/admin/leads/refresh-instagram" && request.method==="POST"){
-        let x={};try{x=await request.json()}catch{}
-        const limit=Math.max(1,Math.min(Number(x.limit)||20,40));
-        const afterId=Math.max(0,Number(x.after_id)||0);
-
-        const r=await env.DB.prepare(`
-          SELECT id,name,area,instagram
-          FROM shops
-          WHERE COALESCE(listing_status,'published')='provisional'
-            AND COALESCE(TRIM(instagram),'')=''
-            AND id>?
-          ORDER BY id ASC
-          LIMIT ?
-        `).bind(afterId,limit).all();
-
-        const updated=[],candidates=[],failed=[];
-        for(const shop of (r.results||[])){
-          try{
-            const found=await findGooglePlaceForShop(env,{
-              name:String(shop.name||"").replace(/^【KBN独自掲載】/,"").trim(),
-              area:shop.area||"熊本"
-            });
-            let website="";
-            if(found.ok&&found.matched){
-              const details=await googlePlaceDetails(env,found.place?.id);
-              website=googleWebsite(details.ok?details.place:found.place);
-            }
-
-            const ig=await discoverInstagramForShop(env,{
-              name:String(shop.name||"").replace(/^【KBN独自掲載】/,"").trim(),
-              area:shop.area||"熊本",
-              website,
-              existing:""
-            });
-
-            if(ig?.instagram && Number(ig.score||0)>=90){
-              await env.DB.prepare(`
-                UPDATE shops SET instagram=?,updated_at=CURRENT_TIMESTAMP WHERE id=?
-              `).bind(ig.instagram,shop.id).run();
-              updated.push({id:shop.id,name:shop.name,instagram:ig.instagram,score:ig.score,source:ig.source});
-            }else if(ig?.candidates?.[0] && Number(ig.candidates[0].score||0)>=70){
-              const c=ig.candidates[0];
-              candidates.push({id:shop.id,name:shop.name,handle:c.handle,score:c.score});
-            }
-          }catch(e){
-            failed.push({id:shop.id,name:shop.name,error:String(e?.message||e).slice(0,250)});
-          }
+        try{
+          const result=await runMaintenanceBatchV242(env,"instagram",{limit:20});
+          return json(result,{headers:{"Cache-Control":"no-store"}});
+        }catch(e){
+          return json({ok:false,error:"REFRESH_INSTAGRAM_FAILED",message:String(e?.message||e).slice(0,500)},{status:500});
         }
-
-        const last=(r.results||[]).length?Number(r.results[r.results.length-1].id||0):afterId;
-        const more=await env.DB.prepare(`
-          SELECT id FROM shops
-          WHERE COALESCE(listing_status,'published')='provisional'
-            AND COALESCE(TRIM(instagram),'')=''
-            AND id>?
-          ORDER BY id ASC LIMIT 1
-        `).bind(last).first();
-
-        return json({
-          ok:true,checked:(r.results||[]).length,updated,candidates,failed,
-          next_after_id:last,has_more:!!more
-        },{headers:{"Cache-Control":"no-store"}});
       }
+
 
 if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
         const cfg=leadSearchConfig(env);
@@ -7348,6 +7483,11 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
 
   async scheduled(event, env, ctx){
     const task=(async()=>{
+      // v2.42: 前回の通常メンテナンスで予約された処理を1種類ずつ実行。
+      // 1分ごとに別Worker invocationになるのでFree枠のsubrequestを分散できます。
+      const queued=await kbnProcessQueuedMaintenanceV242(env);
+      if(queued?.processed)return;
+
       const schedule=await kbnGetRuntimeScheduleV230(env);
 
       // v2.31:
