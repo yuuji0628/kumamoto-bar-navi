@@ -1477,6 +1477,39 @@
   .upload-status{text-align:left}
   .upload-actions{display:grid;grid-template-columns:1fr}
 }
+
+/* v2.38 smart site update */
+.siteupdate-smart{display:grid;gap:14px}
+.siteupdate-smart-head{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+  padding:14px;border:1px solid #33404d;border-radius:16px;
+  background:linear-gradient(180deg,#0c141d,#0a1118)
+}
+.siteupdate-smart-head h3{margin:0 0 6px;font-size:1rem}
+.siteupdate-smart-head p{margin:0;color:#aeb6c0;font-size:.8rem;line-height:1.7}
+.siteupdate-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.siteupdate-step{padding:12px;border:1px solid #33404d;border-radius:14px;background:#0b1219}
+.siteupdate-step b{display:block;color:#f1c75b;margin-bottom:4px;font-size:.82rem}
+.siteupdate-step small{display:block;color:#9ea8b2;line-height:1.6;font-size:.75rem}
+.siteupdate-drop-wrap{padding:14px;border:1px solid #33404d;border-radius:16px;background:#0b1219}
+.siteupdate-list-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.siteupdate-list-head b{font-size:.95rem}
+.siteupdate-list-head small{color:#97a3af}
+.siteupdate-final{
+  padding:14px;border:1px solid #6b5526;border-radius:16px;
+  background:rgba(230,189,85,.05);display:grid;gap:10px
+}
+.siteupdate-final-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.siteupdate-final-top b{display:block;margin-bottom:4px}
+.siteupdate-final-top small{color:#aeb6c0;line-height:1.7}
+.siteupdate-compact-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.siteupdate-builds-embedded{padding-top:2px}
+@media(max-width:760px){
+  .siteupdate-smart-head{display:grid}
+  .siteupdate-steps{grid-template-columns:1fr}
+  .siteupdate-final-top{display:grid}
+  .siteupdate-compact-actions{grid-template-columns:1fr}
+}
 </style>
 
 
@@ -3236,7 +3269,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.37</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.38</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -3732,7 +3765,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div id="refreshExistingStatus" class="auto-discovery-status lead-smart-message"></div>
     <div id="repairExistingAreasStatus" class="auto-discovery-status lead-smart-message"></div>
-    <small class="version-note">ver2.37：管理メニューの「メンテナンス」が自動メンテナンスへ直接移動するよう修正しました。</small>
+    <small class="version-note">ver2.38：管理メニューの「メンテナンス」が自動メンテナンスへ直接移動するよう修正しました。</small>
   </div>
 
   
@@ -3911,46 +3944,73 @@ html,body{max-width:100%;overflow-x:hidden}
     <button id="kbnGithubReload" class="admin-secondary-btn" type="button">接続確認</button>
   </div>
 
-  <div class="kbn-github-status">
-    <span id="kbnGithubDot" class="kbn-github-dot"></span>
-    <strong id="kbnGithubStatus">GitHub接続確認中...</strong>
-    <span id="kbnGithubRepo" class="muted"></span>
-  </div>
-
-  <div id="kbnGithubSetupHelp" class="kbn-github-help" hidden>
-    Cloudflare WorkerのSecretに <b>GITHUB_TOKEN</b> を登録してください。
-  </div>
-
-  <div class="file-upload-updater">
-    <div class="upload-note">
-      <b>使い方：</b>こちらで作成した更新用ファイルを選ぶだけです。<br>
-      ファイル名と同じGitHub上のファイルを自動で探して上書きします。複数ファイルをまとめて選択できます。
+  <div class="siteupdate-smart">
+    <div class="siteupdate-smart-head">
+      <div>
+        <h3>かんたん更新</h3>
+        <p>完成した <b>admin.html</b> や <b>worker.js</b> を選ぶだけで、同じ名前のGitHubファイルへそのまま上書きします。</p>
+      </div>
+      <div class="kbn-github-status" style="margin:0">
+        <span id="kbnGithubDot" class="kbn-github-dot"></span>
+        <strong id="kbnGithubStatus">GitHub接続確認中...</strong>
+        <span id="kbnGithubRepo" class="muted"></span>
+      </div>
     </div>
 
-    <div id="kbnFileDrop" class="file-drop">
-      <input id="kbnUploadFiles" type="file" multiple>
-      <strong>更新ファイルを選択</strong>
-      <span>タップしてファイルを選ぶ / PCではドラッグ＆ドロップも可能</span>
+    <div id="kbnGithubSetupHelp" class="kbn-github-help" hidden>
+      Cloudflare WorkerのSecretに <b>GITHUB_TOKEN</b> を登録してください。
     </div>
 
-    <div id="kbnUploadList" class="upload-file-list">
-      <div class="upload-note">まだファイルが選択されていません。</div>
+    <div class="siteupdate-steps">
+      <div class="siteupdate-step">
+        <b>01 ファイルを選ぶ</b>
+        <small>ここで作成した更新ファイルを選択。複数ファイルもまとめてOKです。</small>
+      </div>
+      <div class="siteupdate-step">
+        <b>02 内容を確認</b>
+        <small>選んだファイル名とサイズを見て、問題なければ確認ボタンを押します。</small>
+      </div>
+      <div class="siteupdate-step">
+        <b>03 反映する</b>
+        <small>反映ボタンでGitHubへアップロード。下のビルド状況からデプロイも確認できます。</small>
+      </div>
     </div>
 
-    
-    <div class="upload-confirm">
-      <b>反映前の確認</b><br>
-      <span style="color:#aeb6c0">下の確認ボタンを押すと、反映ボタンが有効になります。</span>
-      <button id="kbnUploadApprove" class="admin-secondary-btn" type="button" style="width:100%;margin-top:10px">このファイルで更新する</button>
+    <div class="siteupdate-drop-wrap">
+      <div id="kbnFileDrop" class="file-drop">
+        <input id="kbnUploadFiles" type="file" multiple>
+        <strong>更新ファイルを選択</strong>
+        <span>タップして選択 / PCではドラッグ＆ドロップも可能</span>
+      </div>
     </div>
 
+    <div class="file-upload-updater" style="gap:10px">
+      <div class="siteupdate-list-head">
+        <b>選択中のファイル</b>
+        <small>反映前にここで確認</small>
+      </div>
 
-    <div class="upload-actions">
-      <button id="kbnUploadStart" class="btn-gold" type="button" disabled>選択したファイルを反映</button>
-      <button id="kbnUploadClear" class="admin-secondary-btn" type="button">選択をクリア</button>
+      <div id="kbnUploadList" class="upload-file-list">
+        <div class="upload-note">まだファイルが選択されていません。</div>
+      </div>
+
+      <div class="siteupdate-final">
+        <div class="siteupdate-final-top">
+          <div>
+            <b>反映前の確認</b>
+            <small>「このファイルで更新する」を押すと、反映ボタンが有効になります。</small>
+          </div>
+          <button id="kbnUploadApprove" class="admin-secondary-btn" type="button">このファイルで更新する</button>
+        </div>
+
+        <div class="siteupdate-compact-actions">
+          <button id="kbnUploadStart" class="btn-gold" type="button" disabled>選択したファイルを反映</button>
+          <button id="kbnUploadClear" class="admin-secondary-btn" type="button">選択をクリア</button>
+        </div>
+      </div>
+
+      <div id="kbnUploadResult" class="upload-result"></div>
     </div>
-
-    <div id="kbnUploadResult" class="upload-result"></div>
   </div>
 
 <div class="siteupdate-builds-embedded" style="margin-top:18px">
