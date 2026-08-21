@@ -3208,6 +3208,19 @@ html,body{max-width:100%;overflow-x:hidden}
 <style id="kbn-auto-listed-smart-v207">
 .auto-listed-toolbar-v207{display:grid;grid-template-columns:minmax(0,1fr) 120px 120px;gap:7px;margin:10px 0 8px}.auto-listed-toolbar-v207 input,.auto-listed-toolbar-v207 select{min-height:40px;border:1px solid #33404c;border-radius:10px;background:#0a1118;color:#fff;padding:0 10px;font-size:16px}.auto-listed-pager-v207{display:flex;align-items:center;justify-content:center;gap:10px;margin:8px 0 10px}.auto-listed-pager-v207 button{min-height:36px;padding:0 12px;border:1px solid #374451;border-radius:9px;background:#0d151d;color:#fff;font-weight:800}.auto-listed-pager-v207 button:disabled{opacity:.4}.auto-listed-pager-v207 span{min-width:74px;text-align:center;color:#9aa5b0;font-size:.65rem}.auto-listed-actions{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px!important}.auto-listed-actions button.delete{border-color:#7b3d44!important;background:#1b0e11!important;color:#ff9aa4!important}@media(max-width:700px){.auto-listed-toolbar-v207{grid-template-columns:1fr}.auto-listed-actions{grid-template-columns:repeat(2,1fr)}}
 </style>
+
+<style id="kbn-schedule-v217-css">
+.kbn-auto-times-v217{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:10px 0 12px}
+.kbn-auto-times-v217 label{display:grid;gap:5px}
+.kbn-auto-times-v217 label span,.kbn-maintenance-select-v217 label>span{color:#aeb7c1;font-size:.66rem;font-weight:800}
+.kbn-auto-times-v217 input,.kbn-maintenance-select-v217 select{width:100%;box-sizing:border-box;min-height:42px;border:1px solid #3d4955;border-radius:10px;background:#080e14;color:#fff;padding:0 10px;font:inherit}
+.kbn-maintenance-select-v217{margin:10px 0 12px;padding:11px;border:1px solid #4d4326;border-radius:12px;background:#141109}
+.kbn-maintenance-select-v217 label{display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:10px;align-items:center}
+.kbn-maintenance-select-v217 small{display:block;margin-top:7px;color:#918b77;font-size:.62rem;line-height:1.5}
+.kbn-schedule-save-v217{width:100%;min-height:44px;border:0;border-radius:11px;background:#efc45a;color:#101010;font-weight:900}
+@media(max-width:680px){.kbn-auto-times-v217{grid-template-columns:repeat(2,minmax(0,1fr))}.kbn-maintenance-select-v217 label{grid-template-columns:1fr}}
+</style>
+
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
 <div id="topMaintenanceResult" class="top-maintenance-result">
@@ -3220,7 +3233,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.13</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.17</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -3706,16 +3719,43 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div class="kbn-schedule-note kbn-schedule-editor">
       <div class="kbn-schedule-title">
-        <b>予約自動開拓</b>
+        <b>予約時間設定</b>
         <span>日本時間（JST）</span>
       </div>
-      <div class="kbn-schedule-controls">
-        <input type="time" id="autoScheduleTime1" value="03:10" aria-label="1回目の予約時間">
-        <input type="time" id="autoScheduleTime2" value="11:10" aria-label="2回目の予約時間">
-        <input type="time" id="autoScheduleTime3" value="19:10" aria-label="3回目の予約時間">
-        <button type="button" id="autoScheduleSaveBtn">予約を更新</button>
+
+      <small style="display:block;margin:4px 0 8px;color:#9aa4af">
+        自動掲載は1日6回。下の6つすべて自由に変更できます。
+      </small>
+
+      <div class="kbn-auto-times-v217">
+        <label><span>自動掲載 1</span><input type="time" id="autoListingTime1" value="00:00"></label>
+        <label><span>自動掲載 2</span><input type="time" id="autoListingTime2" value="03:00"></label>
+        <label><span>自動掲載 3</span><input type="time" id="autoListingTime3" value="06:00"></label>
+        <label><span>自動掲載 4</span><input type="time" id="autoListingTime4" value="09:00"></label>
+        <label><span>自動掲載 5</span><input type="time" id="autoListingTime5" value="12:00"></label>
+        <label><span>自動掲載 6</span><input type="time" id="autoListingTime6" value="18:00"></label>
       </div>
+
+      <div class="kbn-maintenance-select-v217">
+        <label for="maintenanceScheduleSelect">
+          <span>通常メンテナンスも実行する回</span>
+          <select id="maintenanceScheduleSelect">
+            <option value="1">自動掲載 1</option>
+            <option value="2">自動掲載 2</option>
+            <option value="3">自動掲載 3</option>
+            <option value="4">自動掲載 4</option>
+            <option value="5">自動掲載 5</option>
+            <option value="6">自動掲載 6</option>
+          </select>
+        </label>
+        <small>選んだ1回だけ、閉業確認・既存情報補完などの通常メンテナンスも実行します。</small>
+      </div>
+
+      <button type="button" id="autoScheduleSaveBtn" class="kbn-schedule-save-v217">予約時間を更新</button>
       <small id="autoScheduleStatus">現在の予約時間を読み込み中...</small>
+      <small id="autoListingSixTimesStatus" style="display:block;margin-top:6px;color:#efc45a">
+        自動掲載：1日6回 / 通常メンテナンス：1日1回
+      </small>
     </div>
     <div id="maintenanceStatus" class="auto-discovery-status"></div>
     <div class="kbn-alert-head">
@@ -7648,13 +7688,16 @@ window.refreshExistingIndependentListings=async function(){
 window.runAutoDiscovery=async function(){
   const btn=$("autoDiscoverBtn"), status=$("autoDiscoverStatus");
   const progress=$("autoDiscoverProgress");
-  if(!confirm("Google Placesを優先して、県内のBAR候補を順番に検索・照合して自動掲載します。\n\n進捗をリアルタイム表示しながら実行します。開始しますか？"))return;
+  if(!confirm("Google Placesを優先して、県内のBAR候補を順番に検索・照合して自動掲載します。\n\n一度に負荷をかけすぎない安全なバッチ方式で実行します。開始しますか？"))return;
 
   btn.disabled=true;
   btn.textContent="自動開拓中...";
   if(progress)progress.hidden=false;
 
   const totalSteps=30;
+  const batchSize=5;
+  const maxListings=50;
+  const maxRetries=2;
   let completed=0;
   let createdTotal=[];
   let searchedTotal=[];
@@ -7663,8 +7706,10 @@ window.runAutoDiscovery=async function(){
   let barTotal=0;
   let errors=0;
 
+  const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+
   const updateProgress=(current="準備中...")=>{
-    const pct=Math.round((completed/totalSteps)*100);
+    const pct=Math.min(100,Math.round((completed/totalSteps)*100));
     if($("autoProgressBar"))$("autoProgressBar").style.width=pct+"%";
     if($("autoProgressPct"))$("autoProgressPct").textContent=pct+"%";
     if($("autoProgressSearch"))$("autoProgressSearch").textContent=`${completed} / ${totalSteps}`;
@@ -7673,44 +7718,66 @@ window.runAutoDiscovery=async function(){
     if($("autoProgressCurrent"))$("autoProgressCurrent").textContent=current;
   };
 
-  updateProgress("Google Placesへの検索を開始しています...");
-  if(status)status.textContent="自動開拓を開始しました。進捗は上のバーで確認できます。";
-
-  try{
-    for(let i=0;i<totalSteps;i++){
-      if(createdTotal.length>=50){
-        completed=totalSteps;
-        updateProgress("自動掲載上限50店舗に到達しました。");
-        break;
-      }
-
-      const d=await api("/api/admin/leads/auto-discover",{
+  const runBatch=async(pairLimit,retry=0)=>{
+    try{
+      return await api("/api/admin/leads/auto-discover",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({
-          max_listings:Math.min(3,50-createdTotal.length),
-          pair_limit:1,
+          max_listings:Math.min(10,maxListings-createdTotal.length),
+          pair_limit:pairLimit,
           per_pair_limit:3
         })
       });
+    }catch(e){
+      const msg=String(e?.message||e||"UNKNOWN_ERROR");
+      const retryable=/HTTP_50[0234]|NON_JSON_RESPONSE|network|fetch/i.test(msg);
+      if(retryable && retry<maxRetries){
+        const wait=(retry+1)*1800;
+        if(status){
+          status.innerHTML=
+            `<b>一時的な通信エラーを検知しました。自動で再試行します。</b><br>`+
+            `<small>${Math.round(wait/1000)}秒後に再試行 ${retry+1}/${maxRetries}</small>`;
+        }
+        updateProgress(`通信を休ませています… 再試行 ${retry+1}/${maxRetries}`);
+        await sleep(wait);
+        return runBatch(pairLimit,retry+1);
+      }
+      throw e;
+    }
+  };
 
+  updateProgress("Google Placesへの検索を開始しています...");
+  if(status)status.textContent="自動開拓を開始しました。5検索ずつ安全に処理します。";
+
+  try{
+    while(completed<totalSteps && createdTotal.length<maxListings){
+      const remainingSteps=totalSteps-completed;
+      const pairLimit=Math.min(batchSize,remainingSteps);
+
+      const d=await runBatch(pairLimit);
       const c=Array.isArray(d.created)?d.created:[];
       const rows=Array.isArray(d.searched)?d.searched:[];
       createdTotal.push(...c);
       searchedTotal.push(...rows);
       rejectedTotal+=Number(d.rejected_count||0);
 
-      const r=rows[0]||{};
-      rawTotal+=Number(r.raw_found||0);
-      barTotal+=Number(r.google_found||0);
-      if(!r.ok||r.error)errors++;
+      for(const r of rows){
+        rawTotal+=Number(r.raw_found||0);
+        barTotal+=Number(r.google_found||0);
+        if(!r.ok||r.error)errors++;
+      }
 
-      completed++;
-      const label=[r.area,r.type].filter(Boolean).join(" / ");
+      // 実際に処理された検索数を進捗へ反映。
+      const doneNow=Math.max(1,rows.length||pairLimit);
+      completed=Math.min(totalSteps,completed+doneNow);
+
+      const last=rows[rows.length-1]||{};
+      const label=[last.area,last.type].filter(Boolean).join(" / ");
       updateProgress(
         label
-          ? `${label} 完了｜生ヒット ${Number(r.raw_found||0)}件 → BAR候補 ${Number(r.google_found||0)}件`
-          : `検索 ${completed}/${totalSteps} 完了`
+          ? `${label} まで完了｜${completed}/${totalSteps}検索`
+          : `${completed}/${totalSteps}検索完了`
       );
 
       if(status){
@@ -7719,49 +7786,57 @@ window.runAutoDiscovery=async function(){
           `<small>Google生ヒット:${rawTotal} / BAR候補:${barTotal} / エラー:${errors}</small>`;
       }
 
-      await new Promise(r=>setTimeout(r,180));
+      // Cloudflare / Google Placesへの連続負荷を避ける。
+      if(completed<totalSteps && createdTotal.length<maxListings){
+        await sleep(900);
+      }
     }
 
-    if(completed<totalSteps){
+    if(createdTotal.length>=maxListings){
       completed=totalSteps;
-      updateProgress("処理を完了しました。");
-    }else{
+      updateProgress("自動掲載上限50店舗に到達しました。");
+    }else if(completed>=totalSteps){
       updateProgress("自動開拓が完了しました。");
     }
 
-    await window.loadShops?.();
-    if(typeof window.loadAutoListedShops==="function") await window.loadAutoListedShops();
-
-    const diagRows=searchedTotal.map((x,i)=>`
-      <div style="padding:8px 0;border-top:1px solid rgba(255,255,255,.08)">
-        <b>${i+1}. ${esc(x.area||"")} / ${esc(x.type||"")}</b><br>
-        <span>生ヒット ${Number(x.raw_found||0)}件 → BAR判定 ${Number(x.google_found||0)}件</span>
-        ${x.query?`<br><small>検索語：${esc(x.query)}</small>`:""}
-        ${x.error?`<br><small style="color:#ff8c8c">エラー：${esc(x.error)}</small>`:""}
-      </div>`).join("");
-
+    const createdNames=createdTotal.slice(0,12).map(x=>esc(x.name||"")).join("<br>");
     if(status){
-      status.innerHTML=`
-        <b>${createdTotal.length}店舗をKBN独自掲載しました。</b><br>
-        Google検索：${searchedTotal.length}組<br>
-        Google生ヒット合計：${rawTotal}件<br>
-        BAR判定後：${barTotal}件<br>
-        APIエラー：${errors?`${errors}件`:"なし"}<br>
-        重複・除外：${rejectedTotal}件
-        <details style="margin-top:10px">
-          <summary style="cursor:pointer;font-weight:800">検索詳細を見る</summary>
-          <div style="margin-top:8px">${diagRows||"診断データなし"}</div>
-        </details>`;
+      status.innerHTML=
+        `<b>${createdTotal.length}店舗をKBN独自掲載しました。</b><br>`+
+        `Google検索：${searchedTotal.length}組<br>`+
+        `Google生ヒット 合計：${rawTotal}件<br>`+
+        `BAR判定後：${barTotal}件<br>`+
+        `APIエラー：${errors}件<br>`+
+        `重複・除外：${rejectedTotal}件`+
+        (createdNames?`<br><br><small>${createdNames}</small>`:"");
     }
 
-    alert(createdTotal.length
-      ? `${createdTotal.length}店舗を自動でKBN独自掲載しました。`
-      : "今回は新しい独自掲載対象が見つかりませんでした。"
-    );
+    if(createdTotal.length){
+      alert(`${createdTotal.length}店舗をKBN独自掲載しました。`);
+    }else{
+      alert("今回、新しく掲載できる店舗は見つかりませんでした。");
+    }
+
+    await Promise.allSettled([
+      typeof loadAutoListedShops==="function"?loadAutoListedShops():Promise.resolve(),
+      typeof loadShops==="function"?loadShops():Promise.resolve(),
+      typeof loadAlerts==="function"?loadAlerts():Promise.resolve()
+    ]);
+
   }catch(e){
-    if($("autoProgressCurrent"))$("autoProgressCurrent").textContent="エラーで停止しました。";
-    if(status)status.textContent="自動開拓に失敗しました: "+(e?.message||"UNKNOWN_ERROR");
-    alert("自動開拓できませんでした: "+(e?.message||"UNKNOWN_ERROR"));
+    console.error("auto discovery failed",e);
+    const msg=e?.message||"UNKNOWN_ERROR";
+    if(status){
+      status.innerHTML=
+        `<b>自動開拓を途中で停止しました。</b><br>`+
+        `<small>${completed}/${totalSteps}検索・${createdTotal.length}店舗掲載まで保存済みです。<br>${esc(msg)}</small>`;
+    }
+    updateProgress(`途中停止：${completed}/${totalSteps}検索まで完了`);
+    alert(
+      `自動開拓を途中で停止しました。\n\n`+
+      `${completed}/${totalSteps}検索・${createdTotal.length}店舗掲載までは保存されています。\n`+
+      `通信が安定してから再実行してください。`
+    );
   }finally{
     btn.disabled=false;
     btn.textContent="Google優先で高精度自動掲載";
@@ -9411,26 +9486,57 @@ document.addEventListener("click",async(e)=>{
 </script>
 
 
-<script id="kbn-schedule-editor-v176-js">
+<script id="kbn-schedule-editor-v217-js">
+function kbnScheduleTimesV217(){
+  return [1,2,3,4,5,6].map(i=>document.getElementById(`autoListingTime${i}`)?.value||"");
+}
+
+function kbnMaintenanceSlotV217(){
+  const n=Number(document.getElementById("maintenanceScheduleSelect")?.value||1);
+  return Math.max(1,Math.min(6,n));
+}
+
+function kbnRefreshMaintenanceOptionsV217(){
+  const select=document.getElementById("maintenanceScheduleSelect");
+  if(!select)return;
+  const selected=String(kbnMaintenanceSlotV217());
+  const times=kbnScheduleTimesV217();
+  [...select.options].forEach((opt,i)=>{
+    opt.textContent=`自動掲載 ${i+1}（${times[i]||"--:--"}）`;
+  });
+  select.value=selected;
+}
+
 window.loadAutoSchedule=async function(){
   const status=document.getElementById("autoScheduleStatus");
   try{
     const d=await api("/api/admin/auto-schedule");
-    const times=Array.isArray(d.times_jst)?d.times_jst:[];
-    if(times.length===3){
-      times.forEach((v,i)=>{
-        const el=document.getElementById(`autoScheduleTime${i+1}`);
-        if(el)el.value=v;
-      });
-      if(status){
-        status.dataset.state="ok";
-        status.textContent=`現在：${times.join(" / ")}（日本時間）`;
-      }
-    }else{
-      if(status){
-        status.dataset.state="error";
-        status.textContent="予約時間を3件取得できませんでした。";
-      }
+    const listingTimes=Array.isArray(d.auto_listing_times_jst)?d.auto_listing_times_jst:[];
+    const maintenanceTime=String(d.full_maintenance_time_jst||d.full_maintenance_times_jst?.[0]||"");
+
+    if(listingTimes.length!==6){
+      throw new Error("AUTO_LISTING_SCHEDULE_NOT_6");
+    }
+
+    listingTimes.forEach((v,i)=>{
+      const el=document.getElementById(`autoListingTime${i+1}`);
+      if(el)el.value=v;
+    });
+
+    let slot=listingTimes.indexOf(maintenanceTime)+1;
+    if(slot<1)slot=1;
+    const select=document.getElementById("maintenanceScheduleSelect");
+    if(select)select.value=String(slot);
+    kbnRefreshMaintenanceOptionsV217();
+
+    if(status){
+      status.dataset.state="ok";
+      status.textContent=`現在：自動掲載 ${listingTimes.join(" / ")} ｜ 通常メンテナンス ${maintenanceTime||listingTimes[slot-1]}`;
+    }
+
+    const six=document.getElementById("autoListingSixTimesStatus");
+    if(six){
+      six.textContent=`自動掲載：1日6回（${listingTimes.join(" / ")}） / 通常メンテナンス：${maintenanceTime||listingTimes[slot-1]}`;
     }
   }catch(e){
     if(status){
@@ -9440,27 +9546,36 @@ window.loadAutoSchedule=async function(){
   }
 };
 
+document.addEventListener("input",(e)=>{
+  if(/^autoListingTime[1-6]$/.test(e.target?.id||"")){
+    kbnRefreshMaintenanceOptionsV217();
+  }
+});
+
 document.addEventListener("click",async(e)=>{
   if(e.target?.id!=="autoScheduleSaveBtn")return;
 
   const btn=e.target;
   const status=document.getElementById("autoScheduleStatus");
-  const times=[1,2,3].map(i=>document.getElementById(`autoScheduleTime${i}`)?.value||"");
+  const listingTimes=kbnScheduleTimesV217();
 
-  if(times.some(v=>!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(v))){
+  if(listingTimes.some(v=>!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(v))){
     if(status){
       status.dataset.state="error";
-      status.textContent="3つの時間をすべて入力してください。";
+      status.textContent="自動掲載6回の時間をすべて入力してください。";
     }
     return;
   }
-  if(new Set(times).size!==3){
+  if(new Set(listingTimes).size!==6){
     if(status){
       status.dataset.state="error";
-      status.textContent="同じ時間は設定できません。";
+      status.textContent="自動掲載の6つの時間は重複できません。";
     }
     return;
   }
+
+  const slot=kbnMaintenanceSlotV217();
+  const maintenanceTime=listingTimes[slot-1];
 
   btn.disabled=true;
   btn.textContent="反映中...";
@@ -9473,18 +9588,31 @@ document.addEventListener("click",async(e)=>{
     const d=await api("/api/admin/auto-schedule",{
       method:"PUT",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({times_jst:times})
+      body:JSON.stringify({
+        auto_listing_times_jst:listingTimes,
+        full_maintenance_time_jst:maintenanceTime
+      })
     });
 
-    const saved=Array.isArray(d.times_jst)?d.times_jst:times;
+    const saved=Array.isArray(d.auto_listing_times_jst)?d.auto_listing_times_jst:listingTimes;
     saved.forEach((v,i)=>{
-      const el=document.getElementById(`autoScheduleTime${i+1}`);
+      const el=document.getElementById(`autoListingTime${i+1}`);
       if(el)el.value=v;
     });
 
+    const savedMaintenance=String(d.full_maintenance_time_jst||maintenanceTime);
+    const savedSlot=saved.indexOf(savedMaintenance)+1;
+    const select=document.getElementById("maintenanceScheduleSelect");
+    if(select)select.value=String(savedSlot>0?savedSlot:1);
+    kbnRefreshMaintenanceOptionsV217();
+
     if(status){
       status.dataset.state="ok";
-      status.textContent=`✓ ${saved.join(" / ")}（日本時間）で反映しました。Cloudflareのデプロイ後に有効になります。`;
+      status.textContent=`✓ 自動掲載 ${saved.join(" / ")} ｜ 通常メンテナンス ${savedMaintenance} に更新しました。Cloudflareデプロイ後に有効になります。`;
+    }
+    const six=document.getElementById("autoListingSixTimesStatus");
+    if(six){
+      six.textContent=`自動掲載：1日6回（${saved.join(" / ")}） / 通常メンテナンス：${savedMaintenance}`;
     }
   }catch(err){
     if(status){
@@ -9493,12 +9621,8 @@ document.addEventListener("click",async(e)=>{
     }
   }finally{
     btn.disabled=false;
-    btn.textContent="予約を更新";
+    btn.textContent="予約時間を更新";
   }
-});
-
-document.addEventListener("DOMContentLoaded",()=>{
-  setTimeout(()=>window.loadAutoSchedule?.(),650);
 });
 </script>
 
