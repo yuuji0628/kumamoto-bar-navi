@@ -3220,7 +3220,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.07</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.12</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -3608,6 +3608,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <div class="lead-smart-collapse-body" data-lead-panel="auto">
       <p class="lead-smart-helper">県内を順番に検索し、重複を避けながら高精度で自動掲載します。</p>
       <button type="button" id="autoDiscoverBtn" class="btn-gold lead-smart-primary">Google優先で高精度自動掲載</button>
+      <div style="margin-top:8px;color:#f1c75b;font-weight:800;font-size:.82rem">1回の実行で最大50店舗まで自動掲載</div>
       <div id="autoDiscoverStatus" class="auto-discovery-status"></div>
       <div id="autoDiscoverProgress" class="kbn-work-progress" hidden>
         <div class="kbn-work-progress-head"><b>自動開拓の進捗</b><strong id="autoProgressPct">0%</strong></div>
@@ -7652,7 +7653,7 @@ window.runAutoDiscovery=async function(){
   btn.textContent="自動開拓中...";
   if(progress)progress.hidden=false;
 
-  const totalSteps=15;
+  const totalSteps=30;
   let completed=0;
   let createdTotal=[];
   let searchedTotal=[];
@@ -7676,9 +7677,9 @@ window.runAutoDiscovery=async function(){
 
   try{
     for(let i=0;i<totalSteps;i++){
-      if(createdTotal.length>=20){
+      if(createdTotal.length>=50){
         completed=totalSteps;
-        updateProgress("自動掲載上限20店舗に到達しました。");
+        updateProgress("自動掲載上限50店舗に到達しました。");
         break;
       }
 
@@ -7686,7 +7687,7 @@ window.runAutoDiscovery=async function(){
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({
-          max_listings:Math.min(3,20-createdTotal.length),
+          max_listings:Math.min(3,50-createdTotal.length),
           pair_limit:1,
           per_pair_limit:3
         })
