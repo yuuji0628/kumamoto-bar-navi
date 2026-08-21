@@ -868,10 +868,12 @@ async function ensureKbnCronRunsTableV224(env){
       status TEXT NOT NULL,
       created_count INTEGER DEFAULT 0,
       error TEXT,
+      diagnostic_json TEXT,
       started_at TEXT DEFAULT CURRENT_TIMESTAMP,
       finished_at TEXT
     )
   `).run();
+  try{await env.DB.prepare("ALTER TABLE kbn_cron_runs ADD COLUMN diagnostic_json TEXT").run()}catch{}
 }
 
 async function kbnCronRunStartV224(env,event,runType){
@@ -886,23 +888,61 @@ async function kbnCronRunStartV224(env,event,runType){
   return Number(r?.meta?.last_row_id||0);
 }
 
-async function kbnCronRunFinishV224(env,id,{status="success",createdCount=0,error=""}={}){
+async function kbnCronRunFinishV224(env,id,{status="success",createdCount=0,error="",diagnostic=null}={}){
   if(!id)return;
   await ensureKbnCronRunsTableV224(env);
+  const diag=diagnostic?JSON.stringify(diagnostic).slice(0,12000):"";
   await env.DB.prepare(`
     UPDATE kbn_cron_runs
-    SET status=?,created_count=?,error=?,finished_at=CURRENT_TIMESTAMP
+    SET status=?,created_count=?,error=?,diagnostic_json=?,finished_at=CURRENT_TIMESTAMP
     WHERE id=?
-  `).bind(String(status),Number(createdCount)||0,String(error||"").slice(0,1000),Number(id)).run();
+  `).bind(String(status),Number(createdCount)||0,String(error||"").slice(0,1000),diag,Number(id)).run();
 }
 
-async function kbnLastCronRunV224(env){
+async function kbnLastCronRunV224(env,runType=""){
   await ensureKbnCronRunsTableV224(env);
-  return await env.DB.prepare(`
-    SELECT id,scheduled_time,scheduled_jst,run_type,status,created_count,error,started_at,finished_at
+  const where=runType?"WHERE run_type=?":"";
+  const q=`
+    SELECT id,scheduled_time,scheduled_jst,run_type,status,created_count,error,diagnostic_json,started_at,finished_at
     FROM kbn_cron_runs
+    ${where}
     ORDER BY id DESC LIMIT 1
-  `).first();
+  `;
+  return runType
+    ? await env.DB.prepare(q).bind(String(runType)).first()
+    : await env.DB.prepare(q).first();
+}
+
+function kbnDiscoveryDiagnosticV226(result){
+  const d=result?.discovery||result||{};
+  const searched=Array.isArray(d.searched)?d.searched:[];
+  const rejected=Array.isArray(d.rejected)?d.rejected:[];
+  const reasonCounts={};
+  const sourceFound={google:0,foursquare:0,geoapify:0,osm:0};
+  let rawGoogle=0;
+  for(const s of searched){
+    rawGoogle+=Number(s?.raw_found||0);
+    sourceFound.google+=Number(s?.google_found||0);
+    sourceFound.foursquare+=Number(s?.fsq_found||0);
+    sourceFound.geoapify+=Number(s?.geo_found||0);
+    sourceFound.osm+=Number(s?.osm_found||0);
+  }
+  for(const r of rejected){
+    const raw=String(r?.reason||"UNKNOWN").split(",").filter(Boolean);
+    if(!raw.length)raw.push("UNKNOWN");
+    for(const reason of raw)reasonCounts[reason]=(reasonCounts[reason]||0)+1;
+  }
+  const topReasons=Object.entries(reasonCounts).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([reason,count])=>({reason,count}));
+  return {
+    searched_pairs:searched.length,
+    raw_google_found:rawGoogle,
+    source_found:sourceFound,
+    rejected_total:rejected.length,
+    rejection_reasons:topReasons,
+    created_count:Array.isArray(d.created)?d.created.length:0,
+    passes:Number(d.passes||d.pass_stats?.length||0),
+    source_errors:searched.filter(s=>s?.error).slice(0,10).map(s=>({area:s.area,type:s.type,error:s.error}))
+  };
 }
 
 function kbnEffectiveScheduleV224(env){
@@ -5730,6 +5770,14 @@ ${urls.map(x=>`  <url>
           const effective=kbnEffectiveScheduleV224(env);
           let lastRun=null;
           try{lastRun=await kbnLastCronRunV224(env)}catch(e){console.error("cron history read failed",e)}
+          let lastScheduled=null,lastManual=null;
+          try{
+            const auto=await kbnLastCronRunV224(env,"auto_listing");
+            const maintenanceRun=await kbnLastCronRunV224(env,"maintenance");
+            if(auto&&maintenanceRun)lastScheduled=Number(auto.id)>Number(maintenanceRun.id)?auto:maintenanceRun;
+            else lastScheduled=auto||maintenanceRun||null;
+            lastManual=await kbnLastCronRunV224(env,"manual_test");
+          }catch(e){console.error("cron typed history read failed",e)}
           let cloudflare={configured:false,crons:[],times_jst:[],error:""};
           try{cloudflare=await kbnCloudflareSchedulesV225(env)}catch(e){cloudflare={configured:true,crons:[],times_jst:[],error:String(e?.message||e)}}
           const envInSync=
@@ -5750,7 +5798,9 @@ ${urls.map(x=>`  <url>
             },
             effective,
             cloudflare,
-            last_run:lastRun||null
+            last_run:lastRun||null,
+            last_scheduled_run:lastScheduled||null,
+            last_manual_run:lastManual||null
           });
         }catch(e){
           return json({ok:false,error:"AUTO_SCHEDULE_STATUS_FAILED",message:String(e?.message||e).slice(0,500)},{status:e?.status||502});
@@ -5764,8 +5814,9 @@ ${urls.map(x=>`  <url>
           runId=await kbnCronRunStartV224(env,fakeEvent,"manual_test");
           const result=await runScheduledKbnAutoDiscoveryOnly(env);
           const createdCount=Number(result?.discovery?.created?.length||0);
-          await kbnCronRunFinishV224(env,runId,{status:"success",createdCount});
-          return json({ok:true,status:"success",created_count:createdCount,result});
+          const diagnostic=kbnDiscoveryDiagnosticV226(result);
+          await kbnCronRunFinishV224(env,runId,{status:"success",createdCount,diagnostic});
+          return json({ok:true,status:"success",created_count:createdCount,diagnostic,result});
         }catch(e){
           try{await kbnCronRunFinishV224(env,runId,{status:"failed",error:String(e?.message||e)})}catch{}
           return json({ok:false,error:"CRON_TEST_FAILED",message:String(e?.message||e).slice(0,1000)},{status:500});
@@ -7093,7 +7144,7 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
           ?await runScheduledKbnMaintenance(env)
           :await runScheduledKbnAutoDiscoveryOnly(env);
         const createdCount=Number(result?.discovery?.created?.length||0);
-        await kbnCronRunFinishV224(env,runId,{status:"success",createdCount});
+        await kbnCronRunFinishV224(env,runId,{status:"success",createdCount,diagnostic:kbnDiscoveryDiagnosticV226(result)});
       }catch(e){
         console.error(fullMaintenance?"scheduled KBN maintenance failed":"scheduled KBN auto discovery only failed",e);
         try{await kbnCronRunFinishV224(env,runId,{status:"failed",error:String(e?.message||e)})}catch(logErr){console.error("cron run log failed",logErr)}
