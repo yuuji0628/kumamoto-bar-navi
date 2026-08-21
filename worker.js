@@ -1007,11 +1007,11 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="2.39";
+      config.vars.KBN_CONFIG_VERSION="2.40";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
-          message:"admin: switch KBN scheduler to fixed every-minute trigger (v2.39)",
+          message:"admin: switch KBN scheduler to fixed every-minute trigger (v2.40)",
           content:kbnUtf8ToBase64(content),sha,branch:c.branch
         })
       });
@@ -4977,9 +4977,9 @@ async function runScheduledKbnMaintenance(env){
 // 既存店舗の情報補完・画像補完・Instagram補完・閉業チェックは実行しない。
 async function runScheduledKbnAutoDiscoveryOnly(env){
   const fakeRequest=new Request("https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/api/internal/scheduled-auto-only");
-  // v2.27 Free枠: 50 subrequests/invocation を超えないよう1回を小分け。
-  // 1日6回あるため、1回5店舗目標で分散して増やす。
-  const targetListings=5;
+  // v2.40 Free枠: 50 subrequests/invocation を超えにくい範囲で、1回最大10店舗へ拡張。
+  // 外部fetchの余裕を残すため、探索は最大7ペアに抑える。
+  const targetListings=10;
   const maxPasses=1;
   const allCreated=[];
   const allSearched=[];
@@ -4992,7 +4992,7 @@ async function runScheduledKbnAutoDiscoveryOnly(env){
       env,
       fakeRequest,
       remaining,
-      8,
+      7,  // Free枠のsubrequest余裕を確保
       2
     );
 
