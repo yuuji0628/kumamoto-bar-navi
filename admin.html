@@ -1478,35 +1478,46 @@
   .upload-actions{display:grid;grid-template-columns:1fr}
 }
 
-/* v2.38 smart site update */
-.siteupdate-smart{display:grid;gap:14px}
-.siteupdate-smart-head{
-  display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
-  padding:14px;border:1px solid #33404d;border-radius:16px;
+/* v2.39 compact site update */
+.siteupdate-smart{display:grid;gap:12px}
+.siteupdate-smart-card{
+  display:grid;gap:12px;
+  padding:16px;border:1px solid #33404d;border-radius:18px;
   background:linear-gradient(180deg,#0c141d,#0a1118)
 }
-.siteupdate-smart-head h3{margin:0 0 6px;font-size:1rem}
-.siteupdate-smart-head p{margin:0;color:#aeb6c0;font-size:.8rem;line-height:1.7}
-.siteupdate-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
-.siteupdate-step{padding:12px;border:1px solid #33404d;border-radius:14px;background:#0b1219}
-.siteupdate-step b{display:block;color:#f1c75b;margin-bottom:4px;font-size:.82rem}
-.siteupdate-step small{display:block;color:#9ea8b2;line-height:1.6;font-size:.75rem}
-.siteupdate-drop-wrap{padding:14px;border:1px solid #33404d;border-radius:16px;background:#0b1219}
-.siteupdate-list-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
-.siteupdate-list-head b{font-size:.95rem}
-.siteupdate-list-head small{color:#97a3af}
+.siteupdate-topline{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:10px
+}
+.siteupdate-topline h3{margin:0 0 4px;font-size:1.02rem}
+.siteupdate-topline p{margin:0;color:#aeb6c0;font-size:.8rem;line-height:1.65}
+.siteupdate-statusline{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  padding:12px;border:1px solid #33404d;border-radius:14px;background:#0b1219
+}
+.siteupdate-status-left{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.siteupdate-status-left strong{font-size:.95rem}
+.siteupdate-status-left .muted{color:#aab3bc;font-size:.8rem}
+.siteupdate-drop-wrap{padding:0}
+.siteupdate-list-head{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  margin:2px 0 0
+}
+.siteupdate-list-head b{font-size:.92rem}
+.siteupdate-list-head small{color:#97a3af;font-size:.76rem}
 .siteupdate-final{
-  padding:14px;border:1px solid #6b5526;border-radius:16px;
+  padding:12px;border:1px solid #6b5526;border-radius:14px;
   background:rgba(230,189,85,.05);display:grid;gap:10px
 }
-.siteupdate-final-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
-.siteupdate-final-top b{display:block;margin-bottom:4px}
-.siteupdate-final-top small{color:#aeb6c0;line-height:1.7}
+.siteupdate-final-top{
+  display:flex;align-items:center;justify-content:space-between;gap:10px
+}
+.siteupdate-final-top b{display:block;margin-bottom:2px}
+.siteupdate-final-top small{color:#aeb6c0;line-height:1.6;font-size:.76rem}
 .siteupdate-compact-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .siteupdate-builds-embedded{padding-top:2px}
 @media(max-width:760px){
-  .siteupdate-smart-head{display:grid}
-  .siteupdate-steps{grid-template-columns:1fr}
+  .siteupdate-topline{display:grid}
+  .siteupdate-statusline{display:grid}
   .siteupdate-final-top{display:grid}
   .siteupdate-compact-actions{grid-template-columns:1fr}
 }
@@ -3269,7 +3280,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.38</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.39</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -3765,7 +3776,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div id="refreshExistingStatus" class="auto-discovery-status lead-smart-message"></div>
     <div id="repairExistingAreasStatus" class="auto-discovery-status lead-smart-message"></div>
-    <small class="version-note">ver2.38：管理メニューの「メンテナンス」が自動メンテナンスへ直接移動するよう修正しました。</small>
+    <small class="version-note">ver2.39：管理メニューの「メンテナンス」が自動メンテナンスへ直接移動するよう修正しました。</small>
   </div>
 
   
@@ -3945,46 +3956,35 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
 
   <div class="siteupdate-smart">
-    <div class="siteupdate-smart-head">
-      <div>
-        <h3>かんたん更新</h3>
-        <p>完成した <b>admin.html</b> や <b>worker.js</b> を選ぶだけで、同じ名前のGitHubファイルへそのまま上書きします。</p>
+    <div class="siteupdate-smart-card">
+      <div class="siteupdate-topline">
+        <div>
+          <h3>かんたん更新</h3>
+          <p>完成した <b>admin.html</b> や <b>worker.js</b> を選ぶだけで、同じ名前のGitHubファイルへそのまま上書きします。</p>
+        </div>
       </div>
-      <div class="kbn-github-status" style="margin:0">
-        <span id="kbnGithubDot" class="kbn-github-dot"></span>
-        <strong id="kbnGithubStatus">GitHub接続確認中...</strong>
-        <span id="kbnGithubRepo" class="muted"></span>
-      </div>
-    </div>
 
-    <div id="kbnGithubSetupHelp" class="kbn-github-help" hidden>
-      Cloudflare WorkerのSecretに <b>GITHUB_TOKEN</b> を登録してください。
-    </div>
+      <div class="siteupdate-statusline">
+        <div class="siteupdate-status-left">
+          <span id="kbnGithubDot" class="kbn-github-dot"></span>
+          <strong id="kbnGithubStatus">GitHub接続確認中...</strong>
+          <span id="kbnGithubRepo" class="muted"></span>
+        </div>
+        <button id="kbnGithubReload" class="admin-secondary-btn" type="button">接続確認</button>
+      </div>
 
-    <div class="siteupdate-steps">
-      <div class="siteupdate-step">
-        <b>01 ファイルを選ぶ</b>
-        <small>ここで作成した更新ファイルを選択。複数ファイルもまとめてOKです。</small>
+      <div id="kbnGithubSetupHelp" class="kbn-github-help" hidden>
+        Cloudflare WorkerのSecretに <b>GITHUB_TOKEN</b> を登録してください。
       </div>
-      <div class="siteupdate-step">
-        <b>02 内容を確認</b>
-        <small>選んだファイル名とサイズを見て、問題なければ確認ボタンを押します。</small>
-      </div>
-      <div class="siteupdate-step">
-        <b>03 反映する</b>
-        <small>反映ボタンでGitHubへアップロード。下のビルド状況からデプロイも確認できます。</small>
-      </div>
-    </div>
 
-    <div class="siteupdate-drop-wrap">
-      <div id="kbnFileDrop" class="file-drop">
-        <input id="kbnUploadFiles" type="file" multiple>
-        <strong>更新ファイルを選択</strong>
-        <span>タップして選択 / PCではドラッグ＆ドロップも可能</span>
+      <div class="siteupdate-drop-wrap">
+        <div id="kbnFileDrop" class="file-drop">
+          <input id="kbnUploadFiles" type="file" multiple>
+          <strong>更新ファイルを選択</strong>
+          <span>タップして選択 / PCではドラッグ＆ドロップも可能</span>
+        </div>
       </div>
-    </div>
 
-    <div class="file-upload-updater" style="gap:10px">
       <div class="siteupdate-list-head">
         <b>選択中のファイル</b>
         <small>反映前にここで確認</small>
@@ -3998,7 +3998,7 @@ html,body{max-width:100%;overflow-x:hidden}
         <div class="siteupdate-final-top">
           <div>
             <b>反映前の確認</b>
-            <small>「このファイルで更新する」を押すと、反映ボタンが有効になります。</small>
+            <small>確認後に反映ボタンが有効になります。</small>
           </div>
           <button id="kbnUploadApprove" class="admin-secondary-btn" type="button">このファイルで更新する</button>
         </div>
