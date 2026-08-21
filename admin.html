@@ -3220,7 +3220,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.12</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.13</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -3245,7 +3245,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </nav>
 
 <div class="ops-status-strip">
-  <div><span>公開店舗</span><strong id="opsShopCount">-</strong></div>
+  <div><span>公開店舗 <small style="display:inline;color:#6f7a86;font-size:.58rem">（現在公開中）</small></span><strong id="opsShopCount">-</strong></div>
   <div><span>未対応申込み</span><strong id="opsSubCount">-</strong></div>
   <div><span>未対応店舗申請</span><strong id="opsOwnerReqCount">-</strong></div>
   <button type="button" id="opsReloadAllBtn">すべて更新</button>
@@ -4464,7 +4464,7 @@ function setNotifyBadge(id,count){
 }
 
 function updateOpsCountsFromCurrentData(){
-  const sc=Array.isArray(shops)?shops.length:0;
+  const sc=Array.isArray(shops)?shops.filter(x=>Number(x?.is_published)===1).length:0;
   const sp=Array.isArray(subs)?subs.filter(x=>x.status==="pending").length:0;
 
   if($("opsShopCount"))$("opsShopCount").textContent=String(sc);
@@ -4607,8 +4607,9 @@ window.loadShops=async function(){
   const d=await api("/api/admin/shops");
   shops=d.shops||[];
 
-  if($("opsShopCount"))$("opsShopCount").textContent=String(shops.length);
-  setDashboardCount("dashShopCount",shops.length);
+  const publicShopCount=shops.filter(x=>Number(x?.is_published)===1).length;
+  if($("opsShopCount"))$("opsShopCount").textContent=String(publicShopCount);
+  setDashboardCount("dashShopCount",publicShopCount);
 
   $("jobShop").innerHTML=
     '<option value="">店舗なし</option>'+
