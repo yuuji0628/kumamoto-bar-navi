@@ -3236,7 +3236,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.34</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.35</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -3637,7 +3637,7 @@ html,body{max-width:100%;overflow-x:hidden}
   <div class="lead-smart-head">
     <p class="eyebrow">LEAD FINDER</p>
     <h2>BAR開拓</h2>
-    <p>自動開拓を最上部に配置し、メンテナンス・手動検索の順で使いやすく整理しました。</p>
+    <p>自動開拓・手動検索・メンテナンスを用途ごとに管理できます。</p>
   </div>
 
   <div class="lead-smart-tabs" role="tablist" aria-label="BAR開拓メニュー">
@@ -3732,11 +3732,11 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div id="refreshExistingStatus" class="auto-discovery-status lead-smart-message"></div>
     <div id="repairExistingAreasStatus" class="auto-discovery-status lead-smart-message"></div>
-    <small class="version-note">ver2.34：予約時間は保存するだけで即反映。Cronの複雑な設定・テスト画面を廃止しました。</small>
+    <small class="version-note">ver2.35：予約時間は保存するだけで即反映。Cronの複雑な設定・テスト画面を廃止しました。</small>
   </div>
 
   
-  <div class="lead-smart-card kbn-maintenance-card">
+  <div id="kbnMaintenanceCard" class="lead-smart-card kbn-maintenance-card">
     <div class="lead-smart-card-head">
       <div class="lead-smart-icon">✓</div>
       <div>
@@ -9266,7 +9266,8 @@ document.addEventListener("click",(e)=>{
   const btn=e.target.closest("[data-open-lead-maintenance='1']");
   if(!btn)return;
   setTimeout(()=>{
-    document.getElementById("leadSmartRefresh")?.scrollIntoView({behavior:"smooth",block:"start"});
+    // v2.35: 非表示の「既存更新」ではなく、実際の自動メンテナンスカードへ移動
+    document.getElementById("kbnMaintenanceCard")?.scrollIntoView({behavior:"smooth",block:"start"});
   },80);
 });
 </script>
