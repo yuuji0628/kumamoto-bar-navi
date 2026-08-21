@@ -859,6 +859,120 @@ async function kbnUpdateAutoSchedule(env,scheduleInput){
 
 
 
+
+async function ensureKbnRuntimeScheduleTableV230(env){
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS kbn_runtime_schedule(
+      id INTEGER PRIMARY KEY,
+      times_json TEXT NOT NULL,
+      maintenance_time TEXT NOT NULL,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run();
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS kbn_runtime_minute_runs(
+      minute_key TEXT PRIMARY KEY,
+      run_type TEXT NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run();
+}
+
+function kbnValidateRuntimeScheduleV230(scheduleInput){
+  const listingRaw=Array.isArray(scheduleInput?.auto_listing_times_jst)
+    ?scheduleInput.auto_listing_times_jst:[];
+  const listingTimes=listingRaw.map(kbnNormalizeJstTime);
+  const maintenanceTime=kbnNormalizeJstTime(
+    scheduleInput?.full_maintenance_time_jst||scheduleInput?.maintenance_time_jst||""
+  );
+  if(listingTimes.length!==6||listingTimes.some(x=>!x)){
+    const e=new Error("AUTO_LISTING_REQUIRES_6_VALID_JST_TIMES"); e.status=400; throw e;
+  }
+  if(new Set(listingTimes).size!==6){
+    const e=new Error("AUTO_LISTING_TIMES_MUST_BE_UNIQUE"); e.status=400; throw e;
+  }
+  if(!maintenanceTime||!listingTimes.includes(maintenanceTime)){
+    const e=new Error("MAINTENANCE_TIME_MUST_MATCH_ONE_AUTO_LISTING_TIME"); e.status=400; throw e;
+  }
+  return {auto_listing_times_jst:kbnSortJstTimes(listingTimes),full_maintenance_time_jst:maintenanceTime};
+}
+
+async function kbnGetRuntimeScheduleV230(env){
+  await ensureKbnRuntimeScheduleTableV230(env);
+  const row=await env.DB.prepare(`SELECT times_json,maintenance_time,updated_at FROM kbn_runtime_schedule WHERE id=1`).first();
+  if(row){
+    try{
+      const parsed=JSON.parse(String(row.times_json||"[]"));
+      return {...kbnValidateRuntimeScheduleV230({auto_listing_times_jst:parsed,full_maintenance_time_jst:row.maintenance_time}),updated_at:String(row.updated_at||"")};
+    }catch(e){console.error("runtime schedule parse failed",e)}
+  }
+  const fallback=kbnEffectiveScheduleV224(env);
+  return {
+    auto_listing_times_jst:fallback.auto_listing_times_jst,
+    full_maintenance_time_jst:fallback.full_maintenance_time_jst,
+    updated_at:"",
+    source:"fallback"
+  };
+}
+
+async function kbnSaveRuntimeScheduleV230(env,scheduleInput){
+  const valid=kbnValidateRuntimeScheduleV230(scheduleInput);
+  await ensureKbnRuntimeScheduleTableV230(env);
+  await env.DB.prepare(`
+    INSERT INTO kbn_runtime_schedule(id,times_json,maintenance_time,updated_at)
+    VALUES(1,?,?,CURRENT_TIMESTAMP)
+    ON CONFLICT(id) DO UPDATE SET times_json=excluded.times_json,maintenance_time=excluded.maintenance_time,updated_at=CURRENT_TIMESTAMP
+  `).bind(JSON.stringify(valid.auto_listing_times_jst),valid.full_maintenance_time_jst).run();
+  return {...valid,timezone:"Asia/Tokyo"};
+}
+
+function kbnJstMinuteKeyV230(event){
+  const ms=Number(event?.scheduledTime||Date.now());
+  const d=new Date(ms+9*60*60*1000);
+  const yyyy=d.getUTCFullYear();
+  const mm=String(d.getUTCMonth()+1).padStart(2,"0");
+  const dd=String(d.getUTCDate()).padStart(2,"0");
+  const hh=String(d.getUTCHours()).padStart(2,"0");
+  const mi=String(d.getUTCMinutes()).padStart(2,"0");
+  return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+}
+
+async function kbnClaimRuntimeMinuteV230(env,event,runType){
+  await ensureKbnRuntimeScheduleTableV230(env);
+  const key=kbnJstMinuteKeyV230(event);
+  const r=await env.DB.prepare(`INSERT OR IGNORE INTO kbn_runtime_minute_runs(minute_key,run_type,created_at) VALUES(?,?,CURRENT_TIMESTAMP)`).bind(key,String(runType||"auto_listing")).run();
+  return Number(r?.meta?.changes||0)>0;
+}
+
+async function kbnEnsureMinuteCronPermanentV230(env){
+  const fixed=["* * * * *"];
+  let cloudflare={ok:false,error:""};
+  try{cloudflare=await kbnCloudflareSetSchedulesV225(env,fixed)}
+  catch(e){cloudflare={ok:false,error:String(e?.message||e)}}
+
+  // GitHubのwranglerも「毎分1回」に一度だけ固定。以後、時間変更ではデプロイ不要。
+  let github={ok:true,changed:false,error:""};
+  try{
+    const {config,sha,c}=await kbnReadWranglerFromGithub(env);
+    const current=Array.isArray(config?.triggers?.crons)?config.triggers.crons:[];
+    if(current.length!==1||String(current[0]).trim()!==fixed[0]){
+      config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
+      config.triggers.crons=fixed;
+      config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
+      config.vars.KBN_CONFIG_VERSION="2.30";
+      const content=JSON.stringify(config,null,2)+"\n";
+      const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
+        method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
+          message:"admin: switch KBN scheduler to fixed every-minute trigger (v2.30)",
+          content:kbnUtf8ToBase64(content),sha,branch:c.branch
+        })
+      });
+      github={ok:true,changed:true,commit_sha:result.commit?.sha||""};
+    }
+  }catch(e){github={ok:false,changed:false,error:String(e?.message||e)}}
+  return {cloudflare,github,cron:fixed[0]};
+}
+
 async function ensureKbnCronReceiptsTableV229(env){
   await env.DB.prepare(`
     CREATE TABLE IF NOT EXISTS kbn_cron_receipts(
@@ -5856,134 +5970,30 @@ ${urls.map(x=>`  <url>
       }
 
 
-      if(url.pathname==="/api/admin/auto-schedule-status" && request.method==="GET"){
-        try{
-          const {config}=await kbnReadWranglerFromGithub(env);
-          const desiredRaw=String(config?.vars?.KBN_AUTO_LISTING_TIMES_JST||"")
-            .split("|").map(kbnNormalizeJstTime).filter(Boolean);
-          const desiredTimes=desiredRaw.length===6?kbnSortJstTimes(desiredRaw):[...KBN_DEFAULT_AUTO_LISTING_TIMES_JST_V217];
-          const desiredM=kbnNormalizeJstTime(config?.vars?.KBN_FULL_MAINTENANCE_TIME_JST);
-          const desiredMaintenance=(desiredM&&desiredTimes.includes(desiredM))?desiredM:desiredTimes[0];
-          const effective=kbnEffectiveScheduleV224(env);
-          let lastRun=null;
-          try{lastRun=await kbnLastCronRunV224(env)}catch(e){console.error("cron history read failed",e)}
-          let lastReceipt=null;
-          try{lastReceipt=await kbnLastCronReceiptV229(env)}catch(e){console.error("cron receipt read failed",e)}
-          const propagation=kbnSchedulePropagationStateV229(config?.vars?.KBN_SCHEDULE_UPDATED_AT);
-          let lastScheduled=null,lastManual=null;
-          try{
-            const auto=await kbnLastCronRunV224(env,"auto_listing");
-            const maintenanceRun=await kbnLastCronRunV224(env,"maintenance");
-            if(auto&&maintenanceRun)lastScheduled=Number(auto.id)>Number(maintenanceRun.id)?auto:maintenanceRun;
-            else lastScheduled=auto||maintenanceRun||null;
-            lastManual=await kbnLastCronRunV224(env,"manual_test");
-          }catch(e){console.error("cron typed history read failed",e)}
-          let cloudflare={configured:false,crons:[],times_jst:[],error:""};
-          try{cloudflare=await kbnCloudflareSchedulesV225(env)}catch(e){cloudflare={configured:true,crons:[],times_jst:[],error:String(e?.message||e)}}
-          const envInSync=
-            desiredTimes.join("|")===effective.auto_listing_times_jst.join("|") &&
-            desiredMaintenance===effective.full_maintenance_time_jst;
-          const triggerInSync=cloudflare.configured && !cloudflare.error && desiredTimes.join("|")===cloudflare.times_jst.join("|");
-          return json({
-            ok:true,
-            timezone:"Asia/Tokyo",
-            in_sync:envInSync && triggerInSync,
-            env_in_sync:envInSync,
-            trigger_in_sync:triggerInSync,
-            desired:{
-              auto_listing_times_jst:desiredTimes,
-              full_maintenance_time_jst:desiredMaintenance,
-              schedule_updated_at:String(config?.vars?.KBN_SCHEDULE_UPDATED_AT||""),
-              crons:Array.isArray(config?.triggers?.crons)?config.triggers.crons:[]
-            },
-            effective,
-            cloudflare,
-            propagation,
-            last_receipt:lastReceipt||null,
-            last_run:lastRun||null,
-            last_scheduled_run:lastScheduled||null,
-            last_manual_run:lastManual||null
-          });
-        }catch(e){
-          return json({ok:false,error:"AUTO_SCHEDULE_STATUS_FAILED",message:String(e?.message||e).slice(0,500)},{status:e?.status||502});
-        }
-      }
-
-      if(url.pathname==="/api/admin/cron-test" && request.method==="POST"){
-        let runId=0;
-        const fakeEvent={scheduledTime:Date.now()};
-        try{
-          runId=await kbnCronRunStartV224(env,fakeEvent,"manual_test");
-          const result=await runScheduledKbnAutoDiscoveryOnly(env);
-          const createdCount=Number(result?.discovery?.created?.length||0);
-          const diagnostic=kbnDiscoveryDiagnosticV226(result);
-          await kbnCronRunFinishV224(env,runId,{status:"success",createdCount,diagnostic});
-          return json({ok:true,status:"success",created_count:createdCount,diagnostic,result});
-        }catch(e){
-          try{await kbnCronRunFinishV224(env,runId,{status:"failed",error:String(e?.message||e)})}catch{}
-          return json({ok:false,error:"CRON_TEST_FAILED",message:String(e?.message||e).slice(0,1000)},{status:500});
-        }
-      }
-
       if(url.pathname==="/api/admin/auto-schedule" && request.method==="GET"){
         try{
-          const {config}=await kbnReadWranglerFromGithub(env);
-          const raw=Array.isArray(config?.triggers?.crons)?config.triggers.crons:[];
-          const configuredListing=String(config?.vars?.KBN_AUTO_LISTING_TIMES_JST||"")
-            .split("|").map(kbnNormalizeJstTime).filter(Boolean);
-          const configuredMaintenance=kbnNormalizeJstTime(config?.vars?.KBN_FULL_MAINTENANCE_TIME_JST);
-          let listingTimes=configuredListing.length===6
-            ?kbnSortJstTimes(configuredListing)
-            :[...KBN_DEFAULT_AUTO_LISTING_TIMES_JST_V217];
-          const maintenanceTime=(
-            configuredMaintenance && listingTimes.includes(configuredMaintenance)
-          )?configuredMaintenance:listingTimes[0];
-          const fullTimes=[maintenanceTime];
-          const autoOnlyTimes=listingTimes.filter(x=>x!==maintenanceTime);
-
-          return json({
-            ok:true,
-            timezone:"Asia/Tokyo",
-            times_jst:fullTimes,
-            full_maintenance_times_jst:fullTimes,
-            full_maintenance_time_jst:maintenanceTime,
-            auto_only_times_jst:autoOnlyTimes,
-            auto_listing_times_jst:listingTimes,
-            crons:raw
-          });
+          const schedule=await kbnGetRuntimeScheduleV230(env);
+          return json({ok:true,timezone:"Asia/Tokyo",...schedule});
         }catch(e){
-          return json({
-            ok:false,
-            error:"AUTO_SCHEDULE_READ_FAILED",
-            message:String(e?.message||e).slice(0,500)
-          },{status:e?.status||502});
+          return json({ok:false,error:"AUTO_SCHEDULE_READ_FAILED",message:String(e?.message||e).slice(0,500)},{status:e?.status||500});
         }
       }
 
       if(url.pathname==="/api/admin/auto-schedule" && request.method==="PUT"){
         let x={};
-        try{x=await request.json()}
-        catch{return json({ok:false,error:"INVALID_JSON"},{status:400})}
-
+        try{x=await request.json()}catch{return json({ok:false,error:"INVALID_JSON"},{status:400})}
         try{
-          const listingTimes=Array.isArray(x.auto_listing_times_jst)?x.auto_listing_times_jst:[];
-          const maintenanceTime=String(x.full_maintenance_time_jst||x.maintenance_time_jst||"");
-          const result=await kbnUpdateAutoSchedule(env,{
-            auto_listing_times_jst:listingTimes,
-            full_maintenance_time_jst:maintenanceTime
-          });
-          let cloudflare_sync={ok:false,error:""};
-          try{cloudflare_sync=await kbnCloudflareSetSchedulesV225(env,result.crons)}
-          catch(syncErr){cloudflare_sync={ok:false,error:String(syncErr?.message||syncErr)}}
-          return json({...result,cloudflare_sync,message:cloudflare_sync.ok
-            ?"予約時間をGitHubへ保存し、Cloudflareの実Cron Triggerにも直接反映しました。"
-            :`${result.message} Cloudflare実Triggerの直接更新は失敗しました: ${cloudflare_sync.error}`});
-        }catch(e){
+          const schedule=await kbnSaveRuntimeScheduleV230(env,x);
+          const fixedCron=await kbnEnsureMinuteCronPermanentV230(env);
           return json({
-            ok:false,
-            error:"AUTO_SCHEDULE_UPDATE_FAILED",
-            message:String(e?.message||e).slice(0,500)
-          },{status:e?.status||500});
+            ok:true,
+            ...schedule,
+            fixed_cron:fixedCron,
+            immediate:true,
+            message:"予約時間を保存しました。次回からこの時間に自動実行します。"
+          });
+        }catch(e){
+          return json({ok:false,error:"AUTO_SCHEDULE_UPDATE_FAILED",message:String(e?.message||e).slice(0,500)},{status:e?.status||500});
         }
       }
 
@@ -7236,19 +7246,20 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
   },
 
   async scheduled(event, env, ctx){
-    const fullMaintenance=kbnIsFullMaintenanceEventV218(env,event);
     const task=(async()=>{
-      let runId=0;
+      const schedule=await kbnGetRuntimeScheduleV230(env);
+      const nowJst=kbnScheduledJstTimeV218(event);
+      const listingTimes=new Set(schedule.auto_listing_times_jst||[]);
+
+      // 毎分起動するが、設定した6時刻以外はD1を読むだけで終了。
+      if(!listingTimes.has(nowJst))return;
+
+      const fullMaintenance=nowJst===schedule.full_maintenance_time_jst;
       const runType=fullMaintenance?"maintenance":"auto_listing";
+      const claimed=await kbnClaimRuntimeMinuteV230(env,event,runType);
+      if(!claimed)return; // 同じ分の二重実行防止
 
-      // v2.29: scheduled() に入った瞬間の受信記録を、本処理より先に保存。
-      // これが残れば Cloudflare -> scheduled() までは到達したと判断できる。
-      try{
-        await kbnCronReceiptV229(env,event,fullMaintenance?"maintenance_received":"auto_listing_received");
-      }catch(receiptErr){
-        console.error("scheduled receipt log failed",receiptErr);
-      }
-
+      let runId=0;
       try{
         runId=await kbnCronRunStartV224(env,event,runType);
         const result=fullMaintenance
@@ -7257,13 +7268,10 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
         const createdCount=Number(result?.discovery?.created?.length||0);
         await kbnCronRunFinishV224(env,runId,{status:"success",createdCount,diagnostic:kbnDiscoveryDiagnosticV226(result)});
       }catch(e){
-        console.error(fullMaintenance?"scheduled KBN maintenance failed":"scheduled KBN auto discovery only failed",e);
-        try{await kbnCronRunFinishV224(env,runId,{status:"failed",error:String(e?.message||e)})}catch(logErr){console.error("cron run log failed",logErr)}
+        console.error(fullMaintenance?"runtime maintenance failed":"runtime auto discovery failed",e);
+        try{await kbnCronRunFinishV224(env,runId,{status:"failed",error:String(e?.message||e)})}catch{}
       }
     })();
-
-    // Cloudflare は scheduled() が返す Promise も待つため、明示的に await する。
-    // waitUntil も併用して Past Events 上で失敗が見えやすい形にする。
     ctx.waitUntil(task);
     await task;
   }
