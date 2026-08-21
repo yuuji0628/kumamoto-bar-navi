@@ -937,6 +937,54 @@ function kbnJstMinuteKeyV230(event){
   return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
 }
 
+
+function kbnJstDatePartsV231(event){
+  const ms=Number(event?.scheduledTime||Date.now());
+  const d=new Date(ms+9*60*60*1000);
+  return {
+    yyyy:d.getUTCFullYear(),
+    mm:String(d.getUTCMonth()+1).padStart(2,"0"),
+    dd:String(d.getUTCDate()).padStart(2,"0"),
+    hh:d.getUTCHours(),
+    mi:d.getUTCMinutes()
+  };
+}
+
+function kbnFindDueRuntimeSlotV231(event,schedule,graceMinutes=30){
+  const p=kbnJstDatePartsV231(event);
+  const nowMinutes=p.hh*60+p.mi;
+  const times=Array.isArray(schedule?.auto_listing_times_jst)?schedule.auto_listing_times_jst:[];
+  let best=null;
+
+  for(const raw of times){
+    const m=String(raw||"").match(/^(\d{2}):(\d{2})$/);
+    if(!m)continue;
+    const h=Number(m[1]), mi=Number(m[2]);
+    const slotMinutes=h*60+mi;
+    const diff=nowMinutes-slotMinutes;
+
+    // v2.31: 設定時刻ちょうどだけでなく、30分以内なら取りこぼした回を救済する。
+    if(diff<0 || diff>graceMinutes)continue;
+    if(!best || diff<best.diff){
+      best={
+        time:`${String(h).padStart(2,"0")}:${String(mi).padStart(2,"0")}`,
+        diff,
+        minute_key:`${p.yyyy}-${p.mm}-${p.dd} ${String(h).padStart(2,"0")}:${String(mi).padStart(2,"0")}`
+      };
+    }
+  }
+  return best;
+}
+
+async function kbnClaimRuntimeSlotV231(env,minuteKey,runType){
+  await ensureKbnRuntimeScheduleTableV230(env);
+  const r=await env.DB.prepare(
+    `INSERT OR IGNORE INTO kbn_runtime_minute_runs(minute_key,run_type,created_at)
+     VALUES(?,?,CURRENT_TIMESTAMP)`
+  ).bind(String(minuteKey),String(runType||"auto_listing")).run();
+  return Number(r?.meta?.changes||0)>0;
+}
+
 async function kbnClaimRuntimeMinuteV230(env,event,runType){
   await ensureKbnRuntimeScheduleTableV230(env);
   const key=kbnJstMinuteKeyV230(event);
@@ -959,11 +1007,11 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="2.30";
+      config.vars.KBN_CONFIG_VERSION="2.33";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
-          message:"admin: switch KBN scheduler to fixed every-minute trigger (v2.30)",
+          message:"admin: switch KBN scheduler to fixed every-minute trigger (v2.33)",
           content:kbnUtf8ToBase64(content),sha,branch:c.branch
         })
       });
@@ -1075,6 +1123,17 @@ async function kbnLastCronRunV224(env,runType=""){
   return runType
     ? await env.DB.prepare(q).bind(String(runType)).first()
     : await env.DB.prepare(q).first();
+}
+
+
+async function kbnLastAutomaticRunV233(env){
+  await ensureKbnCronRunsTableV224(env);
+  return await env.DB.prepare(`
+    SELECT id,scheduled_time,scheduled_jst,run_type,status,created_count,error,diagnostic_json,started_at,finished_at
+    FROM kbn_cron_runs
+    WHERE run_type IN ('auto_listing','maintenance')
+    ORDER BY id DESC LIMIT 1
+  `).first();
 }
 
 function kbnDiscoveryDiagnosticV226(result){
@@ -5973,7 +6032,9 @@ ${urls.map(x=>`  <url>
       if(url.pathname==="/api/admin/auto-schedule" && request.method==="GET"){
         try{
           const schedule=await kbnGetRuntimeScheduleV230(env);
-          return json({ok:true,timezone:"Asia/Tokyo",...schedule});
+          let lastAutomaticRun=null;
+          try{lastAutomaticRun=await kbnLastAutomaticRunV233(env)}catch(e){console.error("last automatic run read failed",e)}
+          return json({ok:true,timezone:"Asia/Tokyo",...schedule,last_automatic_run:lastAutomaticRun||null});
         }catch(e){
           return json({ok:false,error:"AUTO_SCHEDULE_READ_FAILED",message:String(e?.message||e).slice(0,500)},{status:e?.status||500});
         }
@@ -7248,16 +7309,17 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
   async scheduled(event, env, ctx){
     const task=(async()=>{
       const schedule=await kbnGetRuntimeScheduleV230(env);
-      const nowJst=kbnScheduledJstTimeV218(event);
-      const listingTimes=new Set(schedule.auto_listing_times_jst||[]);
 
-      // 毎分起動するが、設定した6時刻以外はD1を読むだけで終了。
-      if(!listingTimes.has(nowJst))return;
+      // v2.31:
+      // 毎分起動し、設定時刻から5分以内の「まだ実行していない直近枠」を拾う。
+      // Cron切替直後や一時的な遅延で時刻ちょうどを逃しても自動で追いつく。
+      const due=kbnFindDueRuntimeSlotV231(event,schedule,5);
+      if(!due)return;
 
-      const fullMaintenance=nowJst===schedule.full_maintenance_time_jst;
+      const fullMaintenance=due.time===schedule.full_maintenance_time_jst;
       const runType=fullMaintenance?"maintenance":"auto_listing";
-      const claimed=await kbnClaimRuntimeMinuteV230(env,event,runType);
-      if(!claimed)return; // 同じ分の二重実行防止
+      const claimed=await kbnClaimRuntimeSlotV231(env,due.minute_key,runType);
+      if(!claimed)return; // 同じ予約枠は1日1回だけ
 
       let runId=0;
       try{
@@ -7266,7 +7328,10 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
           ?await runScheduledKbnMaintenance(env)
           :await runScheduledKbnAutoDiscoveryOnly(env);
         const createdCount=Number(result?.discovery?.created?.length||0);
-        await kbnCronRunFinishV224(env,runId,{status:"success",createdCount,diagnostic:kbnDiscoveryDiagnosticV226(result)});
+        const diagnostic=kbnDiscoveryDiagnosticV226(result)||{};
+        diagnostic.scheduled_slot=due.time;
+        diagnostic.catch_up_minutes=due.diff;
+        await kbnCronRunFinishV224(env,runId,{status:"success",createdCount,diagnostic});
       }catch(e){
         console.error(fullMaintenance?"runtime maintenance failed":"runtime auto discovery failed",e);
         try{await kbnCronRunFinishV224(env,runId,{status:"failed",error:String(e?.message||e)})}catch{}
