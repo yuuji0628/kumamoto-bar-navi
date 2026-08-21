@@ -3209,6 +3209,22 @@ html,body{max-width:100%;overflow-x:hidden}
 .auto-listed-toolbar-v207{display:grid;grid-template-columns:minmax(0,1fr) 120px 120px;gap:7px;margin:10px 0 8px}.auto-listed-toolbar-v207 input,.auto-listed-toolbar-v207 select{min-height:40px;border:1px solid #33404c;border-radius:10px;background:#0a1118;color:#fff;padding:0 10px;font-size:16px}.auto-listed-pager-v207{display:flex;align-items:center;justify-content:center;gap:10px;margin:8px 0 10px}.auto-listed-pager-v207 button{min-height:36px;padding:0 12px;border:1px solid #374451;border-radius:9px;background:#0d151d;color:#fff;font-weight:800}.auto-listed-pager-v207 button:disabled{opacity:.4}.auto-listed-pager-v207 span{min-width:74px;text-align:center;color:#9aa5b0;font-size:.65rem}.auto-listed-actions{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px!important}.auto-listed-actions button.delete{border-color:#7b3d44!important;background:#1b0e11!important;color:#ff9aa4!important}@media(max-width:700px){.auto-listed-toolbar-v207{grid-template-columns:1fr}.auto-listed-actions{grid-template-columns:repeat(2,1fr)}}
 </style>
 
+
+<style id="kbn-cron-status-v224-css">
+.kbn-cron-status-v224{margin-top:12px;padding:12px;border:1px solid #394653;border-radius:14px;background:#0b1219}
+.kbn-cron-status-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.kbn-cron-status-head b{color:#fff;font-size:.82rem}
+.kbn-cron-status-head button{border:1px solid #475462;background:#111a23;color:#dfe5eb;border-radius:9px;padding:8px 10px;font-weight:800}
+.kbn-cron-status-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.kbn-cron-status-item{padding:10px;border:1px solid #2f3a45;border-radius:10px;background:#0e161f}
+.kbn-cron-status-item small{display:block;color:#88939e;font-size:.64rem;margin-bottom:4px}
+.kbn-cron-status-item strong{display:block;color:#eef2f5;font-size:.76rem;line-height:1.55;word-break:break-word}
+.kbn-cron-state{margin-top:9px;padding:9px 10px;border-radius:10px;font-size:.72rem;font-weight:900;line-height:1.5}
+.kbn-cron-state.ok{border:1px solid #376748;background:rgba(71,155,95,.08);color:#8ddd9f}
+.kbn-cron-state.warn{border:1px solid #7a642a;background:rgba(232,190,85,.07);color:#efca69}
+.kbn-cron-state.ng{border:1px solid #713b3b;background:rgba(202,86,86,.08);color:#ef9999}
+@media(max-width:640px){.kbn-cron-status-grid{grid-template-columns:1fr}}
+</style>
 <style id="kbn-schedule-v217-css">
 .kbn-auto-times-v217{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:10px 0 12px}
 .kbn-auto-times-v217 label{display:grid;gap:5px}
@@ -3233,7 +3249,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.23</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.24</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -3314,7 +3330,6 @@ html,body{max-width:100%;overflow-x:hidden}
       </span>
       <span class="dashboard-arrow">›</span>
     </button>
-  </div>
 
     <button type="button" class="dashboard-primary-card" data-go-tab="ownerreq">
       <span class="dashboard-icon">📝</span>
@@ -3342,6 +3357,7 @@ html,body{max-width:100%;overflow-x:hidden}
       </span>
       <span class="dashboard-arrow">›</span>
     </button>
+  </div>
 
   <div class="dashboard-status-line">
     <span>未対応申込み <b id="opsSubCount">-</b></span>
@@ -3350,7 +3366,7 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
 
   <div id="buttonHealthNote" class="version-note">
-    ver2.23：管理メニューに全項目を常時表示
+    ver2.24：Cron稼働確認を追加・管理メニュー配置を修正
   </div>
 </section>
 
@@ -3735,7 +3751,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div id="refreshExistingStatus" class="auto-discovery-status lead-smart-message"></div>
     <div id="repairExistingAreasStatus" class="auto-discovery-status lead-smart-message"></div>
-    <small class="version-note">ver2.23：その他メニューを廃止し、全管理項目を最初から表示するようにしました。</small>
+    <small class="version-note">ver2.24：Cronの実稼働状態を確認できるようにし、管理メニュー配置を修正しました。</small>
   </div>
 
   
@@ -3788,6 +3804,20 @@ html,body{max-width:100%;overflow-x:hidden}
 
       <button type="button" id="autoScheduleSaveBtn" class="kbn-schedule-save-v217">予約時間を更新</button>
       <small id="autoScheduleStatus">現在の予約時間を読み込み中...</small>
+      <div class="kbn-cron-status-v224" id="cronRuntimeStatusBox">
+        <div class="kbn-cron-status-head">
+          <b>⚙️ Cron 稼働確認</b>
+          <button type="button" id="cronRuntimeRefreshBtn">再確認</button>
+        </div>
+        <div class="kbn-cron-status-grid">
+          <div class="kbn-cron-status-item"><small>GitHubに保存中</small><strong id="cronDesiredTimes">読み込み中...</strong></div>
+          <div class="kbn-cron-status-item"><small>現在Workerで有効</small><strong id="cronEffectiveTimes">読み込み中...</strong></div>
+          <div class="kbn-cron-status-item"><small>通常メンテナンス</small><strong id="cronMaintenanceTime">-</strong></div>
+          <div class="kbn-cron-status-item"><small>直近Cron実行</small><strong id="cronLastRun">-</strong></div>
+        </div>
+        <div id="cronRuntimeState" class="kbn-cron-state warn">現在の稼働状態を確認中...</div>
+      </div>
+
       <small id="autoListingSixTimesStatus" style="display:block;margin-top:6px;color:#efc45a">
         自動掲載：1日6回 / 通常メンテナンス：1日1回
       </small>
@@ -9703,6 +9733,7 @@ document.addEventListener("click",async(e)=>{
     const six=document.getElementById("autoListingSixTimesStatus");
     if(six){
       six.textContent=`自動掲載：1日6回（${saved.join(" / ")}） / 通常メンテナンス：${savedMaintenance}`;
+      setTimeout(()=>window.loadCronRuntimeStatusV224?.(),800);
     }
   }catch(err){
     const raw=String(err?.message||"UNKNOWN_ERROR");
@@ -9719,6 +9750,52 @@ document.addEventListener("click",async(e)=>{
     btn.textContent="予約時間を更新";
   }
 });
+
+function kbnFormatJstDateV224(v){
+  if(!v)return "実行記録なし";
+  try{
+    const d=new Date(v);
+    if(Number.isNaN(d.getTime()))return String(v);
+    return new Intl.DateTimeFormat("ja-JP",{timeZone:"Asia/Tokyo",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false}).format(d);
+  }catch{return String(v)}
+}
+
+window.loadCronRuntimeStatusV224=async function(){
+  const desired=$("cronDesiredTimes"), effective=$("cronEffectiveTimes"), maintenance=$("cronMaintenanceTime"), last=$("cronLastRun"), state=$("cronRuntimeState");
+  if(!state)return;
+  state.className="kbn-cron-state warn";
+  state.textContent="現在の稼働状態を確認中...";
+  try{
+    const d=await api("/api/admin/auto-schedule-status");
+    const want=Array.isArray(d.desired?.auto_listing_times_jst)?d.desired.auto_listing_times_jst:[];
+    const live=Array.isArray(d.effective?.auto_listing_times_jst)?d.effective.auto_listing_times_jst:[];
+    if(desired)desired.textContent=want.length?want.join(" / "):"取得できません";
+    if(effective)effective.textContent=live.length?live.join(" / "):"取得できません";
+    if(maintenance)maintenance.textContent=`GitHub ${d.desired?.full_maintenance_time_jst||"-"} / 稼働中 ${d.effective?.full_maintenance_time_jst||"-"}`;
+    if(last){
+      const r=d.last_run||null;
+      last.textContent=r?`${kbnFormatJstDateV224(r.started_at||r.created_at)} / ${r.status||"-"}${r.created_count!=null?` / 新規${r.created_count}件`:""}`:"実行記録なし";
+    }
+    if(d.in_sync){
+      state.className="kbn-cron-state ok";
+      state.textContent="✓ GitHub設定と現在稼働中のWorker設定が一致しています。";
+    }else{
+      state.className="kbn-cron-state ng";
+      state.textContent="⚠ GitHub設定と現在稼働中のWorker設定が一致していません。Cloudflareのデプロイ未反映の可能性があります。";
+    }
+    if(d.last_run?.status==="failed"){
+      state.className="kbn-cron-state ng";
+      state.textContent+=` 直近Cronは失敗：${d.last_run.error||"原因不明"}`;
+    }
+  }catch(e){
+    state.className="kbn-cron-state ng";
+    state.textContent=`Cron状態を取得できませんでした：${e?.message||"UNKNOWN_ERROR"}`;
+  }
+};
+
+document.addEventListener("click",e=>{if(e.target?.id==="cronRuntimeRefreshBtn")window.loadCronRuntimeStatusV224?.()});
+document.addEventListener("DOMContentLoaded",()=>setTimeout(()=>window.loadCronRuntimeStatusV224?.(),700));
+
 </script>
 
 <script id="kbn-auto-listed-bind-v207">
