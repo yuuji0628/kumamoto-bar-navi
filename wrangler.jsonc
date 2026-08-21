@@ -11,7 +11,7 @@
     "KBN_FULL_MAINTENANCE_TIME_JST": "01:15",
     "KBN_AUTO_ONLY_CRONS": "0 23 * * *|0 3 * * *|0 7 * * *|0 10 * * *|35 14 * * *",
     "KBN_AUTO_LISTING_TIMES_JST": "01:15|08:00|12:00|16:00|19:00|23:35",
-    "KBN_SCHEDULE_UPDATED_AT": "2026-08-21T16:13:36.074Z"
+    "KBN_SCHEDULE_UPDATED_AT": "2026-08-21T16:13:40.192Z"
   },
   "assets": {
     "directory": ".",
