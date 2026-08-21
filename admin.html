@@ -3233,7 +3233,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.21</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.22</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -3296,14 +3296,30 @@ html,body{max-width:100%;overflow-x:hidden}
       </span>
       <span class="dashboard-arrow">›</span>
     </button>
+
+    <button type="button" class="dashboard-primary-card" data-go-tab="jobs">
+      <span class="dashboard-icon">💼</span>
+      <span class="dashboard-copy">
+        <b>求人管理</b>
+        <small>求人の確認・公開管理</small>
+      </span>
+      <span class="dashboard-arrow">›</span>
+    </button>
+
+    <button type="button" class="dashboard-primary-card" data-go-tab="members">
+      <span class="dashboard-icon">👤</span>
+      <span class="dashboard-copy">
+        <b>会員管理</b>
+        <small>無料会員の確認・管理</small>
+      </span>
+      <span class="dashboard-arrow">›</span>
+    </button>
   </div>
 
   <details class="dashboard-more">
-    <summary>追加メニューを開く</summary>
+    <summary>その他のメニューを開く</summary>
     <div class="dashboard-more-grid">
       <button type="button" data-go-tab="ownerreq">店舗申請</button>
-      <button type="button" data-go-tab="jobs">求人管理</button>
-      <button type="button" data-go-tab="members">無料会員管理</button>
       <button type="button" data-go-tab="analytics">アクセス確認</button>
       <button type="button" data-go-tab="siteupdate">サイト更新</button>
     </div>
@@ -3316,7 +3332,7 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
 
   <div id="buttonHealthNote" class="version-note">
-    ver2.21：上部タブを廃止し、管理メニューに集約
+    ver2.22：求人・会員を管理メニューへ追加、店舗一覧は3件表示
   </div>
 </section>
 
@@ -3328,7 +3344,7 @@ html,body{max-width:100%;overflow-x:hidden}
   <div>
     <p class="eyebrow">SHOPS</p>
     <h2>店舗管理</h2>
-    <p>エリアを選んで店舗を確認できます。編集は店舗カードから行えます。</p>
+    <p>エリアを選んで店舗を確認できます。初期表示は見やすく3件までです。編集は店舗カードから行えます。</p>
   </div>
 </div>
 
@@ -3493,6 +3509,10 @@ html,body{max-width:100%;overflow-x:hidden}
 </form>
 </div>
 <div id="shopList" class="admin-shop-list compact-shop-list"></div>
+<div id="shopListMoreWrap" class="shop-list-more-wrap" hidden>
+  <small id="shopListPreviewNote" style="display:block;color:#93a0ad;margin:6px 0 10px"></small>
+  <button type="button" id="toggleShopListBtn" class="admin-secondary-btn">すべて見る</button>
+</div>
 </section>
 
 <section id="tab-jobs" class="admin-block" hidden>
@@ -3697,7 +3717,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div id="refreshExistingStatus" class="auto-discovery-status lead-smart-message"></div>
     <div id="repairExistingAreasStatus" class="auto-discovery-status lead-smart-message"></div>
-    <small class="version-note">ver2.21：上部タブを廃止し、管理メニューへ統合しました。</small>
+    <small class="version-note">ver2.22：管理メニューに求人・会員を追加し、店舗一覧は3件表示にしました。</small>
   </div>
 
   
@@ -4572,6 +4592,9 @@ async function api(path,opt={}){
 
   return d;
 }
+let shopListExpanded=false;
+const SHOP_LIST_PREVIEW_COUNT=3;
+
 function renderShopAreaSummary(){
   const box=$("shopAreaSummary");
   if(!box)return;
@@ -4605,8 +4628,10 @@ function renderShopList(){
 
   if($("shopFilteredCount"))$("shopFilteredCount").textContent=String(filtered.length);
 
-  $("shopList").innerHTML=filtered.length
-    ? filtered.map(s=>{
+  const visible=shopListExpanded?filtered:filtered.slice(0,SHOP_LIST_PREVIEW_COUNT);
+
+  $("shopList").innerHTML=visible.length
+    ? visible.map(s=>{
         const provisional=String(s.listing_status||"published")==="provisional";
 
         return `<article class="admin-shop-item compact-shop-card dense-shop-card">
@@ -4638,6 +4663,22 @@ function renderShopList(){
         </article>`;
       }).join("")
     : '<p style="color:#aeb4bd">条件に一致する店舗はありません。</p>';
+
+  const wrap=$("shopListMoreWrap");
+  const btn=$("toggleShopListBtn");
+  const note=$("shopListPreviewNote");
+  if(wrap && btn && note){
+    const hasMore=filtered.length>SHOP_LIST_PREVIEW_COUNT;
+    wrap.hidden=!hasMore;
+    if(hasMore){
+      note.textContent=shopListExpanded
+        ? `全${filtered.length}件を表示中`
+        : `全${filtered.length}件のうち、上位${SHOP_LIST_PREVIEW_COUNT}件を表示中`;
+      btn.textContent=shopListExpanded
+        ? `3件表示に戻す`
+        : `すべて見る（残り${filtered.length-SHOP_LIST_PREVIEW_COUNT}件）`;
+    }
+  }
 }
 
 window.loadShops=async function(){
@@ -8723,6 +8764,7 @@ document.addEventListener("click",e=>{
 
 document.addEventListener("change",e=>{
   if(e.target?.id==="shopAreaFilter" || e.target?.id==="shopStatusFilter"){
+    shopListExpanded=false;
     renderShopList?.();
   }
 });
@@ -8736,6 +8778,7 @@ document.addEventListener("click",e=>{
     document.querySelectorAll("[data-shop-status-toggle]").forEach(btn=>{
       btn.classList.toggle("active",btn===statusToggle);
     });
+    shopListExpanded=false;
     renderShopList?.();
     return;
   }
@@ -8744,6 +8787,7 @@ document.addEventListener("click",e=>{
   if(chip){
     e.preventDefault();
     if($("shopAreaFilter"))$("shopAreaFilter").value=chip.dataset.shopAreaChip||"";
+    shopListExpanded=false;
     renderShopList?.();
     return;
   }
@@ -8756,10 +8800,24 @@ document.addEventListener("click",e=>{
     document.querySelectorAll("[data-shop-status-toggle]").forEach(btn=>{
       btn.classList.toggle("active",(btn.dataset.shopStatusToggle||"")==="provisional");
     });
+    shopListExpanded=false;
     renderShopList?.();
   }
 });
 
+
+document.addEventListener("click",e=>{
+  const more=e.target.closest?.("#toggleShopListBtn");
+  if(more){
+    e.preventDefault();
+    shopListExpanded=!shopListExpanded;
+    renderShopList?.();
+    if(shopListExpanded){
+      setTimeout(()=>document.getElementById("shopListMoreWrap")?.scrollIntoView({behavior:"smooth",block:"nearest"}),60);
+    }
+    return;
+  }
+});
 
 document.addEventListener("click",e=>{
   const action=e.target.closest?.(".shop-more-panel button");
