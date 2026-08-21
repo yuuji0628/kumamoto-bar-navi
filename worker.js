@@ -691,6 +691,36 @@ function kbnSortJstTimes(times){
   });
 }
 
+// KBN v2.17: 自動掲載6回＋そのうち1回を通常メンテナンスとして管理画面から自由設定。
+const KBN_DEFAULT_AUTO_LISTING_TIMES_JST_V217=["00:00","03:00","06:00","09:00","12:00","18:00"];
+const KBN_DEFAULT_FULL_MAINTENANCE_TIMES_JST_V215=["00:00"];
+
+function kbnFullMaintenanceCrons(env){
+  const raw=String(env?.KBN_FULL_MAINTENANCE_CRONS||"").trim();
+  const list=raw.split("|").map(x=>x.trim()).filter(Boolean);
+  if(list.length===1)return list;
+  return KBN_DEFAULT_FULL_MAINTENANCE_TIMES_JST_V215.map(kbnJstTimeToCron);
+}
+
+function kbnConfiguredAutoOnlyCrons(env){
+  const raw=String(env?.KBN_AUTO_ONLY_CRONS||"").trim();
+  const list=raw.split("|").map(x=>x.trim()).filter(Boolean);
+  if(list.length===5)return list;
+
+  const full=new Set(kbnFullMaintenanceCrons(env));
+  return KBN_DEFAULT_AUTO_LISTING_TIMES_JST_V217
+    .map(kbnJstTimeToCron)
+    .filter(cron=>!full.has(cron));
+}
+
+function kbnAutoListingCrons(env){
+  return [...kbnFullMaintenanceCrons(env),...kbnConfiguredAutoOnlyCrons(env)];
+}
+
+function kbnIsFullMaintenanceCron(env,cron){
+  return new Set(kbnFullMaintenanceCrons(env)).has(String(cron||"").trim());
+}
+
 async function kbnReadWranglerFromGithub(env){
   const c=kbnGithubConfig(env);
   const d=await kbnGithubApi(
@@ -705,27 +735,53 @@ async function kbnReadWranglerFromGithub(env){
   return {config,sha:d.sha,content,c};
 }
 
-async function kbnUpdateAutoSchedule(env,timesJst){
-  const normalized=timesJst.map(kbnNormalizeJstTime);
-  if(normalized.length!==3||normalized.some(x=>!x)){
-    const e=new Error("SCHEDULE_REQUIRES_3_VALID_JST_TIMES");
+async function kbnUpdateAutoSchedule(env,scheduleInput){
+  const listingRaw=Array.isArray(scheduleInput?.auto_listing_times_jst)
+    ?scheduleInput.auto_listing_times_jst
+    :(Array.isArray(scheduleInput)?scheduleInput:[]);
+  const maintenanceRaw=String(
+    scheduleInput?.full_maintenance_time_jst
+    ||scheduleInput?.maintenance_time_jst
+    ||""
+  ).trim();
+
+  const listingTimes=listingRaw.map(kbnNormalizeJstTime);
+  const maintenanceTime=kbnNormalizeJstTime(maintenanceRaw);
+
+  if(listingTimes.length!==6||listingTimes.some(x=>!x)){
+    const e=new Error("AUTO_LISTING_REQUIRES_6_VALID_JST_TIMES");
     e.status=400;
     throw e;
   }
-  if(new Set(normalized).size!==3){
-    const e=new Error("SCHEDULE_TIMES_MUST_BE_UNIQUE");
+  if(new Set(listingTimes).size!==6){
+    const e=new Error("AUTO_LISTING_TIMES_MUST_BE_UNIQUE");
+    e.status=400;
+    throw e;
+  }
+  if(!maintenanceTime){
+    const e=new Error("MAINTENANCE_TIME_REQUIRED");
+    e.status=400;
+    throw e;
+  }
+  if(!listingTimes.includes(maintenanceTime)){
+    const e=new Error("MAINTENANCE_TIME_MUST_MATCH_ONE_AUTO_LISTING_TIME");
     e.status=400;
     throw e;
   }
 
-  const times=kbnSortJstTimes(normalized);
-  const crons=times.map(kbnJstTimeToCron);
+  const sortedListingTimes=kbnSortJstTimes(listingTimes);
+  const autoOnlyTimes=sortedListingTimes.filter(x=>x!==maintenanceTime);
+  const fullCrons=[kbnJstTimeToCron(maintenanceTime)];
+  const autoOnlyCrons=autoOnlyTimes.map(kbnJstTimeToCron);
+  const crons=[...fullCrons,...autoOnlyCrons];
+
   const {config,sha,c}=await kbnReadWranglerFromGithub(env);
-
   config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
   config.triggers.crons=crons;
   config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-  config.vars.KBN_CONFIG_VERSION="1.76";
+  config.vars.KBN_CONFIG_VERSION="2.17";
+  config.vars.KBN_FULL_MAINTENANCE_CRONS=fullCrons.join("|");
+  config.vars.KBN_AUTO_ONLY_CRONS=autoOnlyCrons.join("|");
   config.vars.KBN_SCHEDULE_UPDATED_AT=new Date().toISOString();
 
   const content=JSON.stringify(config,null,2)+"\n";
@@ -736,7 +792,7 @@ async function kbnUpdateAutoSchedule(env,timesJst){
       method:"PUT",
       headers:{"content-type":"application/json"},
       body:JSON.stringify({
-        message:`admin: update auto discovery schedule ${times.join(" / ")} JST`,
+        message:`admin: set auto listing ${sortedListingTimes.join(" / ")} JST; maintenance ${maintenanceTime}`,
         content:kbnUtf8ToBase64(content),
         sha,
         branch:c.branch
@@ -746,11 +802,16 @@ async function kbnUpdateAutoSchedule(env,timesJst){
 
   return {
     ok:true,
-    times_jst:times,
+    timezone:"Asia/Tokyo",
+    times_jst:[maintenanceTime],
+    full_maintenance_times_jst:[maintenanceTime],
+    full_maintenance_time_jst:maintenanceTime,
+    auto_only_times_jst:autoOnlyTimes,
+    auto_listing_times_jst:sortedListingTimes,
     crons,
     commit_sha:result.commit?.sha||"",
     commit_url:result.commit?.html_url||"",
-    message:"予約時間をGitHubへ反映しました。Cloudflareの自動デプロイ後にCronが更新されます。"
+    message:"自動掲載6回と通常メンテナンス1回の時間をGitHubへ反映しました。Cloudflareの自動デプロイ後に有効になります。"
   };
 }
 
@@ -4445,6 +4506,95 @@ async function runScheduledKbnMaintenance(env){
   };
 }
 
+
+// KBN v2.15: 追加Cronでは「自動掲載」に関係する処理だけを実行。
+// 既存店舗の情報補完・画像補完・Instagram補完・閉業チェックは実行しない。
+async function runScheduledKbnAutoDiscoveryOnly(env){
+  const fakeRequest=new Request("https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/api/internal/scheduled-auto-only");
+  const targetListings=15;
+  const maxPasses=6;
+  const allCreated=[];
+  const allSearched=[];
+  const allRejected=[];
+  const passStats=[];
+
+  for(let pass=1;pass<=maxPasses && allCreated.length<targetListings;pass++){
+    const remaining=targetListings-allCreated.length;
+    const result=await autoDiscover(
+      env,
+      fakeRequest,
+      remaining,
+      20,
+      3
+    );
+
+    const created=Array.isArray(result?.created)?result.created:[];
+    const searched=Array.isArray(result?.searched)?result.searched:[];
+    const rejected=Array.isArray(result?.rejected)?result.rejected:[];
+
+    for(const x of created){
+      const key=Number(x?.shop_id||x?.id||0)||`${x?.name||""}|${x?.area||""}`;
+      if(!allCreated.some(y=>{
+        const yk=Number(y?.shop_id||y?.id||0)||`${y?.name||""}|${y?.area||""}`;
+        return yk===key;
+      })){
+        allCreated.push(x);
+      }
+      if(allCreated.length>=targetListings)break;
+    }
+
+    allSearched.push(...searched);
+    allRejected.push(...rejected);
+    passStats.push({
+      pass,
+      created:created.length,
+      total:allCreated.length,
+      searched:searched.length,
+      rejected:rejected.length
+    });
+
+    if(result?.ok===false && result?.error==="DISCOVERY_SOURCES_UNAVAILABLE")break;
+  }
+
+  const created=allCreated.slice(0,targetListings);
+
+  // 新規掲載直後の最低限の品質確保だけ実施。既存店舗メンテナンスは回さない。
+  const createdEnrichment=await enrichScheduledCreatedShops(env,created);
+
+  if(created.length){
+    await notifyCreatedShops(env,created,"予約自動開拓（追加枠）");
+    try{
+      await kbnSendNewListingDigest(env,created);
+    }catch(e){
+      console.error("member new listing digest failed",e);
+    }
+  }
+
+  await createKbnAlert(env,{
+    type:"scheduled_discovery_summary",
+    title:"追加の予約自動開拓完了",
+    message:[
+      `新規掲載 ${created.length}/${targetListings}店舗`,
+      `探索 ${passStats.length}巡`,
+      `画像 ${createdEnrichment?.images?.updated?.length||0}件`,
+      `Instagram ${createdEnrichment?.instagram?.updated?.length||0}件`
+    ].join(" / ")
+  });
+
+  return {
+    discovery:{
+      ok:true,
+      created,
+      searched:allSearched,
+      rejected:allRejected,
+      target:targetListings,
+      passes:passStats.length,
+      pass_stats:passStats
+    },
+    created_enrichment:createdEnrichment
+  };
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url=new URL(request.url);
@@ -5414,11 +5564,35 @@ ${urls.map(x=>`  <url>
         try{
           const {config}=await kbnReadWranglerFromGithub(env);
           const raw=Array.isArray(config?.triggers?.crons)?config.triggers.crons:[];
-          const times=kbnSortJstTimes(raw.map(kbnCronToJstTime).filter(Boolean));
+          const configuredFull=String(config?.vars?.KBN_FULL_MAINTENANCE_CRONS||"")
+            .split("|").map(x=>x.trim()).filter(Boolean);
+          const configuredAutoOnly=String(config?.vars?.KBN_AUTO_ONLY_CRONS||"")
+            .split("|").map(x=>x.trim()).filter(Boolean);
+
+          const fullCrons=configuredFull.length===1
+            ?configuredFull
+            :raw.slice(0,1);
+
+          const autoOnlyCrons=configuredAutoOnly.length===5
+            ?configuredAutoOnly
+            :raw.filter(x=>!fullCrons.includes(x)).slice(0,5);
+
+          const fullTimes=kbnSortJstTimes(fullCrons.map(kbnCronToJstTime).filter(Boolean));
+          const autoOnlyTimes=kbnSortJstTimes(autoOnlyCrons.map(kbnCronToJstTime).filter(Boolean));
+          let listingTimes=kbnSortJstTimes([...fullTimes,...autoOnlyTimes]);
+
+          if(listingTimes.length!==6){
+            listingTimes=[...KBN_DEFAULT_AUTO_LISTING_TIMES_JST_V217];
+          }
+
           return json({
             ok:true,
             timezone:"Asia/Tokyo",
-            times_jst:times,
+            times_jst:fullTimes,
+            full_maintenance_times_jst:fullTimes,
+            full_maintenance_time_jst:fullTimes[0]||listingTimes[0],
+            auto_only_times_jst:autoOnlyTimes,
+            auto_listing_times_jst:listingTimes,
             crons:raw
           });
         }catch(e){
@@ -5436,8 +5610,12 @@ ${urls.map(x=>`  <url>
         catch{return json({ok:false,error:"INVALID_JSON"},{status:400})}
 
         try{
-          const times=Array.isArray(x.times_jst)?x.times_jst:[];
-          const result=await kbnUpdateAutoSchedule(env,times);
+          const listingTimes=Array.isArray(x.auto_listing_times_jst)?x.auto_listing_times_jst:[];
+          const maintenanceTime=String(x.full_maintenance_time_jst||x.maintenance_time_jst||"");
+          const result=await kbnUpdateAutoSchedule(env,{
+            auto_listing_times_jst:listingTimes,
+            full_maintenance_time_jst:maintenanceTime
+          });
           return json(result);
         }catch(e){
           return json({
@@ -6697,9 +6875,17 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
   },
 
   async scheduled(event, env, ctx){
+    const fullMaintenance=kbnIsFullMaintenanceCron(env,event?.cron);
     ctx.waitUntil(
-      runScheduledKbnMaintenance(env)
-        .catch(e=>console.error("scheduled KBN maintenance failed",e))
+      (fullMaintenance
+        ? runScheduledKbnMaintenance(env)
+        : runScheduledKbnAutoDiscoveryOnly(env)
+      ).catch(e=>console.error(
+        fullMaintenance
+          ?"scheduled KBN maintenance failed"
+          :"scheduled KBN auto discovery only failed",
+        e
+      ))
     );
   }
 };
