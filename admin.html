@@ -3658,6 +3658,7 @@ html,body{max-width:100%;overflow-x:hidden}
 }
 </style>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
 <div id="topMaintenanceResult" class="top-maintenance-result">
@@ -3670,7 +3671,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.81</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.82</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -6795,117 +6796,212 @@ function applySvgPreviewFallback(shop,message="iPhone向け互換プレビュー
   return true;
 }
 
+
+function shopPublicUrlV282(shop){
+  const slug=String(shop?.slug||"").trim();
+  return slug
+    ? `${location.origin}/shop.html?slug=${encodeURIComponent(slug)}`
+    : location.origin;
+}
+
+async function ensureQrLibV282(){
+  if(window.QRCode)return true;
+  const existing=document.querySelector('script[src*="qrcodejs"]');
+  if(existing){
+    await new Promise((resolve,reject)=>{
+      if(window.QRCode)return resolve();
+      const done=()=>window.QRCode?resolve():reject(new Error("QRCODE_LIB_UNAVAILABLE"));
+      existing.addEventListener("load",done,{once:true});
+      existing.addEventListener("error",()=>reject(new Error("QRCODE_LIB_LOAD_FAILED")),{once:true});
+      setTimeout(done,3500);
+    });
+    return !!window.QRCode;
+  }
+  const s=document.createElement("script");
+  s.src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js";
+  s.crossOrigin="anonymous";
+  s.referrerPolicy="no-referrer";
+  document.head.appendChild(s);
+  await new Promise((resolve,reject)=>{
+    s.onload=resolve;
+    s.onerror=()=>reject(new Error("QRCODE_LIB_LOAD_FAILED"));
+    setTimeout(()=>window.QRCode?resolve():reject(new Error("QRCODE_LIB_TIMEOUT")),5000);
+  });
+  return !!window.QRCode;
+}
+
+async function makeShopQrDataUrlV282(shop){
+  const publicUrl=shopPublicUrlV282(shop);
+  try{
+    await ensureQrLibV282();
+    const host=document.createElement("div");
+    host.style.cssText="position:fixed;left:-99999px;top:-99999px;width:260px;height:260px;background:#fff;padding:10px;z-index:-1";
+    document.body.appendChild(host);
+    new QRCode(host,{
+      text:publicUrl,
+      width:240,
+      height:240,
+      colorDark:"#070707",
+      colorLight:"#ffffff",
+      correctLevel:QRCode.CorrectLevel.H
+    });
+    await new Promise(r=>setTimeout(r,80));
+    const c=host.querySelector("canvas");
+    const img=host.querySelector("img");
+    let dataUrl="";
+    if(c)dataUrl=c.toDataURL("image/png");
+    else if(img?.src)dataUrl=img.src;
+    host.remove();
+    return dataUrl;
+  }catch(e){
+    console.warn("QR generation failed",e);
+    return "";
+  }
+}
+
+function premiumCornerV282(ctx,x,y,flipX=1,flipY=1){
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.scale(flipX,flipY);
+  ctx.strokeStyle="#d8aa42";
+  ctx.lineWidth=3;
+  ctx.beginPath();
+  ctx.moveTo(0,38);ctx.lineTo(0,0);ctx.lineTo(38,0);
+  ctx.stroke();
+  ctx.lineWidth=1;
+  ctx.beginPath();
+  ctx.moveTo(8,30);ctx.lineTo(8,8);ctx.lineTo(30,8);
+  ctx.stroke();
+  ctx.restore();
+}
+
 async function renderInstaPost(shop,{forceNoImage=false}={}){
   const canvas=$("instaPostCanvas");
   const status=$("instaPreviewStatus");
   const wrap=canvas?.closest?.(".insta-preview-wrap");
   const readyNote=$("instaPreviewReadyNote");
-
   if(!canvas)return false;
 
   instaRenderState.rendering=true;
   instaRenderState.ready=false;
   instaRenderState.lastDataUrl="";
   instaRenderState.lastShopId=Number(shop?.id||0);
-
   if(wrap)wrap.dataset.rendering="1";
   if(readyNote)readyNote.classList.remove("show");
-
   setInstaPreviewButtonsDisabled(true);
 
   const box=$("instaFullPreview");
   const fullImg=$("instaFullPreviewImg");
-  if(box){
-    box.hidden=true;
-    box.style.display="none";
-    box.dataset.ready="0";
-  }
+  if(box){box.hidden=true;box.style.display="none";box.dataset.ready="0";}
   if(fullImg)fullImg.removeAttribute("src");
 
-  // Safariでは一度でもCORS画像でcanvasが汚染されると、その後clearRectしても
-  // toDataURLが失敗し続けるため、毎回サイズを入れ直して完全に初期化する。
   const W=1080,H=1350;
-  canvas.width=W;
-  canvas.height=H;
+  canvas.width=W;canvas.height=H;
   const ctx=canvas.getContext("2d");
   if(!ctx)throw new Error("CANVAS_CONTEXT_UNAVAILABLE");
   ctx.clearRect(0,0,W,H);
 
   if(status){
-    status.textContent="承認した店舗情報から投稿画像を自動生成中...";
+    status.textContent="承認店舗の情報・写真・公開ページQRから高品質画像を生成中...";
     status.dataset.state="loading";
   }
 
-  const gold="#d9ad45";
-  const gold2="#f1c75b";
-  const white="#f7f8fa";
-  const muted="#c0c7cf";
-  const dark="#070b10";
-  const dark2="#101720";
+  const gold="#d8aa42", gold2="#f3ca64", gold3="#8d681d";
+  const white="#f8f5ee", muted="#c8c1b3", black="#050505", panel="#0a0a0b";
+  const displayName=cleanShopDisplayName(shop?.name||"NEW BAR");
+  const area=String(shop?.area||"熊本");
+  const genre=String(shop?.genre||"BAR");
+  const hours=String(shop?.hours||"店舗情報をご確認ください");
+  const holiday=String(shop?.holiday||"店舗情報をご確認ください");
+  const handle=cleanInstagramHandle(shop?.instagram||"");
+  const desc=String(shop?.description||"").replace(/\s+/g," ").trim();
+  const features=String(shop?.features||"").replace(/\s+/g," ").trim();
+  const budget=(shop?.budget_min||shop?.budget_max)
+    ? `${shop?.budget_min?Number(shop.budget_min).toLocaleString()+"円":""}${shop?.budget_min&&shop?.budget_max?"〜":""}${shop?.budget_max?Number(shop.budget_max).toLocaleString()+"円":""}`
+    : "";
+  const seats=shop?.seats ? `${shop.seats}席` : "";
+  const publicUrl=shopPublicUrlV282(shop);
 
-  // Background
-  const bg=ctx.createLinearGradient(0,0,W,H);
-  bg.addColorStop(0,"#05080d");
-  bg.addColorStop(.5,"#0b1118");
-  bg.addColorStop(1,"#030507");
-  ctx.fillStyle=bg;
-  ctx.fillRect(0,0,W,H);
+  // black + warm gold premium background
+  ctx.fillStyle=black;ctx.fillRect(0,0,W,H);
+  const bg=ctx.createRadialGradient(780,210,10,780,210,780);
+  bg.addColorStop(0,"rgba(160,103,22,.28)");
+  bg.addColorStop(.35,"rgba(90,53,10,.13)");
+  bg.addColorStop(1,"rgba(0,0,0,0)");
+  ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
 
-  // subtle texture
-  const seed=stringHash((shop?.name||"")+(shop?.area||"")+(shop?.genre||""));
-  ctx.save();
-  ctx.globalAlpha=.06;
-  ctx.strokeStyle=gold;
-  ctx.lineWidth=2;
-  for(let i=0;i<18;i++){
-    const x=(seed*(i+7)*17)%W;
-    const y=(seed*(i+11)*23)%H;
-    const r=50+((seed>>(i%12))%150);
-    ctx.beginPath();
-    ctx.arc(x,y,r,0,Math.PI*2);
-    ctx.stroke();
-  }
-  ctx.restore();
+  // outer frame + ornate corners
+  ctx.strokeStyle=gold;ctx.lineWidth=2;ctx.strokeRect(18,18,W-36,H-36);
+  ctx.strokeStyle="rgba(216,170,66,.5)";ctx.lineWidth=1;ctx.strokeRect(28,28,W-56,H-56);
+  premiumCornerV282(ctx,18,18,1,1);
+  premiumCornerV282(ctx,W-18,18,-1,1);
+  premiumCornerV282(ctx,18,H-18,1,-1);
+  premiumCornerV282(ctx,W-18,H-18,-1,-1);
 
-  // top brand and tagline
+  // Header
   ctx.textAlign="left";
   ctx.fillStyle=gold2;
-  ctx.font="800 34px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
-  ctx.fillText("熊本の夜をもっと楽しく、もっとおいしく。",250,60);
+  ctx.font="800 72px 'Hiragino Mincho ProN','Yu Mincho',Georgia,serif";
+  ctx.fillText("正式掲載のお知らせ",58,105);
+  ctx.strokeStyle=gold3;ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(58,135);ctx.lineTo(720,135);ctx.stroke();
 
-  // logo-like mark
-  ctx.strokeStyle=gold;
-  ctx.lineWidth=5;
-  ctx.beginPath();
-  ctx.arc(92,92,52,0,Math.PI*2);
-  ctx.stroke();
-  ctx.fillStyle=gold2;
-  ctx.font="900 28px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
-  ctx.textAlign="center";
-  ctx.fillText("KBN",92,101);
-
-  // headline
-  const displayName=cleanShopDisplayName(shop?.name||"NEW BAR");
-
-  // 右上バッジは長い店舗名やキャッチコピーと重なるため廃止。
-  // ヘッダーは中央寄せの1行にして、どの店舗でも崩れないようにする。
-  ctx.textAlign="center";
   ctx.fillStyle=white;
-  ctx.font="900 40px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
-  ctx.fillText("新規掲載しました",650,112);
+  ctx.font="600 24px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif";
+  ctx.fillText("このたび、下記の店舗様を",60,177);
+  ctx.fillStyle=gold2;
+  ctx.font="800 34px Georgia,'Times New Roman',serif";
+  ctx.fillText("KUMAMOTO BAR NAVI",60,223);
+  ctx.fillStyle=white;
+  ctx.font="900 48px 'Hiragino Mincho ProN','Yu Mincho',Georgia,serif";
+  ctx.fillText("に正式掲載しました！",420,223);
 
-  // gold ribbon
-  ctx.fillStyle=gold;
-  ctx.fillRect(44,150,992,54);
-  ctx.fillStyle="#111";
-  ctx.font="800 26px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+  // Premium KBN badge
+  ctx.save();
+  ctx.translate(900,126);
+  ctx.fillStyle="#090909";ctx.strokeStyle=gold2;ctx.lineWidth=5;
+  ctx.beginPath();ctx.arc(0,0,82,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.strokeStyle=gold3;ctx.lineWidth=2;
+  ctx.beginPath();ctx.arc(0,0,68,0,Math.PI*2);ctx.stroke();
+  ctx.fillStyle=gold2;ctx.textAlign="center";
+  ctx.font="900 40px Georgia,serif";ctx.fillText("KBN",0,8);
+  ctx.font="700 13px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";ctx.fillText("KUMAMOTO BAR NAVI",0,32);
+  ctx.restore();
+
+  // Shop main panel
+  drawRoundedRect(ctx,46,268,614,485,10,"rgba(2,2,2,.9)",gold3);
+  // NEW ribbon
+  ctx.save();
+  ctx.translate(45,310);ctx.rotate(-Math.PI/4);
+  ctx.fillStyle=gold2;ctx.fillRect(-70,-23,180,46);
+  ctx.fillStyle="#080808";ctx.font="900 24px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+  ctx.textAlign="center";ctx.fillText("NEW",20,8);ctx.restore();
+
   ctx.textAlign="center";
-  ctx.fillText("熊本のBAR情報サイト「KUMAMOTO BAR NAVI」に新店掲載！",540,187);
+  ctx.fillStyle=gold2;
+  ctx.font="700 23px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif";
+  ctx.fillText(`${area}  /  ${genre}`,350,322);
 
-  // photo area
-  const px=70,py=755,pw=940,ph=265;
-  drawRoundedRect(ctx,px,py,pw,ph,18,dark2,"rgba(217,173,69,.45)");
+  let nameFont=74;
+  const nameFamily="'Hiragino Mincho ProN','Yu Mincho',Georgia,serif";
+  while(nameFont>38){
+    ctx.font=`800 ${nameFont}px ${nameFamily}`;
+    if(ctx.measureText(displayName).width<=540)break;
+    nameFont-=2;
+  }
+  ctx.fillStyle=white;ctx.font=`800 ${nameFont}px ${nameFamily}`;
+  ctx.fillText(displayName,350,405);
+  ctx.strokeStyle=gold3;ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(110,438);ctx.lineTo(590,438);ctx.stroke();
 
+  // description
+  ctx.textAlign="left";ctx.fillStyle=white;
+  ctx.font="500 22px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif";
+  wrapCanvasText(ctx,desc||`${area}で楽しめる${genre}。KUMAMOTO BAR NAVIで正式掲載中です。`,90,480,530,31,4);
+
+  // Hero photo within main panel
+  const px=78,py=590,pw=550,ph=135;
+  drawRoundedRect(ctx,px,py,pw,ph,8,"#111",gold3);
   let imageLoaded=false;
   const imageUrl=forceNoImage ? "" : absoluteMediaUrl(shop?.image_url||"");
   if(imageUrl){
@@ -6913,243 +7009,159 @@ async function renderInstaPost(shop,{forceNoImage=false}={}){
       const img=await loadCanvasImage(imageUrl);
       ctx.save();
       ctx.beginPath();
-      const rr=18;
-      ctx.moveTo(px+rr,py);
-      ctx.arcTo(px+pw,py,px+pw,py+ph,rr);
-      ctx.arcTo(px+pw,py+ph,px,py+ph,rr);
-      ctx.arcTo(px,py+ph,px,py,rr);
-      ctx.arcTo(px,py,px+pw,py,rr);
-      ctx.closePath();
+      ctx.roundRect?.(px,py,pw,ph,8);
+      if(!ctx.roundRect){
+        ctx.rect(px,py,pw,ph);
+      }
       ctx.clip();
       drawCoverPositioned(ctx,img,px,py,pw,ph,currentInstaPhotoPosition());
-      const veil=ctx.createLinearGradient(px,py,px,py+ph);
-      veil.addColorStop(0,"rgba(0,0,0,.05)");
-      veil.addColorStop(1,"rgba(0,0,0,.38)");
-      ctx.fillStyle=veil;
-      ctx.fillRect(px,py,pw,ph);
+      const shade=ctx.createLinearGradient(px,py,px,py+ph);
+      shade.addColorStop(0,"rgba(0,0,0,0)");
+      shade.addColorStop(1,"rgba(0,0,0,.35)");
+      ctx.fillStyle=shade;ctx.fillRect(px,py,pw,ph);
       ctx.restore();
       imageLoaded=true;
-    }catch(e){
-      console.warn("shop image load failed",e);
-    }
+    }catch(e){console.warn("shop image load failed",e);}
   }
-
   if(!imageLoaded){
-    // 写真がない店舗は、同梱した実写風バー画像を表示。
-    // 画像読み込みに失敗した場合のみ従来の描画フォールバックへ切り替える。
     try{
       const fallbackPhoto=await loadCanvasImage(INSTA_REALISTIC_FALLBACK_DATA_URL);
-      ctx.save();
-      ctx.beginPath();
-      const rr=18;
-      ctx.moveTo(px+rr,py);
-      ctx.arcTo(px+pw,py,px+pw,py+ph,rr);
-      ctx.arcTo(px+pw,py+ph,px,py+ph,rr);
-      ctx.arcTo(px,py+ph,px,py,rr);
-      ctx.arcTo(px,py,px+pw,py,rr);
-      ctx.closePath();
-      ctx.clip();
+      ctx.save();ctx.beginPath();ctx.rect(px,py,pw,ph);ctx.clip();
       drawCoverPositioned(ctx,fallbackPhoto,px,py,pw,ph,currentInstaPhotoPosition());
-      const veil=ctx.createLinearGradient(px,py,px,py+ph);
-      veil.addColorStop(0,"rgba(0,0,0,.04)");
-      veil.addColorStop(1,"rgba(0,0,0,.22)");
-      ctx.fillStyle=veil;
-      ctx.fillRect(px,py,pw,ph);
-      ctx.restore();
-      imageLoaded=true;
+      ctx.restore();imageLoaded=true;
     }catch(e){
-      console.warn("realistic fallback image load failed",e);
       drawFallbackBarScene(ctx,px,py,pw,ph,shop);
     }
   }
 
-  // left "New" and store info
-  ctx.textAlign="left";
-  ctx.fillStyle=gold2;
-  ctx.font="italic 700 58px Georgia,serif";
-  ctx.fillText("New!",60,320);
-
-  ctx.fillStyle=white;
-  ctx.font="800 31px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
-  ctx.fillText("BAR",64,375);
-
-  // 店名は無理に改行せず、1行で収まるまで文字サイズを自動調整
-  const nameFamily="-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans','Yu Gothic',sans-serif";
-  let nameFont=64;
-  const nameMaxWidth=900;
-  while(nameFont>30){
-    ctx.font=`900 ${nameFont}px ${nameFamily}`;
-    if(ctx.measureText(displayName).width<=nameMaxWidth)break;
-    nameFont-=2;
-  }
-  ctx.fillStyle=white;
-  ctx.textAlign="left";
-  ctx.fillText(displayName,64,450);
-
-  // chips
-  const chips=[
-    shop?.area,
-    ...splitGenre(shop?.genre).slice(0,2)
-  ].filter(Boolean);
-
-  let cx=64,cy=555;
-  ctx.font="700 24px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
-  for(const c of chips){
-    const tw=Math.min(190,ctx.measureText(c).width+42);
-    drawRoundedRect(ctx,cx,cy,tw,48,22,"#152233","rgba(255,255,255,.08)");
-    ctx.fillStyle=white;
-    ctx.fillText(c,cx+20,cy+32);
-    cx+=tw+10;
-    if(cx>420){cx=64;cy+=58;}
-  }
-
-  // description: スマホで読めるサイズを優先し、少し大きめに最大3行表示
-  let desc=String(shop?.description||"").trim().replace(/\s+/g," ");
-  if(desc){
-    ctx.fillStyle=white;
-    const family="-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans','Yu Gothic',sans-serif";
-    const maxWidth=940;
-    const maxLines=3;
-    const descFont=24;
-    const lineHeight=31;
-    ctx.font=`500 ${descFont}px ${family}`;
-
-    const chars=Array.from(desc);
-    const lines=[];
-    let line="";
-
-    for(const ch of chars){
-      const test=line+ch;
-      if(ctx.measureText(test).width>maxWidth && line){
-        lines.push(line);
-        line=ch;
-        if(lines.length===maxLines-1)break;
-      }else{
-        line=test;
-      }
-    }
-    if(lines.length<maxLines && line)lines.push(line);
-
-    const shownCount=lines.reduce((n,l)=>n+Array.from(l).length,0);
-    if(shownCount<chars.length && lines.length){
-      let last=lines[lines.length-1];
-      while(last && ctx.measureText(last+"…").width>maxWidth){
-        last=Array.from(last).slice(0,-1).join("");
-      }
-      lines[lines.length-1]=last+"…";
-    }
-
-    lines.forEach((ln,i)=>ctx.fillText(ln,64,632+i*lineHeight));
-  }
-
-  // information panel
-  const panelY=1042;
-  drawRoundedRect(ctx,44,panelY,992,180,22,"rgba(8,13,18,.86)","rgba(255,255,255,.16)");
-
-  const info=[
-    ["📍","エリア",shop?.area||"熊本"],
-    ["◷","営業時間",shop?.hours||"店舗情報をご確認ください"],
-    ["▣","定休日",shop?.holiday||"店舗情報をご確認ください"],
-    ["◎","設備・特徴",[shop?.genre,shop?.features].filter(Boolean).join(" / ")||"BAR"]
+  // Right info panel
+  drawRoundedRect(ctx,680,268,354,485,10,"rgba(2,2,2,.92)",gold3);
+  const rows=[
+    ["エリア",area],
+    ["営業時間",hours],
+    ["定休日",holiday],
+    ["Instagram",handle?`@${handle}`:"未登録"],
+    ["予算目安",budget||"店舗情報をご確認ください"],
+    ["席数",seats||"店舗情報をご確認ください"]
   ];
-
-  const colW=248;
-  info.forEach((it,i)=>{
-    const x=55+i*colW;
-    if(i>0){
-      ctx.strokeStyle="rgba(255,255,255,.18)";
-      ctx.lineWidth=1;
-      ctx.beginPath();
-      ctx.moveTo(x,panelY+24);
-      ctx.lineTo(x,panelY+166);
-      ctx.stroke();
-    }
-    ctx.fillStyle=gold2;
-    ctx.font="700 34px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
-    ctx.fillText(it[0],x+16,panelY+57);
-
+  let ry=306;
+  rows.forEach(([label,value],idx)=>{
+    ctx.textAlign="left";ctx.fillStyle=gold2;
+    ctx.font="800 20px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif";
+    ctx.fillText(label,708,ry);
     ctx.fillStyle=white;
-    ctx.font="700 23px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
-    ctx.fillText(it[1],x+63,panelY+54);
-
-    ctx.fillStyle=muted;
-    ctx.font="500 22px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
-    wrapCanvasText(ctx,it[2],x+16,panelY+112,colW-32,29,2);
+    ctx.font="500 19px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif";
+    wrapCanvasText(ctx,value,815,ry,195,24,2);
+    if(idx<rows.length-1){
+      ctx.strokeStyle="rgba(216,170,66,.34)";ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(708,ry+40);ctx.lineTo(1005,ry+40);ctx.stroke();
+    }
+    ry+=72;
   });
 
-  // footer CTA
-  ctx.fillStyle=gold2;
-  ctx.font="800 28px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
-  ctx.fillText("熊本のBAR探しは KUMAMOTO BAR NAVIで！",60,1275);
+  // Feature band
+  drawRoundedRect(ctx,46,773,988,120,8,"rgba(6,6,6,.94)",gold3);
+  ctx.fillStyle=gold2;ctx.textAlign="left";
+  ctx.font="900 24px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif";
+  ctx.fillText("お店の特徴",72,813);
+  ctx.fillStyle=white;
+  ctx.font="600 21px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif";
+  wrapCanvasText(ctx,features||`${genre} / ${area} / KUMAMOTO BAR NAVI正式掲載店`,72,852,680,28,2);
+  ctx.fillStyle=gold2;ctx.font="900 22px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+  ctx.textAlign="center";ctx.fillText("ぜひチェック＆シェア！",892,826);
+  ctx.font="500 16px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+  ctx.fillText("KUMAMOTO BAR NAVI",892,858);
 
-  drawRoundedRect(ctx,635,950,300,74,30,gold);
-  ctx.fillStyle="#111";
-  ctx.textAlign="center";
-  ctx.font="800 24px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
-  ctx.fillText("ぜひチェック＆",785,982);
-  ctx.fillText("シェアお願いします！",785,1011);
+  // Bottom left: real public-page QR
+  drawRoundedRect(ctx,46,916,410,330,8,"rgba(4,4,4,.96)",gold3);
+  ctx.textAlign="left";ctx.fillStyle=gold2;
+  ctx.font="900 27px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif";
+  ctx.fillText("KUMAMOTO BAR NAVI をチェック！",68,958);
+  ctx.fillStyle=white;
+  ctx.font="500 18px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif";
+  ctx.fillText("店舗の公開ページはこちら",68,992);
 
-  const handle=cleanInstagramHandle(shop?.instagram||"");
-  if(handle){
-    ctx.textAlign="left";
-    ctx.fillStyle=muted;
-    ctx.font="600 20px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
-    ctx.fillText("@"+handle,60,1032);
+  const qrDataUrl=await makeShopQrDataUrlV282(shop);
+  if(qrDataUrl){
+    try{
+      const qrImg=await loadCanvasImage(qrDataUrl);
+      ctx.fillStyle="#fff";ctx.fillRect(78,1020,196,196);
+      ctx.drawImage(qrImg,88,1030,176,176);
+    }catch(e){console.warn("QR image draw failed",e);}
+  }else{
+    ctx.fillStyle="#fff";ctx.fillRect(78,1020,196,196);
+    ctx.fillStyle="#111";ctx.textAlign="center";ctx.font="900 22px sans-serif";
+    ctx.fillText("QR",176,1105);
+    ctx.font="600 14px sans-serif";ctx.fillText("公開ページ",176,1135);
   }
 
-  ctx.textAlign="left";
+  ctx.textAlign="left";ctx.fillStyle=muted;
+  ctx.font="500 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+  wrapCanvasText(ctx,publicUrl,292,1035,140,20,6);
 
-  // iPhone Safariでも安定して再利用できるよう、生成完了時点でPNGを確定
+  // Bottom right promo / recruiting
+  drawRoundedRect(ctx,478,916,556,330,8,"rgba(4,4,4,.96)",gold3);
+  const recruiting=Number(shop?.is_recruiting||0)===1;
+  ctx.fillStyle=gold2;ctx.textAlign="left";
+  ctx.font="900 34px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif";
+  ctx.fillText(recruiting?"スタッフ募集中":"正式掲載店舗",510,970);
+  ctx.fillStyle=white;
+  ctx.font="600 21px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif";
+  const promo=recruiting
+    ?"一緒にお店を盛り上げてくれるスタッフを募集しています！お気軽に店舗へお問い合わせください。"
+    :"熊本のBAR・CAFE BAR情報メディア「KUMAMOTO BAR NAVI」で店舗情報を公開中です。";
+  wrapCanvasText(ctx,promo,510,1015,485,31,5);
+
+  ctx.strokeStyle=gold3;ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(510,1173);ctx.lineTo(996,1173);ctx.stroke();
+  ctx.fillStyle=gold2;ctx.font="800 22px Georgia,serif";
+  ctx.fillText("KUMAMOTO BAR NAVI",510,1210);
+
+  // Footer
+  ctx.textAlign="center";ctx.fillStyle=gold2;
+  ctx.font="700 34px Georgia,'Times New Roman',serif";
+  ctx.fillText("KUMAMOTO BAR NAVI",540,1292);
+  ctx.fillStyle=muted;
+  ctx.font="500 15px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif";
+  ctx.fillText("熊本のBAR・CAFE BAR情報メディア",540,1320);
+
+  // Finalize PNG. If CORS tainted by shop photo, caller retries with embedded fallback photo.
   let dataUrl="";
   try{
     dataUrl=canvas.toDataURL("image/png");
   }catch(e){
-    console.warn("canvas dataURL generation failed; using SVG fallback",e);
-    return applySvgPreviewFallback(shop);
+    console.warn("canvas dataURL generation failed",e);
+    if(!forceNoImage)throw e;
+    return applySvgPreviewFallback(shop,"互換モードでプレビューを生成しました");
   }
-
   if(!dataUrl){
-    return applySvgPreviewFallback(shop);
+    if(!forceNoImage)throw new Error("CANVAS_DATA_URL_EMPTY");
+    return applySvgPreviewFallback(shop,"互換モードでプレビューを生成しました");
   }
 
   instaRenderState.rendering=false;
-  instaRenderState.ready=!!dataUrl;
+  instaRenderState.ready=true;
   instaRenderState.lastDataUrl=dataUrl;
   instaRenderState.lastShopId=Number(shop?.id||0);
-
   if(wrap)wrap.dataset.rendering="0";
 
   if(status){
-    status.textContent=dataUrl
-      ? (imageLoaded
-          ? "店舗写真＋店舗情報から掲載画像を自動生成しました"
-          : "店舗情報から掲載画像を自動生成しました")
-      : "画像生成は完了しましたが、プレビュー画像の確定に失敗しました";
-    status.dataset.state=dataUrl?"ok":"error";
+    status.textContent=imageLoaded
+      ?"高級デザイン＋店舗写真＋公開ページQRで掲載画像を生成しました"
+      :"高級デザイン＋公開ページQRで掲載画像を生成しました";
+    status.dataset.state="ok";
   }
+  if(readyNote)readyNote.classList.add("show");
+  setInstaPreviewButtonsDisabled(false);
 
-  if(readyNote){
-    readyNote.classList.toggle("show",!!dataUrl);
+  if(box&&fullImg){
+    fullImg.src=dataUrl;
+    box.hidden=false;
+    box.style.display="block";
+    box.dataset.ready="1";
   }
-
-  setInstaPreviewButtonsDisabled(!dataUrl);
-
-  // 生成完了後、自動で完成画像プレビューを表示
-  if(dataUrl){
-    const box=$("instaFullPreview");
-    const img=$("instaFullPreviewImg");
-
-    if(box&&img){
-      img.src=dataUrl;
-      box.hidden=false;
-      box.style.display="block";
-      box.dataset.ready="1";
-    }
-  }
-
-  return !!dataUrl;
+  return true;
 }
-
 
 function buildInstaShareDm(shop){
   const name=String(shop?.name||"店舗").trim();
