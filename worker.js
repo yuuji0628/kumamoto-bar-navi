@@ -5138,9 +5138,9 @@ async function kbnQueueMaintenanceV242(env,runDate){
   await ensureKbnMaintenanceQueueV242(env);
   await env.DB.prepare(`
     INSERT INTO kbn_maintenance_queue(id,phase,run_date,updated_at)
-    VALUES(1,1,?,CURRENT_TIMESTAMP)
+    VALUES(1,11,?,CURRENT_TIMESTAMP)
     ON CONFLICT(id) DO UPDATE SET
-      phase=1,run_date=excluded.run_date,updated_at=CURRENT_TIMESTAMP
+      phase=11,run_date=excluded.run_date,updated_at=CURRENT_TIMESTAMP
   `).bind(String(runDate||"")).run();
 }
 
@@ -5152,6 +5152,42 @@ async function kbnProcessQueuedMaintenanceV242(env){
 
   const phase=Number(q?.phase||0);
   if(!phase)return {ok:true,processed:false};
+
+  // v2.54:
+  // phase 11-14 = 自動開拓の追加4回。
+  // フルメンテ開始時に1回実行済みなので、合計5回×最大10店舗 = 最大50店舗を狙う。
+  // 各回は別の毎分Cron invocationなので、Cloudflare Freeのsubrequest負荷を分散する。
+  if(phase>=11 && phase<=14){
+    let result;
+    try{
+      result=await runScheduledKbnAutoDiscoveryOnly(env);
+    }catch(e){
+      console.error("queued discovery failed",phase,e);
+      result={ok:false,error:String(e?.message||e)};
+    }
+
+    const nextPhase=phase>=14?1:phase+1;
+    await env.DB.prepare(`
+      UPDATE kbn_maintenance_queue SET phase=?,updated_at=CURRENT_TIMESTAMP WHERE id=1
+    `).bind(nextPhase).run();
+
+    try{
+      const created=Number(result?.discovery?.created?.length||0);
+      await createKbnAlert(env,{
+        type:"maintenance_discovery_batch",
+        title:`予約メンテナンス自動開拓 ${phase-9}/5`,
+        message:`今回の新規掲載 ${created}店舗 / 未開拓地区を優先 / 次の自動開拓へ`
+      });
+    }catch{}
+
+    return {
+      ok:true,processed:true,phase,
+      task:"discovery",
+      discovery_batch:phase-9,
+      discovery_batches_total:5,
+      result
+    };
+  }
 
   const task=phase===1?"missing":phase===2?"closed":phase===3?"instagram":"";
   if(!task){
@@ -5358,8 +5394,8 @@ async function enrichScheduledCreatedShops(env,created=[]){
 async function runScheduledKbnMaintenance(env){
   // v2.42:
   // 選択した通常メンテナンス回では、まず通常の自動掲載を実行。
-  // 情報不足20件 → 閉業20件 → Instagram20件 は、
-  // 毎分Cronの次の3回に分けて実行しFree枠のsubrequest超過を避ける。
+  // 自動開拓をさらに4回 → 情報不足20件 → 閉業20件 → Instagram20件 の順で、
+  // 毎分Cronに分けて実行しFree枠のsubrequest超過を避ける。合計5回の自動開拓で最大50店舗を狙う。
   const discoveryResult=await runScheduledKbnAutoDiscoveryOnly(env);
 
   const now=new Date(Date.now()+9*60*60*1000);
@@ -5369,13 +5405,15 @@ async function runScheduledKbnMaintenance(env){
   await createKbnAlert(env,{
     type:"scheduled_summary",
     title:"予約メンテナンス開始",
-    message:"自動掲載後、情報不足20店舗 → 閉業20店舗 → Instagram20店舗を順番に続きから確認します。"
+    message:"自動開拓を5回に分割して最大50店舗を狙った後、情報不足20店舗 → 閉業20店舗 → Instagram20店舗を順番に続きから確認します。"
   });
 
   return {
     ...discoveryResult,
     maintenance_queued:true,
-    maintenance_batch_size:20
+    maintenance_batch_size:20,
+    discovery_batches:5,
+    discovery_target_max:50
   };
 }
 
@@ -5386,8 +5424,8 @@ async function runScheduledKbnMaintenance(env){
 // 既存店舗の情報補完・画像補完・Instagram補完・閉業チェックは実行しない。
 async function runScheduledKbnAutoDiscoveryOnly(env){
   const fakeRequest=new Request("https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/api/internal/scheduled-auto-only");
-  // v2.40 Free枠: 50 subrequests/invocation を超えにくい範囲で、1回最大10店舗へ拡張。
-  // 外部fetchの余裕を残すため、探索は最大7ペアに抑える。
+  // v2.54 Free枠: 1 invocation 最大10店舗は維持。
+  // 未開拓地区優先ロジックを使い、5地区×1回を複数Cronに分割して安全に積み上げる。
   const targetListings=10;
   const maxPasses=1;
   const allCreated=[];
@@ -5401,8 +5439,8 @@ async function runScheduledKbnAutoDiscoveryOnly(env){
       env,
       fakeRequest,
       remaining,
-      7,  // Free枠のsubrequest余裕を確保
-      2
+      5,  // 5地区に抑え、Details最大6件/地区でもFree枠に余裕を残す
+      4
     );
 
     const created=Array.isArray(result?.created)?result.created:[];
