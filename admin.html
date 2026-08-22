@@ -3283,7 +3283,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.42</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.43</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -3779,7 +3779,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div id="refreshExistingStatus" class="auto-discovery-status lead-smart-message"></div>
     <div id="repairExistingAreasStatus" class="auto-discovery-status lead-smart-message"></div>
-    <small class="version-note">ver2.42：管理メニューの「メンテナンス」が自動メンテナンスへ直接移動するよう修正しました。</small>
+    <small class="version-note">ver2.43：管理メニューの「メンテナンス」が自動メンテナンスへ直接移動するよう修正しました。</small>
   </div>
 
   
@@ -8733,6 +8733,7 @@ safeBind("jobForm","submit",e=>{
     ["subs",window.loadSubs],
     ["ownerreq",window.loadOwnerReq],
     ["analytics",window.loadAnalytics],
+    ["members",window.loadMembers],
     ["github",window.loadKbnGithubStatus]
   ];
 
@@ -8813,6 +8814,28 @@ window.switchAdminTab=function(tab){
       panel.classList.toggle("active",active);
     });
 
+    // v2.43: 管理メニューから開いた時点で、その画面のデータを自動読み込み。
+    // 「再読み込み」を押さなくても表示されるようにする。
+    const loaders={
+      shops:window.loadShops,
+      jobs:window.loadJobs,
+      subs:window.loadSubs,
+      ownerreq:window.loadOwnerReq,
+      analytics:window.loadAnalytics,
+      members:window.loadMembers,
+      siteupdate:window.loadKbnGithubStatus
+    };
+    const loader=loaders[tab];
+    if(typeof loader==="function"){
+      Promise.resolve(loader()).catch(e=>console.error(`tab auto load failed: ${tab}`,e));
+    }
+    if(tab==="jobs"){
+      Promise.allSettled([
+        window.loadJobCandidates?.(),
+        window.loadApprovedSubmissionJobCandidates?.(false)
+      ]).catch(()=>{});
+    }
+
     const target=document.getElementById(`tab-${tab}`);
     if(target){
       setTimeout(()=>target.scrollIntoView({behavior:"smooth",block:"start"}),40);
@@ -8862,6 +8885,7 @@ window.reloadCurrentTab=async function(tab){
     else if(tab==="subs") await loadSubs();
     else if(tab==="ownerreq") await loadOwnerReq();
     else if(tab==="analytics") await loadAnalytics();
+    else if(tab==="members") await loadMembers();
   }catch(e){
     console.error("reloadCurrentTab failed",tab,e);
     alert("再読み込みできませんでした: "+(e?.message||"UNKNOWN_ERROR"));
