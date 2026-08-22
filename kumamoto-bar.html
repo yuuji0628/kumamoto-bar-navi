@@ -13,52 +13,158 @@
 <meta property="og:url" content="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/kumamoto-bar.html">
 <link rel="stylesheet" href="style.css?v=210">
 
-<style>
+<style id="kbn-seo-rich-v274">
 :root{color-scheme:dark}
 *{box-sizing:border-box}
 body{margin:0;background:#080b10;color:#f3f5f7;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans JP",sans-serif}
-.seo-page{max-width:940px;margin:auto;padding:38px 18px 70px}
-.kicker{color:#efc45a;font-weight:950;letter-spacing:.12em;font-size:.78rem}
-h1{font-size:clamp(30px,7vw,48px);line-height:1.15;margin:8px 0 12px}
-h2{margin:32px 0 10px;font-size:1.45rem}
-h3{margin:0 0 6px;font-size:1.02rem}
-p{color:#b6bec7;line-height:1.85}
-.cta{display:inline-flex;margin:14px 0 28px;padding:13px 20px;border-radius:999px;background:#efc45a;color:#111;text-decoration:none;font-weight:950}
+.seo-page{max-width:980px;margin:auto;padding:34px 18px 74px}
+.kicker{color:#efc45a;font-weight:950;letter-spacing:.12em;font-size:.72rem}
+h1{font-size:clamp(29px,7vw,46px);line-height:1.15;margin:7px 0 11px}
+h2{margin:30px 0 11px;font-size:clamp(20px,4.8vw,27px)}
+h3{margin:0 0 6px;font-size:1rem}
+p{color:#b6bec7;line-height:1.8}
+.hero-actions{display:flex;flex-wrap:wrap;gap:8px;margin:15px 0 22px}
+.cta{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 17px;border-radius:999px;background:#efc45a;color:#111;text-decoration:none;font-weight:950}
+.cta.secondary{background:#101821;color:#efc45a;border:1px solid #665421}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:15px 0 4px}
+.stat{padding:11px;border:1px solid #34404c;border-radius:12px;background:#101821}
+.stat small{display:block;color:#8e99a5;font-size:.68rem}
+.stat strong{display:block;margin-top:3px;color:#efc45a;font-size:1.25rem}
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-.card{padding:16px;border:1px solid #34404c;border-radius:14px;background:#101821}
-.card p{margin:0 0 8px;font-size:.92rem}
-.card a,.links a{color:#efc45a;text-decoration:none;font-weight:800}
-.links{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
-.links a{border:1px solid #5f512d;border-radius:999px;padding:8px 12px;background:#12140d}
-.note{margin-top:26px;padding:14px 16px;border:1px solid #2d3945;border-radius:12px;background:#0d141b;font-size:.85rem}
-@media(max-width:640px){.grid{grid-template-columns:1fr}.seo-page{padding-top:28px}}
+.info-card{padding:15px;border:1px solid #34404c;border-radius:14px;background:#101821}
+.info-card p{margin:0 0 8px;font-size:.9rem}
+.info-card a,.links a{color:#efc45a;text-decoration:none;font-weight:800}
+.links{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}
+.links a{border:1px solid #5f512d;border-radius:999px;padding:7px 11px;background:#12140d;font-size:.8rem}
+.shop-head{display:flex;justify-content:space-between;align-items:end;gap:10px;margin-bottom:9px}
+.shop-head small{color:#8e99a5}
+.shop-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.shop-card{display:grid;grid-template-columns:82px minmax(0,1fr);gap:11px;padding:10px;border:1px solid #303d49;border-radius:13px;background:#0f171f;min-width:0}
+.shop-thumb{width:82px;height:82px;border-radius:10px;overflow:hidden;background:#151e27;display:grid;place-items:center;color:#6e7985;font-size:.65rem}
+.shop-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.shop-copy{min-width:0}
+.shop-name{margin:0 0 4px;color:#fff;font-size:.91rem;line-height:1.35;overflow-wrap:anywhere}
+.shop-meta{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:5px}
+.shop-chip{padding:3px 6px;border-radius:999px;border:1px solid #3d4854;color:#aeb7c1;font-size:.61rem}
+.shop-desc{margin:0;color:#8f9aa5;font-size:.69rem;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.shop-empty{padding:16px;border:1px dashed #3b4652;border-radius:13px;color:#98a3ae;background:#0d141b}
+.faq{display:grid;gap:8px}
+.faq details{border:1px solid #303d49;border-radius:12px;background:#0f171f;padding:11px 13px}
+.faq summary{cursor:pointer;color:#f1f3f5;font-weight:850}
+.faq details p{margin:8px 0 0;font-size:.88rem}
+.note{margin-top:24px;padding:13px 15px;border:1px solid #2d3945;border-radius:12px;background:#0d141b;font-size:.82rem}
+@media(max-width:700px){
+  .seo-page{padding-top:26px}
+  .stats{grid-template-columns:repeat(3,1fr)}
+  .stat{padding:9px}
+  .stat strong{font-size:1.05rem}
+  .grid,.shop-grid{grid-template-columns:1fr}
+  .shop-card{grid-template-columns:72px minmax(0,1fr)}
+  .shop-thumb{width:72px;height:72px}
+}
 </style>
 
 <script type="application/ld+json">
 {
-  "@context":"https://schema.org",
-  "@type":"WebPage",
-  "name":"熊本のバーを、もっと探しやすく。",
-  "url":"https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/kumamoto-bar.html",
-  "description":"熊本でバーを探すならKUMAMOTO BAR NAVI。熊本市の下通・上通・新市街をはじめ、八代・人吉・玉名・天草など熊本県内のBARをエリア・ジャンル・特徴から探せます。",
-  "isPartOf":{"@type":"WebSite","name":"KUMAMOTO BAR NAVI","url":"https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/"}
+ "@context":"https://schema.org",
+ "@type":"CollectionPage",
+ "name":"熊本のバーを、もっと探しやすく。",
+ "url":"https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/kumamoto-bar.html",
+ "description":"熊本でバーを探すならKUMAMOTO BAR NAVI。熊本市の下通・上通・新市街をはじめ、八代・人吉・玉名・天草など熊本県内のBARをエリア・ジャンル・特徴から探せます。",
+ "isPartOf":{"@type":"WebSite","name":"KUMAMOTO BAR NAVI","url":"https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/"}
 }
 </script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "熊本でBARが多いエリアは？", "acceptedAnswer": {"@type": "Answer", "text": "熊本市中心部では下通・上通・新市街・花畑町・中央街周辺に多く集まっています。KUMAMOTO BAR NAVIでは県内各地も掲載対象です。"}}, {"@type": "Question", "name": "一人でも利用しやすいBARは探せますか？", "acceptedAnswer": {"@type": "Answer", "text": "店舗の特徴や説明を確認しながら探せます。気になる店舗は営業時間や最新情報を公式SNSでも確認するのがおすすめです。"}}, {"@type": "Question", "name": "掲載情報は更新されますか？", "acceptedAnswer": {"@type": "Answer", "text": "掲載済み店舗の情報補完、閉業確認、Instagram情報の補完などを継続的に行っています。"}}]}</script>
 </head>
 <body>
 <main class="seo-page">
 <div class="kicker">KUMAMOTO BAR GUIDE</div>
 <h1>熊本のバーを、もっと探しやすく。</h1>
-<p>KUMAMOTO BAR NAVIは、熊本市中心部だけでなく県内各地のBAR情報を探せる熊本特化型のバー検索サイトです。エリアやお店のタイプから、自分に合った一軒を探せます。</p>
-<a class="cta" href="bars.html">熊本のBAR一覧を見る</a>
-<section><h2>熊本でバーを探す人気エリア</h2><div class="grid"><div class="card"><h3>熊本市中心部</h3><p>下通・上通・新市街・花畑町・中央街など、熊本の夜を代表するエリア。</p><a href="area-kumamoto.html">熊本市の店舗を見る</a></div><div class="card"><h3>県内各地</h3><p>八代、人吉、天草など、地元で楽しめるBARも探せます。</p><div class="links"><a href="area-yatsushiro.html">八代</a><a href="area-hitoyoshi.html">人吉</a><a href="area-amakusa.html">天草</a></div></div></div></section>
-<section><h2>目的から熊本のBARを探す</h2><div class="grid"><div class="card"><h3>カラオケBAR</h3><p>歌って楽しみたい夜に。</p><a href="karaoke-bar-kumamoto.html">カラオケBARを探す</a></div><div class="card"><h3>ダーツBAR</h3><p>ダーツを楽しめるBARを探したい人向け。</p><a href="darts-bar-kumamoto.html">ダーツBARを探す</a></div></div></section>
-<section><h2>熊本特化だから探しやすい</h2><p>熊本の繁華街から郊外まで、地域に合わせて店舗情報を整理。掲載情報の補完や閉業確認なども継続し、探しやすい状態を目指しています。</p></section>
+<p>熊本市中心部から県内各地まで、掲載中のBAR情報を自動で読み込みながら紹介します。エリアやお店のタイプ、利用シーンから自分に合う一軒を探せます。</p>
+<div class="hero-actions">
+  <a class="cta" href="bars.html">全店舗一覧を見る</a>
+  <a class="cta secondary" href="areas.html">エリアから探す</a>
+</div>
+
+<div class="stats" aria-label="掲載状況">
+  <div class="stat"><small>掲載BAR</small><strong id="seoShopCountV274">読込中</strong></div>
+  <div class="stat"><small>対応エリア</small><strong id="seoAreaCountV274">—</strong></div>
+  <div class="stat"><small>表示更新</small><strong id="seoUpdatedV274">—</strong></div>
+</div>
+
 <section>
-<h2>関連ページ</h2>
-<div class="links"><a href="index.html">トップ</a><a href="bars.html">全店舗</a><a href="areas.html">エリア一覧</a><a href="jobs.html">求人情報</a></div>
+  <div class="shop-head">
+    <div><h2>熊本県内の掲載BAR</h2><small>掲載データから自動表示</small></div>
+  </div>
+  <div id="seoShopGridV274" class="shop-grid"><div class="shop-empty">店舗情報を読み込み中...</div></div>
 </section>
+
+
+<section><h2>熊本でBARを探すなら</h2><div class="grid">
+<div class="info-card"><h3>熊本市中心部</h3><p>下通・上通・新市街・花畑町・中央街など、二軒目や夜遊びで探しやすいエリアです。</p><a href="area-kumamoto.html">熊本市の店舗を見る</a></div>
+<div class="info-card"><h3>県内各地</h3><p>八代・人吉・玉名・天草など、熊本県内の地域からもBARを探せます。</p><a href="areas.html">エリア一覧を見る</a></div>
+<div class="info-card"><h3>盛り上がりたい</h3><p>カラオケBARやダーツBARなど、遊びながら楽しめるお店を探せます。</p><a href="karaoke-bar-kumamoto.html">カラオケBARを見る</a></div>
+<div class="info-card"><h3>落ち着いて飲みたい</h3><p>スナック・ラウンジなど、会話や雰囲気を楽しみたい夜の選択肢も掲載しています。</p><a href="snack-kumamoto.html">スナック・ラウンジを見る</a></div>
+</div></section>
+
+<section><h2>よくある質問</h2><div class="faq"><details><summary>熊本でBARが多いエリアは？</summary><p>熊本市中心部では下通・上通・新市街・花畑町・中央街周辺に多く集まっています。KUMAMOTO BAR NAVIでは県内各地も掲載対象です。</p></details><details><summary>一人でも利用しやすいBARは探せますか？</summary><p>店舗の特徴や説明を確認しながら探せます。気になる店舗は営業時間や最新情報を公式SNSでも確認するのがおすすめです。</p></details><details><summary>掲載情報は更新されますか？</summary><p>掲載済み店舗の情報補完、閉業確認、Instagram情報の補完などを継続的に行っています。</p></details></div></section>
+
+<section><h2>関連ページ</h2><div class="links"><a href="shimotori-bar.html">下通のバー</a><a href="karaoke-bar-kumamoto.html">カラオケBAR</a><a href="darts-bar-kumamoto.html">ダーツBAR</a><a href="snack-kumamoto.html">スナック・ラウンジ</a><a href="index.html">トップ</a><a href="bars.html">全店舗</a></div></section>
+
 <p class="note">営業時間・料金・営業状況などは変更される場合があります。来店前には店舗の公式SNS・公式サイト等もあわせてご確認ください。</p>
 </main>
+
+<script>
+(()=>{
+  const esc=v=>String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+  const list=document.getElementById("seoShopGridV274");
+  const countEl=document.getElementById("seoShopCountV274");
+  const areaEl=document.getElementById("seoAreaCountV274");
+  const updatedEl=document.getElementById("seoUpdatedV274");
+  const matchShop=s=>{ return true; };
+  const imageOf=s=>String(s.image_url||s.image||s.photo_url||"").trim();
+  const textOf=s=>String(s.description||s.features||"").trim();
+
+  async function load(){
+    try{
+      const r=await fetch("/api/shops?seo=274&ts="+Date.now(),{cache:"no-store"});
+      if(!r.ok)throw new Error("HTTP_"+r.status);
+      const d=await r.json();
+      const all=(Array.isArray(d?.shops)?d.shops:[]).filter(s=>Number(s?.is_published??1)!==0);
+      const matched=all.filter(matchShop);
+      countEl.textContent=matched.length+"店舗";
+      areaEl.textContent=new Set(matched.map(s=>String(s.area||"").trim()).filter(Boolean)).size+"地域";
+      updatedEl.textContent=new Date().toLocaleDateString("ja-JP",{month:"numeric",day:"numeric"});
+
+      const shown=matched.slice(0,18);
+      if(!shown.length){
+        list.innerHTML='<div class="shop-empty">現在、条件に合う掲載店舗を整理中です。<br>全店舗一覧からも探せます。</div>';
+        return;
+      }
+      list.innerHTML=shown.map(s=>{
+        const img=imageOf(s);
+        const desc=textOf(s);
+        const area=String(s.area||"熊本県").trim();
+        const genre=String(s.genre||"BAR").trim();
+        return `<article class="shop-card">
+          <div class="shop-thumb">${img?`<img src="${esc(img)}" alt="${esc(s.name||"BAR")}" loading="lazy">`:"BAR"}</div>
+          <div class="shop-copy">
+            <h3 class="shop-name">${esc(s.name||"店舗名未登録")}</h3>
+            <div class="shop-meta"><span class="shop-chip">${esc(area)}</span><span class="shop-chip">${esc(genre)}</span></div>
+            <p class="shop-desc">${esc(desc||"店舗情報を掲載中です。")}</p>
+          </div>
+        </article>`;
+      }).join("");
+    }catch(e){
+      console.error("SEO shop load failed",e);
+      list.innerHTML='<div class="shop-empty">店舗情報を読み込めませんでした。時間をおいて再度お試しください。</div>';
+      countEl.textContent="—";
+      areaEl.textContent="—";
+      updatedEl.textContent="—";
+    }
+  }
+  load();
+})();
+</script>
 </body>
 </html>
