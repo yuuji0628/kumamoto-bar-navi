@@ -673,11 +673,40 @@ function kbnJstTimeToCron(value){
 }
 
 
-function kbnHomeHeroCompactPatchScriptV244(){
+function kbnHomeHeroLivePatchScriptV245(){
   return `<script>(function(){
     function txt(el){return String(el?.innerText||el?.textContent||"").replace(/\s+/g," ").trim();}
+    function jpTime(){
+      try{
+        return new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false,timeZone:'Asia/Tokyo'});
+      }catch(_){
+        const d=new Date();
+        return [d.getHours(),d.getMinutes(),d.getSeconds()].map(v=>String(v).padStart(2,'0')).join(':');
+      }
+    }
+    function injectStyle(){
+      if(document.getElementById('kbn-live-hero-style-v245')) return;
+      const style=document.createElement('style');
+      style.id='kbn-live-hero-style-v245';
+      style.textContent = [
+        '.kbn-live-hero-wrap-v245{position:relative;gap:12px!important;margin:14px 0 18px!important}',
+        '.kbn-live-hero-wrap-v245::before{content:"";position:absolute;inset:-6px;border-radius:28px;background:radial-gradient(circle at 20% 20%,rgba(228,190,85,.12),transparent 42%),radial-gradient(circle at 80% 30%,rgba(255,255,255,.06),transparent 35%);pointer-events:none}',
+        '.kbn-live-card-v245{position:relative;overflow:hidden;padding:14px 16px!important;min-height:0!important;border-radius:20px!important;background:linear-gradient(135deg,rgba(7,19,40,.98),rgba(19,27,47,.92))!important;border:1px solid rgba(228,190,85,.28)!important;box-shadow:0 10px 28px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.04)!important}',
+        '.kbn-live-card-v245::after{content:"";position:absolute;inset:auto -20% -55% auto;width:160px;height:160px;border-radius:999px;background:radial-gradient(circle,rgba(228,190,85,.22),rgba(228,190,85,0));pointer-events:none}',
+        '.kbn-live-head-v245{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}',
+        '.kbn-live-badge-v245{display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:999px;background:rgba(12,20,34,.72);border:1px solid rgba(106,232,170,.34);color:#b8ffd6;font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;white-space:nowrap}',
+        '.kbn-live-dot-v245{width:8px;height:8px;border-radius:50%;background:#61f2a6;box-shadow:0 0 0 0 rgba(97,242,166,.45);animation:kbnLivePulseV245 1.8s infinite}',
+        '@keyframes kbnLivePulseV245{0%{box-shadow:0 0 0 0 rgba(97,242,166,.48)}70%{box-shadow:0 0 0 10px rgba(97,242,166,0)}100%{box-shadow:0 0 0 0 rgba(97,242,166,0)}}',
+        '.kbn-live-label-v245{font-size:11px!important;line-height:1.25!important;letter-spacing:.08em;color:rgba(255,230,170,.96)!important;font-weight:700!important;text-transform:none}',
+        '.kbn-live-sub-v245{font-size:11px!important;line-height:1.35!important;color:rgba(214,224,238,.70)!important;margin-top:2px}',
+        '.kbn-live-number-v245{font-size:clamp(26px,7.1vw,42px)!important;line-height:1!important;font-weight:900!important;letter-spacing:-.03em;text-shadow:0 0 18px rgba(255,209,95,.16)}',
+        '.kbn-live-meta-v245{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.08);font-size:10px;color:rgba(230,238,247,.72)}',
+        '.kbn-live-clock-v245{font-variant-numeric:tabular-nums;color:#9ef3c0;font-weight:700;letter-spacing:.08em}'
+      ].join('');
+      document.head.appendChild(style);
+    }
     function findLabel(label){
-      return Array.from(document.querySelectorAll("body *")).find(el=>{
+      return Array.from(document.querySelectorAll('body *')).find(el=>{
         if(!el) return false;
         const t=txt(el);
         if(!t) return false;
@@ -689,56 +718,103 @@ function kbnHomeHeroCompactPatchScriptV244(){
       let cur=node;
       while(cur && cur!==document.body){
         const t=txt(cur);
-        const tag=(cur.tagName||"").toLowerCase();
-        if(["div","article","section","li"].includes(tag) && /\d/.test(t) && t.length<=180){
+        const tag=(cur.tagName||'').toLowerCase();
+        if(['div','article','section','li'].includes(tag) && /\d/.test(t) && t.length<=220){
           return cur;
         }
         cur=cur.parentElement;
       }
       return node?.parentElement || null;
     }
-    function applyCard(card,label){
-      if(!card) return;
-      if(card.dataset.kbnCompactHeroStat==='1') return;
-      card.dataset.kbnCompactHeroStat='1';
-      card.style.padding='14px 16px';
-      card.style.minHeight='0';
-      card.style.borderRadius='18px';
-      card.style.gap='8px';
-      card.querySelectorAll('*').forEach(el=>{
-        const t=txt(el);
-        if(!t) return;
-        if(t.includes(label) || t.includes('熊本県内のBAR情報を随時更新')){
-          el.style.fontSize='12px';
-          el.style.lineHeight='1.35';
-        }else if(/\d/.test(t) && (t.includes('店舗') || t.includes('地域') || /^\d+$/.test(t))){
-          el.style.fontSize='clamp(28px, 8vw, 44px)';
-          el.style.lineHeight='1';
-        }
-      });
+    function isVisible(el){
+      if(!el) return false;
+      const st=getComputedStyle(el);
+      return st.display!=='none' && st.visibility!=='hidden';
     }
-    function apply(){
-      const shopLabel=findLabel('掲載店舗数');
-      const areaLabel=findLabel('対応エリア');
-      const shopCard=findCard(shopLabel);
-      const areaCard=findCard(areaLabel);
-      applyCard(shopCard,'掲載店舗数');
-      applyCard(areaCard,'対応エリア');
-
+    function findNumberEl(card){
+      const all=Array.from(card.querySelectorAll('*')).filter(isVisible);
+      let best=null,bestScore=-1;
+      for(const el of all){
+        const t=txt(el);
+        if(!t || !/\d/.test(t)) continue;
+        const rect=el.getBoundingClientRect();
+        const score=(rect.width*rect.height) + (t.includes('店舗')||t.includes('地域')?5000:0) + (/^\d+$/.test(t.replace(/,/g,''))?8000:0);
+        if(score>bestScore){best=el;bestScore=score;}
+      }
+      return best;
+    }
+    function findSubEl(card,labelEl,numberEl){
+      return Array.from(card.querySelectorAll('*')).find(el=>{
+        if(el===labelEl || el===numberEl) return false;
+        const t=txt(el);
+        return t && (t.includes('随時更新') || t.includes('エリアをカバー') || t.length<=26);
+      }) || null;
+    }
+    function patchCard(card,label){
+      if(!card || card.dataset.kbnLiveHeroStatV245==='1') return;
+      card.dataset.kbnLiveHeroStatV245='1';
+      card.classList.add('kbn-live-card-v245');
+      const numberEl=findNumberEl(card);
+      const labelEl=findLabel(label) || Array.from(card.querySelectorAll('*')).find(el=>txt(el).includes(label));
+      const subEl=findSubEl(card,labelEl,numberEl);
+      if(numberEl) numberEl.classList.add('kbn-live-number-v245');
+      if(labelEl) labelEl.classList.add('kbn-live-label-v245');
+      if(subEl) subEl.classList.add('kbn-live-sub-v245');
+      const head=document.createElement('div');
+      head.className='kbn-live-head-v245';
+      const badge=document.createElement('div');
+      badge.className='kbn-live-badge-v245';
+      badge.innerHTML='<span class="kbn-live-dot-v245"></span>LIVE';
+      if(labelEl && labelEl.parentElement){
+        labelEl.parentElement.insertBefore(head,labelEl);
+        head.appendChild(labelEl);
+        head.appendChild(badge);
+      }else{
+        card.insertBefore(head,card.firstChild);
+        const fallback=document.createElement('div');
+        fallback.className='kbn-live-label-v245';
+        fallback.textContent=label;
+        head.appendChild(fallback);
+        head.appendChild(badge);
+      }
+      if(!subEl){
+        const p=document.createElement('div');
+        p.className='kbn-live-sub-v245';
+        p.textContent=label==='掲載店舗数' ? '熊本県内のBAR情報をリアルタイム表示' : '県内の対応エリアをリアルタイム表示';
+        if(numberEl?.parentElement) numberEl.parentElement.insertAdjacentElement('afterend',p);
+        else card.appendChild(p);
+      }
+      const meta=document.createElement('div');
+      meta.className='kbn-live-meta-v245';
+      meta.innerHTML='<span>リアルタイム更新中</span><span class="kbn-live-clock-v245"></span>';
+      card.appendChild(meta);
+    }
+    function patchWrap(){
       const wrap=Array.from(document.querySelectorAll('section,div,article')).find(el=>{
         const t=txt(el);
         return t.includes('掲載店舗数') && t.includes('対応エリア') && (el.querySelectorAll('div,article,section').length>=2);
       });
-      if(wrap && wrap.dataset.kbnCompactHeroWrap!=='1'){
-        wrap.dataset.kbnCompactHeroWrap='1';
-        wrap.style.gap='10px';
-        wrap.style.margin='12px 0 18px';
-      }
+      if(wrap) wrap.classList.add('kbn-live-hero-wrap-v245');
+      return wrap;
+    }
+    function updateClocks(){
+      const now=jpTime();
+      document.querySelectorAll('.kbn-live-clock-v245').forEach(el=>{el.textContent=now;});
+    }
+    function apply(){
+      injectStyle();
+      patchWrap();
+      const shopCard=findCard(findLabel('掲載店舗数'));
+      const areaCard=findCard(findLabel('対応エリア'));
+      patchCard(shopCard,'掲載店舗数');
+      patchCard(areaCard,'対応エリア');
+      updateClocks();
     }
     function run(){
       apply();
       setTimeout(apply,200);
       setTimeout(apply,1200);
+      setInterval(updateClocks,1000);
     }
     if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',run,{once:true});
     else run();
@@ -748,10 +824,10 @@ function kbnHomeHeroCompactPatchScriptV244(){
   })();</script>`;
 }
 
-function kbnInjectHomeHeroCompactV244(html){
-  const script=kbnHomeHeroCompactPatchScriptV244();
+function kbnInjectHomeHeroLiveV245(html){
+  const script=kbnHomeHeroLivePatchScriptV245();
   const source=String(html||'');
-  if(source.includes('kbnCompactHeroStat')) return source;
+  if(source.includes('kbnLiveHeroStatV245')) return source;
   if(/<\/body>/i.test(source)) return source.replace(/<\/body>/i, script + '</body>');
   return source + script;
 }
@@ -7564,7 +7640,7 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
 
     if((url.pathname==="/" || url.pathname==="/index.html") && String(assetResponse.headers.get("content-type")||"").includes("text/html")){
       const body=await assetResponse.text();
-      const patched=kbnInjectHomeHeroCompactV244(body);
+      const patched=kbnInjectHomeHeroLiveV245(body);
       const h=new Headers(assetResponse.headers);
       h.delete("content-length");
       return new Response(patched,{
