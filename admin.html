@@ -3350,7 +3350,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.65</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.66</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -5313,7 +5313,7 @@ window.ignoreExclusionCandidateV265=async function(shopId,button){
   if(status)status.textContent=`${shop.name||"店舗"} を対象外候補から除外しています...`;
 
   try{
-    await api("/api/admin/shops/exclusion-candidates/ignore",{
+    await api("/api/admin/exclusion-ignore",{
       method:"POST",
       headers:{"content-type":"application/json"},
       body:JSON.stringify({
@@ -5330,7 +5330,12 @@ window.ignoreExclusionCandidateV265=async function(shopId,button){
     }
   }catch(err){
     console.error("ignore exclusion candidate failed",err);
-    alert("除外できませんでした: "+(err?.message||"UNKNOWN_ERROR"));
+    const msg=String(err?.message||err||"UNKNOWN_ERROR");
+    if(/ADMIN_ROUTE_NOT_FOUND/i.test(msg)){
+      alert("除外APIがまだ反映されていません。worker.js と admin.html の両方を反映してください。");
+    }else{
+      alert("除外できませんでした: "+msg);
+    }
     if(button)button.disabled=false;
     if(status)status.textContent="候補からの除外に失敗しました。";
   }
