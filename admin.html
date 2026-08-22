@@ -3271,6 +3271,57 @@ html,body{max-width:100%;overflow-x:hidden}
 @media(max-width:680px){.kbn-auto-times-v217{grid-template-columns:repeat(2,minmax(0,1fr))}.kbn-maintenance-select-v217 label{grid-template-columns:1fr}}
 </style>
 
+
+<style id="kbn-exclusion-candidates-v259">
+.exclusion-tool-v259{
+  margin:0 0 14px;
+  border:1px solid #4c3d1d;
+  border-radius:14px;
+  background:#12130f;
+  overflow:hidden;
+}
+.exclusion-tool-head-v259{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:12px 13px;
+}
+.exclusion-tool-head-v259 strong{color:#f1c75b;font-size:.92rem}
+.exclusion-tool-head-v259 small{display:block;margin-top:3px;color:#8f99a4;line-height:1.45}
+.exclusion-scan-btn-v259{
+  min-height:38px;padding:0 12px;border:1px solid #6f5924;border-radius:10px;
+  background:#17140c;color:#efc45a;font-weight:900;white-space:nowrap
+}
+.exclusion-panel-v259{padding:0 12px 12px}
+.exclusion-panel-v259[hidden]{display:none!important}
+.exclusion-summary-v259{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:10px 0;border-top:1px solid #2f342f;color:#b9c0c8;font-size:.78rem
+}
+.exclusion-summary-v259 b{color:#f2c65a;font-size:1.1rem}
+.exclusion-actions-v259{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:9px}
+.exclusion-actions-v259 button{
+  min-height:40px;border-radius:10px;border:1px solid #42505d;background:#101821;color:#e9edf1;font-weight:850
+}
+.exclusion-actions-v259 .danger{border-color:#7a3838;background:#251010;color:#ffb5b5}
+.exclusion-list-v259{display:grid;gap:7px;max-height:460px;overflow:auto}
+.exclusion-item-v259{
+  display:grid;grid-template-columns:28px minmax(0,1fr);gap:8px;align-items:flex-start;
+  padding:10px;border:1px solid #343f49;border-radius:11px;background:#0b1118
+}
+.exclusion-item-v259 input{width:18px;height:18px;margin-top:2px}
+.exclusion-item-v259 h4{margin:0;color:#f4f5f7;font-size:.88rem;line-height:1.35}
+.exclusion-item-v259 p{margin:3px 0 0;color:#8f99a4;font-size:.7rem;line-height:1.5}
+.exclusion-reason-v259{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.exclusion-reason-v259 span{
+  padding:3px 6px;border-radius:999px;background:#281414;border:1px solid #633636;color:#ffb8b8;font-size:.62rem;font-weight:800
+}
+.exclusion-status-v259{margin-top:8px;color:#9ba5af;font-size:.72rem;line-height:1.5}
+@media(max-width:640px){
+  .exclusion-tool-head-v259{align-items:flex-start;flex-direction:column}
+  .exclusion-scan-btn-v259{width:100%}
+  .exclusion-actions-v259{grid-template-columns:1fr}
+}
+</style>
+
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
 <div id="topMaintenanceResult" class="top-maintenance-result">
@@ -3417,6 +3468,32 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 
 <div class="shop-mini-actions"><button id="reloadShops" class="admin-secondary-btn" type="button">一覧を再読み込み</button></div>
+
+<div class="exclusion-tool-v259">
+  <div class="exclusion-tool-head-v259">
+    <div>
+      <strong>⚠ 対象外店舗チェック</strong>
+      <small>居酒屋・通常カラオケ・温泉・サウナ・スポーツ施設など、BARではない可能性が高い掲載済み店舗を抽出します。</small>
+    </div>
+    <button id="scanExclusionCandidatesV259" class="exclusion-scan-btn-v259" type="button">対象外候補を確認</button>
+  </div>
+
+  <div id="exclusionPanelV259" class="exclusion-panel-v259" hidden>
+    <div class="exclusion-summary-v259">
+      <span>対象外候補 <b id="exclusionCandidateCountV259">0</b> 店舗</span>
+      <span id="exclusionSelectedCountV259">選択 0件</span>
+    </div>
+
+    <div class="exclusion-actions-v259">
+      <button id="toggleAllExclusionV259" type="button">すべて選択</button>
+      <button id="deleteSelectedExclusionV259" class="danger" type="button">選択した店舗を削除</button>
+    </div>
+
+    <div id="exclusionCandidateListV259" class="exclusion-list-v259"></div>
+    <div id="exclusionStatusV259" class="exclusion-status-v259"></div>
+  </div>
+</div>
+
 
 <div class="shop-filter-panel">
   <div class="shop-filter-grid">
@@ -5005,6 +5082,143 @@ window.deleteShop=async id=>{
     }
   }
 };
+
+
+
+let exclusionCandidatesV259=[];
+
+function updateExclusionSelectedCountV259(){
+  const checked=[...document.querySelectorAll('.exclusion-check-v259:checked')];
+  const el=document.getElementById("exclusionSelectedCountV259");
+  if(el)el.textContent=`選択 ${checked.length}件`;
+}
+
+function renderExclusionCandidatesV259(){
+  const list=document.getElementById("exclusionCandidateListV259");
+  const count=document.getElementById("exclusionCandidateCountV259");
+  if(!list||!count)return;
+
+  count.textContent=String(exclusionCandidatesV259.length);
+
+  if(!exclusionCandidatesV259.length){
+    list.innerHTML='<div style="padding:12px;color:#8f99a4">現在、明確な対象外候補はありません。</div>';
+    updateExclusionSelectedCountV259();
+    return;
+  }
+
+  list.innerHTML=exclusionCandidatesV259.map(s=>{
+    const provisional=String(s.listing_status||"published")==="provisional";
+    const reasons=Array.isArray(s.reasons)?s.reasons:[];
+    return `<label class="exclusion-item-v259">
+      <input class="exclusion-check-v259" type="checkbox" value="${Number(s.id)}">
+      <span>
+        <h4>${esc(s.name||"店舗名なし")} ${provisional?'<small style="color:#efc45a">［独自］</small>':'<small style="color:#8ec5ff">［正式］</small>'}</h4>
+        <p>${esc(s.area||"")} ${s.genre?` / ${esc(s.genre)}`:""}${s.address?`<br>${esc(s.address)}`:""}</p>
+        <span class="exclusion-reason-v259">${reasons.map(r=>`<span>${esc(r)}</span>`).join("")}</span>
+      </span>
+    </label>`;
+  }).join("");
+
+  document.querySelectorAll(".exclusion-check-v259").forEach(el=>{
+    el.addEventListener("change",updateExclusionSelectedCountV259);
+  });
+  updateExclusionSelectedCountV259();
+}
+
+window.loadExclusionCandidatesV259=async function(){
+  const panel=document.getElementById("exclusionPanelV259");
+  const list=document.getElementById("exclusionCandidateListV259");
+  const status=document.getElementById("exclusionStatusV259");
+  if(panel)panel.hidden=false;
+  if(list)list.innerHTML='<div style="padding:12px;color:#8f99a4">掲載済み店舗をチェックしています...</div>';
+  if(status)status.textContent="";
+
+  try{
+    const d=await api("/api/admin/shops/exclusion-candidates");
+    exclusionCandidatesV259=Array.isArray(d?.candidates)?d.candidates:[];
+    renderExclusionCandidatesV259();
+    if(status){
+      status.textContent=`掲載中 ${Number(d?.total||0)}店舗を確認し、対象外の可能性が高い店舗を ${exclusionCandidatesV259.length}件 抽出しました。`;
+    }
+  }catch(e){
+    if(list)list.innerHTML='<div style="padding:12px;color:#ff9e9e">候補を取得できませんでした。</div>';
+    if(status)status.textContent=String(e?.message||e);
+  }
+};
+
+window.deleteSelectedExclusionV259=async function(){
+  const ids=[...document.querySelectorAll(".exclusion-check-v259:checked")]
+    .map(el=>Number(el.value))
+    .filter(Boolean);
+
+  if(!ids.length){
+    alert("削除する店舗を選択してください。");
+    return;
+  }
+
+  const selected=exclusionCandidatesV259.filter(x=>ids.includes(Number(x.id)));
+  const officialCount=selected.filter(x=>String(x.listing_status||"published")!=="provisional").length;
+
+  const warning=
+    `${ids.length}店舗を完全削除します。\n\n`+
+    `この操作は元に戻せません。`+
+    (officialCount?`\n正式掲載の店舗が ${officialCount}件 含まれています。`:"")+
+    `\n\n本当に削除しますか？`;
+
+  if(!confirm(warning))return;
+
+  const status=document.getElementById("exclusionStatusV259");
+  if(status)status.textContent=`${ids.length}店舗を削除しています...`;
+
+  try{
+    const d=await api("/api/admin/shops/exclusion-candidates/bulk-delete",{
+      method:"POST",
+      headers:{"content-type":"application/json"},
+      body:JSON.stringify({ids})
+    });
+
+    const deleted=Number(d?.deleted_count||0);
+    const skipped=Number(d?.skipped_count||0);
+    const failed=Number(d?.failed_count||0);
+
+    alert(`削除完了：${deleted}店舗${skipped?`\n対象外再判定でスキップ：${skipped}件`:""}${failed?`\n失敗：${failed}件`:""}`);
+
+    await Promise.allSettled([
+      window.loadShops?.(),
+      window.loadExclusionCandidatesV259?.()
+    ]);
+  }catch(e){
+    console.error("bulk exclusion delete failed",e);
+    alert("削除できませんでした: "+(e?.message||"UNKNOWN_ERROR"));
+    if(status)status.textContent="削除に失敗しました。";
+  }
+};
+
+document.addEventListener("click",e=>{
+  const scan=e.target?.closest?.("#scanExclusionCandidatesV259");
+  if(scan){
+    e.preventDefault();
+    window.loadExclusionCandidatesV259?.();
+    return;
+  }
+
+  const all=e.target?.closest?.("#toggleAllExclusionV259");
+  if(all){
+    e.preventDefault();
+    const boxes=[...document.querySelectorAll(".exclusion-check-v259")];
+    const allChecked=boxes.length>0 && boxes.every(x=>x.checked);
+    boxes.forEach(x=>{x.checked=!allChecked;});
+    all.textContent=allChecked?"すべて選択":"すべて解除";
+    updateExclusionSelectedCountV259();
+    return;
+  }
+
+  const del=e.target?.closest?.("#deleteSelectedExclusionV259");
+  if(del){
+    e.preventDefault();
+    window.deleteSelectedExclusionV259?.();
+  }
+});
 
 
 
