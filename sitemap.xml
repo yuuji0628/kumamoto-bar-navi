@@ -25,4 +25,12 @@
   <url><loc>https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/pricing.html</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
   <url><loc>https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/coupons.html</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
   <url><loc>https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/events.html</loc><changefreq>daily</changefreq><priority>0.6</priority></url>
+  <url><loc>https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/kumamoto-station-bar.html</loc><changefreq>daily</changefreq><priority>0.82</priority></url>
+  <url><loc>https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/suizenji-bar.html</loc><changefreq>daily</changefreq><priority>0.82</priority></url>
+  <url><loc>https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/kengun-bar.html</loc><changefreq>daily</changefreq><priority>0.82</priority></url>
+  <url><loc>https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/hikarinomori-bar.html</loc><changefreq>daily</changefreq><priority>0.82</priority></url>
+  <url><loc>https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/yatsushiro-bar.html</loc><changefreq>daily</changefreq><priority>0.82</priority></url>
+  <url><loc>https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/hitoyoshi-bar.html</loc><changefreq>daily</changefreq><priority>0.82</priority></url>
+  <url><loc>https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/tamana-bar.html</loc><changefreq>daily</changefreq><priority>0.82</priority></url>
+  <url><loc>https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/amakusa-bar.html</loc><changefreq>daily</changefreq><priority>0.82</priority></url>
 </urlset>
