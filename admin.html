@@ -3671,7 +3671,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.82</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.84</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -6951,21 +6951,44 @@ async function renderInstaPost(shop,{forceNoImage=false}={}){
   ctx.fillText("このたび、下記の店舗様を",60,177);
   ctx.fillStyle=gold2;
   ctx.font="800 34px Georgia,'Times New Roman',serif";
-  ctx.fillText("KUMAMOTO BAR NAVI",60,223);
+  ctx.fillText("KUMAMOTO BAR NAVI",60,219);
   ctx.fillStyle=white;
-  ctx.font="900 48px 'Hiragino Mincho ProN','Yu Mincho',Georgia,serif";
-  ctx.fillText("に正式掲載しました！",420,223);
+  ctx.font="900 40px 'Hiragino Mincho ProN','Yu Mincho',Georgia,serif";
+  ctx.fillText("に正式掲載しました！",60,258);
 
   // Premium KBN badge
   ctx.save();
   ctx.translate(900,126);
-  ctx.fillStyle="#090909";ctx.strokeStyle=gold2;ctx.lineWidth=5;
+  const badgeGlow=ctx.createRadialGradient(0,0,16,0,0,118);
+  badgeGlow.addColorStop(0,"rgba(230,190,92,.28)");
+  badgeGlow.addColorStop(.55,"rgba(180,120,30,.18)");
+  badgeGlow.addColorStop(1,"rgba(0,0,0,0)");
+  ctx.fillStyle=badgeGlow;
+  ctx.beginPath();ctx.arc(0,0,118,0,Math.PI*2);ctx.fill();
+
+  const badgeFill=ctx.createLinearGradient(-76,-76,76,76);
+  badgeFill.addColorStop(0,"#120d06");
+  badgeFill.addColorStop(.55,"#050505");
+  badgeFill.addColorStop(1,"#1a1208");
+  ctx.shadowColor="rgba(216,170,66,.32)";
+  ctx.shadowBlur=24;
+  ctx.fillStyle=badgeFill;ctx.strokeStyle=gold2;ctx.lineWidth=5;
   ctx.beginPath();ctx.arc(0,0,82,0,Math.PI*2);ctx.fill();ctx.stroke();
-  ctx.strokeStyle=gold3;ctx.lineWidth=2;
+  ctx.shadowBlur=0;
+
+  ctx.strokeStyle="rgba(250,214,120,.95)";ctx.lineWidth=2;
   ctx.beginPath();ctx.arc(0,0,68,0,Math.PI*2);ctx.stroke();
+  ctx.strokeStyle="rgba(216,170,66,.45)";ctx.lineWidth=1;
+  ctx.beginPath();ctx.arc(0,0,58,0,Math.PI*2);ctx.stroke();
+
+  ctx.strokeStyle=gold3;ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(-34,-36);ctx.lineTo(34,-36);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(-28,44);ctx.lineTo(28,44);ctx.stroke();
+
   ctx.fillStyle=gold2;ctx.textAlign="center";
-  ctx.font="900 40px Georgia,serif";ctx.fillText("KBN",0,8);
-  ctx.font="700 13px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";ctx.fillText("KUMAMOTO BAR NAVI",0,32);
+  ctx.font="900 42px Georgia,serif";ctx.fillText("KBN",0,6);
+  ctx.font="700 11px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";ctx.fillText("KUMAMOTO",0,24);
+  ctx.font="700 10px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";ctx.fillText("BAR NAVI",0,38);
   ctx.restore();
 
   // Shop main panel
@@ -7075,11 +7098,11 @@ async function renderInstaPost(shop,{forceNoImage=false}={}){
   // Bottom left: real public-page QR
   drawRoundedRect(ctx,46,916,410,330,8,"rgba(4,4,4,.96)",gold3);
   ctx.textAlign="left";ctx.fillStyle=gold2;
-  ctx.font="900 27px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif";
-  ctx.fillText("KUMAMOTO BAR NAVI をチェック！",68,958);
+  ctx.font="900 25px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif";
+  ctx.fillText("KUMAMOTO BAR NAVI をチェック！",68,972);
   ctx.fillStyle=white;
   ctx.font="500 18px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif";
-  ctx.fillText("店舗の公開ページはこちら",68,992);
+  ctx.fillText("店舗の公開ページはこちら",68,1006);
 
   const qrDataUrl=await makeShopQrDataUrlV282(shop);
   if(qrDataUrl){
