@@ -3671,7 +3671,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.86</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.87</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -6946,13 +6946,16 @@ async function renderInstaPost(shop,{forceNoImage=false}={}){
   ctx.strokeStyle=gold3;ctx.lineWidth=2;
   ctx.beginPath();ctx.moveTo(58,135);ctx.lineTo(720,135);ctx.stroke();
 
-  // Sub headline: 2-line layout with more breathing room
+  // Sub headline: brand in gold, announcement in white
   ctx.fillStyle=white;
   ctx.font="600 22px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif";
   ctx.fillText("このたび、下記の店舗様を",60,184);
-  ctx.fillStyle=gold2;
   ctx.font="800 29px 'Hiragino Mincho ProN','Yu Mincho',Georgia,serif";
-  ctx.fillText("KUMAMOTO BAR NAVI に正式掲載しました",60,232);
+  ctx.fillStyle=gold2;
+  ctx.fillText("KUMAMOTO BAR NAVI",60,232);
+  const headerBrandWidth=ctx.measureText("KUMAMOTO BAR NAVI").width;
+  ctx.fillStyle=white;
+  ctx.fillText(" に正式掲載しました",60+headerBrandWidth+10,232);
 
   // Premium KBN badge
   ctx.save();
@@ -7123,11 +7126,20 @@ async function renderInstaPost(shop,{forceNoImage=false}={}){
   ctx.font="900 34px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif";
   ctx.fillText(recruiting?"スタッフ募集中":"正式掲載店舗",510,970);
   ctx.fillStyle=white;
-  ctx.font="600 21px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif";
-  const promo=recruiting
-    ?"一緒にお店を盛り上げてくれるスタッフを募集しています！お気軽に店舗へお問い合わせください。"
-    :"熊本のBAR・CAFE BAR情報メディア「KUMAMOTO BAR NAVI」で店舗情報を公開中です。";
-  wrapCanvasText(ctx,promo,510,1015,485,31,5);
+  if(recruiting){
+    ctx.font="600 21px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif";
+    wrapCanvasText(ctx,"一緒にお店を盛り上げてくれるスタッフを募集しています！お気軽に店舗へお問い合わせください。",510,1015,485,31,5);
+  }else{
+    // Fixed 3-line composition for a cleaner official-listing panel
+    ctx.font="600 20px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif";
+    ctx.fillText("熊本のBAR・CAFE BAR情報メディア",510,1020);
+    ctx.fillStyle=gold2;
+    ctx.font="800 23px Georgia,'Times New Roman',serif";
+    ctx.fillText("KUMAMOTO BAR NAVI",510,1060);
+    ctx.fillStyle=white;
+    ctx.font="600 20px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif";
+    ctx.fillText("で店舗情報を公開中です。",510,1100);
+  }
 
   ctx.strokeStyle=gold3;ctx.lineWidth=1;
   ctx.beginPath();ctx.moveTo(510,1173);ctx.lineTo(996,1173);ctx.stroke();
