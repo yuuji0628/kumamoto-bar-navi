@@ -3338,6 +3338,216 @@ html,body{max-width:100%;overflow-x:hidden}
 }
 </style>
 
+
+<style id="kbn-maintenance-compact-v268">
+/* v2.68: メンテナンス画面をスマート＆コンパクト化 */
+#tab-leads[data-lead-mode="maintenance"] .lead-maintenance-label-v261{
+  display:none!important;
+}
+#tab-leads[data-lead-mode="maintenance"] .lead-smart-head{
+  margin-bottom:10px!important;
+  padding:0 2px!important;
+}
+#tab-leads[data-lead-mode="maintenance"] .lead-smart-head h2{
+  font-size:1.05rem!important;
+}
+#tab-leads[data-lead-mode="maintenance"] .lead-smart-head p{
+  font-size:.7rem!important;
+  line-height:1.45!important;
+}
+
+#tab-leads[data-lead-mode="maintenance"] .kbn-maintenance-card{
+  margin-top:0!important;
+  padding:12px!important;
+  border:1px solid #394653!important;
+  border-radius:14px!important;
+  background:linear-gradient(180deg,#101820,#0c1218)!important;
+  box-shadow:0 10px 24px rgba(0,0,0,.18)!important;
+}
+#tab-leads[data-lead-mode="maintenance"] .kbn-maintenance-card .lead-smart-card-head{
+  margin-bottom:8px!important;
+  align-items:center!important;
+}
+#tab-leads[data-lead-mode="maintenance"] .kbn-maintenance-card .lead-smart-icon{
+  width:40px!important;
+  height:40px!important;
+  min-width:40px!important;
+  border-radius:10px!important;
+  font-size:1.05rem!important;
+}
+#tab-leads[data-lead-mode="maintenance"] .kbn-maintenance-card .lead-smart-card-head h3{
+  font-size:.95rem!important;
+  margin:0 0 2px!important;
+}
+#tab-leads[data-lead-mode="maintenance"] .kbn-maintenance-card .lead-smart-card-head p{
+  font-size:.66rem!important;
+  line-height:1.45!important;
+  color:#98a2ad!important;
+}
+
+#tab-leads[data-lead-mode="maintenance"] .kbn-maintenance-grid{
+  display:grid!important;
+  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  gap:6px!important;
+  margin-top:8px!important;
+}
+#tab-leads[data-lead-mode="maintenance"] .kbn-maintenance-grid button{
+  min-height:38px!important;
+  padding:0 8px!important;
+  border-radius:10px!important;
+  font-size:.68rem!important;
+  font-weight:800!important;
+}
+
+#tab-leads[data-lead-mode="maintenance"] .kbn-schedule-note.kbn-schedule-editor{
+  display:block!important;
+  margin-top:10px!important;
+  padding:10px!important;
+  border-radius:12px!important;
+  background:#0d141b!important;
+  border:1px solid #2e3945!important;
+}
+#tab-leads[data-lead-mode="maintenance"] .kbn-schedule-title{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:8px!important;
+  margin-bottom:6px!important;
+}
+#tab-leads[data-lead-mode="maintenance"] .kbn-schedule-title b{
+  font-size:.74rem!important;
+}
+#tab-leads[data-lead-mode="maintenance"] .kbn-schedule-title span{
+  font-size:.62rem!important;
+  color:#8e99a5!important;
+}
+#tab-leads[data-lead-mode="maintenance"] .kbn-schedule-note > small{
+  font-size:.66rem!important;
+  line-height:1.45!important;
+}
+#tab-leads[data-lead-mode="maintenance"] .kbn-auto-times-v217{
+  display:grid!important;
+  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  gap:6px!important;
+  margin-top:8px!important;
+}
+#tab-leads[data-lead-mode="maintenance"] .kbn-auto-times-v217 label,
+#tab-leads[data-lead-mode="maintenance"] .kbn-maintenance-select-v217 label{
+  display:flex!important;
+  flex-direction:column!important;
+  gap:5px!important;
+  padding:8px!important;
+  border:1px solid #2d3946!important;
+  border-radius:10px!important;
+  background:#111922!important;
+}
+#tab-leads[data-lead-mode="maintenance"] .kbn-auto-times-v217 span,
+#tab-leads[data-lead-mode="maintenance"] .kbn-maintenance-select-v217 span{
+  font-size:.63rem!important;
+  color:#b8c1ca!important;
+}
+#tab-leads[data-lead-mode="maintenance"] .kbn-auto-times-v217 input,
+#tab-leads[data-lead-mode="maintenance"] .kbn-maintenance-select-v217 select{
+  min-height:34px!important;
+  padding:0 8px!important;
+  border-radius:8px!important;
+  font-size:.74rem!important;
+}
+#tab-leads[data-lead-mode="maintenance"] .kbn-maintenance-select-v217{
+  margin-top:8px!important;
+}
+#tab-leads[data-lead-mode="maintenance"] .kbn-maintenance-select-v217 small{
+  display:block!important;
+  margin-top:6px!important;
+  font-size:.64rem!important;
+  line-height:1.45!important;
+  color:#9aa4af!important;
+}
+#tab-leads[data-lead-mode="maintenance"] #autoScheduleSaveBtn{
+  width:100%!important;
+  min-height:40px!important;
+  margin-top:8px!important;
+  border-radius:10px!important;
+  font-size:.74rem!important;
+}
+#tab-leads[data-lead-mode="maintenance"] #autoScheduleStatus,
+#tab-leads[data-lead-mode="maintenance"] #autoListingSixTimesStatus{
+  display:block!important;
+  margin-top:6px!important;
+  font-size:.68rem!important;
+  line-height:1.45!important;
+}
+#tab-leads[data-lead-mode="maintenance"] .kbn-simple-schedule-ok,
+#tab-leads[data-lead-mode="maintenance"] #lastAutomaticRunStatus{
+  margin-top:8px!important;
+  padding:8px 10px!important;
+  border-radius:10px!important;
+  font-size:.7rem!important;
+  line-height:1.5!important;
+}
+#tab-leads[data-lead-mode="maintenance"] #maintenanceStatus{
+  min-height:18px!important;
+  margin-top:8px!important;
+  font-size:.68rem!important;
+}
+#tab-leads[data-lead-mode="maintenance"] .kbn-alert-head{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:8px!important;
+  margin-top:10px!important;
+  padding-top:8px!important;
+  border-top:1px solid #27323c!important;
+}
+#tab-leads[data-lead-mode="maintenance"] .kbn-alert-head b{
+  font-size:.78rem!important;
+}
+#tab-leads[data-lead-mode="maintenance"] .kbn-alert-head button{
+  min-height:32px!important;
+  padding:0 10px!important;
+  border-radius:9px!important;
+}
+#tab-leads[data-lead-mode="maintenance"] #kbnAlertsList{
+  max-height:240px!important;
+  overflow:auto!important;
+  margin-top:8px!important;
+}
+#tab-leads[data-lead-mode="maintenance"] .kbn-alert-item{
+  padding:8px!important;
+  border-radius:10px!important;
+}
+#tab-leads[data-lead-mode="maintenance"] .kbn-alert-item b{
+  font-size:.72rem!important;
+}
+#tab-leads[data-lead-mode="maintenance"] .kbn-alert-item p{
+  font-size:.64rem!important;
+  line-height:1.45!important;
+}
+#tab-leads[data-lead-mode="maintenance"] .kbn-alert-actions button{
+  min-height:29px!important;
+  padding:0 7px!important;
+  font-size:.61rem!important;
+}
+#tab-leads[data-lead-mode="maintenance"] small.version-note{
+  display:none!important;
+}
+
+@media(max-width:680px){
+  #tab-leads[data-lead-mode="maintenance"] .kbn-maintenance-grid{
+    grid-template-columns:1fr 1fr!important;
+  }
+  #tab-leads[data-lead-mode="maintenance"] .kbn-maintenance-grid button:last-child{
+    grid-column:1 / -1!important;
+  }
+  #tab-leads[data-lead-mode="maintenance"] .kbn-auto-times-v217{
+    grid-template-columns:1fr 1fr!important;
+  }
+  #tab-leads[data-lead-mode="maintenance"] .kbn-auto-times-v217 label:last-child{
+    grid-column:1 / -1!important;
+  }
+}
+</style>
+
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
 <div id="topMaintenanceResult" class="top-maintenance-result">
@@ -3350,7 +3560,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.67</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.68</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -3883,13 +4093,13 @@ html,body{max-width:100%;overflow-x:hidden}
       <div class="lead-smart-icon">✓</div>
       <div>
         <h3>自動メンテナンス</h3>
-        <p>掲載中の店舗を20件ずつ順番に確認。次回は前回の続きから自動で進みます。</p>
+        <p>掲載済み店舗を順番に自動確認。次回も続きから進みます。</p>
       </div>
     </div>
     <div class="kbn-maintenance-grid">
-      <button type="button" id="refreshMissingInfoBtn">情報不足を補完（20件）</button>
-      <button type="button" id="checkClosedShopsBtn">閉業チェック（20件）</button>
-      <button type="button" id="refreshInstagramBtn">Instagram補完（20件）</button>
+      <button type="button" id="refreshMissingInfoBtn">情報補完 20件</button>
+      <button type="button" id="checkClosedShopsBtn">閉業確認 20件</button>
+      <button type="button" id="refreshInstagramBtn">Instagram 20件</button>
     </div>
     <div class="kbn-schedule-note kbn-schedule-editor">
       <div class="kbn-schedule-title">
@@ -3898,7 +4108,7 @@ html,body{max-width:100%;overflow-x:hidden}
       </div>
 
       <small style="display:block;margin:4px 0 8px;color:#9aa4af">
-        自動掲載は1日6回。好きな時間を設定して保存するだけで、そのまま反映されます。
+        1日6回の自動掲載時間をここでまとめて設定できます。
       </small>
 
       <div class="kbn-auto-times-v217">
@@ -3912,7 +4122,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
       <div class="kbn-maintenance-select-v217">
         <label for="maintenanceScheduleSelect">
-          <span>通常メンテナンスも実行する回</span>
+          <span>メンテ実行タイミング</span>
           <select id="maintenanceScheduleSelect">
             <option value="1">自動掲載 1</option>
             <option value="2">自動掲載 2</option>
@@ -3922,10 +4132,10 @@ html,body{max-width:100%;overflow-x:hidden}
             <option value="6">自動掲載 6</option>
           </select>
         </label>
-        <small>選んだ1回だけ、閉業確認・既存情報補完などの通常メンテナンスも実行します。</small>
+        <small>選んだ1回だけ通常メンテナンスも実行します。</small>
       </div>
 
-      <button type="button" id="autoScheduleSaveBtn" class="kbn-schedule-save-v217">予約時間を更新</button>
+      <button type="button" id="autoScheduleSaveBtn" class="kbn-schedule-save-v217">時間を保存</button>
       <small id="autoScheduleStatus">現在の予約時間を読み込み中...</small>
       <div class="kbn-simple-schedule-ok" style="margin-top:10px;padding:10px 12px;border:1px solid #315b45;border-radius:12px;background:#0d1b15;color:#7ee2a8;font-size:.78rem;line-height:1.6">
         ✓ 時間を保存するだけでOK。遅れても5分以内なら自動で取りこぼしを補完します。
@@ -3935,14 +4145,14 @@ html,body{max-width:100%;overflow-x:hidden}
         最終自動実行：読み込み中...
       </div>
 
-      <div style="margin-top:8px;color:#aeb6c0;font-size:.76rem">予約自動掲載：通常回は1回最大6店舗。通常メンテナンス回は120検索を分割し、累計件数で表示します。</div>
+      <div style="margin-top:8px;color:#aeb6c0;font-size:.76rem">通常回は最大6店舗。メンテ回は分割実行して累計件数で表示します。</div>
       <small id="autoListingSixTimesStatus" style="display:block;margin-top:6px;color:#efc45a">
         自動掲載：1日6回 / 通常メンテナンス：1日1回
       </small>
     </div>
     <div id="maintenanceStatus" class="auto-discovery-status"></div>
     <div class="kbn-alert-head">
-      <b>新店舗・運営通知</b>
+      <b>通知</b>
       <button type="button" id="reloadKbnAlertsBtn">更新</button>
     </div>
     <div id="kbnAlertsList" class="kbn-alert-list"><small>通知を読み込み中...</small></div>
@@ -10272,7 +10482,7 @@ document.addEventListener("click",async e=>{
     if(status){status.dataset.state="ok";status.textContent=`✓ 保存しました。自動掲載 ${saved.join(" / ")} ｜ 通常メンテナンス ${mt}`;}
     const six=document.getElementById("autoListingSixTimesStatus");if(six)six.textContent=`自動掲載：1日6回（${saved.join(" / ")}） / 通常メンテナンス：${mt}`;
   }catch(err){if(status){status.dataset.state="error";status.textContent=`保存できませんでした：${err?.message||"UNKNOWN_ERROR"}`;}}
-  finally{btn.disabled=false;btn.textContent="予約時間を更新";}
+  finally{btn.disabled=false;btn.textContent="時間を保存";}
 });
 
 document.addEventListener("DOMContentLoaded",()=>setTimeout(kbnLoadSimpleScheduleV230,450));
