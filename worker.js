@@ -1296,6 +1296,61 @@ async function kbnLastAutomaticRunV233(env){
   `).first();
 }
 
+async function kbnMaintenanceQueueStatusV257(env){
+  try{
+    await ensureKbnMaintenanceQueueV242(env);
+    const q=await env.DB.prepare(`
+      SELECT phase,run_date,created_total,updated_at
+      FROM kbn_maintenance_queue
+      WHERE id=1
+    `).first();
+    const phase=Number(q?.phase||0);
+    const createdTotal=Math.max(0,Number(q?.created_total||0));
+
+    if(!phase){
+      return {
+        active:false,
+        phase:0,
+        stage:"idle",
+        created_total:createdTotal,
+        discovery_batch:0,
+        discovery_batches_total:40,
+        run_date:q?.run_date||"",
+        updated_at:q?.updated_at||""
+      };
+    }
+
+    if(phase>=11 && phase<=49){
+      return {
+        active:true,
+        phase,
+        stage:"discovery",
+        created_total:createdTotal,
+        // phase 11 is queued batch #2 because batch #1 ran at the scheduled minute.
+        discovery_batch:Math.min(40,Math.max(1,phase-9)),
+        discovery_batches_total:40,
+        run_date:q?.run_date||"",
+        updated_at:q?.updated_at||""
+      };
+    }
+
+    const task=phase===1?"missing":phase===2?"closed":phase===3?"instagram":"maintenance";
+    return {
+      active:true,
+      phase,
+      stage:"maintenance",
+      task,
+      created_total:createdTotal,
+      discovery_batch:40,
+      discovery_batches_total:40,
+      run_date:q?.run_date||"",
+      updated_at:q?.updated_at||""
+    };
+  }catch(e){
+    return {active:false,stage:"unknown",error:String(e?.message||e)};
+  }
+}
+
 function kbnDiscoveryDiagnosticV226(result){
   const d=result?.discovery||result||{};
   const searched=Array.isArray(d.searched)?d.searched:[];
@@ -6530,8 +6585,16 @@ ${urls.map(x=>`  <url>
         try{
           const schedule=await kbnGetRuntimeScheduleV230(env);
           let lastAutomaticRun=null;
+          let maintenanceQueue=null;
           try{lastAutomaticRun=await kbnLastAutomaticRunV233(env)}catch(e){console.error("last automatic run read failed",e)}
-          return json({ok:true,timezone:"Asia/Tokyo",...schedule,last_automatic_run:lastAutomaticRun||null});
+          try{maintenanceQueue=await kbnMaintenanceQueueStatusV257(env)}catch(e){console.error("maintenance queue status read failed",e)}
+          return json({
+            ok:true,
+            timezone:"Asia/Tokyo",
+            ...schedule,
+            last_automatic_run:lastAutomaticRun||null,
+            maintenance_queue:maintenanceQueue||null
+          });
         }catch(e){
           return json({ok:false,error:"AUTO_SCHEDULE_READ_FAILED",message:String(e?.message||e).slice(0,500)},{status:e?.status||500});
         }
