@@ -672,6 +672,90 @@ function kbnJstTimeToCron(value){
   return `${um} ${uh} * * *`;
 }
 
+
+function kbnHomeHeroCompactPatchScriptV244(){
+  return `<script>(function(){
+    function txt(el){return String(el?.innerText||el?.textContent||"").replace(/\s+/g," ").trim();}
+    function findLabel(label){
+      return Array.from(document.querySelectorAll("body *")).find(el=>{
+        if(!el) return false;
+        const t=txt(el);
+        if(!t) return false;
+        if(t!==label && !t.startsWith(label)) return false;
+        return (el.children?.length||0) <= 6;
+      }) || null;
+    }
+    function findCard(node){
+      let cur=node;
+      while(cur && cur!==document.body){
+        const t=txt(cur);
+        const tag=(cur.tagName||"").toLowerCase();
+        if(["div","article","section","li"].includes(tag) && /\d/.test(t) && t.length<=180){
+          return cur;
+        }
+        cur=cur.parentElement;
+      }
+      return node?.parentElement || null;
+    }
+    function applyCard(card,label){
+      if(!card) return;
+      if(card.dataset.kbnCompactHeroStat==='1') return;
+      card.dataset.kbnCompactHeroStat='1';
+      card.style.padding='14px 16px';
+      card.style.minHeight='0';
+      card.style.borderRadius='18px';
+      card.style.gap='8px';
+      card.querySelectorAll('*').forEach(el=>{
+        const t=txt(el);
+        if(!t) return;
+        if(t.includes(label) || t.includes('熊本県内のBAR情報を随時更新')){
+          el.style.fontSize='12px';
+          el.style.lineHeight='1.35';
+        }else if(/\d/.test(t) && (t.includes('店舗') || t.includes('地域') || /^\d+$/.test(t))){
+          el.style.fontSize='clamp(28px, 8vw, 44px)';
+          el.style.lineHeight='1';
+        }
+      });
+    }
+    function apply(){
+      const shopLabel=findLabel('掲載店舗数');
+      const areaLabel=findLabel('対応エリア');
+      const shopCard=findCard(shopLabel);
+      const areaCard=findCard(areaLabel);
+      applyCard(shopCard,'掲載店舗数');
+      applyCard(areaCard,'対応エリア');
+
+      const wrap=Array.from(document.querySelectorAll('section,div,article')).find(el=>{
+        const t=txt(el);
+        return t.includes('掲載店舗数') && t.includes('対応エリア') && (el.querySelectorAll('div,article,section').length>=2);
+      });
+      if(wrap && wrap.dataset.kbnCompactHeroWrap!=='1'){
+        wrap.dataset.kbnCompactHeroWrap='1';
+        wrap.style.gap='10px';
+        wrap.style.margin='12px 0 18px';
+      }
+    }
+    function run(){
+      apply();
+      setTimeout(apply,200);
+      setTimeout(apply,1200);
+    }
+    if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',run,{once:true});
+    else run();
+    const mo=new MutationObserver(()=>apply());
+    mo.observe(document.documentElement,{childList:true,subtree:true});
+    setTimeout(()=>mo.disconnect(),15000);
+  })();</script>`;
+}
+
+function kbnInjectHomeHeroCompactV244(html){
+  const script=kbnHomeHeroCompactPatchScriptV244();
+  const source=String(html||'');
+  if(source.includes('kbnCompactHeroStat')) return source;
+  if(/<\/body>/i.test(source)) return source.replace(/<\/body>/i, script + '</body>');
+  return source + script;
+}
+
 function kbnCronToJstTime(cron){
   const m=String(cron||"").trim().match(/^(\d{1,2})\s+(\d{1,2})\s+\*\s+\*\s+\*$/);
   if(!m)return "";
@@ -7472,6 +7556,18 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
       h.set("Pragma","no-cache");
       h.set("Expires","0");
       return new Response(assetResponse.body,{
+        status:assetResponse.status,
+        statusText:assetResponse.statusText,
+        headers:h
+      });
+    }
+
+    if((url.pathname==="/" || url.pathname==="/index.html") && String(assetResponse.headers.get("content-type")||"").includes("text/html")){
+      const body=await assetResponse.text();
+      const patched=kbnInjectHomeHeroCompactV244(body);
+      const h=new Headers(assetResponse.headers);
+      h.delete("content-length");
+      return new Response(patched,{
         status:assetResponse.status,
         statusText:assetResponse.statusText,
         headers:h
