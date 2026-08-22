@@ -3707,7 +3707,7 @@ html,body{max-width:100%;overflow-x:hidden}
       <p class="lead-smart-helper">県内を順番に検索し、重複を避けながら高精度で自動掲載します。</p>
       <button type="button" id="autoDiscoverBtn" class="btn-gold lead-smart-primary">Google優先で高精度自動掲載</button>
       <div style="margin-top:8px;color:#f1c75b;font-weight:800;font-size:.82rem">1回の実行で最大100店舗まで自動掲載</div>
-      <div style="margin-top:4px;color:#9ca7b3;font-size:.72rem">繁華街・町名単位まで細分化して120検索を5件ずつ安全に分割。重複を避けながら40〜50店舗前後の新規掲載を狙います（既存掲載状況により変動）。</div>
+      <div style="margin-top:4px;color:#9ca7b3;font-size:.72rem">繁華街・町名単位まで細分化して120検索を3件ずつ安全に分割。重複を避けながら40〜50店舗前後の新規掲載を狙います（既存掲載状況により変動）。</div>
       <div id="autoDiscoverStatus" class="auto-discovery-status"></div>
       <div id="autoDiscoverProgress" class="kbn-work-progress" hidden>
         <div class="kbn-work-progress-head"><b>自動開拓の進捗</b><strong id="autoProgressPct">0%</strong></div>
@@ -7870,9 +7870,9 @@ window.runAutoDiscovery=async function(){
   if(progress)progress.hidden=false;
 
   const totalSteps=120;
-  const batchSize=5;
+  const batchSize=3;
   const maxListings=100;
-  const maxRetries=2;
+  const maxRetries=4;
   let completed=0;
   let createdTotal=[];
   let searchedTotal=[];
@@ -7899,22 +7899,23 @@ window.runAutoDiscovery=async function(){
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({
-          max_listings:Math.min(10,maxListings-createdTotal.length),
+          max_listings:Math.min(6,maxListings-createdTotal.length),
           pair_limit:pairLimit,
-          per_pair_limit:4
+          per_pair_limit:3
         })
       });
     }catch(e){
       const msg=String(e?.message||e||"UNKNOWN_ERROR");
       const retryable=/HTTP_50[0234]|NON_JSON_RESPONSE|network|fetch/i.test(msg);
       if(retryable && retry<maxRetries){
-        const wait=(retry+1)*1800;
+        const waits=[2500,5000,8000,12000];
+        const wait=waits[Math.min(retry,waits.length-1)];
         if(status){
           status.innerHTML=
-            `<b>一時的な通信エラーを検知しました。自動で再試行します。</b><br>`+
-            `<small>${Math.round(wait/1000)}秒後に再試行 ${retry+1}/${maxRetries}</small>`;
+            `<b>一時的な503/通信エラーを検知しました。自動で復旧を試します。</b><br>`+
+            `<small>${Math.round(wait/1000)}秒休止 → 再試行 ${retry+1}/${maxRetries}</small>`;
         }
-        updateProgress(`通信を休ませています… 再試行 ${retry+1}/${maxRetries}`);
+        updateProgress(`サーバー負荷を下げています… 再試行 ${retry+1}/${maxRetries}`);
         await sleep(wait);
         return runBatch(pairLimit,retry+1);
       }
@@ -7923,14 +7924,32 @@ window.runAutoDiscovery=async function(){
   };
 
   updateProgress("Google Placesへの検索を開始しています...");
-  if(status)status.textContent="自動開拓を開始しました。120検索を未開拓の地区・町名から5検索ずつ安全に処理します。";
+  if(status)status.textContent="自動開拓を開始しました。120検索を未開拓の地区・町名から3検索ずつ安全に処理します。503時は自動で1検索モードへ切り替えます。";
 
   try{
     while(completed<totalSteps && createdTotal.length<maxListings){
       const remainingSteps=totalSteps-completed;
       const pairLimit=Math.min(batchSize,remainingSteps);
 
-      const d=await runBatch(pairLimit);
+      let d;
+      try{
+        d=await runBatch(pairLimit);
+      }catch(batchError){
+        const msg=String(batchError?.message||batchError||"UNKNOWN_ERROR");
+        const retryable=/HTTP_50[0234]|NON_JSON_RESPONSE|network|fetch/i.test(msg);
+        if(!retryable)throw batchError;
+
+        // 3検索でも503が続く場合は、1検索だけに落として自動継続。
+        if(status){
+          status.innerHTML=
+            `<b>サーバー負荷を検知したため、1検索モードへ自動切替します。</b><br>`+
+            `<small>${completed}/${totalSteps}検索まで保存済み。停止せず続行します。</small>`;
+        }
+        updateProgress(`負荷回避モード：1検索ずつ続行`);
+        await sleep(5000);
+        d=await runBatch(1);
+      }
+
       const c=Array.isArray(d.created)?d.created:[];
       const rows=Array.isArray(d.searched)?d.searched:[];
       createdTotal.push(...c);
