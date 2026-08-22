@@ -3707,7 +3707,7 @@ html,body{max-width:100%;overflow-x:hidden}
       <p class="lead-smart-helper">県内を順番に検索し、重複を避けながら高精度で自動掲載します。</p>
       <button type="button" id="autoDiscoverBtn" class="btn-gold lead-smart-primary">Google優先で高精度自動掲載</button>
       <div style="margin-top:8px;color:#f1c75b;font-weight:800;font-size:.82rem">1回の実行で最大100店舗まで自動掲載</div>
-      <div style="margin-top:4px;color:#9ca7b3;font-size:.72rem">繁華街・未開拓地区を優先して70検索を安全に分割。重複を避けながら平均40〜50店舗の新規掲載を狙います（判定結果により変動）。</div>
+      <div style="margin-top:4px;color:#9ca7b3;font-size:.72rem">繁華街・町名単位まで細分化して120検索を5件ずつ安全に分割。重複を避けながら40〜50店舗前後の新規掲載を狙います（既存掲載状況により変動）。</div>
       <div id="autoDiscoverStatus" class="auto-discovery-status"></div>
       <div id="autoDiscoverProgress" class="kbn-work-progress" hidden>
         <div class="kbn-work-progress-head"><b>自動開拓の進捗</b><strong id="autoProgressPct">0%</strong></div>
@@ -7869,7 +7869,7 @@ window.runAutoDiscovery=async function(){
   btn.textContent="自動開拓中...";
   if(progress)progress.hidden=false;
 
-  const totalSteps=70;
+  const totalSteps=120;
   const batchSize=5;
   const maxListings=100;
   const maxRetries=2;
@@ -7923,7 +7923,7 @@ window.runAutoDiscovery=async function(){
   };
 
   updateProgress("Google Placesへの検索を開始しています...");
-  if(status)status.textContent="自動開拓を開始しました。未開拓の地区・ジャンルを優先し、5検索ずつ安全に処理します。";
+  if(status)status.textContent="自動開拓を開始しました。120検索を未開拓の地区・町名から5検索ずつ安全に処理します。";
 
   try{
     while(completed<totalSteps && createdTotal.length<maxListings){
