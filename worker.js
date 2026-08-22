@@ -5832,9 +5832,10 @@ async function runScheduledKbnAutoDiscoveryOnly(env){
   const fakeRequest=new Request("https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/api/internal/scheduled-auto-only");
   // v2.54 Free枠: 1 invocation 最大10店舗は維持。
   // 未開拓地区優先ロジックを使い、5地区×1回を複数Cronに分割して安全に積み上げる。
-  // v2.80: 3地区の探索数は増やさず、各地区の採用枠を5件まで使って最大15店舗を狙う。
-  // 外部検索回数を大きく増やさず、Cloudflare Free枠への負荷を抑える。
-  const targetListings=15;
+  // v2.88: 1回で見るエリアを3地区→7地区へ拡大し、最大20店舗を狙う。
+  // 1回のautoDiscover内でまとめて探索することで、OSM/Geoapifyの共通取得を使い回し、
+  // 複数pass方式よりCloudflare Free枠のsubrequestを抑える。
+  const targetListings=20;
   const maxPasses=1;
   const allCreated=[];
   const allSearched=[];
@@ -5847,8 +5848,8 @@ async function runScheduledKbnAutoDiscoveryOnly(env){
       env,
       fakeRequest,
       remaining,
-      3,  // 3地区のまま維持して外部検索回数を抑える
-      5   // v2.80: 1地区あたり最大5店舗まで採用候補を見る
+      7,  // v2.88: 未開拓優先で7地区まで探索し、候補不足を減らす
+      4   // 1地区あたり最大4店舗。Details上限も4件でFree枠を守る
     );
 
     const created=Array.isArray(result?.created)?result.created:[];
