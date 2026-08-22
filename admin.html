@@ -132,6 +132,51 @@
 
 
 .kbn-cron-diag-v226{margin-top:12px;padding:14px;border:1px solid #384552;border-radius:14px;background:#0d151d}.kbn-cron-diag-v226 h4{margin:0 0 10px;color:#f1c75b}.kbn-cron-diag-grid-v226{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.kbn-cron-diag-card-v226{padding:11px;border:1px solid #303d49;border-radius:10px;background:#111a23}.kbn-cron-diag-card-v226 small{display:block;color:#8794a1;margin-bottom:4px}.kbn-cron-diag-card-v226 strong{display:block;color:#f1f4f7;line-height:1.45}.kbn-cron-reasons-v226{margin-top:10px;color:#d3d9df;font-size:.88rem;line-height:1.6}@media(max-width:640px){.kbn-cron-diag-grid-v226{grid-template-columns:1fr 1fr}}
+
+</style>
+
+<style id="owner-url-modal-v281">
+.owner-url-modal-v281[hidden]{display:none!important}
+.owner-url-modal-v281{
+  position:fixed;inset:0;z-index:100500;
+  background:rgba(0,0,0,.82);
+  display:flex;align-items:center;justify-content:center;
+  padding:16px;
+}
+.owner-url-panel-v281{
+  width:min(560px,100%);
+  border:1px solid #485461;
+  border-radius:18px;
+  background:#0d151d;
+  padding:18px;
+  box-shadow:0 20px 60px rgba(0,0,0,.45);
+}
+.owner-url-panel-v281 h3{margin:0 0 7px;color:#f2c95c}
+.owner-url-panel-v281 p{margin:0 0 12px;color:#abb4bd;line-height:1.65}
+.owner-url-box-v281{
+  width:100%;min-height:84px;padding:11px;
+  border:1px solid #3a4652;border-radius:11px;
+  background:#080e14;color:#e8edf2;
+  font:inherit;font-size:.78rem;line-height:1.55;
+  resize:none;overflow-wrap:anywhere;
+}
+.owner-url-actions-v281{
+  display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px
+}
+.owner-url-actions-v281 button{
+  min-height:44px;border-radius:11px;font-weight:900
+}
+.owner-url-primary-v281{border:0;background:#efc45a;color:#111}
+.owner-url-secondary-v281{border:1px solid #485461;background:#111a23;color:#e8edf2}
+.owner-url-status-v281{
+  margin-top:10px;padding:9px 10px;border-radius:10px;
+  background:#101922;color:#aab4be;font-size:.76rem
+}
+.owner-url-status-v281[data-state="ok"]{color:#7ee0ad;border:1px solid #2d654b}
+.owner-url-status-v281[data-state="error"]{color:#ff9b9b;border:1px solid #7a3535}
+@media(max-width:560px){
+  .owner-url-actions-v281{grid-template-columns:1fr}
+}
 </style>
 
 
@@ -3625,7 +3670,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.80</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.81</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -5112,8 +5157,8 @@ function renderShopList(){
               <summary>•••</summary>
               <div class="shop-more-panel">
                 ${provisional?`<button onclick="publishShop(${s.id})" class="publish-shop-btn">正式掲載にする</button>`:""}
-                <button onclick="issueOwnerLink(${s.id})">専用URL発行</button>
-                ${s.owner_token_hash?`<button onclick="revokeOwnerLink(${s.id})">URL無効化</button>`:""}
+                <button type="button" class="owner-link-issue-v281" data-shop-id="${s.id}">専用URL発行</button>
+                ${s.owner_token_hash?`<button type="button" class="owner-link-revoke-v281" data-shop-id="${s.id}">URL無効化</button>`:""}
                 <button onclick="deleteShop(${s.id})" class="danger-action">完全削除</button>
               </div>
             </details>
@@ -5318,44 +5363,179 @@ window.openInstagramProfile=function(id){
   window.open(`https://www.instagram.com/${encodeURIComponent(handle)}/`,"_blank");
 };
 
+
+let ownerUrlShopV281=null;
+let ownerUrlValueCurrentV281="";
+
+function setOwnerUrlModalV281({title="店舗専用URL",message="",url="",state="loading",status=""}={}){
+  const modal=$("ownerUrlModalV281");
+  if(!modal)return;
+  $("ownerUrlTitleV281").textContent=title;
+  $("ownerUrlMessageV281").textContent=message;
+  const box=$("ownerUrlValueV281");
+  const copy=$("ownerUrlCopyV281");
+  const invite=$("ownerUrlInviteV281");
+  const st=$("ownerUrlStatusV281");
+  ownerUrlValueCurrentV281=url||"";
+  if(url){
+    box.hidden=false;
+    box.value=url;
+    copy.hidden=false;
+    invite.hidden=false;
+  }else{
+    box.hidden=true;
+    box.value="";
+    copy.hidden=true;
+    invite.hidden=true;
+  }
+  st.dataset.state=state;
+  st.textContent=status || (state==="loading"?"処理中...":"");
+  modal.hidden=false;
+}
+
+function closeOwnerUrlModalV281(){
+  const modal=$("ownerUrlModalV281");
+  if(modal)modal.hidden=true;
+}
+
+async function apiWithTimeoutV281(path,opt={},timeoutMs=15000){
+  const ctrl=new AbortController();
+  const timer=setTimeout(()=>ctrl.abort(),timeoutMs);
+  try{
+    return await api(path,{...opt,signal:ctrl.signal});
+  }catch(e){
+    if(e?.name==="AbortError")throw new Error("TIMEOUT");
+    throw e;
+  }finally{
+    clearTimeout(timer);
+  }
+}
+
 window.issueOwnerLink=async id=>{
-  const s=shops.find(x=>x.id==id);
-  if(!s)return;
+  const s=shops.find(x=>Number(x.id)===Number(id));
+  if(!s){
+    setOwnerUrlModalV281({
+      title:"専用URLを発行できません",
+      message:"店舗情報を再読み込みして、もう一度お試しください。",
+      state:"error",
+      status:"店舗データが見つかりません"
+    });
+    return;
+  }
 
   if(s.owner_token_hash && !confirm(`「${s.name}」の専用URLを再発行しますか？\n古いURLは使えなくなります。`))return;
 
+  ownerUrlShopV281=s;
+  setOwnerUrlModalV281({
+    title:`${s.name}｜店舗専用URL`,
+    message:"専用URLを発行しています。数秒お待ちください。",
+    state:"loading",
+    status:"発行中..."
+  });
+
   try{
-    const d=await api(`/api/admin/shops/${id}/owner-token`,{method:"POST"});
-    await loadShops();
+    const d=await apiWithTimeoutV281(`/api/admin/shops/${id}/owner-token`,{method:"POST"},15000);
+    const url=String(d?.url||"").trim();
+    if(!url)throw new Error("URL_NOT_RETURNED");
 
-    const url=d.url||"";
-    if(!url){
-      alert("専用URLは発行されましたが、URLを取得できませんでした。");
-      return;
-    }
+    setOwnerUrlModalV281({
+      title:`${s.name}｜店舗専用URL`,
+      message:"発行完了しました。URLをコピーして店舗様へ送れます。",
+      url,
+      state:"ok",
+      status:"発行完了"
+    });
 
-    const sendNow=confirm(
-      `専用URLを発行しました。\n\n${url}\n\n続けてInstagram送信用の案内文を作成しますか？`
-    );
-
-    if(sendNow){
-      await openInstagramOwnerInvite(s,url);
-    }else{
-      prompt("このURLを店舗様へ送ってください。",url);
-    }
+    // 一覧更新はURL表示後に行い、操作感を止めない。
+    loadShops().catch(console.error);
   }catch(e){
-    alert("URLを発行できませんでした: "+e.message);
+    console.error("issueOwnerLink failed",e);
+    const msg=e?.message==="TIMEOUT"
+      ?"通信が15秒を超えました。もう一度お試しください。"
+      :"専用URLを発行できませんでした。";
+    setOwnerUrlModalV281({
+      title:`${s.name}｜店舗専用URL`,
+      message:msg,
+      state:"error",
+      status:e?.message||"UNKNOWN_ERROR"
+    });
   }
-}
+};
+
 window.revokeOwnerLink=async id=>{
-  const s=shops.find(x=>x.id==id);if(!s)return;
+  const s=shops.find(x=>Number(x.id)===Number(id));
+  if(!s)return;
   if(!confirm(`「${s.name}」の専用URLを無効化しますか？`))return;
+
+  ownerUrlShopV281=s;
+  setOwnerUrlModalV281({
+    title:`${s.name}｜店舗専用URL`,
+    message:"専用URLを無効化しています。",
+    state:"loading",
+    status:"処理中..."
+  });
+
   try{
-    await api(`/api/admin/shops/${id}/owner-token`,{method:"DELETE"});
-    await loadShops();
-    alert("専用URLを無効化しました");
-  }catch(e){alert("無効化できませんでした: "+e.message)}
-}
+    await apiWithTimeoutV281(`/api/admin/shops/${id}/owner-token`,{method:"DELETE"},15000);
+    setOwnerUrlModalV281({
+      title:`${s.name}｜店舗専用URL`,
+      message:"専用URLを無効化しました。",
+      state:"ok",
+      status:"無効化完了"
+    });
+    loadShops().catch(console.error);
+  }catch(e){
+    console.error("revokeOwnerLink failed",e);
+    setOwnerUrlModalV281({
+      title:`${s.name}｜店舗専用URL`,
+      message:e?.message==="TIMEOUT"?"通信が15秒を超えました。もう一度お試しください。":"無効化できませんでした。",
+      state:"error",
+      status:e?.message||"UNKNOWN_ERROR"
+    });
+  }
+};
+
+document.addEventListener("click",e=>{
+  const issue=e.target.closest(".owner-link-issue-v281");
+  if(issue){
+    e.preventDefault();
+    e.stopPropagation();
+    issue.closest("details")?.removeAttribute("open");
+    const id=Number(issue.dataset.shopId||0);
+    if(id)window.issueOwnerLink(id);
+    return;
+  }
+
+  const revoke=e.target.closest(".owner-link-revoke-v281");
+  if(revoke){
+    e.preventDefault();
+    e.stopPropagation();
+    revoke.closest("details")?.removeAttribute("open");
+    const id=Number(revoke.dataset.shopId||0);
+    if(id)window.revokeOwnerLink(id);
+  }
+});
+
+document.addEventListener("DOMContentLoaded",()=>{
+  $("ownerUrlCloseV281")?.addEventListener("click",closeOwnerUrlModalV281);
+  $("ownerUrlModalV281")?.addEventListener("click",e=>{
+    if(e.target===$("ownerUrlModalV281"))closeOwnerUrlModalV281();
+  });
+
+  $("ownerUrlCopyV281")?.addEventListener("click",async()=>{
+    if(!ownerUrlValueCurrentV281)return;
+    const ok=await copyTextSafe(ownerUrlValueCurrentV281);
+    const st=$("ownerUrlStatusV281");
+    st.dataset.state=ok?"ok":"error";
+    st.textContent=ok?"URLをコピーしました":"コピーできませんでした";
+  });
+
+  $("ownerUrlInviteV281")?.addEventListener("click",async()=>{
+    if(!ownerUrlShopV281||!ownerUrlValueCurrentV281)return;
+    await openInstagramOwnerInvite(ownerUrlShopV281,ownerUrlValueCurrentV281);
+  });
+});
+
 window.deleteShop=async id=>{
   const s=shops.find(x=>Number(x.id)===Number(id));
   const name=s?.name||`店舗ID ${id}`;
@@ -10542,4 +10722,19 @@ document.addEventListener("DOMContentLoaded",()=>{
   const s=id=>document.getElementById(id);
 });
 </script>
+
+<div id="ownerUrlModalV281" class="owner-url-modal-v281" hidden>
+  <div class="owner-url-panel-v281" role="dialog" aria-modal="true" aria-labelledby="ownerUrlTitleV281">
+    <h3 id="ownerUrlTitleV281">店舗専用URL</h3>
+    <p id="ownerUrlMessageV281">発行しています...</p>
+    <textarea id="ownerUrlValueV281" class="owner-url-box-v281" readonly hidden></textarea>
+    <div class="owner-url-actions-v281">
+      <button type="button" id="ownerUrlCopyV281" class="owner-url-primary-v281" hidden>URLをコピー</button>
+      <button type="button" id="ownerUrlInviteV281" class="owner-url-secondary-v281" hidden>Instagram案内文</button>
+      <button type="button" id="ownerUrlCloseV281" class="owner-url-secondary-v281">閉じる</button>
+    </div>
+    <div id="ownerUrlStatusV281" class="owner-url-status-v281">処理中...</div>
+  </div>
+</div>
+
 </body></html>
