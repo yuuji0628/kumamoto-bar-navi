@@ -3542,6 +3542,54 @@ html,body{max-width:100%;overflow-x:hidden}
 }
 </style>
 
+
+<style id="kbn-maintenance-time-fix-v270">
+/* v2.70: 予約時間を完全2列・はみ出し防止 */
+#tab-leads[data-lead-mode="maintenance"] .kbn-auto-times-v217{
+  display:grid!important;
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  gap:8px!important;
+  width:100%!important;
+}
+#tab-leads[data-lead-mode="maintenance"] .kbn-auto-times-v217 > label{
+  grid-column:auto!important;
+  width:100%!important;
+  min-width:0!important;
+  max-width:100%!important;
+  box-sizing:border-box!important;
+  padding:8px!important;
+}
+#tab-leads[data-lead-mode="maintenance"] .kbn-auto-times-v217 > label:last-child{
+  grid-column:auto!important;
+}
+#tab-leads[data-lead-mode="maintenance"] .kbn-auto-times-v217 input[type="time"]{
+  display:block!important;
+  width:100%!important;
+  max-width:100%!important;
+  min-width:0!important;
+  box-sizing:border-box!important;
+  margin:0!important;
+  padding:0 8px!important;
+  overflow:hidden!important;
+}
+#tab-leads[data-lead-mode="maintenance"] .kbn-maintenance-select-v217,
+#tab-leads[data-lead-mode="maintenance"] .kbn-maintenance-select-v217 label,
+#tab-leads[data-lead-mode="maintenance"] .kbn-maintenance-select-v217 select{
+  width:100%!important;
+  max-width:100%!important;
+  min-width:0!important;
+  box-sizing:border-box!important;
+}
+#tab-leads[data-lead-mode="maintenance"] .kbn-simple-schedule-ok{
+  display:none!important;
+}
+@media(max-width:680px){
+  #tab-leads[data-lead-mode="maintenance"] .kbn-auto-times-v217{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  }
+}
+</style>
+
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
 <div id="topMaintenanceResult" class="top-maintenance-result">
@@ -3554,7 +3602,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.69</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.70</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -4131,9 +4179,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
       <button type="button" id="autoScheduleSaveBtn" class="kbn-schedule-save-v217">時間を保存</button>
       <small id="autoScheduleStatus">現在の予約時間を読み込み中...</small>
-      <div class="kbn-simple-schedule-ok" style="margin-top:10px;padding:10px 12px;border:1px solid #315b45;border-radius:12px;background:#0d1b15;color:#7ee2a8;font-size:.78rem;line-height:1.6">
-        ✓ 時間を保存するだけでOK。遅れても5分以内なら自動で取りこぼしを補完します。
-      </div>
+      
 
       <div id="lastAutomaticRunStatus" style="margin-top:10px;padding:10px 12px;border:1px solid #394653;border-radius:12px;background:#101820;color:#d9e1e8;font-size:.78rem;line-height:1.55">
         最終自動実行：読み込み中...
