@@ -2011,6 +2011,37 @@ async function ownerShop(request,env){
 const KBN_AREAS=["熊本市", "八代市", "人吉市", "荒尾市", "水俣市", "玉名市", "山鹿市", "菊池市", "宇土市", "上天草市", "宇城市", "阿蘇市", "天草市", "合志市", "美里町", "玉東町", "南関町", "長洲町", "和水町", "大津町", "菊陽町", "南小国町", "小国町", "産山村", "高森町", "西原村", "南阿蘇村", "御船町", "嘉島町", "益城町", "甲佐町", "山都町", "氷川町", "芦北町", "津奈木町", "錦町", "多良木町", "湯前町", "水上村", "相良村", "五木村", "山江村", "球磨村", "あさぎり町", "苓北町"];
 const KBN_LEAD_TYPES=[["bar", "BAR"], ["darts", "ダーツバー"], ["karaoke", "カラオケバー"], ["snack", "スナック"], ["lounge", "ラウンジ"], ["girls", "ガールズバー"], ["shot", "ショットバー"], ["sports", "スポーツバー"], ["wine", "ワインバー"], ["beer", "ビアバー"], ["cocktail", "カクテルバー"], ["music", "ミュージックバー"], ["shisha", "シーシャバー"], ["concept", "コンセプトバー"], ["cafebar", "カフェバー"], ["pub", "パブ"], ["night", "ナイトバー"], ["standing", "立ち飲みバー"], ["craft", "クラフトビール"], ["whisky", "ウイスキーバー"]];
 
+// v2.53: 同じ「市×ジャンル」検索の繰り返しを減らし、未開拓の繁華街・地区を優先する。
+// area は店舗判定用の正式エリア、search_area はGoogle検索専用の細かい検索地点。
+const KBN_DISCOVERY_SPOTS=[
+  {area:"熊本市",search_area:"熊本市 下通"},
+  {area:"熊本市",search_area:"熊本市 上通"},
+  {area:"熊本市",search_area:"熊本市 新市街"},
+  {area:"熊本市",search_area:"熊本市 銀座通り"},
+  {area:"熊本市",search_area:"熊本市 駕町通り"},
+  {area:"熊本市",search_area:"熊本市 シャワー通り"},
+  {area:"熊本市",search_area:"熊本市 水前寺"},
+  {area:"熊本市",search_area:"熊本市 健軍"},
+  {area:"熊本市",search_area:"熊本市 熊本駅"},
+  {area:"熊本市",search_area:"熊本市 上乃裏"},
+  {area:"八代市",search_area:"八代市 本町"},
+  {area:"人吉市",search_area:"人吉市 紺屋町"},
+  {area:"玉名市",search_area:"玉名市 高瀬"},
+  {area:"荒尾市",search_area:"荒尾市"},
+  {area:"山鹿市",search_area:"山鹿市"},
+  {area:"菊池市",search_area:"菊池市"},
+  {area:"合志市",search_area:"合志市"},
+  {area:"菊陽町",search_area:"菊陽町 光の森"},
+  {area:"大津町",search_area:"大津町"},
+  {area:"宇城市",search_area:"宇城市 松橋"},
+  {area:"宇土市",search_area:"宇土市"},
+  {area:"天草市",search_area:"天草市 本渡"},
+  {area:"阿蘇市",search_area:"阿蘇市"},
+  {area:"水俣市",search_area:"水俣市"},
+  {area:"上天草市",search_area:"上天草市"}
+];
+
+
 async function ensureLeadDiscoveryTables(env){
   await env.DB.prepare(`
     CREATE TABLE IF NOT EXISTS lead_discovery_runs(
@@ -2104,7 +2135,6 @@ async function autoDiscoveryPairs(env,limit=4){
   `).all();
   const m=new Map((r.results||[]).map(x=>[`${x.area}||${x.lead_type}`,x.last_searched||""]));
 
-  // v2.28: 掲載数が少ないエリアを優先しつつ、同じ検索ペアの連続実行を避ける。
   let areaCountRows=[];
   try{
     const c=await env.DB.prepare(`SELECT area,COUNT(*) shop_count FROM shops WHERE is_published=1 GROUP BY area`).all();
@@ -2112,17 +2142,37 @@ async function autoDiscoveryPairs(env,limit=4){
   }catch{}
   const areaCounts=new Map(areaCountRows.map(x=>[String(x.area||""),Number(x.shop_count||0)]));
 
+  const spots=Array.isArray(KBN_DISCOVERY_SPOTS)&&KBN_DISCOVERY_SPOTS.length
+    ? KBN_DISCOVERY_SPOTS
+    : KBN_AREAS.map(area=>({area,search_area:area}));
+
   const p=[];
-  for(const area of KBN_AREAS)for(const [type,label] of KBN_LEAD_TYPES)
-    p.push({area,type,label,last:m.get(`${area}||${type}`)||"",shop_count:areaCounts.get(area)||0});
+  for(const spot of spots){
+    for(const [type,label] of KBN_LEAD_TYPES){
+      const area=String(spot.area||"").trim();
+      const searchArea=String(spot.search_area||area).trim();
+      const runKey=`${searchArea}||${type}`;
+      p.push({
+        area,
+        search_area:searchArea,
+        type,
+        label,
+        last:m.get(runKey)||"",
+        shop_count:areaCounts.get(area)||0
+      });
+    }
+  }
 
   p.sort((a,b)=>{
-    // 未検索を優先。同条件なら掲載数の少ないエリア、その後に最終検索が古い順。
+    // 未検索の「地区×ジャンル」を最優先。
     if(!a.last&&b.last)return -1;
     if(a.last&&!b.last)return 1;
+    // 同条件なら掲載数の少ない市町村を優先。
     if(a.shop_count!==b.shop_count)return a.shop_count-b.shop_count;
+    // 最後に、長く検索していない地区から。
     return String(a.last).localeCompare(String(b.last));
   });
+
   return p.slice(0,Math.max(1,Math.min(Number(limit)||4,40)));
 }
 
@@ -4089,7 +4139,7 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
   for(const pair of pairs){
     if(created.length>=maxListings)break;
 
-    const query=[pair.area,"熊本県",pair.label||"BAR"].filter(Boolean).join(" ");
+    const query=[pair.search_area||pair.area,"熊本県",pair.label||"BAR"].filter(Boolean).join(" ");
 
     const googleSearch=googleConfigured
       ? await googlePlacesTextSearch(env,{query,pageSize:20})
@@ -4102,7 +4152,7 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
     // v2.28: 上位4件だけでは既存店に偏るため、最大10件まで候補を見る。
     // 重複はPlace Details取得前に落とすので、subrequestは増えにくい。
     const googleCandidates=googleSearch.ok
-      ? (googleSearch.places||[]).filter(googlePlaceLooksLikeBar).slice(0,10)
+      ? (googleSearch.places||[]).filter(googlePlaceLooksLikeBar).slice(0,15)
       : [];
 
     const fsqCandidates=fsqSearch.ok
@@ -4126,7 +4176,7 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
       : [];
 
     searched.push({
-      area:pair.area,
+      area:pair.search_area||pair.area,
       type:pair.label,
       ok:googleSearch.ok||fsqSearch.ok||geoSnap.ok||osmSnap.ok,
       raw_found:Array.isArray(googleSearch.places)?googleSearch.places.length:0,
@@ -4146,11 +4196,11 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
 
     await env.DB.prepare(
       "INSERT INTO lead_discovery_runs(area,lead_type,searched_at) VALUES(?,?,CURRENT_TIMESTAMP)"
-    ).bind(pair.area,pair.type).run();
+    ).bind(pair.search_area||pair.area,pair.type).run();
 
     let made=0;
     let detailChecks=0;
-    const detailCheckLimit=Math.max(2,Math.min(4,Number(perPairLimit||2)+2));
+    const detailCheckLimit=Math.max(3,Math.min(6,Number(perPairLimit||3)+2));
 
     // --------------------------------------------------------
     // 1) Google candidates first
