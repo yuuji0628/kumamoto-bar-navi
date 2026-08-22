@@ -261,6 +261,29 @@
   font-size:.68rem;font-weight:900;line-height:1;
 }
 .tab-notify-badge[hidden]{display:none!important}
+
+.dashboard-primary-card{position:relative}
+.dashboard-menu-badge-v277{
+  position:absolute;
+  top:8px;
+  right:8px;
+  min-width:22px;
+  height:22px;
+  padding:0 6px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:999px;
+  background:#d84242;
+  color:#fff;
+  border:2px solid #111922;
+  box-shadow:0 4px 12px rgba(216,66,66,.28);
+  font-size:.66rem;
+  font-weight:950;
+  line-height:1;
+  z-index:3;
+}
+.dashboard-menu-badge-v277[hidden]{display:none!important}
 .ops-status-strip{
   display:grid;grid-template-columns:repeat(3,1fr) auto;
   gap:8px;align-items:stretch;margin:12px 0 18px;
@@ -3602,7 +3625,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.70</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.77</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -3658,6 +3681,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </button>
 
     <button type="button" class="dashboard-primary-card" data-go-tab="subs">
+      <span id="dashSubBadgeV277" class="dashboard-menu-badge-v277" hidden>0</span>
       <span class="dashboard-icon">📥</span>
       <span class="dashboard-copy">
         <b>申込み確認</b>
@@ -3685,6 +3709,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </button>
 
     <button type="button" class="dashboard-primary-card" data-go-tab="ownerreq">
+      <span id="dashOwnerReqBadgeV277" class="dashboard-menu-badge-v277" hidden>0</span>
       <span class="dashboard-icon">📝</span>
       <span class="dashboard-copy">
         <b>店舗申請</b>
@@ -4960,6 +4985,7 @@ function updateOpsCountsFromCurrentData(){
   if($("opsSubCount"))$("opsSubCount").textContent=String(sp);
 
   setNotifyBadge("subTabBadge",sp);
+  setNotifyBadge("dashSubBadgeV277",sp);
 }
 
 async function reloadAllAdminData(){
@@ -6044,6 +6070,7 @@ window.loadSubs=async function(){
     const pendingCount=subs.filter(x=>x.status==="pending").length;
     if($("opsSubCount"))$("opsSubCount").textContent=String(pendingCount);
     setNotifyBadge("subTabBadge",pendingCount);
+    setNotifyBadge("dashSubBadgeV277",pendingCount);
     setDashboardCount("dashSubCount",subs.filter(x=>x.status==="pending").length);
 
     if(!subs.length){
@@ -7802,6 +7829,7 @@ window.loadOwnerReq=async function(){
   const list=d.requests||[];
   const ownerPending=list.filter(x=>x.status==="pending").length;
   if($("opsOwnerReqCount"))$("opsOwnerReqCount").textContent=String(ownerPending);
+    setNotifyBadge("dashOwnerReqBadgeV277",ownerPending);
   setNotifyBadge("ownerReqTabBadge",ownerPending);
   setDashboardCount("dashOwnerReqCount",list.filter(x=>x.status==="pending").length);
 
