@@ -3841,7 +3841,7 @@ html,body{max-width:100%;overflow-x:hidden}
         最終自動実行：読み込み中...
       </div>
 
-      <div style="margin-top:8px;color:#aeb6c0;font-size:.76rem">予約自動掲載：1回最大10店舗（候補不足・重複時は10件未満になります）</div>
+      <div style="margin-top:8px;color:#aeb6c0;font-size:.76rem">予約自動掲載：通常回は1回最大6店舗。通常メンテナンス回は120検索を分割し、累計件数で表示します。</div>
       <small id="autoListingSixTimesStatus" style="display:block;margin-top:6px;color:#efc45a">
         自動掲載：1日6回 / 通常メンテナンス：1日1回
       </small>
@@ -9734,7 +9734,26 @@ function kbnNormalizeAdminTimeV230(v){
   return `${String(h).padStart(2,"0")}:${String(mi).padStart(2,"0")}`;
 }
 
-function kbnFormatLastAutomaticRunV233(run){
+function kbnFormatLastAutomaticRunV233(run,queue){
+  if(queue?.active){
+    const created=Math.max(0,Number(queue.created_total||0));
+
+    if(queue.stage==="discovery"){
+      const batch=Math.max(1,Number(queue.discovery_batch||1));
+      const total=Math.max(batch,Number(queue.discovery_batches_total||40));
+      return `自動メンテナンス実行中：自動開拓 ${batch}/${total} / 累計新規${created}件`;
+    }
+
+    if(queue.stage==="maintenance"){
+      const taskLabel={
+        missing:"情報不足チェック",
+        closed:"閉業チェック",
+        instagram:"Instagram補完"
+      }[String(queue.task||"")]||"通常メンテナンス";
+      return `自動開拓完了：累計新規${created}件 / ${taskLabel}を実行中`;
+    }
+  }
+
   if(!run)return "最終自動実行：まだ記録がありません";
   const raw=String(run.finished_at||run.started_at||"").trim();
   let when="日時不明";
@@ -9787,6 +9806,17 @@ async function kbnLoadSimpleScheduleV230(){
 document.addEventListener("change",e=>{
   if(e.target?.matches?.('[id^="autoListingTime"]')||e.target?.id==="maintenanceScheduleSelect")kbnRefreshMaintenanceOptionsV217();
 });
+
+// v2.57: メンテナンス実行中の累計件数を管理画面へ自動反映。
+let kbnScheduleLiveRefreshV257=null;
+document.addEventListener("DOMContentLoaded",()=>{
+  if(kbnScheduleLiveRefreshV257)return;
+  kbnScheduleLiveRefreshV257=setInterval(()=>{
+    if(document.visibilityState!=="visible")return;
+    kbnLoadSimpleScheduleV230().catch(()=>{});
+  },5000);
+});
+
 
 document.addEventListener("click",async e=>{
   const btn=e.target.closest?.("#autoScheduleSaveBtn");
