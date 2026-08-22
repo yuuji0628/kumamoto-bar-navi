@@ -3671,7 +3671,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.84</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.85</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -6993,12 +6993,12 @@ async function renderInstaPost(shop,{forceNoImage=false}={}){
 
   // Shop main panel
   drawRoundedRect(ctx,46,268,614,485,10,"rgba(2,2,2,.9)",gold3);
-  // NEW ribbon
+  // NEW ribbon (moved to avoid overlap with headline)
   ctx.save();
-  ctx.translate(45,310);ctx.rotate(-Math.PI/4);
-  ctx.fillStyle=gold2;ctx.fillRect(-70,-23,180,46);
-  ctx.fillStyle="#080808";ctx.font="900 24px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
-  ctx.textAlign="center";ctx.fillText("NEW",20,8);ctx.restore();
+  ctx.translate(28,392);ctx.rotate(-Math.PI/4);
+  ctx.fillStyle=gold2;ctx.fillRect(-52,-18,132,36);
+  ctx.fillStyle="#080808";ctx.font="900 19px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+  ctx.textAlign="center";ctx.fillText("NEW",14,6);ctx.restore();
 
   ctx.textAlign="center";
   ctx.fillStyle=gold2;
