@@ -824,10 +824,6 @@
   color:#fff;
   text-align:left;
 }
-.dashboard-primary-card:first-child{
-  border-color:#725d27;
-  background:linear-gradient(180deg,rgba(232,191,86,.11),#111922);
-}
 .dashboard-icon{font-size:1.7rem}
 .dashboard-copy b{display:block;font-size:1rem;margin-bottom:6px}
 .dashboard-copy small{color:#9fa8b3}
@@ -2306,6 +2302,11 @@ html,body{max-width:100%;overflow-x:hidden}
 </style>
 
 <style id="kbn-dashboard-active-v261">
+.dashboard-primary-card:not(.is-active){
+  border-color:#384452!important;
+  background:#111922!important;
+  box-shadow:none!important;
+}
 .dashboard-primary-card.is-active{
   border-color:#8a6c28!important;
   background:linear-gradient(180deg,rgba(239,196,90,.14),#111922)!important;
@@ -3336,7 +3337,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.62</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.63</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
