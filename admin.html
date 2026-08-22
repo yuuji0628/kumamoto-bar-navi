@@ -3300,7 +3300,7 @@ html,body{max-width:100%;overflow-x:hidden}
   padding:10px 0;border-top:1px solid #2f342f;color:#b9c0c8;font-size:.78rem
 }
 .exclusion-summary-v259 b{color:#f2c65a;font-size:1.1rem}
-.exclusion-actions-v259{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:9px}
+.exclusion-actions-v259{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:9px}
 .exclusion-actions-v259 button{
   min-height:40px;border-radius:10px;border:1px solid #42505d;background:#101821;color:#e9edf1;font-weight:850
 }
@@ -3317,6 +3317,19 @@ html,body{max-width:100%;overflow-x:hidden}
 .exclusion-reason-v259 span{
   padding:3px 6px;border-radius:999px;background:#281414;border:1px solid #633636;color:#ffb8b8;font-size:.62rem;font-weight:800
 }
+
+.exclusion-ignore-v265{
+  margin-top:8px;
+  min-height:34px;
+  padding:0 10px;
+  border:1px solid #355b48;
+  border-radius:9px;
+  background:#0c1d16;
+  color:#8ee3b2;
+  font-size:.7rem;
+  font-weight:900;
+}
+.exclusion-ignore-v265:disabled{opacity:.55}
 .exclusion-status-v259{margin-top:8px;color:#9ba5af;font-size:.72rem;line-height:1.5}
 @media(max-width:640px){
   .exclusion-tool-head-v259{align-items:flex-start;flex-direction:column}
@@ -3337,7 +3350,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.63</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.65</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -3476,7 +3489,7 @@ html,body{max-width:100%;overflow-x:hidden}
   <div class="exclusion-tool-head-v259">
     <div>
       <strong>⚠ 対象外店舗チェック</strong>
-      <small>店名を優先して、居酒屋・通常カラオケ・温泉・サウナ・スポーツ施設など、BARではない可能性が高い掲載済み店舗を抽出します。誤って「カラオケBAR」等のジャンルが付いた店舗も判定します。</small>
+      <small>店名を優先してBARではない可能性が高い掲載済み店舗を抽出します。正しい店舗は「✓ 正しい店舗として除外」を押すと、次回以降のチェックには表示されません。</small>
     </div>
     <button id="scanExclusionCandidatesV259" class="exclusion-scan-btn-v259" type="button">対象外候補を確認</button>
   </div>
@@ -3490,10 +3503,11 @@ html,body{max-width:100%;overflow-x:hidden}
     <div class="exclusion-actions-v259">
       <button id="toggleAllExclusionV259" type="button">すべて選択</button>
       <button id="deleteSelectedExclusionV259" class="danger" type="button">選択した店舗を削除</button>
+      <button id="deleteAllExclusionV264" class="danger" type="button">候補をすべて削除</button>
     </div>
 
     <div id="exclusionCandidateListV259" class="exclusion-list-v259"></div>
-    <div id="exclusionStatusV259" class="exclusion-status-v259">※ 複数削除は5店舗ずつ自動分割して安全に処理します。</div>
+    <div id="exclusionStatusV259" class="exclusion-status-v259">※ 「候補をすべて削除」は1回押すだけでOK。内部で自動分割して最後まで処理します。</div>
   </div>
 </div>
 
@@ -5118,6 +5132,7 @@ function renderExclusionCandidatesV259(){
         <h4>${esc(s.name||"店舗名なし")} ${provisional?'<small style="color:#efc45a">［独自］</small>':'<small style="color:#8ec5ff">［正式］</small>'}</h4>
         <p>${esc(s.area||"")} ${s.genre?` / ${esc(s.genre)}`:""}${s.address?`<br>${esc(s.address)}`:""}</p>
         <span class="exclusion-reason-v259">${reasons.map(r=>`<span>${esc(r)}</span>`).join("")}</span>
+        <button class="exclusion-ignore-v265" type="button" data-ignore-exclusion-v265="${Number(s.id)}">✓ 正しい店舗として除外</button>
       </span>
     </label>`;
   }).join("");
@@ -5141,7 +5156,7 @@ window.loadExclusionCandidatesV259=async function(){
     exclusionCandidatesV259=Array.isArray(d?.candidates)?d.candidates:[];
     renderExclusionCandidatesV259();
     if(status){
-      status.textContent=`掲載中 ${Number(d?.total||0)}店舗を確認し、対象外の可能性が高い店舗を ${exclusionCandidatesV259.length}件 抽出しました。`;
+      status.textContent=`掲載中 ${Number(d?.total||0)}店舗を確認し、対象外候補 ${exclusionCandidatesV259.length}件を抽出しました。正しい店舗として除外済み ${Number(d?.ignored_count||0)}件。`;
     }
   }catch(e){
     if(list)list.innerHTML='<div style="padding:12px;color:#ff9e9e">候補を取得できませんでした。</div>';
@@ -5149,13 +5164,10 @@ window.loadExclusionCandidatesV259=async function(){
   }
 };
 
-window.deleteSelectedExclusionV259=async function(){
-  const ids=[...document.querySelectorAll(".exclusion-check-v259:checked")]
-    .map(el=>Number(el.value))
-    .filter(Boolean);
-
+async function deleteExclusionIdsV264(ids,{label="選択した店舗"}={}){
+  ids=[...new Set((Array.isArray(ids)?ids:[]).map(Number).filter(Boolean))];
   if(!ids.length){
-    alert("削除する店舗を選択してください。");
+    alert("削除する店舗がありません。");
     return;
   }
 
@@ -5163,24 +5175,25 @@ window.deleteSelectedExclusionV259=async function(){
   const officialCount=selected.filter(x=>String(x.listing_status||"published")!=="provisional").length;
 
   const warning=
-    `${ids.length}店舗を完全削除します。\n\n`+
-    `削除は5店舗ずつ安全に処理します。`+
+    `${label} ${ids.length}店舗を完全削除します。\n\n`+
+    `画面上は1回の操作ですが、内部では自動で小分け処理します。`+
     (officialCount?`\n正式掲載の店舗が ${officialCount}件 含まれています。`:"")+
     `\n\n本当に削除しますか？`;
 
   if(!confirm(warning))return;
 
   const status=document.getElementById("exclusionStatusV259");
-  const button=document.getElementById("deleteSelectedExclusionV259");
-  if(button)button.disabled=true;
+  const selectedBtn=document.getElementById("deleteSelectedExclusionV259");
+  const allBtn=document.getElementById("deleteAllExclusionV264");
+  if(selectedBtn)selectedBtn.disabled=true;
+  if(allBtn)allBtn.disabled=true;
 
   let deletedTotal=0;
   let skippedTotal=0;
   let failedTotal=0;
-  const failedIds=[];
 
-  // v2.62: Safari/CloudflareのLoad failed回避。
-  // 35件などを一度に送らず、5店舗ずつ順番に削除する。
+  // v2.64:
+  // ユーザーは1回押すだけ。内部では5店舗ずつ自動処理して最後まで進む。
   const chunkSize=5;
 
   try{
@@ -5192,13 +5205,12 @@ window.deleteSelectedExclusionV259=async function(){
       if(status){
         status.textContent=
           `削除中 ${Math.min(i+chunk.length,ids.length)}/${ids.length}店舗 `+
-          `（${batchNo}/${batchTotal}）`;
+          `（自動処理 ${batchNo}/${batchTotal}）`;
       }
 
       let d=null;
       let lastError=null;
 
-      // 一時的な通信エラーは同じ小分けを最大3回まで再試行。
       for(let retry=0;retry<3;retry++){
         try{
           d=await api("/api/admin/shops/exclusion-candidates/bulk-delete",{
@@ -5211,7 +5223,9 @@ window.deleteSelectedExclusionV259=async function(){
         }catch(e){
           lastError=e;
           if(retry<2){
-            if(status)status.textContent=`通信待機中… ${batchNo}/${batchTotal} を再試行します`;
+            if(status)status.textContent=
+              `通信待機中… ${Math.min(i+chunk.length,ids.length)}/${ids.length}店舗 `+
+              `（再試行 ${retry+1}/2）`;
             await new Promise(r=>setTimeout(r,(retry+1)*1800));
           }
         }
@@ -5219,18 +5233,13 @@ window.deleteSelectedExclusionV259=async function(){
 
       if(lastError || !d){
         failedTotal+=chunk.length;
-        failedIds.push(...chunk);
         continue;
       }
 
       deletedTotal+=Number(d?.deleted_count||0);
       skippedTotal+=Number(d?.skipped_count||0);
       failedTotal+=Number(d?.failed_count||0);
-      if(Array.isArray(d?.failed)){
-        failedIds.push(...d.failed.map(x=>Number(x?.id)).filter(Boolean));
-      }
 
-      // Cloudflare/D1を休ませる。
       if(i+chunkSize<ids.length){
         await new Promise(r=>setTimeout(r,450));
       }
@@ -5258,11 +5267,75 @@ window.deleteSelectedExclusionV259=async function(){
   }catch(e){
     console.error("chunked exclusion delete failed",e);
     alert("削除処理でエラーが発生しました: "+(e?.message||"UNKNOWN_ERROR"));
-    if(status)status.textContent="削除処理を中断しました。削除済みの店舗はそのまま保存されています。";
+    if(status)status.textContent=
+      "削除処理を中断しました。削除済みの店舗はそのまま保存されています。";
   }finally{
+    if(selectedBtn)selectedBtn.disabled=false;
+    if(allBtn)allBtn.disabled=false;
+  }
+}
+
+window.deleteSelectedExclusionV259=async function(){
+  const ids=[...document.querySelectorAll(".exclusion-check-v259:checked")]
+    .map(el=>Number(el.value))
+    .filter(Boolean);
+
+  if(!ids.length){
+    alert("削除する店舗を選択してください。");
+    return;
+  }
+
+  return deleteExclusionIdsV264(ids,{label:"選択した"});
+};
+
+window.deleteAllExclusionV264=async function(){
+  const ids=exclusionCandidatesV259.map(x=>Number(x.id)).filter(Boolean);
+
+  if(!ids.length){
+    alert("現在、削除対象候補はありません。");
+    return;
+  }
+
+  return deleteExclusionIdsV264(ids,{label:"対象外候補"});
+};
+
+window.ignoreExclusionCandidateV265=async function(shopId,button){
+  shopId=Number(shopId||0);
+  const shop=exclusionCandidatesV259.find(x=>Number(x.id)===shopId);
+  if(!shopId||!shop)return;
+
+  if(!confirm(`「${shop.name||"この店舗"}」を正しい店舗として対象外候補から除外しますか？\n\n次回以降の対象外チェックには表示されなくなります。`)){
+    return;
+  }
+
+  if(button)button.disabled=true;
+  const status=document.getElementById("exclusionStatusV259");
+  if(status)status.textContent=`${shop.name||"店舗"} を対象外候補から除外しています...`;
+
+  try{
+    await api("/api/admin/shops/exclusion-candidates/ignore",{
+      method:"POST",
+      headers:{"content-type":"application/json"},
+      body:JSON.stringify({
+        shop_id:shopId,
+        note:"管理画面で正しい店舗として除外"
+      })
+    });
+
+    exclusionCandidatesV259=exclusionCandidatesV259.filter(x=>Number(x.id)!==shopId);
+    renderExclusionCandidatesV259();
+
+    if(status){
+      status.textContent=`${shop.name||"店舗"} を除外しました。次回以降の対象外チェックには表示されません。`;
+    }
+  }catch(err){
+    console.error("ignore exclusion candidate failed",err);
+    alert("除外できませんでした: "+(err?.message||"UNKNOWN_ERROR"));
     if(button)button.disabled=false;
+    if(status)status.textContent="候補からの除外に失敗しました。";
   }
 };
+
 
 document.addEventListener("click",e=>{
   const scan=e.target?.closest?.("#scanExclusionCandidatesV259");
@@ -5283,10 +5356,28 @@ document.addEventListener("click",e=>{
     return;
   }
 
+  const ignoreBtn=e.target?.closest?.("[data-ignore-exclusion-v265]");
+  if(ignoreBtn){
+    e.preventDefault();
+    e.stopPropagation();
+    window.ignoreExclusionCandidateV265?.(
+      Number(ignoreBtn.dataset.ignoreExclusionV265||0),
+      ignoreBtn
+    );
+    return;
+  }
+
   const del=e.target?.closest?.("#deleteSelectedExclusionV259");
   if(del){
     e.preventDefault();
     window.deleteSelectedExclusionV259?.();
+    return;
+  }
+
+  const delAll=e.target?.closest?.("#deleteAllExclusionV264");
+  if(delAll){
+    e.preventDefault();
+    window.deleteAllExclusionV264?.();
   }
 });
 
