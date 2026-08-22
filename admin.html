@@ -3336,7 +3336,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.61</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.62</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -3492,7 +3492,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
 
     <div id="exclusionCandidateListV259" class="exclusion-list-v259"></div>
-    <div id="exclusionStatusV259" class="exclusion-status-v259"></div>
+    <div id="exclusionStatusV259" class="exclusion-status-v259">※ 複数削除は5店舗ずつ自動分割して安全に処理します。</div>
   </div>
 </div>
 
@@ -5163,36 +5163,103 @@ window.deleteSelectedExclusionV259=async function(){
 
   const warning=
     `${ids.length}店舗を完全削除します。\n\n`+
-    `この操作は元に戻せません。`+
+    `削除は5店舗ずつ安全に処理します。`+
     (officialCount?`\n正式掲載の店舗が ${officialCount}件 含まれています。`:"")+
     `\n\n本当に削除しますか？`;
 
   if(!confirm(warning))return;
 
   const status=document.getElementById("exclusionStatusV259");
-  if(status)status.textContent=`${ids.length}店舗を削除しています...`;
+  const button=document.getElementById("deleteSelectedExclusionV259");
+  if(button)button.disabled=true;
+
+  let deletedTotal=0;
+  let skippedTotal=0;
+  let failedTotal=0;
+  const failedIds=[];
+
+  // v2.62: Safari/CloudflareのLoad failed回避。
+  // 35件などを一度に送らず、5店舗ずつ順番に削除する。
+  const chunkSize=5;
 
   try{
-    const d=await api("/api/admin/shops/exclusion-candidates/bulk-delete",{
-      method:"POST",
-      headers:{"content-type":"application/json"},
-      body:JSON.stringify({ids})
-    });
+    for(let i=0;i<ids.length;i+=chunkSize){
+      const chunk=ids.slice(i,i+chunkSize);
+      const batchNo=Math.floor(i/chunkSize)+1;
+      const batchTotal=Math.ceil(ids.length/chunkSize);
 
-    const deleted=Number(d?.deleted_count||0);
-    const skipped=Number(d?.skipped_count||0);
-    const failed=Number(d?.failed_count||0);
+      if(status){
+        status.textContent=
+          `削除中 ${Math.min(i+chunk.length,ids.length)}/${ids.length}店舗 `+
+          `（${batchNo}/${batchTotal}）`;
+      }
 
-    alert(`削除完了：${deleted}店舗${skipped?`\n対象外再判定でスキップ：${skipped}件`:""}${failed?`\n失敗：${failed}件`:""}`);
+      let d=null;
+      let lastError=null;
+
+      // 一時的な通信エラーは同じ小分けを最大3回まで再試行。
+      for(let retry=0;retry<3;retry++){
+        try{
+          d=await api("/api/admin/shops/exclusion-candidates/bulk-delete",{
+            method:"POST",
+            headers:{"content-type":"application/json"},
+            body:JSON.stringify({ids:chunk})
+          });
+          lastError=null;
+          break;
+        }catch(e){
+          lastError=e;
+          if(retry<2){
+            if(status)status.textContent=`通信待機中… ${batchNo}/${batchTotal} を再試行します`;
+            await new Promise(r=>setTimeout(r,(retry+1)*1800));
+          }
+        }
+      }
+
+      if(lastError || !d){
+        failedTotal+=chunk.length;
+        failedIds.push(...chunk);
+        continue;
+      }
+
+      deletedTotal+=Number(d?.deleted_count||0);
+      skippedTotal+=Number(d?.skipped_count||0);
+      failedTotal+=Number(d?.failed_count||0);
+      if(Array.isArray(d?.failed)){
+        failedIds.push(...d.failed.map(x=>Number(x?.id)).filter(Boolean));
+      }
+
+      // Cloudflare/D1を休ませる。
+      if(i+chunkSize<ids.length){
+        await new Promise(r=>setTimeout(r,450));
+      }
+    }
+
+    const lines=[
+      `削除完了：${deletedTotal}店舗`,
+      skippedTotal?`再判定でスキップ：${skippedTotal}件`:"",
+      failedTotal?`削除できなかった店舗：${failedTotal}件`:""
+    ].filter(Boolean);
+
+    alert(lines.join("\n"));
+
+    if(status){
+      status.textContent=
+        failedTotal
+          ? `${deletedTotal}店舗を削除しました。${failedTotal}件は残っています。`
+          : `${deletedTotal}店舗を削除しました。`;
+    }
 
     await Promise.allSettled([
       window.loadShops?.(),
       window.loadExclusionCandidatesV259?.()
     ]);
   }catch(e){
-    console.error("bulk exclusion delete failed",e);
-    alert("削除できませんでした: "+(e?.message||"UNKNOWN_ERROR"));
-    if(status)status.textContent="削除に失敗しました。";
+    console.error("chunked exclusion delete failed",e);
+    alert("削除処理でエラーが発生しました: "+(e?.message||"UNKNOWN_ERROR"));
+    if(status)status.textContent="削除処理を中断しました。削除済みの店舗はそのまま保存されています。";
+  }finally{
+    if(button)button.disabled=false;
   }
 };
 
