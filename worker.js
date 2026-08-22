@@ -1334,7 +1334,7 @@ async function kbnMaintenanceQueueStatusV257(env){
       };
     }
 
-    const task=phase===1?"missing":phase===2?"closed":phase===3?"instagram":"maintenance";
+    const task=phase===1?"missing":phase===2?"closed":phase===3?"instagram":phase===4?"exclusion":"maintenance";
     return {
       active:true,
       phase,
@@ -3690,6 +3690,52 @@ function kbnExclusionCandidateV259(shop){
     reasons:[...new Set(reasons)]
   };
 }
+
+async function kbnScanExclusionCandidatesV267(env){
+  const ignoredIds=await kbnIgnoredExclusionShopIdsV265(env);
+
+  const r=await env.DB.prepare(`
+    SELECT id,slug,name,area,genre,address,features,description,instagram,
+           is_published,listing_status,created_at,updated_at
+    FROM shops
+    WHERE is_published=1
+    ORDER BY id DESC
+  `).all();
+
+  const candidates=[];
+  for(const shop of (r.results||[])){
+    if(ignoredIds.has(Number(shop.id)))continue;
+
+    const check=kbnExclusionCandidateV259(shop);
+    if(!check.candidate)continue;
+
+    candidates.push({
+      id:Number(shop.id),
+      slug:shop.slug||"",
+      name:shop.name||"",
+      area:shop.area||"",
+      genre:shop.genre||"",
+      listing_status:normalizeListingStatus(shop.listing_status),
+      score:Number(check.score||0),
+      reasons:check.reasons||[]
+    });
+  }
+
+  candidates.sort((a,b)=>
+    b.score-a.score ||
+    (a.listing_status==="provisional"?-1:1) ||
+    b.id-a.id
+  );
+
+  return {
+    ok:true,
+    checked:Number((r.results||[]).length),
+    ignored_count:ignoredIds.size,
+    candidate_count:candidates.length,
+    candidates
+  };
+}
+
 async function kbnDeleteShopCompletelyV259(env,id,{archive=true}={}){
   const shop=await env.DB.prepare("SELECT * FROM shops WHERE id=? LIMIT 1").bind(id).first();
   if(!shop)return {ok:false,id,error:"NOT_FOUND"};
@@ -5515,7 +5561,7 @@ async function kbnProcessQueuedMaintenanceV242(env){
     };
   }
 
-  const task=phase===1?"missing":phase===2?"closed":phase===3?"instagram":"";
+  const task=phase===1?"missing":phase===2?"closed":phase===3?"instagram":phase===4?"exclusion":"";
   if(!task){
     await env.DB.prepare(`
       UPDATE kbn_maintenance_queue
@@ -5527,26 +5573,40 @@ async function kbnProcessQueuedMaintenanceV242(env){
 
   let result;
   try{
-    result=await runMaintenanceBatchV242(env,task,{limit:20});
+    if(task==="exclusion"){
+      result=await kbnScanExclusionCandidatesV267(env);
+    }else{
+      result=await runMaintenanceBatchV242(env,task,{limit:20});
+    }
   }catch(e){
     console.error("queued maintenance failed",task,e);
     result={ok:false,error:String(e?.message||e),task};
   }
 
-  const nextPhase=phase>=3?0:phase+1;
+  const nextPhase=phase>=4?0:phase+1;
   await env.DB.prepare(`
     UPDATE kbn_maintenance_queue SET phase=?,updated_at=CURRENT_TIMESTAMP WHERE id=1
   `).bind(nextPhase).run();
 
   try{
-    const checked=Number(result?.checked||0);
-    const updated=Array.isArray(result?.updated)?result.updated.length:0;
-    const closed=Array.isArray(result?.closed)?result.closed.length:0;
-    await createKbnAlert(env,{
-      type:"maintenance_batch",
-      title:`自動メンテナンス: ${task}`,
-      message:`${checked}店舗を確認 / 更新${updated}件${task==="closed"?` / 閉業候補${closed}件`:""} / 次回は続きから`
-    });
+    if(task==="exclusion"){
+      const checked=Number(result?.checked||0);
+      const candidateCount=Number(result?.candidate_count||0);
+      await createKbnAlert(env,{
+        type:"maintenance_exclusion_scan",
+        title:"自動メンテナンス: 対象外候補チェック",
+        message:`${checked}店舗を確認 / 対象外候補 ${candidateCount}件 / 店舗管理から確認できます`
+      });
+    }else{
+      const checked=Number(result?.checked||0);
+      const updated=Array.isArray(result?.updated)?result.updated.length:0;
+      const closed=Array.isArray(result?.closed)?result.closed.length:0;
+      await createKbnAlert(env,{
+        type:"maintenance_batch",
+        title:`自動メンテナンス: ${task}`,
+        message:`${checked}店舗を確認 / 更新${updated}件${task==="closed"?` / 閉業候補${closed}件`:""} / 次回は続きから`
+      });
+    }
   }catch{}
 
   return {ok:true,processed:true,phase,task,result};
@@ -5723,7 +5783,7 @@ async function enrichScheduledCreatedShops(env,created=[]){
 async function runScheduledKbnMaintenance(env){
   // v2.42:
   // 選択した通常メンテナンス回では、まず通常の自動掲載を実行。
-  // 自動開拓を合計40バッチ（120検索） → 情報不足20件 → 閉業20件 → Instagram20件 の順で、
+  // 自動開拓を合計40バッチ（120検索） → 情報不足20件 → 閉業20件 → Instagram20件 → 対象外候補チェック の順で、
   // 毎分Cronに分けて実行しFree枠のsubrequest超過を避ける。新規100店舗で早期終了する。
   const discoveryResult=await runScheduledKbnAutoDiscoveryOnly(env);
 
@@ -5734,7 +5794,7 @@ async function runScheduledKbnMaintenance(env){
   await createKbnAlert(env,{
     type:"scheduled_summary",
     title:"予約メンテナンス開始",
-    message:"自動開拓を120検索・40バッチに分割し、503を避けながら最大100店舗を上限に新規掲載を狙った後、情報不足20店舗 → 閉業20店舗 → Instagram20店舗を続きから確認します。"
+    message:"自動開拓を120検索・40バッチに分割し、503を避けながら最大100店舗を上限に新規掲載を狙った後、情報不足20店舗 → 閉業20店舗 → Instagram20店舗 → 対象外候補チェックを実行します。"
   });
 
   return {
@@ -7441,49 +7501,15 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
       }
 
 
-      // v2.59: 掲載済み店舗から「対象外の可能性が高い店舗」を抽出。
+      // v2.59/v2.67: 掲載済み店舗から「対象外の可能性が高い店舗」を抽出。
       if(url.pathname==="/api/admin/shops/exclusion-candidates" && request.method==="GET"){
-        const ignoredIds=await kbnIgnoredExclusionShopIdsV265(env);
-        const r=await env.DB.prepare(`
-          SELECT id,slug,name,area,genre,address,features,description,instagram,
-                 is_published,listing_status,created_at,updated_at
-          FROM shops
-          WHERE is_published=1
-          ORDER BY id DESC
-        `).all();
-
-        const candidates=[];
-        for(const shop of (r.results||[])){
-          if(ignoredIds.has(Number(shop.id)))continue;
-          const check=kbnExclusionCandidateV259(shop);
-          if(!check.candidate)continue;
-          candidates.push({
-            id:Number(shop.id),
-            slug:shop.slug||"",
-            name:shop.name||"",
-            area:shop.area||"",
-            genre:shop.genre||"",
-            address:shop.address||"",
-            instagram:shop.instagram||"",
-            listing_status:normalizeListingStatus(shop.listing_status),
-            is_published:Number(shop.is_published||0),
-            score:Number(check.score||0),
-            reasons:check.reasons||[]
-          });
-        }
-
-        candidates.sort((a,b)=>
-          b.score-a.score ||
-          (a.listing_status==="provisional"?-1:1) ||
-          b.id-a.id
-        );
-
+        const scan=await kbnScanExclusionCandidatesV267(env);
         return json({
           ok:true,
-          total:Number((r.results||[]).length),
-          ignored_count:ignoredIds.size,
-          candidate_count:candidates.length,
-          candidates
+          total:Number(scan.checked||0),
+          ignored_count:Number(scan.ignored_count||0),
+          candidate_count:Number(scan.candidate_count||0),
+          candidates:Array.isArray(scan.candidates)?scan.candidates:[]
         });
       }
 
