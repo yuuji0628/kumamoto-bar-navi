@@ -3578,6 +3578,26 @@ function kbnStrongNightType(types=""){
   ].some(x=>s.includes(x));
 }
 
+
+async function ensureKbnExclusionCandidateIgnoresV265(env){
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS kbn_exclusion_candidate_ignores(
+      shop_id INTEGER PRIMARY KEY,
+      note TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run();
+}
+
+async function kbnIgnoredExclusionShopIdsV265(env){
+  await ensureKbnExclusionCandidateIgnoresV265(env);
+  const r=await env.DB.prepare(`
+    SELECT shop_id FROM kbn_exclusion_candidate_ignores
+  `).all();
+  return new Set((r.results||[]).map(x=>Number(x.shop_id)).filter(Boolean));
+}
+
 function kbnExclusionCandidateV259(shop){
   const name=String(shop?.name||"").trim();
   const genre=String(shop?.genre||"").trim();
@@ -7423,6 +7443,7 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
 
       // v2.59: 掲載済み店舗から「対象外の可能性が高い店舗」を抽出。
       if(url.pathname==="/api/admin/shops/exclusion-candidates" && request.method==="GET"){
+        const ignoredIds=await kbnIgnoredExclusionShopIdsV265(env);
         const r=await env.DB.prepare(`
           SELECT id,slug,name,area,genre,address,features,description,instagram,
                  is_published,listing_status,created_at,updated_at
@@ -7433,6 +7454,7 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
 
         const candidates=[];
         for(const shop of (r.results||[])){
+          if(ignoredIds.has(Number(shop.id)))continue;
           const check=kbnExclusionCandidateV259(shop);
           if(!check.candidate)continue;
           candidates.push({
@@ -7459,6 +7481,7 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
         return json({
           ok:true,
           total:Number((r.results||[]).length),
+          ignored_count:ignoredIds.size,
           candidate_count:candidates.length,
           candidates
         });
@@ -7466,6 +7489,44 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
 
       // v2.59: 対象外候補だけを選択削除 / 一括削除。
       // 安全のため、送られたIDをサーバー側でも再判定し、候補外は削除しない。
+
+      // v2.65: 正しい店舗は対象外候補から永続的に除外。
+      if(url.pathname==="/api/admin/shops/exclusion-candidates/ignore" && request.method==="POST"){
+        let body;
+        try{body=await request.json()}catch{return json({ok:false,error:"INVALID_JSON"},{status:400})}
+
+        const shopId=Number(body?.shop_id||0);
+        if(!Number.isInteger(shopId)||shopId<=0){
+          return json({ok:false,error:"INVALID_SHOP_ID"},{status:400});
+        }
+
+        const shop=await env.DB.prepare(`
+          SELECT id,name FROM shops WHERE id=? LIMIT 1
+        `).bind(shopId).first();
+
+        if(!shop){
+          return json({ok:false,error:"SHOP_NOT_FOUND"},{status:404});
+        }
+
+        await ensureKbnExclusionCandidateIgnoresV265(env);
+        await env.DB.prepare(`
+          INSERT INTO kbn_exclusion_candidate_ignores(shop_id,note,created_at,updated_at)
+          VALUES(?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
+          ON CONFLICT(shop_id) DO UPDATE SET
+            note=excluded.note,
+            updated_at=CURRENT_TIMESTAMP
+        `).bind(
+          shopId,
+          t(body?.note||"管理者が正しい店舗として対象外候補から除外",500)
+        ).run();
+
+        return json({
+          ok:true,
+          shop_id:shopId,
+          name:shop.name||""
+        });
+      }
+
       if(url.pathname==="/api/admin/shops/exclusion-candidates/bulk-delete" && request.method==="POST"){
         let body;
         try{body=await request.json()}catch{return json({ok:false,error:"INVALID_JSON"},{status:400})}
@@ -7490,7 +7551,7 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
           const tr=await env.DB.prepare(`
             SELECT name FROM sqlite_master
             WHERE type='table'
-            AND name IN ('shop_images','shop_analytics','jobs','owner_requests','member_favorites','shop_views')
+            AND name IN ('shop_images','shop_analytics','jobs','owner_requests','member_favorites','shop_views','kbn_exclusion_candidate_ignores')
           `).all();
           for(const row of (tr.results||[]))existingTables.add(String(row.name||""));
         }catch(e){
@@ -7524,6 +7585,9 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
             if(existingTables.has("owner_requests"))stmts.push(env.DB.prepare("DELETE FROM owner_requests WHERE shop_id=?").bind(id));
             if(existingTables.has("member_favorites"))stmts.push(env.DB.prepare("DELETE FROM member_favorites WHERE shop_id=?").bind(id));
             if(existingTables.has("shop_views"))stmts.push(env.DB.prepare("DELETE FROM shop_views WHERE shop_id=?").bind(id));
+            if(existingTables.has("kbn_exclusion_candidate_ignores")){
+              stmts.push(env.DB.prepare("DELETE FROM kbn_exclusion_candidate_ignores WHERE shop_id=?").bind(id));
+            }
             stmts.push(env.DB.prepare("DELETE FROM shops WHERE id=?").bind(id));
 
             if(typeof env.DB.batch==="function"){
