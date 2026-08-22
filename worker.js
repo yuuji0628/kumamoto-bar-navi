@@ -604,6 +604,7 @@ async function kbnSendNewListingDigest(env,created=[]){
   return {ok:true,sent,failed};
 }
 
+// v2.78: SEO専用ページ・コラム・エリアSEOページをサイト更新から更新可能にする
 const KBN_GITHUB_EDITABLE_FILES = [
   "index.html",
   "style.css",
@@ -618,7 +619,23 @@ const KBN_GITHUB_EDITABLE_FILES = [
   "robots.txt",
   "sitemap.xml",
   "member.html",
-  "listing-form.html"
+  "listing-form.html",
+  "kumamoto-bar.html",
+  "shimotori-bar.html",
+  "karaoke-bar-kumamoto.html",
+  "darts-bar-kumamoto.html",
+  "snack-kumamoto.html",
+  "column-bar-beginner.html",
+  "column-kumamoto-night.html",
+  "column-solo-bar.html",
+  "kumamoto-station-bar.html",
+  "suizenji-bar.html",
+  "kengun-bar.html",
+  "hikarinomori-bar.html",
+  "yatsushiro-bar.html",
+  "hitoyoshi-bar.html",
+  "tamana-bar.html",
+  "amakusa-bar.html"
 ];
 
 function kbnGithubConfig(env){
