@@ -3625,7 +3625,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.77</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.80</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -4210,7 +4210,7 @@ html,body{max-width:100%;overflow-x:hidden}
         最終自動実行：読み込み中...
       </div>
 
-      <div style="margin-top:8px;color:#aeb6c0;font-size:.76rem">通常回は最大6店舗。メンテ回は分割実行して累計件数で表示します。</div>
+      <div style="margin-top:8px;color:#aeb6c0;font-size:.76rem">通常回は最大15店舗を目標に探索します。条件を満たした店舗だけ掲載するため、実際の追加数は毎回変わります。</div>
       <small id="autoListingSixTimesStatus" style="display:block;margin-top:6px;color:#efc45a">
         自動掲載：1日6回 / 通常メンテナンス：1日1回
       </small>
@@ -10159,35 +10159,16 @@ window.loadKbnAlerts=async function(){
 
     if(!box)return;
 
-    // 新店舗通知は1店舗ずつ縦に並べず、1枚にまとめる
-    const newShopRows=baseRows.filter(x=>x.alert_type==="new_shop").slice(0,15);
-    const otherRows=baseRows.filter(x=>x.alert_type!=="new_shop").slice(0,8);
+    // v2.79: 店舗単位の new_shop 通知は一覧では非表示。
+    // 「自動掲載15店舗」のような累計カードをやめ、各実行結果を1回ずつ個別表示する。
+    const otherRows=baseRows.filter(x=>x.alert_type!=="new_shop").slice(0,12);
 
     const cards=[];
 
-    if(newShopRows.length){
-      const names=newShopRows.map(x=>
-        String(x.title||"")
-          .replace(/^新店舗を自動掲載:\s*/,"")
-          .trim()
-      ).filter(Boolean);
-
-      cards.push(`
-        <div class="kbn-alert-item kbn-newshops-group">
-          <b>自動掲載 ${newShopRows.length}店舗</b>
-          <p>直近の自動メンテナンスで追加した店舗をまとめて表示しています。</p>
-          <div class="kbn-newshops-inline">
-            ${names.slice(0,5).map(n=>`<span>${esc(n)}</span>`).join("")}
-            ${names.length>5?`<span>＋${names.length-5}店舗</span>`:""}
-          </div>
-          <small>${esc(kbnAlertTime(newShopRows[0]?.created_at))}</small>
-        </div>
-      `);
-    }
-
     for(const x of otherRows){
       const closed=x.alert_type==="closed_shop"&&x.shop_id;
-      const isSummary=x.alert_type==="scheduled_summary";
+      const isSummary=x.alert_type==="scheduled_summary"||x.alert_type==="scheduled_discovery_summary";
+      const isDiscoveryRun=x.alert_type==="scheduled_discovery_summary";
       let summaryHtml="";
 
       if(isSummary){
@@ -10200,7 +10181,7 @@ window.loadKbnAlerts=async function(){
 
       cards.push(`
         <div class="kbn-alert-item ${Number(x.is_read)?"":"unread"}" data-alert-id="${x.id}" data-shop-id="${x.shop_id||""}">
-          <b>${esc(x.title||"お知らせ")}</b>
+          <b>${isDiscoveryRun?`自動掲載結果　${esc(kbnAlertTime(x.created_at))}`:esc(x.title||"お知らせ")}</b>
           ${isSummary?summaryHtml:`<p>${esc(x.message||"")}</p>`}
           <small>${esc(kbnAlertTime(x.created_at))}</small>
           ${closed?`
