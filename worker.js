@@ -2017,29 +2017,58 @@ const KBN_DISCOVERY_SPOTS=[
   {area:"熊本市",search_area:"熊本市 下通"},
   {area:"熊本市",search_area:"熊本市 上通"},
   {area:"熊本市",search_area:"熊本市 新市街"},
+  {area:"熊本市",search_area:"熊本市 中央街"},
+  {area:"熊本市",search_area:"熊本市 花畑町"},
+  {area:"熊本市",search_area:"熊本市 安政町"},
+  {area:"熊本市",search_area:"熊本市 手取本町"},
+  {area:"熊本市",search_area:"熊本市 南坪井町"},
+  {area:"熊本市",search_area:"熊本市 並木坂"},
+  {area:"熊本市",search_area:"熊本市 辛島町"},
   {area:"熊本市",search_area:"熊本市 銀座通り"},
   {area:"熊本市",search_area:"熊本市 駕町通り"},
   {area:"熊本市",search_area:"熊本市 シャワー通り"},
+  {area:"熊本市",search_area:"熊本市 上乃裏"},
+  {area:"熊本市",search_area:"熊本市 熊本駅"},
   {area:"熊本市",search_area:"熊本市 水前寺"},
   {area:"熊本市",search_area:"熊本市 健軍"},
-  {area:"熊本市",search_area:"熊本市 熊本駅"},
-  {area:"熊本市",search_area:"熊本市 上乃裏"},
+  {area:"熊本市",search_area:"熊本市 武蔵ヶ丘"},
+  {area:"熊本市",search_area:"熊本市 楠"},
+  {area:"熊本市",search_area:"熊本市 植木"},
   {area:"八代市",search_area:"八代市 本町"},
+  {area:"八代市",search_area:"八代市 袋町"},
+  {area:"八代市",search_area:"八代市 旭中央通"},
   {area:"人吉市",search_area:"人吉市 紺屋町"},
+  {area:"人吉市",search_area:"人吉市 九日町"},
   {area:"玉名市",search_area:"玉名市 高瀬"},
+  {area:"玉名市",search_area:"玉名市 繁根木"},
   {area:"荒尾市",search_area:"荒尾市"},
+  {area:"荒尾市",search_area:"荒尾市 万田"},
   {area:"山鹿市",search_area:"山鹿市"},
+  {area:"山鹿市",search_area:"山鹿市 温泉街"},
   {area:"菊池市",search_area:"菊池市"},
+  {area:"菊池市",search_area:"菊池市 隈府"},
   {area:"合志市",search_area:"合志市"},
   {area:"菊陽町",search_area:"菊陽町 光の森"},
+  {area:"菊陽町",search_area:"菊陽町 津久礼"},
   {area:"大津町",search_area:"大津町"},
+  {area:"大津町",search_area:"大津町 室"},
   {area:"宇城市",search_area:"宇城市 松橋"},
+  {area:"宇城市",search_area:"宇城市 小川"},
   {area:"宇土市",search_area:"宇土市"},
   {area:"天草市",search_area:"天草市 本渡"},
+  {area:"天草市",search_area:"天草市 中央新町"},
+  {area:"上天草市",search_area:"上天草市"},
   {area:"阿蘇市",search_area:"阿蘇市"},
+  {area:"阿蘇市",search_area:"阿蘇市 内牧"},
   {area:"水俣市",search_area:"水俣市"},
-  {area:"上天草市",search_area:"上天草市"}
-];
+  {area:"益城町",search_area:"益城町"},
+  {area:"御船町",search_area:"御船町"},
+  {area:"嘉島町",search_area:"嘉島町"},
+  {area:"長洲町",search_area:"長洲町"},
+  {area:"南関町",search_area:"南関町"},
+  {area:"芦北町",search_area:"芦北町"},
+  {area:"あさぎり町",search_area:"あさぎり町"}
+]
 
 
 async function ensureLeadDiscoveryTables(env){
@@ -3459,14 +3488,34 @@ function googlePlaceTypes(place){
 function googlePlaceLooksLikeBar(place){
   const types=googlePlaceTypes(place).join(" ").toLowerCase();
   const name=googlePlaceName(place).toLowerCase();
-  const strong=[
-    "bar","pub","night_club","night club","cocktail","lounge",
-    "karaoke","ダーツ","バー","パブ","スナック","ラウンジ",
-    "カラオケ","シーシャ"
-  ];
-  return strong.some(x=>types.includes(x)||name.includes(x));
-}
 
+  const explicitNameStrong=[
+    "bar","バー","pub","パブ","snack","スナック","lounge","ラウンジ",
+    "karaoke","カラオケ","darts","ダーツ","shisha","シーシャ",
+    "cocktail","カクテル","ガールズバー","コンカフェ","クラブ"
+  ].some(x=>name.includes(x));
+
+  const strongType=[
+    "bar","pub","night_club","night club","cocktail","lounge","karaoke"
+  ].some(x=>types.includes(x));
+
+  // 「スポーツバー」は残すが、スポーツクラブ・テニスクラブ等は除外。
+  const obviousNonBarName=[
+    "スポーツクラブ","フィットネスクラブ","テニスクラブ","ゴルフクラブ",
+    "サウナ","スパ","ジム","gym","fitness","ボウリング","カラオケスタジオ",
+    "焼肉店","レストラン","食堂","ホテル","旅館","美容","ネイル","エステ"
+  ].some(x=>name.includes(x));
+
+  const obviousNonBarType=[
+    "gym","fitness_center","sports_club","spa","sauna","tennis",
+    "restaurant","hotel","lodging","beauty_salon","hair_care"
+  ].some(x=>types.includes(x));
+
+  if(explicitNameStrong)return true;
+  if(obviousNonBarName)return false;
+  if(obviousNonBarType && !strongType)return false;
+  return strongType;
+}
 function googlePlaceScore(place,{name="",area=""}={}){
   let score=placeNameMatchScore(name,googlePlaceName(place));
   const address=googlePlaceAddress(place);
@@ -4024,14 +4073,19 @@ function autoListingBarStrength({name="",genre="",categories=[],amenity=""}={}){
 
 function autoListingNameQuality(name){
   const s=String(name||"").trim();
+  const low=s.toLowerCase();
   if(!s)return false;
   if(s.length<2 || s.length>80)return false;
   if(/^https?:\/\//i.test(s))return false;
   if(/^(bar|バー|pub|パブ|snack|スナック|lounge|ラウンジ)$/i.test(s))return false;
   if(/\b(?:求人|スタッフ募集|まとめ|ランキング|公式サイト)\b/i.test(s))return false;
+
+  const explicitBar=/(?:bar|バー|pub|パブ|snack|スナック|lounge|ラウンジ|karaoke|カラオケ|darts|ダーツ|shisha|シーシャ|コンカフェ|ガールズバー)/i.test(s);
+  const obviousNonBar=/(?:スポーツクラブ|フィットネスクラブ|テニスクラブ|ゴルフクラブ|サウナ|スパ|ジム|gym|fitness|ボウリング|カラオケスタジオ|レストラン|食堂|ホテル|旅館|美容|ネイル|エステ)/i.test(low);
+  if(obviousNonBar && !explicitBar)return false;
+
   return true;
 }
-
 function autoListingContactScore({phone="",website="",instagram=""}={}){
   let score=0;
   if(isLikelyJapanesePhone(phone))score+=2;
@@ -5129,35 +5183,65 @@ async function ensureKbnMaintenanceQueueV242(env){
       id INTEGER PRIMARY KEY CHECK(id=1),
       phase INTEGER NOT NULL DEFAULT 0,
       run_date TEXT,
+      created_total INTEGER NOT NULL DEFAULT 0,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `).run();
-}
 
-async function kbnQueueMaintenanceV242(env,runDate){
+  // Existing DB compatibility.
+  try{
+    const info=await env.DB.prepare("PRAGMA table_info(kbn_maintenance_queue)").all();
+    const names=new Set((info.results||[]).map(x=>String(x.name||"")));
+    if(!names.has("created_total")){
+      await env.DB.prepare("ALTER TABLE kbn_maintenance_queue ADD COLUMN created_total INTEGER NOT NULL DEFAULT 0").run();
+    }
+  }catch(e){
+    const msg=String(e?.message||e||"");
+    if(!/duplicate column/i.test(msg))throw e;
+  }
+}
+async function kbnQueueMaintenanceV242(env,runDate,initialCreated=0){
   await ensureKbnMaintenanceQueueV242(env);
   await env.DB.prepare(`
-    INSERT INTO kbn_maintenance_queue(id,phase,run_date,updated_at)
-    VALUES(1,11,?,CURRENT_TIMESTAMP)
+    INSERT INTO kbn_maintenance_queue(id,phase,run_date,created_total,updated_at)
+    VALUES(1,11,?,?,CURRENT_TIMESTAMP)
     ON CONFLICT(id) DO UPDATE SET
-      phase=11,run_date=excluded.run_date,updated_at=CURRENT_TIMESTAMP
-  `).bind(String(runDate||"")).run();
+      phase=11,
+      run_date=excluded.run_date,
+      created_total=excluded.created_total,
+      updated_at=CURRENT_TIMESTAMP
+  `).bind(String(runDate||""),Math.max(0,Number(initialCreated)||0)).run();
 }
-
 async function kbnProcessQueuedMaintenanceV242(env){
   await ensureKbnMaintenanceQueueV242(env);
   const q=await env.DB.prepare(`
-    SELECT phase,run_date,updated_at FROM kbn_maintenance_queue WHERE id=1
+    SELECT phase,run_date,created_total,updated_at FROM kbn_maintenance_queue WHERE id=1
   `).first();
 
   const phase=Number(q?.phase||0);
+  let createdTotal=Math.max(0,Number(q?.created_total||0));
   if(!phase)return {ok:true,processed:false};
 
-  // v2.54:
-  // phase 11-14 = 自動開拓の追加4回。
-  // フルメンテ開始時に1回実行済みなので、合計5回×最大10店舗 = 最大50店舗を狙う。
-  // 各回は別の毎分Cron invocationなので、Cloudflare Freeのsubrequest負荷を分散する。
-  if(phase>=11 && phase<=14){
+  // v2.55:
+  // 手動の120検索と同じ母集団を自動メンテナンスでも使う。
+  // 最初の1回 + 追加23回 = 24バッチ × 5検索 = 合計120検索。
+  // 各バッチは別Cron invocation。新規100店舗に到達したら早期終了。
+  if(phase>=11 && phase<=33){
+    if(createdTotal>=100){
+      await env.DB.prepare(`
+        UPDATE kbn_maintenance_queue
+        SET phase=1,updated_at=CURRENT_TIMESTAMP
+        WHERE id=1
+      `).run();
+      return {
+        ok:true,processed:true,phase,
+        task:"discovery",
+        discovery_skipped:true,
+        reason:"TARGET_100_REACHED",
+        created_total:createdTotal
+      };
+    }
+
     let result;
     try{
       result=await runScheduledKbnAutoDiscoveryOnly(env);
@@ -5166,17 +5250,23 @@ async function kbnProcessQueuedMaintenanceV242(env){
       result={ok:false,error:String(e?.message||e)};
     }
 
-    const nextPhase=phase>=14?1:phase+1;
+    const created=Number(result?.discovery?.created?.length||0);
+    createdTotal+=created;
+
+    const lastDiscoveryPhase=33;
+    const nextPhase=(phase>=lastDiscoveryPhase || createdTotal>=100)?1:phase+1;
+
     await env.DB.prepare(`
-      UPDATE kbn_maintenance_queue SET phase=?,updated_at=CURRENT_TIMESTAMP WHERE id=1
-    `).bind(nextPhase).run();
+      UPDATE kbn_maintenance_queue
+      SET phase=?,created_total=?,updated_at=CURRENT_TIMESTAMP
+      WHERE id=1
+    `).bind(nextPhase,createdTotal).run();
 
     try{
-      const created=Number(result?.discovery?.created?.length||0);
       await createKbnAlert(env,{
         type:"maintenance_discovery_batch",
-        title:`予約メンテナンス自動開拓 ${phase-9}/5`,
-        message:`今回の新規掲載 ${created}店舗 / 未開拓地区を優先 / 次の自動開拓へ`
+        title:`予約メンテナンス自動開拓 ${phase-9}/24`,
+        message:`今回 ${created}店舗 / 累計 ${createdTotal}店舗 / 120検索を分割実行中`
       });
     }catch{}
 
@@ -5184,14 +5274,19 @@ async function kbnProcessQueuedMaintenanceV242(env){
       ok:true,processed:true,phase,
       task:"discovery",
       discovery_batch:phase-9,
-      discovery_batches_total:5,
+      discovery_batches_total:24,
+      created_total:createdTotal,
       result
     };
   }
 
   const task=phase===1?"missing":phase===2?"closed":phase===3?"instagram":"";
   if(!task){
-    await env.DB.prepare(`UPDATE kbn_maintenance_queue SET phase=0,updated_at=CURRENT_TIMESTAMP WHERE id=1`).run();
+    await env.DB.prepare(`
+      UPDATE kbn_maintenance_queue
+      SET phase=0,updated_at=CURRENT_TIMESTAMP
+      WHERE id=1
+    `).run();
     return {ok:true,processed:false};
   }
 
@@ -5221,7 +5316,6 @@ async function kbnProcessQueuedMaintenanceV242(env){
 
   return {ok:true,processed:true,phase,task,result};
 }
-
 async function checkClosedShops(env,{limit=20,afterId=0}={}){
   await ensureKbnAlertsTable(env);
   await ensureShopMaintenanceStatusColumn(env);
@@ -5394,26 +5488,26 @@ async function enrichScheduledCreatedShops(env,created=[]){
 async function runScheduledKbnMaintenance(env){
   // v2.42:
   // 選択した通常メンテナンス回では、まず通常の自動掲載を実行。
-  // 自動開拓をさらに4回 → 情報不足20件 → 閉業20件 → Instagram20件 の順で、
-  // 毎分Cronに分けて実行しFree枠のsubrequest超過を避ける。合計5回の自動開拓で最大50店舗を狙う。
+  // 自動開拓を合計24バッチ（120検索） → 情報不足20件 → 閉業20件 → Instagram20件 の順で、
+  // 毎分Cronに分けて実行しFree枠のsubrequest超過を避ける。新規100店舗で早期終了する。
   const discoveryResult=await runScheduledKbnAutoDiscoveryOnly(env);
 
   const now=new Date(Date.now()+9*60*60*1000);
   const runDate=`${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,"0")}-${String(now.getUTCDate()).padStart(2,"0")}`;
-  await kbnQueueMaintenanceV242(env,runDate);
+  await kbnQueueMaintenanceV242(env,runDate,Number(discoveryResult?.discovery?.created?.length||0));
 
   await createKbnAlert(env,{
     type:"scheduled_summary",
     title:"予約メンテナンス開始",
-    message:"自動開拓を5回に分割して最大50店舗を狙った後、情報不足20店舗 → 閉業20店舗 → Instagram20店舗を順番に続きから確認します。"
+    message:"自動開拓を120検索・24バッチに分割し、最大100店舗を上限に新規掲載を狙った後、情報不足20店舗 → 閉業20店舗 → Instagram20店舗を続きから確認します。"
   });
 
   return {
     ...discoveryResult,
     maintenance_queued:true,
     maintenance_batch_size:20,
-    discovery_batches:5,
-    discovery_target_max:50
+    discovery_batches:24,
+    discovery_target_max:100
   };
 }
 
@@ -6792,7 +6886,7 @@ ${urls.map(x=>`  <url>
         let x={}; try{x=await request.json()}catch{}
         const max=Math.max(1,Math.min(Number(x.max_listings)||10,50));
         const pairs=Math.max(1,Math.min(Number(x.pair_limit)||15,40));
-        const perPair=Math.max(1,Math.min(Number(x.per_pair_limit)||2,3));
+        const perPair=Math.max(1,Math.min(Number(x.per_pair_limit)||2,4));
 
         try{
           const result=await autoDiscover(env,request,max,pairs,perPair);
