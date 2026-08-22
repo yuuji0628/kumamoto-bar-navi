@@ -7470,17 +7470,32 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
         let body;
         try{body=await request.json()}catch{return json({ok:false,error:"INVALID_JSON"},{status:400})}
 
+        // v2.62: 1リクエスト最大10店舗に制限。
+        // 管理画面側が自動で小分け送信することでSafari/CloudflareのLoad failedを防ぐ。
         const ids=[...new Set(
           (Array.isArray(body?.ids)?body.ids:[])
             .map(Number)
             .filter(x=>Number.isInteger(x)&&x>0)
-        )].slice(0,500);
+        )].slice(0,10);
 
         if(!ids.length)return json({ok:false,error:"NO_IDS"},{status:400});
 
         const deleted=[];
         const skipped=[];
         const failed=[];
+
+        // 関連テーブルの存在確認はリクエスト内で1回だけ。
+        const existingTables=new Set();
+        try{
+          const tr=await env.DB.prepare(`
+            SELECT name FROM sqlite_master
+            WHERE type='table'
+            AND name IN ('shop_images','shop_analytics','jobs','owner_requests','member_favorites','shop_views')
+          `).all();
+          for(const row of (tr.results||[]))existingTables.add(String(row.name||""));
+        }catch(e){
+          console.error("related tables lookup failed",e);
+        }
 
         for(const id of ids){
           try{
@@ -7496,10 +7511,35 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
               continue;
             }
 
-            const result=await kbnDeleteShopCompletelyV259(env,id,{archive:true});
-            if(result.ok)deleted.push({...result,reasons:check.reasons||[]});
-            else failed.push({id,name:shop.name||"",error:result.error||"DELETE_FAILED"});
+            // 削除履歴へ保存。これにより自動開拓での再掲載も防ぐ。
+            try{await archiveDeletedAutoListing(env,shop)}catch(e){
+              console.error("archive excluded shop failed",id,e);
+            }
+
+            // 1店舗分をまとめてD1 batchで削除。
+            const stmts=[];
+            if(existingTables.has("shop_images"))stmts.push(env.DB.prepare("DELETE FROM shop_images WHERE shop_id=?").bind(id));
+            if(existingTables.has("shop_analytics"))stmts.push(env.DB.prepare("DELETE FROM shop_analytics WHERE shop_id=?").bind(id));
+            if(existingTables.has("jobs"))stmts.push(env.DB.prepare("DELETE FROM jobs WHERE shop_id=?").bind(id));
+            if(existingTables.has("owner_requests"))stmts.push(env.DB.prepare("DELETE FROM owner_requests WHERE shop_id=?").bind(id));
+            if(existingTables.has("member_favorites"))stmts.push(env.DB.prepare("DELETE FROM member_favorites WHERE shop_id=?").bind(id));
+            if(existingTables.has("shop_views"))stmts.push(env.DB.prepare("DELETE FROM shop_views WHERE shop_id=?").bind(id));
+            stmts.push(env.DB.prepare("DELETE FROM shops WHERE id=?").bind(id));
+
+            if(typeof env.DB.batch==="function"){
+              await env.DB.batch(stmts);
+            }else{
+              for(const stmt of stmts)await stmt.run();
+            }
+
+            deleted.push({
+              ok:true,
+              id:Number(id),
+              name:shop.name||"",
+              reasons:check.reasons||[]
+            });
           }catch(e){
+            console.error("excluded shop delete failed",id,e);
             failed.push({id,error:String(e?.message||e)});
           }
         }
@@ -7515,6 +7555,7 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
           failed
         },{status:failed.length?207:200});
       }
+
 
       if(url.pathname==="/api/admin/shops" && request.method==="GET"){
         const r=await env.DB.prepare("SELECT * FROM shops ORDER BY sort_order ASC,id DESC").all();
