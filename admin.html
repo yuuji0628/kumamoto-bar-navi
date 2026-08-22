@@ -3350,7 +3350,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.66</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.67</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -7688,7 +7688,7 @@ function setLeadModeV261(mode){
   if(next==="maintenance"){
     if(eyebrow)eyebrow.textContent="MAINTENANCE";
     if(title)title.textContent="メンテナンス";
-    if(desc)desc.textContent="掲載済み店舗の情報補完・閉業確認・予約メンテナンスを管理します。";
+    if(desc)desc.textContent="掲載済み店舗の情報補完・閉業確認・Instagram補完・対象外候補チェック・予約メンテナンスを管理します。";
   }else{
     if(eyebrow)eyebrow.textContent="LEAD FINDER";
     if(title)title.textContent="BAR開拓";
@@ -10175,7 +10175,8 @@ function kbnFormatLastAutomaticRunV233(run,queue){
       const taskLabel={
         missing:"情報不足チェック",
         closed:"閉業チェック",
-        instagram:"Instagram補完"
+        instagram:"Instagram補完",
+        exclusion:"対象外候補チェック"
       }[String(queue.task||"")]||"通常メンテナンス";
       return `自動開拓完了：累計新規${created}件 / ${taskLabel}を実行中`;
     }
