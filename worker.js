@@ -3540,36 +3540,147 @@ function googlePlaceTypes(place){
   ].filter(Boolean);
 }
 
+
+// v2.58: 自動掲載は「明確に夜業態 / BAR系」と確認できる店だけ通す。
+function kbnExplicitBarSignal(text=""){
+  const s=String(text||"").toLowerCase();
+  return [
+    "bar","バー","pub","パブ","snack","スナック","lounge","ラウンジ",
+    "darts bar","ダーツバー","karaoke bar","カラオケバー",
+    "shisha bar","シーシャバー","cocktail bar","カクテルバー",
+    "wine bar","ワインバー","beer bar","ビアバー",
+    "shot bar","ショットバー","music bar","ミュージックバー",
+    "sports bar","スポーツバー","girls bar","ガールズバー",
+    "コンカフェ","night club","nightclub","ナイトクラブ"
+  ].some(x=>s.includes(x));
+}
+
+function kbnHardNonBarSignal(text=""){
+  const s=String(text||"").toLowerCase();
+  return [
+    "居酒屋","izakaya","焼鳥","焼き鳥","やきとり","串焼","串カツ",
+    "ラーメン","うどん","そば","寿司","鮨","焼肉","食堂","定食",
+    "レストラン","restaurant","カフェ","cafe","喫茶",
+    "カラオケ店","カラオケボックス","カラオケスタジオ","karaoke box",
+    "温泉","銭湯","浴場","spa","スパ","サウナ","sauna",
+    "ホテル","旅館","宿泊","hotel","lodging",
+    "スポーツクラブ","フィットネスクラブ","テニスクラブ","ゴルフクラブ",
+    "ジム","gym","fitness","ボウリング",
+    "美容","ネイル","エステ","病院","歯科","整体","マッサージ",
+    "コンビニ","スーパー","不動産","建設","学校","塾"
+  ].some(x=>s.includes(x));
+}
+
+function kbnStrongNightType(types=""){
+  const s=String(types||"").toLowerCase();
+  return [
+    "bar","pub","night_club","night club","cocktail_bar","wine_bar"
+  ].some(x=>s.includes(x));
+}
+
+function kbnExclusionCandidateV259(shop){
+  const name=String(shop?.name||"").trim();
+  const genre=String(shop?.genre||"").trim();
+  const features=String(shop?.features||"").trim();
+  const description=String(shop?.description||"").trim();
+  const address=String(shop?.address||"").trim();
+  const text=[name,genre,features,description,address].filter(Boolean).join(" ");
+  const low=text.toLowerCase();
+
+  // BAR系の明確な表記がある店は対象外候補にしない。
+  // 例: カラオケバー、焼肉BAR、Cafe Bar、スポーツバーなど。
+  if(kbnExplicitBarSignal(text)){
+    return {candidate:false,score:0,reasons:[]};
+  }
+
+  const reasons=[];
+  let score=0;
+  const hit=(rx,label,points)=>{
+    if(rx.test(low)){
+      reasons.push(label);
+      score+=points;
+    }
+  };
+
+  hit(/居酒屋|izakaya|焼鳥|焼き鳥|やきとり|串焼|串カツ/, "居酒屋・飲食店系", 95);
+  hit(/カラオケ|karaoke/, "通常カラオケ店の可能性", 95);
+  hit(/温泉|銭湯|浴場|spa|スパ|サウナ|sauna/, "温泉・スパ・サウナ系", 100);
+  hit(/スポーツクラブ|フィットネスクラブ|テニスクラブ|ゴルフクラブ|ジム|gym|fitness|ボウリング/, "スポーツ・フィットネス系", 100);
+  hit(/ホテル|旅館|宿泊|hotel|lodging/, "宿泊施設系", 90);
+  hit(/レストラン|restaurant|食堂|定食|ラーメン|うどん|そば|寿司|鮨/, "一般飲食店系", 85);
+  hit(/カフェ|cafe|喫茶/, "カフェ系", 75);
+  hit(/美容|ネイル|エステ|病院|歯科|整体|マッサージ/, "美容・医療系", 100);
+  hit(/コンビニ|スーパー|不動産|建設|学校|塾/, "その他非BAR業態", 100);
+
+  // 店名だけで明確な除外ワードを持つ場合は強く判定。
+  const nameLow=name.toLowerCase();
+  if(/^(?:カラオケ|karaoke)\b/.test(nameLow) && !/バー|bar/.test(nameLow)){
+    if(!reasons.includes("通常カラオケ店の可能性"))reasons.push("通常カラオケ店の可能性");
+    score=Math.max(score,95);
+  }
+
+  return {
+    candidate:score>=75,
+    score,
+    reasons:[...new Set(reasons)]
+  };
+}
+
+async function kbnDeleteShopCompletelyV259(env,id,{archive=true}={}){
+  const shop=await env.DB.prepare("SELECT * FROM shops WHERE id=? LIMIT 1").bind(id).first();
+  if(!shop)return {ok:false,id,error:"NOT_FOUND"};
+
+  if(archive){
+    try{await archiveDeletedAutoListing(env,shop)}catch(e){console.error("archive excluded shop failed",id,e)}
+  }
+
+  const tableExists=async(name)=>{
+    const row=await env.DB.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name=?"
+    ).bind(name).first();
+    return !!row;
+  };
+
+  const related=[
+    ["shop_images","DELETE FROM shop_images WHERE shop_id=?"],
+    ["shop_analytics","DELETE FROM shop_analytics WHERE shop_id=?"],
+    ["jobs","DELETE FROM jobs WHERE shop_id=?"],
+    ["owner_requests","DELETE FROM owner_requests WHERE shop_id=?"],
+    ["member_favorites","DELETE FROM member_favorites WHERE shop_id=?"],
+    ["shop_views","DELETE FROM shop_views WHERE shop_id=?"]
+  ];
+
+  for(const [table,sql] of related){
+    try{
+      if(await tableExists(table))await env.DB.prepare(sql).bind(id).run();
+    }catch(e){
+      console.error("related delete failed",table,id,e);
+    }
+  }
+
+  await env.DB.prepare("DELETE FROM shops WHERE id=?").bind(id).run();
+  return {ok:true,id:Number(id),name:shop.name||""};
+}
+
 function googlePlaceLooksLikeBar(place){
   const types=googlePlaceTypes(place).join(" ").toLowerCase();
-  const name=googlePlaceName(place).toLowerCase();
+  const name=googlePlaceName(place);
+  const text=`${name} ${types}`;
 
-  const explicitNameStrong=[
-    "bar","バー","pub","パブ","snack","スナック","lounge","ラウンジ",
-    "karaoke","カラオケ","darts","ダーツ","shisha","シーシャ",
-    "cocktail","カクテル","ガールズバー","コンカフェ","クラブ"
-  ].some(x=>name.includes(x));
+  const explicit=kbnExplicitBarSignal(text);
+  const strongType=kbnStrongNightType(types);
+  const hardNonBar=kbnHardNonBarSignal(text);
 
-  const strongType=[
-    "bar","pub","night_club","night club","cocktail","lounge","karaoke"
-  ].some(x=>types.includes(x));
+  // 明確な非BAR業態は、店名にBAR系ワードがあっても原則除外。
+  // 例外は「焼肉BAR」「Cafe Bar」のようにBARが店名として明示され、
+  // Google側もbar/pub/night_club等の夜業態typeを返している場合だけ。
+  if(hardNonBar && !(explicit && strongType))return false;
 
-  // 「スポーツバー」は残すが、スポーツクラブ・テニスクラブ等は除外。
-  const obviousNonBarName=[
-    "スポーツクラブ","フィットネスクラブ","テニスクラブ","ゴルフクラブ",
-    "サウナ","スパ","ジム","gym","fitness","ボウリング","カラオケスタジオ",
-    "焼肉店","レストラン","食堂","ホテル","旅館","美容","ネイル","エステ"
-  ].some(x=>name.includes(x));
+  // 自動掲載はホワイトリスト方式。
+  // 店名かGoogle typeのどちらかでBAR/夜業態を明確に確認できない候補は通さない。
+  if(!explicit && !strongType)return false;
 
-  const obviousNonBarType=[
-    "gym","fitness_center","sports_club","spa","sauna","tennis",
-    "restaurant","hotel","lodging","beauty_salon","hair_care"
-  ].some(x=>types.includes(x));
-
-  if(explicitNameStrong)return true;
-  if(obviousNonBarName)return false;
-  if(obviousNonBarType && !strongType)return false;
-  return strongType;
+  return true;
 }
 function googlePlaceScore(place,{name="",area=""}={}){
   let score=placeNameMatchScore(name,googlePlaceName(place));
@@ -4103,41 +4214,34 @@ function autoListingBarStrength({name="",genre="",categories=[],amenity=""}={}){
   const text=[name,genre,...categories,amenity].join(" ").toLowerCase();
   let score=0;
 
-  const strong=[
-    "bar","バー","pub","パブ","nightclub","night_club","ナイトクラブ",
-    "snack","スナック","lounge","ラウンジ","darts","ダーツ",
-    "karaoke","カラオケ","shisha","シーシャ","cocktail","カクテル"
-  ];
-  const bad=[
-    "restaurant","レストラン","居酒屋","izakaya","cafe","カフェ",
-    "hotel","ホテル","美容","ネイル","エステ","病院","歯科",
-    "不動産","建設","学校","塾","コンビニ","スーパー"
-  ];
+  const explicit=kbnExplicitBarSignal(text);
+  const hardNonBar=kbnHardNonBarSignal(text);
+  const strongType=kbnStrongNightType(`${categories.join(" ")} ${amenity}`);
 
-  const strongHit=strong.some(x=>text.includes(x));
-  if(strongHit)score+=3;
-  if(/catering\.(bar|pub)/.test(text))score+=3;
-  if(/^(bar|pub|nightclub|karaoke_box)$/.test(String(amenity||"")))score+=3;
+  if(explicit)score+=6;
+  if(strongType)score+=5;
+  if(/catering\.(bar|pub)/.test(text))score+=4;
+  if(/^(bar|pub|nightclub|night_club)$/.test(String(amenity||"")))score+=4;
 
-  // v2.28: "Cafe Bar" やフード提供のあるBARまで cafe/restaurant の語だけで落とさない。
-  // BAR系シグナルが一切ない場合だけ除外方向へ強く寄せる。
-  if(!strongHit && bad.some(x=>text.includes(x)))score-=5;
+  // 明確な非BAR業態は強く減点。
+  if(hardNonBar)score-=10;
 
   return score;
 }
-
 function autoListingNameQuality(name){
   const s=String(name||"").trim();
-  const low=s.toLowerCase();
   if(!s)return false;
   if(s.length<2 || s.length>80)return false;
   if(/^https?:\/\//i.test(s))return false;
   if(/^(bar|バー|pub|パブ|snack|スナック|lounge|ラウンジ)$/i.test(s))return false;
   if(/\b(?:求人|スタッフ募集|まとめ|ランキング|公式サイト)\b/i.test(s))return false;
 
-  const explicitBar=/(?:bar|バー|pub|パブ|snack|スナック|lounge|ラウンジ|karaoke|カラオケ|darts|ダーツ|shisha|シーシャ|コンカフェ|ガールズバー)/i.test(s);
-  const obviousNonBar=/(?:スポーツクラブ|フィットネスクラブ|テニスクラブ|ゴルフクラブ|サウナ|スパ|ジム|gym|fitness|ボウリング|カラオケスタジオ|レストラン|食堂|ホテル|旅館|美容|ネイル|エステ)/i.test(low);
-  if(obviousNonBar && !explicitBar)return false;
+  const explicit=kbnExplicitBarSignal(s);
+  const hardNonBar=kbnHardNonBarSignal(s);
+
+  // 居酒屋、温泉、カラオケ店などは自動掲載しない。
+  // 「カラオケバー」「シーシャバー」などBARが明示される名前は通す。
+  if(hardNonBar && !explicit)return false;
 
   return true;
 }
@@ -4193,7 +4297,7 @@ function strictAutoListingGate({
   else confidence+=3;
 
   const barStrength=autoListingBarStrength({name,genre,categories,amenity});
-  if(barStrength<3)reasons.push("BAR_CATEGORY_WEAK");
+  if(barStrength<6)reasons.push("BAR_CATEGORY_WEAK");
   else confidence+=Math.min(4,barStrength);
 
   const contactScore=autoListingContactScore({phone,website,instagram});
@@ -4211,7 +4315,7 @@ function strictAutoListingGate({
     ["NAME_WEAK","ADDRESS_NOT_CONFIRMED","BAR_CATEGORY_WEAK","NO_RELIABLE_CONTACT"].includes(r)
   );
 
-  const approved=!coreBlocked && confidence>=10;
+  const approved=!coreBlocked && confidence>=12;
 
   return {
     approved,
@@ -4369,6 +4473,18 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
           ?"パブ"
           :/karaoke/.test(googlePlaceTypes(gp).join(" ").toLowerCase())
             ?"カラオケBAR":"BAR";
+      // v2.58 最終安全弁:
+      // 店名・genre・Google typesのどこにもBAR系の明確な根拠が無い候補は掲載しない。
+      const finalBarText=`${gName} ${genre} ${googlePlaceTypes(gp).join(" ")}`;
+      if(kbnHardNonBarSignal(finalBarText) && !kbnExplicitBarSignal(finalBarText)){
+        rejected.push({name:gName,reason:"HARD_NON_BAR",source:"google_places"});
+        continue;
+      }
+      if(!kbnExplicitBarSignal(finalBarText) && !kbnStrongNightType(googlePlaceTypes(gp).join(" "))){
+        rejected.push({name:gName,reason:"NO_EXPLICIT_BAR_SIGNAL",source:"google_places"});
+        continue;
+      }
+
       let sourceCount=1;
       let matchScore=googlePlaceScore(g,{name:gName,area:pair.area});
 
@@ -7258,6 +7374,102 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
           UPDATE shops SET is_published=?,updated_at=CURRENT_TIMESTAMP WHERE id=?
         `).bind(published,id).run();
         return json({ok:true,shop_id:id,is_published:published,action});
+      }
+
+
+      // v2.59: 掲載済み店舗から「対象外の可能性が高い店舗」を抽出。
+      if(url.pathname==="/api/admin/shops/exclusion-candidates" && request.method==="GET"){
+        const r=await env.DB.prepare(`
+          SELECT id,slug,name,area,genre,address,features,description,instagram,
+                 is_published,listing_status,created_at,updated_at
+          FROM shops
+          WHERE is_published=1
+          ORDER BY id DESC
+        `).all();
+
+        const candidates=[];
+        for(const shop of (r.results||[])){
+          const check=kbnExclusionCandidateV259(shop);
+          if(!check.candidate)continue;
+          candidates.push({
+            id:Number(shop.id),
+            slug:shop.slug||"",
+            name:shop.name||"",
+            area:shop.area||"",
+            genre:shop.genre||"",
+            address:shop.address||"",
+            instagram:shop.instagram||"",
+            listing_status:normalizeListingStatus(shop.listing_status),
+            is_published:Number(shop.is_published||0),
+            score:Number(check.score||0),
+            reasons:check.reasons||[]
+          });
+        }
+
+        candidates.sort((a,b)=>
+          b.score-a.score ||
+          (a.listing_status==="provisional"?-1:1) ||
+          b.id-a.id
+        );
+
+        return json({
+          ok:true,
+          total:Number((r.results||[]).length),
+          candidate_count:candidates.length,
+          candidates
+        });
+      }
+
+      // v2.59: 対象外候補だけを選択削除 / 一括削除。
+      // 安全のため、送られたIDをサーバー側でも再判定し、候補外は削除しない。
+      if(url.pathname==="/api/admin/shops/exclusion-candidates/bulk-delete" && request.method==="POST"){
+        let body;
+        try{body=await request.json()}catch{return json({ok:false,error:"INVALID_JSON"},{status:400})}
+
+        const ids=[...new Set(
+          (Array.isArray(body?.ids)?body.ids:[])
+            .map(Number)
+            .filter(x=>Number.isInteger(x)&&x>0)
+        )].slice(0,500);
+
+        if(!ids.length)return json({ok:false,error:"NO_IDS"},{status:400});
+
+        const deleted=[];
+        const skipped=[];
+        const failed=[];
+
+        for(const id of ids){
+          try{
+            const shop=await env.DB.prepare("SELECT * FROM shops WHERE id=? LIMIT 1").bind(id).first();
+            if(!shop){
+              skipped.push({id,reason:"NOT_FOUND"});
+              continue;
+            }
+
+            const check=kbnExclusionCandidateV259(shop);
+            if(!check.candidate){
+              skipped.push({id,name:shop.name||"",reason:"NO_LONGER_CANDIDATE"});
+              continue;
+            }
+
+            const result=await kbnDeleteShopCompletelyV259(env,id,{archive:true});
+            if(result.ok)deleted.push({...result,reasons:check.reasons||[]});
+            else failed.push({id,name:shop.name||"",error:result.error||"DELETE_FAILED"});
+          }catch(e){
+            failed.push({id,error:String(e?.message||e)});
+          }
+        }
+
+        return json({
+          ok:failed.length===0,
+          requested:ids.length,
+          deleted_count:deleted.length,
+          skipped_count:skipped.length,
+          failed_count:failed.length,
+          deleted,
+          skipped,
+          failed
+        },{status:failed.length?207:200});
       }
 
       if(url.pathname==="/api/admin/shops" && request.method==="GET"){
