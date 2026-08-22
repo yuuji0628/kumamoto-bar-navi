@@ -139,11 +139,16 @@
 
 
 
-<style id="kbn-home-stats-v247">
-@keyframes kbnLivePulseV247{
-  0%{box-shadow:0 0 0 0 rgba(78,233,154,.44)}
-  70%{box-shadow:0 0 0 8px rgba(78,233,154,0)}
-  100%{box-shadow:0 0 0 0 rgba(78,233,154,0)}
+<style id="kbn-home-stats-v248">
+@keyframes kbnLivePulseV248{
+  0%{box-shadow:0 0 0 0 rgba(86,239,160,.48)}
+  70%{box-shadow:0 0 0 8px rgba(86,239,160,0)}
+  100%{box-shadow:0 0 0 0 rgba(86,239,160,0)}
+}
+@keyframes kbnLiveSheenV248{
+  0%,100%{transform:translateX(-120%) rotate(12deg);opacity:0}
+  12%{opacity:.32}
+  42%{transform:translateX(240%) rotate(12deg);opacity:0}
 }
 .public-hero-stats-v211{margin:14px 0 18px}
 .public-hero-statbar-v211{
@@ -160,175 +165,213 @@
 }
 .public-hero-statbar-v211::after{display:none}
 .public-hero-divider-v211{display:none}
+
 .public-hero-total-v211,
 .public-hero-area-v211{
   position:relative;
   min-width:0;
-  min-height:86px;
+  min-height:88px;
   overflow:hidden;
-  border:1px solid rgba(239,196,90,.32);
+  border:1px solid rgba(239,196,90,.34);
   border-radius:18px;
   background:
-    radial-gradient(circle at 95% 0%,rgba(239,196,90,.10),transparent 38%),
-    linear-gradient(135deg,rgba(8,18,31,.96),rgba(14,19,27,.94));
-  box-shadow:0 10px 24px rgba(0,0,0,.20),inset 0 1px 0 rgba(255,255,255,.025);
+    radial-gradient(circle at 100% 0%,rgba(239,196,90,.12),transparent 38%),
+    linear-gradient(145deg,rgba(7,17,30,.98),rgba(13,18,27,.96));
+  box-shadow:
+    0 12px 28px rgba(0,0,0,.24),
+    inset 0 1px 0 rgba(255,255,255,.04),
+    inset 0 -1px 0 rgba(239,196,90,.03);
 }
+.public-hero-total-v211::marker,
+.public-hero-area-v211::marker{display:none}
+.public-hero-total-v211 > *,
+.public-hero-area-v211 > *{position:relative;z-index:2}
+
 .public-hero-total-v211{
   display:grid;
   grid-template-columns:38px minmax(0,1fr);
   align-items:center;
   gap:9px;
-  padding:13px 14px;
+  padding:13px 14px 18px;
 }
 .public-hero-area-v211{
   display:grid;
   grid-template-columns:30px minmax(0,1fr);
   align-items:center;
   gap:7px;
-  padding:13px 11px;
+  padding:13px 11px 18px;
 }
-.public-hero-total-v211::before,
-.public-hero-area-v211::before{
-  content:"LIVE";
+
+/* subtle moving highlight */
+.public-hero-total-v211 .kbn-live-sheen-v248,
+.public-hero-area-v211 .kbn-live-sheen-v248{
   position:absolute;
-  top:9px;
-  right:9px;
-  height:18px;
-  padding:0 7px 0 16px;
-  display:flex;
-  align-items:center;
-  border:1px solid rgba(78,233,154,.22);
-  border-radius:999px;
-  background:rgba(20,54,40,.34);
-  color:#9af0be;
-  font-size:8px;
-  font-weight:900;
-  letter-spacing:.10em;
-  line-height:1;
+  z-index:1;
+  top:-40%;
+  left:-28px;
+  width:28px;
+  height:190%;
+  pointer-events:none;
+  background:linear-gradient(90deg,transparent,rgba(255,227,151,.10),transparent);
+  animation:kbnLiveSheenV248 7s ease-in-out infinite;
 }
-.public-hero-total-v211::after,
-.public-hero-area-v211::after{
+
+/* LIVE badge */
+.kbn-live-badge-v248{
+  position:absolute!important;
+  z-index:4!important;
+  top:8px;
+  right:8px;
+  height:19px;
+  padding:0 7px 0 17px;
+  display:inline-flex;
+  align-items:center;
+  border:1px solid rgba(86,239,160,.24);
+  border-radius:999px;
+  background:rgba(14,48,35,.48);
+  color:#a6f5c7;
+  font-size:8px;
+  font-weight:950;
+  letter-spacing:.11em;
+  line-height:1;
+  backdrop-filter:blur(5px);
+}
+.kbn-live-badge-v248::before{
   content:"";
   position:absolute;
-  top:15px;
-  right:42px;
+  left:7px;
+  top:50%;
   width:5px;
   height:5px;
+  margin-top:-2.5px;
   border-radius:50%;
-  background:#4ee99a;
-  animation:kbnLivePulseV247 1.8s infinite;
+  background:#56efa0;
+  animation:kbnLivePulseV248 1.75s infinite;
 }
+
 .public-hero-icon-v211{
   width:38px;
   height:38px;
   display:grid;
   place-items:center;
-  border:1px solid rgba(239,196,90,.34);
+  border:1px solid rgba(239,196,90,.38);
   border-radius:50%;
   color:#efc45a;
-  background:rgba(239,196,90,.035);
+  background:linear-gradient(145deg,rgba(239,196,90,.055),rgba(239,196,90,.015));
   font-size:17px;
-  box-shadow:none;
+  box-shadow:inset 0 0 14px rgba(239,196,90,.035);
 }
 .public-hero-area-icon-v211{
   width:30px;
   height:30px;
   display:grid;
   place-items:center;
-  border:1px solid rgba(239,196,90,.28);
+  border:1px solid rgba(239,196,90,.32);
   border-radius:50%;
   color:#efc45a;
-  background:rgba(239,196,90,.03);
+  background:rgba(239,196,90,.035);
   font-size:14px;
 }
 .public-hero-total-copy-v211 small,
 .public-hero-area-copy-v211 small{
   display:block;
   color:#efc45a;
-  font-size:.55rem;
-  font-weight:900;
-  letter-spacing:.08em;
+  font-size:.56rem;
+  font-weight:950;
+  letter-spacing:.07em;
   white-space:nowrap;
 }
 .public-hero-total-copy-v211 strong{
   display:flex;
   align-items:baseline;
   gap:4px;
-  margin-top:4px;
+  margin-top:3px;
   color:#fff;
-  font-size:clamp(29px,8.4vw,38px);
-  line-height:.94;
+  font-size:clamp(29px,9vw,39px);
+  line-height:.93;
   font-weight:1000;
   letter-spacing:-.035em;
+  text-shadow:0 0 20px rgba(239,196,90,.10);
 }
 .public-hero-area-copy-v211 strong{
   display:flex;
   align-items:baseline;
   gap:3px;
-  margin-top:5px;
+  margin-top:4px;
   color:#fff;
-  font-size:clamp(24px,7vw,30px);
-  line-height:.96;
-  font-weight:950;
+  font-size:clamp(23px,7vw,30px);
+  line-height:.95;
+  font-weight:1000;
+  text-shadow:0 0 18px rgba(239,196,90,.08);
 }
 .public-hero-unit-v211{
   color:#efc45a;
   font-size:.34em;
-  font-weight:900;
-  letter-spacing:0;
+  font-weight:950;
 }
 .public-hero-total-sub-v211{
-  position:absolute;
-  left:61px;
-  right:10px;
-  bottom:8px;
-  padding:0;
-  color:rgba(255,255,255,.40);
-  font-size:.46rem;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
+  display:none!important;
 }
-.kbn-live-meta-v247{
-  position:absolute;
-  right:10px;
-  bottom:7px;
-  color:rgba(154,240,190,.78);
-  font-size:7px;
-  font-weight:700;
-  letter-spacing:.05em;
+
+/* live time line shared by the two cards */
+.kbn-live-time-v248{
+  position:absolute!important;
+  z-index:4!important;
+  left:12px;
+  right:12px;
+  bottom:6px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding-top:5px;
+  border-top:1px solid rgba(255,255,255,.055);
+  color:rgba(225,233,242,.45);
+  font-size:7.5px;
+  line-height:1;
+  letter-spacing:.035em;
   white-space:nowrap;
 }
+.kbn-live-time-v248 b{
+  color:#89eeb2;
+  font-size:8px;
+  font-variant-numeric:tabular-nums;
+  letter-spacing:.08em;
+}
+
 @media(max-width:700px){
   .public-hero-stats-v211{margin:12px 0 16px}
   .public-hero-statbar-v211{
-    grid-template-columns:minmax(0,1.28fr) minmax(108px,.72fr);
+    grid-template-columns:minmax(0,1.25fr) minmax(110px,.75fr);
     gap:8px;
   }
   .public-hero-total-v211,
   .public-hero-area-v211{
-    min-height:80px;
+    min-height:82px;
     border-radius:16px;
   }
   .public-hero-total-v211{
     grid-template-columns:35px minmax(0,1fr);
     gap:8px;
-    padding:11px 10px;
+    padding:12px 10px 18px;
   }
   .public-hero-area-v211{
     grid-template-columns:27px minmax(0,1fr);
     gap:6px;
-    padding:11px 9px;
+    padding:12px 9px 18px;
   }
-  .public-hero-icon-v211{width:35px;height:35px;font-size:15px}
+  .public-hero-icon-v211{width:35px;height:35px;font-size:16px}
   .public-hero-area-icon-v211{width:27px;height:27px;font-size:12px}
-  .public-hero-total-copy-v211 small,.public-hero-area-copy-v211 small{font-size:.50rem}
-  .public-hero-total-copy-v211 strong{font-size:clamp(27px,8.8vw,35px)}
-  .public-hero-area-copy-v211 strong{font-size:clamp(22px,6.8vw,28px)}
-  .public-hero-total-sub-v211{left:53px;right:8px;bottom:6px;font-size:.40rem}
-  .public-hero-total-v211::before,.public-hero-area-v211::before{top:7px;right:7px;height:16px;font-size:7px;padding:0 6px 0 14px}
-  .public-hero-total-v211::after,.public-hero-area-v211::after{top:12px;right:36px;width:4px;height:4px}
-  .kbn-live-meta-v247{right:8px;bottom:6px;font-size:6px}
+  .public-hero-total-copy-v211 small,
+  .public-hero-area-copy-v211 small{font-size:.50rem}
+  .public-hero-total-copy-v211 strong{font-size:clamp(27px,9vw,35px)}
+  .public-hero-area-copy-v211 strong{font-size:clamp(21px,6.8vw,28px)}
+  .kbn-live-badge-v248{top:6px;right:6px;height:18px;font-size:7px}
+  .kbn-live-time-v248{
+    left:9px;right:9px;bottom:5px;
+    font-size:6.5px;
+  }
+  .kbn-live-time-v248 b{font-size:7px}
 }
 </style>
 </head>
@@ -625,19 +668,45 @@
 
 
 
-<script id="kbn-home-stats-script-v247">
+<script id="kbn-home-stats-script-v248">
 (()=>{
   const totalEl=document.getElementById("heroTotalShopCount");
   const areaEl=document.getElementById("heroAreaCount");
   const noticeEl=document.getElementById("publicNoticeCountText");
+  const totalCard=document.querySelector(".public-hero-total-v211");
   const areaCard=document.querySelector(".public-hero-area-v211");
 
-  let liveMeta=areaCard?.querySelector(".kbn-live-meta-v247");
-  if(areaCard && !liveMeta){
-    liveMeta=document.createElement("span");
-    liveMeta.className="kbn-live-meta-v247";
-    areaCard.appendChild(liveMeta);
+  function ensureLiveUi(card,label){
+    if(!card)return null;
+
+    let badge=card.querySelector(".kbn-live-badge-v248");
+    if(!badge){
+      badge=document.createElement("span");
+      badge.className="kbn-live-badge-v248";
+      badge.textContent="LIVE";
+      card.appendChild(badge);
+    }
+
+    let sheen=card.querySelector(".kbn-live-sheen-v248");
+    if(!sheen){
+      sheen=document.createElement("span");
+      sheen.className="kbn-live-sheen-v248";
+      sheen.setAttribute("aria-hidden","true");
+      card.appendChild(sheen);
+    }
+
+    let time=card.querySelector(".kbn-live-time-v248");
+    if(!time){
+      time=document.createElement("span");
+      time.className="kbn-live-time-v248";
+      time.innerHTML=`<span>${label}</span><b>--:--:--</b>`;
+      card.appendChild(time);
+    }
+    return time.querySelector("b");
   }
+
+  const totalClock=ensureLiveUi(totalCard,"リアルタイム");
+  const areaClock=ensureLiveUi(areaCard,"リアルタイム");
 
   function formatTime(){
     try{
@@ -653,9 +722,16 @@
     }
   }
 
+  function updateClock(){
+    const now=formatTime();
+    if(totalClock)totalClock.textContent=now;
+    if(areaClock)areaClock.textContent=now;
+  }
+
   async function refreshStats(){
     try{
       const r=await fetch("/api/shops?live="+Date.now(),{cache:"no-store"});
+      if(!r.ok)throw new Error("HTTP_"+r.status);
       const d=await r.json();
       const shops=Array.isArray(d?.shops)?d.shops:[];
       const areaCount=new Set(
@@ -671,19 +747,18 @@
       if(noticeEl){
         noticeEl.textContent=`熊本県内のBARを ${shops.length} 店舗掲載中`;
       }
-      if(liveMeta){
-        liveMeta.textContent=`更新 ${formatTime()}`;
-      }
     }catch(e){
-      if(totalEl && !totalEl.textContent.trim())totalEl.textContent="掲載中";
-      if(areaEl && !areaEl.textContent.trim())areaEl.textContent="熊本全域";
-      if(noticeEl)noticeEl.textContent="熊本県内のBARを掲載中";
-      if(liveMeta)liveMeta.textContent="LIVE";
       console.error("home stats load failed",e);
     }
   }
 
+  updateClock();
   refreshStats();
+
+  // 現在時刻は1秒ごとに更新
+  setInterval(updateClock,1000);
+
+  // 店舗数・対応エリアは60秒ごとに再取得
   setInterval(refreshStats,60000);
 })();
 </script>
