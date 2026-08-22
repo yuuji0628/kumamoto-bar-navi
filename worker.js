@@ -7491,7 +7491,7 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
       // 安全のため、送られたIDをサーバー側でも再判定し、候補外は削除しない。
 
       // v2.65: 正しい店舗は対象外候補から永続的に除外。
-      if(url.pathname==="/api/admin/shops/exclusion-candidates/ignore" && request.method==="POST"){
+      if((url.pathname==="/api/admin/shops/exclusion-candidates/ignore" || url.pathname==="/api/admin/exclusion-ignore") && request.method==="POST"){
         let body;
         try{body=await request.json()}catch{return json({ok:false,error:"INVALID_JSON"},{status:400})}
 
