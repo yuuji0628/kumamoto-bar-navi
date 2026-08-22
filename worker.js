@@ -5832,7 +5832,9 @@ async function runScheduledKbnAutoDiscoveryOnly(env){
   const fakeRequest=new Request("https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/api/internal/scheduled-auto-only");
   // v2.54 Free枠: 1 invocation 最大10店舗は維持。
   // 未開拓地区優先ロジックを使い、5地区×1回を複数Cronに分割して安全に積み上げる。
-  const targetListings=6;
+  // v2.80: 3地区の探索数は増やさず、各地区の採用枠を5件まで使って最大15店舗を狙う。
+  // 外部検索回数を大きく増やさず、Cloudflare Free枠への負荷を抑える。
+  const targetListings=15;
   const maxPasses=1;
   const allCreated=[];
   const allSearched=[];
@@ -5845,8 +5847,8 @@ async function runScheduledKbnAutoDiscoveryOnly(env){
       env,
       fakeRequest,
       remaining,
-      3,  // v2.56: 503対策。3地区に抑えて外部fetchとCPU負荷を下げる
-      3
+      3,  // 3地区のまま維持して外部検索回数を抑える
+      5   // v2.80: 1地区あたり最大5店舗まで採用候補を見る
     );
 
     const created=Array.isArray(result?.created)?result.created:[];
