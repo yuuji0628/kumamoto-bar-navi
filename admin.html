@@ -2305,25 +2305,27 @@ html,body{max-width:100%;overflow-x:hidden}
 }
 </style>
 
-<style id="kbn-dashboard-auto-v157">
-.dashboard-auto-discover-card{
+<style id="kbn-dashboard-active-v261">
+.dashboard-primary-card.is-active{
   border-color:#8a6c28!important;
   background:linear-gradient(180deg,rgba(239,196,90,.14),#111922)!important;
+  box-shadow:inset 0 0 0 1px rgba(239,196,90,.06)!important;
 }
-.dashboard-auto-discover-card .dashboard-icon{
-  color:#efc45a;
+.dashboard-primary-card.is-active .dashboard-icon{color:#efc45a!important}
+.dashboard-primary-card.is-active .dashboard-copy b{color:#fff!important}
+.dashboard-primary-card.is-active .dashboard-copy small{color:#c8ced5!important}
+
+#tab-leads[data-lead-mode="auto"] #leadSmartRefresh,
+#tab-leads[data-lead-mode="auto"] #kbnMaintenanceCard,
+#tab-leads[data-lead-mode="auto"] .lead-maintenance-label-v261,
+#tab-leads[data-lead-mode="maintenance"] #leadSmartAuto,
+#tab-leads[data-lead-mode="maintenance"] #leadSmartManual,
+#tab-leads[data-lead-mode="maintenance"] .manual-section-label,
+#tab-leads[data-lead-mode="maintenance"] .lead-smart-tabs,
+#tab-leads[data-lead-mode="maintenance"] .lead-auto-label-v261{
+  display:none!important;
 }
-.dashboard-auto-discover-card .dashboard-copy b{
-  color:#fff;
-}
-.dashboard-auto-discover-card .dashboard-copy small{
-  color:#c8ced5;
-}
-@media(max-width:680px){
-  .dashboard-auto-discover-card{
-    min-height:96px!important;
-  }
-}
+#tab-leads[data-lead-mode="maintenance"] .lead-smart-head .eyebrow{color:#efc45a}
 </style>
 
 
@@ -3334,7 +3336,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.43</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.61</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -3362,7 +3364,7 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
 
   <div class="dashboard-primary-grid">
-    <button type="button" class="dashboard-primary-card dashboard-auto-discover-card" data-go-tab="leads" data-open-lead-auto="1">
+    <button type="button" class="dashboard-primary-card" data-go-tab="leads" data-open-lead-auto="1">
       <span class="dashboard-icon">⚡</span>
       <span class="dashboard-copy">
         <b>BAR開拓</b>
@@ -3757,7 +3759,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 
 
-<section id="tab-leads" class="admin-block lead-smart-page" hidden>
+<section id="tab-leads" class="admin-block lead-smart-page" data-lead-mode="auto" hidden>
   <div class="lead-smart-head">
     <p class="eyebrow">LEAD FINDER</p>
     <h2>BAR開拓</h2>
@@ -3770,7 +3772,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <button type="button" class="lead-smart-tab" data-lead-jump="refresh">↻ 既存更新</button>
   </div>
 
-  <div class="kbn-lead-section-label">01 自動開拓 <span>普段はここだけでOK</span></div>
+  <div class="kbn-lead-section-label lead-auto-label-v261">01 自動開拓 <span>普段はここだけでOK</span></div>
 <div id="leadSmartAuto" class="lead-smart-card">
     <button type="button" class="lead-smart-collapse-head" data-lead-collapse="auto" aria-expanded="true">
       <span class="lead-smart-icon">⚡</span>
@@ -3812,7 +3814,7 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
 
 
-<div class="kbn-lead-section-label">02 自動メンテナンス <span>掲載後の情報管理</span></div>
+<div class="kbn-lead-section-label lead-maintenance-label-v261">02 自動メンテナンス <span>掲載後の情報管理</span></div>
 <div id="leadSmartRefresh" class="lead-smart-card lead-smart-featured">
     <div class="lead-smart-card-head">
       <div class="lead-smart-icon">↻</div>
@@ -7492,6 +7494,46 @@ window.finishOwnerReq=async(id,status)=>{
 };
 
 
+
+// v2.61: 管理メニューの選択色と、BAR開拓/メンテナンスの表示内容を同期。
+function setDashboardActiveV261({tab="",leadMode=""}={}){
+  document.querySelectorAll("#adminDashboard .dashboard-primary-card").forEach(btn=>{
+    let active=false;
+    if(tab==="leads"){
+      active=leadMode==="maintenance"
+        ? btn.dataset.openLeadMaintenance==="1"
+        : btn.dataset.openLeadAuto==="1";
+    }else{
+      active=btn.dataset.goTab===tab && !btn.dataset.openLeadAuto && !btn.dataset.openLeadMaintenance;
+    }
+    btn.classList.toggle("is-active",active);
+    btn.setAttribute("aria-current",active?"page":"false");
+  });
+}
+
+function setLeadModeV261(mode){
+  const tab=document.getElementById("tab-leads");
+  if(!tab)return;
+  const next=mode==="maintenance"?"maintenance":"auto";
+  tab.dataset.leadMode=next;
+
+  const eyebrow=tab.querySelector(".lead-smart-head .eyebrow");
+  const title=tab.querySelector(".lead-smart-head h2");
+  const desc=tab.querySelector(".lead-smart-head p:last-child");
+
+  if(next==="maintenance"){
+    if(eyebrow)eyebrow.textContent="MAINTENANCE";
+    if(title)title.textContent="メンテナンス";
+    if(desc)desc.textContent="掲載済み店舗の情報補完・閉業確認・予約メンテナンスを管理します。";
+  }else{
+    if(eyebrow)eyebrow.textContent="LEAD FINDER";
+    if(title)title.textContent="BAR開拓";
+    if(desc)desc.textContent="自動開拓・手動検索で新しいBAR候補を管理します。";
+  }
+
+  setDashboardActiveV261({tab:"leads",leadMode:next});
+}
+
 // v83: ボタン制御は起動処理より先に登録。
 // 1つの機能が壊れても、他の管理ボタンを止めない。
 function runLegacyButtonAction(btn,e){
@@ -7501,26 +7543,26 @@ function runLegacyButtonAction(btn,e){
   // capture phase でここが先に拾うため、専用遷移をこの中で直接実行する。
   if(btn.dataset?.openLeadMaintenance==="1"){
     e.preventDefault();
-    switchAdminTab("leads");
+    switchAdminTab("leads",{leadMode:"maintenance"});
+    setLeadModeV261("maintenance");
     setTimeout(()=>{
-      const target=document.getElementById("kbnMaintenanceCard");
-      if(target){
-        target.scrollIntoView({behavior:"auto",block:"start"});
-      }
-    },120);
+      const target=document.getElementById("leadSmartRefresh")||document.getElementById("kbnMaintenanceCard");
+      target?.scrollIntoView({behavior:"auto",block:"start"});
+    },80);
     return true;
   }
 
   if(btn.dataset?.openLeadAuto==="1"){
     e.preventDefault();
-    switchAdminTab("leads");
+    switchAdminTab("leads",{leadMode:"auto"});
+    setLeadModeV261("auto");
     setTimeout(()=>{
       const head=document.querySelector('[data-lead-collapse="auto"]');
       const panel=document.querySelector('[data-lead-panel="auto"]');
       if(panel)panel.removeAttribute("hidden");
       if(head)head.setAttribute("aria-expanded","true");
       document.getElementById("leadSmartAuto")?.scrollIntoView({behavior:"auto",block:"start"});
-    },120);
+    },80);
     return true;
   }
 
@@ -9033,7 +9075,7 @@ function setDashboardCount(id,value){
 
 
 
-window.switchAdminTab=function(tab){
+window.switchAdminTab=function(tab,opts={}){
   try{
     document.querySelectorAll(".admin-tabs button[data-tab]").forEach(btn=>{
       const active=btn.dataset.tab===tab;
@@ -9047,6 +9089,13 @@ window.switchAdminTab=function(tab){
       panel.style.display=active?"":"none";
       panel.classList.toggle("active",active);
     });
+
+    if(tab==="leads"){
+      const mode=opts?.leadMode || document.getElementById("tab-leads")?.dataset?.leadMode || "auto";
+      setLeadModeV261(mode);
+    }else{
+      setDashboardActiveV261({tab});
+    }
 
     // v2.43: 管理メニューから開いた時点で、その画面のデータを自動読み込み。
     // 「再読み込み」を押さなくても表示されるようにする。
