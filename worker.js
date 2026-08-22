@@ -3584,39 +3584,84 @@ function kbnExclusionCandidateV259(shop){
   const features=String(shop?.features||"").trim();
   const description=String(shop?.description||"").trim();
   const address=String(shop?.address||"").trim();
-  const text=[name,genre,features,description,address].filter(Boolean).join(" ");
-  const low=text.toLowerCase();
 
-  // BAR系の明確な表記がある店は対象外候補にしない。
-  // 例: カラオケバー、焼肉BAR、Cafe Bar、スポーツバーなど。
-  if(kbnExplicitBarSignal(text)){
-    return {candidate:false,score:0,reasons:[]};
-  }
+  const nameLow=name.toLowerCase();
+  const metaText=[genre,features,description,address].filter(Boolean).join(" ").toLowerCase();
 
   const reasons=[];
   let score=0;
-  const hit=(rx,label,points)=>{
-    if(rx.test(low)){
-      reasons.push(label);
-      score+=points;
-    }
+
+  const add=(label,points)=>{
+    if(!reasons.includes(label))reasons.push(label);
+    score=Math.max(score,points);
   };
 
-  hit(/居酒屋|izakaya|焼鳥|焼き鳥|やきとり|串焼|串カツ/, "居酒屋・飲食店系", 95);
-  hit(/カラオケ|karaoke/, "通常カラオケ店の可能性", 95);
-  hit(/温泉|銭湯|浴場|spa|スパ|サウナ|sauna/, "温泉・スパ・サウナ系", 100);
-  hit(/スポーツクラブ|フィットネスクラブ|テニスクラブ|ゴルフクラブ|ジム|gym|fitness|ボウリング/, "スポーツ・フィットネス系", 100);
-  hit(/ホテル|旅館|宿泊|hotel|lodging/, "宿泊施設系", 90);
-  hit(/レストラン|restaurant|食堂|定食|ラーメン|うどん|そば|寿司|鮨/, "一般飲食店系", 85);
-  hit(/カフェ|cafe|喫茶/, "カフェ系", 75);
-  hit(/美容|ネイル|エステ|病院|歯科|整体|マッサージ/, "美容・医療系", 100);
-  hit(/コンビニ|スーパー|不動産|建設|学校|塾/, "その他非BAR業態", 100);
+  // -------------------------
+  // 1) 店名を最優先で判定
+  // -------------------------
+  // 「カラオケバー」「BAR○○」のように、店名そのものがBARを明示している場合は保護。
+  const explicitBarInName=kbnExplicitBarSignal(name);
 
-  // 店名だけで明確な除外ワードを持つ場合は強く判定。
-  const nameLow=name.toLowerCase();
-  if(/^(?:カラオケ|karaoke)\b/.test(nameLow) && !/バー|bar/.test(nameLow)){
-    if(!reasons.includes("通常カラオケ店の可能性"))reasons.push("通常カラオケ店の可能性");
-    score=Math.max(score,95);
+  // 通常カラオケ店・大手カラオケチェーン
+  const karaokeChain=
+    /カラオケ館|ビッグエコー|big\s*echo|ジャンカラ|まねきねこ|コロッケ倶楽部|カラオケバンバン|banban|カラオケ本舗|カラオケクラブ|カラオケスタジオ/i.test(name);
+
+  const normalKaraokeName=
+    /カラオケ|karaoke/i.test(name) &&
+    !/(?:カラオケ\s*bar|カラオケバー|karaoke\s*bar)/i.test(name);
+
+  if(karaokeChain || normalKaraokeName){
+    add("通常カラオケ店の可能性",100);
+  }
+
+  // 居酒屋・一般飲食
+  if(/居酒屋|izakaya|焼鳥|焼き鳥|やきとり|串焼|串カツ|食堂|定食|ラーメン|うどん|そば|寿司|鮨/i.test(name)){
+    add("居酒屋・一般飲食店系",100);
+  }
+
+  // 温泉・サウナ・スパ
+  if(/温泉|銭湯|浴場|spa|スパ|サウナ|sauna/i.test(name)){
+    add("温泉・スパ・サウナ系",100);
+  }
+
+  // スポーツ・フィットネス
+  if(/スポーツクラブ|フィットネスクラブ|テニスクラブ|ゴルフクラブ|ジム|gym|fitness|ボウリング/i.test(name)){
+    add("スポーツ・フィットネス系",100);
+  }
+
+  // 宿泊施設
+  if(/ホテル|旅館|宿泊|hotel|lodging/i.test(name)){
+    add("宿泊施設系",95);
+  }
+
+  // カフェ・レストラン
+  if(/レストラン|restaurant|カフェ|cafe|喫茶/i.test(name) && !explicitBarInName){
+    add("一般飲食・カフェ系",85);
+  }
+
+  // 美容・医療など
+  if(/美容|ネイル|エステ|病院|歯科|整体|マッサージ|コンビニ|スーパー|不動産|建設|学校|塾/i.test(name)){
+    add("その他非BAR業態",100);
+  }
+
+  // -------------------------
+  // 2) メタ情報は補助判定
+  // -------------------------
+  // 自動掲載時に genre が誤って「カラオケBAR」「ナイトクラブ」になっているケースがあるため、
+  // genreだけをBAR根拠にはしない。
+  if(!score){
+    if(/温泉|銭湯|サウナ|spa|スポーツクラブ|テニスクラブ|フィットネス|ホテル|旅館/.test(metaText)){
+      add("掲載情報から非BAR業態の可能性",80);
+    }else if(/居酒屋|レストラン|食堂|カラオケボックス|カラオケスタジオ/.test(metaText) && !explicitBarInName){
+      add("掲載情報から非BAR業態の可能性",78);
+    }
+  }
+
+  // 店名そのものにBAR/バー/Pub/スナック/ラウンジ等が明確なら、
+  // 一般語の誤検知は候補から外す。ただし通常カラオケチェーン等の強い判定は優先。
+  const strongNonBar=score>=95;
+  if(explicitBarInName && !strongNonBar){
+    return {candidate:false,score:0,reasons:[]};
   }
 
   return {
@@ -3625,7 +3670,6 @@ function kbnExclusionCandidateV259(shop){
     reasons:[...new Set(reasons)]
   };
 }
-
 async function kbnDeleteShopCompletelyV259(env,id,{archive=true}={}){
   const shop=await env.DB.prepare("SELECT * FROM shops WHERE id=? LIMIT 1").bind(id).first();
   if(!shop)return {ok:false,id,error:"NOT_FOUND"};
