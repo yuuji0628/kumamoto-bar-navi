@@ -604,7 +604,7 @@ async function kbnSendNewListingDigest(env,created=[]){
   return {ok:true,sent,failed};
 }
 
-// v2.72: SEO専用の新規HTMLページをサイト更新から作成可能にする
+// v2.76: SEO専用ページと既存コラム3記事をサイト更新から更新可能にする
 const KBN_GITHUB_EDITABLE_FILES = [
   "index.html",
   "style.css",
@@ -624,7 +624,10 @@ const KBN_GITHUB_EDITABLE_FILES = [
   "shimotori-bar.html",
   "karaoke-bar-kumamoto.html",
   "darts-bar-kumamoto.html",
-  "snack-kumamoto.html"
+  "snack-kumamoto.html",
+  "column-bar-beginner.html",
+  "column-kumamoto-night.html",
+  "column-solo-bar.html"
 ];
 
 function kbnGithubConfig(env){
