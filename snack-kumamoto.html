@@ -13,51 +13,158 @@
 <meta property="og:url" content="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/snack-kumamoto.html">
 <link rel="stylesheet" href="style.css?v=210">
 
-<style>
+<style id="kbn-seo-rich-v274">
 :root{color-scheme:dark}
 *{box-sizing:border-box}
 body{margin:0;background:#080b10;color:#f3f5f7;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans JP",sans-serif}
-.seo-page{max-width:940px;margin:auto;padding:38px 18px 70px}
-.kicker{color:#efc45a;font-weight:950;letter-spacing:.12em;font-size:.78rem}
-h1{font-size:clamp(30px,7vw,48px);line-height:1.15;margin:8px 0 12px}
-h2{margin:32px 0 10px;font-size:1.45rem}
-h3{margin:0 0 6px;font-size:1.02rem}
-p{color:#b6bec7;line-height:1.85}
-.cta{display:inline-flex;margin:14px 0 28px;padding:13px 20px;border-radius:999px;background:#efc45a;color:#111;text-decoration:none;font-weight:950}
+.seo-page{max-width:980px;margin:auto;padding:34px 18px 74px}
+.kicker{color:#efc45a;font-weight:950;letter-spacing:.12em;font-size:.72rem}
+h1{font-size:clamp(29px,7vw,46px);line-height:1.15;margin:7px 0 11px}
+h2{margin:30px 0 11px;font-size:clamp(20px,4.8vw,27px)}
+h3{margin:0 0 6px;font-size:1rem}
+p{color:#b6bec7;line-height:1.8}
+.hero-actions{display:flex;flex-wrap:wrap;gap:8px;margin:15px 0 22px}
+.cta{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 17px;border-radius:999px;background:#efc45a;color:#111;text-decoration:none;font-weight:950}
+.cta.secondary{background:#101821;color:#efc45a;border:1px solid #665421}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:15px 0 4px}
+.stat{padding:11px;border:1px solid #34404c;border-radius:12px;background:#101821}
+.stat small{display:block;color:#8e99a5;font-size:.68rem}
+.stat strong{display:block;margin-top:3px;color:#efc45a;font-size:1.25rem}
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-.card{padding:16px;border:1px solid #34404c;border-radius:14px;background:#101821}
-.card p{margin:0 0 8px;font-size:.92rem}
-.card a,.links a{color:#efc45a;text-decoration:none;font-weight:800}
-.links{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
-.links a{border:1px solid #5f512d;border-radius:999px;padding:8px 12px;background:#12140d}
-.note{margin-top:26px;padding:14px 16px;border:1px solid #2d3945;border-radius:12px;background:#0d141b;font-size:.85rem}
-@media(max-width:640px){.grid{grid-template-columns:1fr}.seo-page{padding-top:28px}}
+.info-card{padding:15px;border:1px solid #34404c;border-radius:14px;background:#101821}
+.info-card p{margin:0 0 8px;font-size:.9rem}
+.info-card a,.links a{color:#efc45a;text-decoration:none;font-weight:800}
+.links{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}
+.links a{border:1px solid #5f512d;border-radius:999px;padding:7px 11px;background:#12140d;font-size:.8rem}
+.shop-head{display:flex;justify-content:space-between;align-items:end;gap:10px;margin-bottom:9px}
+.shop-head small{color:#8e99a5}
+.shop-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.shop-card{display:grid;grid-template-columns:82px minmax(0,1fr);gap:11px;padding:10px;border:1px solid #303d49;border-radius:13px;background:#0f171f;min-width:0}
+.shop-thumb{width:82px;height:82px;border-radius:10px;overflow:hidden;background:#151e27;display:grid;place-items:center;color:#6e7985;font-size:.65rem}
+.shop-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.shop-copy{min-width:0}
+.shop-name{margin:0 0 4px;color:#fff;font-size:.91rem;line-height:1.35;overflow-wrap:anywhere}
+.shop-meta{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:5px}
+.shop-chip{padding:3px 6px;border-radius:999px;border:1px solid #3d4854;color:#aeb7c1;font-size:.61rem}
+.shop-desc{margin:0;color:#8f9aa5;font-size:.69rem;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.shop-empty{padding:16px;border:1px dashed #3b4652;border-radius:13px;color:#98a3ae;background:#0d141b}
+.faq{display:grid;gap:8px}
+.faq details{border:1px solid #303d49;border-radius:12px;background:#0f171f;padding:11px 13px}
+.faq summary{cursor:pointer;color:#f1f3f5;font-weight:850}
+.faq details p{margin:8px 0 0;font-size:.88rem}
+.note{margin-top:24px;padding:13px 15px;border:1px solid #2d3945;border-radius:12px;background:#0d141b;font-size:.82rem}
+@media(max-width:700px){
+  .seo-page{padding-top:26px}
+  .stats{grid-template-columns:repeat(3,1fr)}
+  .stat{padding:9px}
+  .stat strong{font-size:1.05rem}
+  .grid,.shop-grid{grid-template-columns:1fr}
+  .shop-card{grid-template-columns:72px minmax(0,1fr)}
+  .shop-thumb{width:72px;height:72px}
+}
 </style>
 
 <script type="application/ld+json">
 {
-  "@context":"https://schema.org",
-  "@type":"WebPage",
-  "name":"熊本のスナック・ラウンジを探す",
-  "url":"https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/snack-kumamoto.html",
-  "description":"熊本のスナック・ラウンジ探しに。熊本市をはじめ熊本県内の夜のお店をKUMAMOTO BAR NAVIで探せます。",
-  "isPartOf":{"@type":"WebSite","name":"KUMAMOTO BAR NAVI","url":"https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/"}
+ "@context":"https://schema.org",
+ "@type":"CollectionPage",
+ "name":"熊本のスナック・ラウンジを探す",
+ "url":"https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/snack-kumamoto.html",
+ "description":"熊本のスナック・ラウンジ探しに。熊本市をはじめ熊本県内の夜のお店をKUMAMOTO BAR NAVIで探せます。",
+ "isPartOf":{"@type":"WebSite","name":"KUMAMOTO BAR NAVI","url":"https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/"}
 }
 </script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "熊本市以外のスナックも探せますか？", "acceptedAnswer": {"@type": "Answer", "text": "はい。KUMAMOTO BAR NAVIは熊本県内を対象にしているため、県内各地の掲載店を探せます。"}}, {"@type": "Question", "name": "料金情報は掲載されていますか？", "acceptedAnswer": {"@type": "Answer", "text": "取得・登録されている店舗では料金情報を掲載しています。最新料金は公式情報もご確認ください。"}}, {"@type": "Question", "name": "ラウンジも同じページで探せますか？", "acceptedAnswer": {"@type": "Answer", "text": "はい。店舗名・ジャンル・特徴・説明からスナックまたはラウンジに該当する掲載店を自動抽出します。"}}]}</script>
 </head>
 <body>
 <main class="seo-page">
 <div class="kicker">SNACK & LOUNGE</div>
 <h1>熊本のスナック・ラウンジを探す</h1>
-<p>落ち着いて飲みたい夜や、会話を楽しみたいときに。熊本県内のスナック・ラウンジ探しに使える情報をまとめています。</p>
-<a class="cta" href="bars.html">熊本のBAR一覧を見る</a>
-<section><h2>エリアから探す</h2><div class="grid"><div class="card"><h3>熊本市</h3><p>下通・花畑町・中央街など中心部をチェック。</p><a href="area-kumamoto.html">熊本市を見る</a></div><div class="card"><h3>県内各地</h3><p>八代・人吉・天草などのエリアからも探せます。</p><a href="areas.html">エリア一覧を見る</a></div></div></section>
-<section><h2>初めて行くときは</h2><p>料金体系や営業時間、予約の要否などを事前に確認すると安心です。店舗情報と公式SNSをあわせて確認してください。</p></section>
+<p>掲載中の店舗データから、スナック・ラウンジとして登録されている店舗を自動抽出して表示します。落ち着いて飲みたい夜や会話を楽しみたいときに。</p>
+<div class="hero-actions">
+  <a class="cta" href="bars.html">全店舗一覧を見る</a>
+  <a class="cta secondary" href="areas.html">エリアから探す</a>
+</div>
+
+<div class="stats" aria-label="掲載状況">
+  <div class="stat"><small>候補店舗</small><strong id="seoShopCountV274">読込中</strong></div>
+  <div class="stat"><small>対応エリア</small><strong id="seoAreaCountV274">—</strong></div>
+  <div class="stat"><small>表示更新</small><strong id="seoUpdatedV274">—</strong></div>
+</div>
+
 <section>
-<h2>関連ページ</h2>
-<div class="links"><a href="kumamoto-bar.html">熊本のバー</a><a href="bars.html">全店舗</a><a href="areas.html">エリア一覧</a></div>
+  <div class="shop-head">
+    <div><h2>熊本のスナック・ラウンジ掲載店</h2><small>掲載データから自動表示</small></div>
+  </div>
+  <div id="seoShopGridV274" class="shop-grid"><div class="shop-empty">店舗情報を読み込み中...</div></div>
 </section>
+
+
+<section><h2>スナック・ラウンジを探すポイント</h2><div class="grid">
+<div class="info-card"><h3>エリア</h3><p>熊本市中心部だけでなく、八代・人吉・天草など県内各地から探せます。</p><a href="areas.html">エリア一覧を見る</a></div>
+<div class="info-card"><h3>料金体系</h3><p>セット料金やチャージなど店舗ごとに異なるため、来店前の確認がおすすめです。</p></div>
+<div class="info-card"><h3>初めての利用</h3><p>店舗説明や公式SNSを確認すると、お店の雰囲気を把握しやすくなります。</p></div>
+<div class="info-card"><h3>BARも一緒に探す</h3><p>ジャンルを限定せず熊本の夜のお店を探したい場合はBAR総合ページへ。</p><a href="kumamoto-bar.html">熊本のBARを見る</a></div>
+</div></section>
+
+<section><h2>よくある質問</h2><div class="faq"><details><summary>熊本市以外のスナックも探せますか？</summary><p>はい。KUMAMOTO BAR NAVIは熊本県内を対象にしているため、県内各地の掲載店を探せます。</p></details><details><summary>料金情報は掲載されていますか？</summary><p>取得・登録されている店舗では料金情報を掲載しています。最新料金は公式情報もご確認ください。</p></details><details><summary>ラウンジも同じページで探せますか？</summary><p>はい。店舗名・ジャンル・特徴・説明からスナックまたはラウンジに該当する掲載店を自動抽出します。</p></details></div></section>
+
+<section><h2>関連ページ</h2><div class="links"><a href="kumamoto-bar.html">熊本のバー</a><a href="shimotori-bar.html">下通のバー</a><a href="karaoke-bar-kumamoto.html">カラオケBAR</a><a href="index.html">トップ</a><a href="bars.html">全店舗</a></div></section>
+
 <p class="note">営業時間・料金・営業状況などは変更される場合があります。来店前には店舗の公式SNS・公式サイト等もあわせてご確認ください。</p>
 </main>
+
+<script>
+(()=>{
+  const esc=v=>String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+  const list=document.getElementById("seoShopGridV274");
+  const countEl=document.getElementById("seoShopCountV274");
+  const areaEl=document.getElementById("seoAreaCountV274");
+  const updatedEl=document.getElementById("seoUpdatedV274");
+  const matchShop=s=>{ const t=[s.name,s.genre,s.features,s.description].map(v=>String(v||"").toLowerCase()).join(" "); return /スナック|snack|ラウンジ|lounge/.test(t); };
+  const imageOf=s=>String(s.image_url||s.image||s.photo_url||"").trim();
+  const textOf=s=>String(s.description||s.features||"").trim();
+
+  async function load(){
+    try{
+      const r=await fetch("/api/shops?seo=274&ts="+Date.now(),{cache:"no-store"});
+      if(!r.ok)throw new Error("HTTP_"+r.status);
+      const d=await r.json();
+      const all=(Array.isArray(d?.shops)?d.shops:[]).filter(s=>Number(s?.is_published??1)!==0);
+      const matched=all.filter(matchShop);
+      countEl.textContent=matched.length+"店舗";
+      areaEl.textContent=new Set(matched.map(s=>String(s.area||"").trim()).filter(Boolean)).size+"地域";
+      updatedEl.textContent=new Date().toLocaleDateString("ja-JP",{month:"numeric",day:"numeric"});
+
+      const shown=matched.slice(0,18);
+      if(!shown.length){
+        list.innerHTML='<div class="shop-empty">現在、条件に合う掲載店舗を整理中です。<br>全店舗一覧からも探せます。</div>';
+        return;
+      }
+      list.innerHTML=shown.map(s=>{
+        const img=imageOf(s);
+        const desc=textOf(s);
+        const area=String(s.area||"熊本県").trim();
+        const genre=String(s.genre||"BAR").trim();
+        return `<article class="shop-card">
+          <div class="shop-thumb">${img?`<img src="${esc(img)}" alt="${esc(s.name||"BAR")}" loading="lazy">`:"BAR"}</div>
+          <div class="shop-copy">
+            <h3 class="shop-name">${esc(s.name||"店舗名未登録")}</h3>
+            <div class="shop-meta"><span class="shop-chip">${esc(area)}</span><span class="shop-chip">${esc(genre)}</span></div>
+            <p class="shop-desc">${esc(desc||"店舗情報を掲載中です。")}</p>
+          </div>
+        </article>`;
+      }).join("");
+    }catch(e){
+      console.error("SEO shop load failed",e);
+      list.innerHTML='<div class="shop-empty">店舗情報を読み込めませんでした。時間をおいて再度お試しください。</div>';
+      countEl.textContent="—";
+      areaEl.textContent="—";
+      updatedEl.textContent="—";
+    }
+  }
+  load();
+})();
+</script>
 </body>
 </html>
