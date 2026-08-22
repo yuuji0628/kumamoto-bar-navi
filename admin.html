@@ -2693,7 +2693,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 /* 自動メンテナンス：操作を2〜3列でコンパクト */
 .kbn-maintenance-card .kbn-maintenance-grid{
-  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
   gap:6px!important;
   margin-top:8px!important;
 }
@@ -2820,9 +2820,6 @@ html,body{max-width:100%;overflow-x:hidden}
   }
   .kbn-maintenance-card .kbn-maintenance-grid{
     grid-template-columns:1fr 1fr!important;
-  }
-  .kbn-maintenance-card .kbn-maintenance-grid button:last-child{
-    grid-column:1/-1;
   }
   .auto-listed-item{
     grid-template-columns:1fr!important;
@@ -3387,7 +3384,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 #tab-leads[data-lead-mode="maintenance"] .kbn-maintenance-grid{
   display:grid!important;
-  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
   gap:6px!important;
   margin-top:8px!important;
 }
@@ -3536,9 +3533,6 @@ html,body{max-width:100%;overflow-x:hidden}
   #tab-leads[data-lead-mode="maintenance"] .kbn-maintenance-grid{
     grid-template-columns:1fr 1fr!important;
   }
-  #tab-leads[data-lead-mode="maintenance"] .kbn-maintenance-grid button:last-child{
-    grid-column:1 / -1!important;
-  }
   #tab-leads[data-lead-mode="maintenance"] .kbn-auto-times-v217{
     grid-template-columns:1fr 1fr!important;
   }
@@ -3560,7 +3554,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.68</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.69</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
