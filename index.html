@@ -118,14 +118,14 @@
 @media(max-width:700px){
   .public-header-actions-v196{gap:6px}
   .public-member-cta-v196{
-    min-height:38px;
+    min-height:32px;
     padding:0 11px;
     font-size:.68rem;
   }
   .public-header-actions-v196 .public-header-cta{
-    min-height:38px;
-    padding-left:12px;
-    padding-right:12px;
+    min-height:32px;
+    padding-left:10px;
+    padding-right:10px;
   }
 }
 @media(max-width:430px){
@@ -145,6 +145,12 @@
   70%{box-shadow:0 0 0 8px rgba(86,239,160,0)}
   100%{box-shadow:0 0 0 0 rgba(86,239,160,0)}
 }
+@keyframes kbnCountPopV249{
+  0%{transform:scale(1);filter:brightness(1)}
+  45%{transform:scale(1.06);filter:brightness(1.25)}
+  100%{transform:scale(1);filter:brightness(1)}
+}
+.kbn-count-pop-v249{animation:kbnCountPopV249 .45s ease}
 @keyframes kbnLiveSheenV248{
   0%,100%{transform:translateX(-120%) rotate(12deg);opacity:0}
   12%{opacity:.32}
@@ -153,8 +159,8 @@
 .public-hero-stats-v211{margin:14px 0 18px}
 .public-hero-statbar-v211{
   display:grid;
-  grid-template-columns:minmax(0,1.28fr) minmax(118px,.72fr);
-  gap:10px;
+  grid-template-columns:minmax(0,1.2fr) minmax(104px,.68fr);
+  gap:8px;
   align-items:stretch;
   padding:0;
   border:0;
@@ -170,10 +176,10 @@
 .public-hero-area-v211{
   position:relative;
   min-width:0;
-  min-height:88px;
+  min-height:76px;
   overflow:hidden;
   border:1px solid rgba(239,196,90,.34);
-  border-radius:18px;
+  border-radius:15px;
   background:
     radial-gradient(circle at 100% 0%,rgba(239,196,90,.12),transparent 38%),
     linear-gradient(145deg,rgba(7,17,30,.98),rgba(13,18,27,.96));
@@ -189,17 +195,17 @@
 
 .public-hero-total-v211{
   display:grid;
-  grid-template-columns:38px minmax(0,1fr);
+  grid-template-columns:32px minmax(0,1fr);
   align-items:center;
   gap:9px;
-  padding:13px 14px 18px;
+  padding:10px 11px 15px;
 }
 .public-hero-area-v211{
   display:grid;
-  grid-template-columns:30px minmax(0,1fr);
+  grid-template-columns:25px minmax(0,1fr);
   align-items:center;
   gap:7px;
-  padding:13px 11px 18px;
+  padding:10px 9px 15px;
 }
 
 /* subtle moving highlight */
@@ -222,15 +228,15 @@
   z-index:4!important;
   top:8px;
   right:8px;
-  height:19px;
-  padding:0 7px 0 17px;
+  height:17px;
+  padding:0 6px 0 15px;
   display:inline-flex;
   align-items:center;
   border:1px solid rgba(86,239,160,.24);
   border-radius:999px;
   background:rgba(14,48,35,.48);
   color:#a6f5c7;
-  font-size:8px;
+  font-size:6.5px;
   font-weight:950;
   letter-spacing:.11em;
   line-height:1;
@@ -239,10 +245,10 @@
 .kbn-live-badge-v248::before{
   content:"";
   position:absolute;
-  left:7px;
+  left:6px;
   top:50%;
-  width:5px;
-  height:5px;
+  width:4px;
+  height:4px;
   margin-top:-2.5px;
   border-radius:50%;
   background:#56efa0;
@@ -250,33 +256,33 @@
 }
 
 .public-hero-icon-v211{
-  width:38px;
-  height:38px;
+  width:32px;
+  height:32px;
   display:grid;
   place-items:center;
   border:1px solid rgba(239,196,90,.38);
   border-radius:50%;
   color:#efc45a;
   background:linear-gradient(145deg,rgba(239,196,90,.055),rgba(239,196,90,.015));
-  font-size:17px;
+  font-size:11px;
   box-shadow:inset 0 0 14px rgba(239,196,90,.035);
 }
 .public-hero-area-icon-v211{
-  width:30px;
-  height:30px;
+  width:25px;
+  height:25px;
   display:grid;
   place-items:center;
   border:1px solid rgba(239,196,90,.32);
   border-radius:50%;
   color:#efc45a;
   background:rgba(239,196,90,.035);
-  font-size:14px;
+  font-size:11px;
 }
 .public-hero-total-copy-v211 small,
 .public-hero-area-copy-v211 small{
   display:block;
   color:#efc45a;
-  font-size:.56rem;
+  font-size:.46rem;
   font-weight:950;
   letter-spacing:.07em;
   white-space:nowrap;
@@ -287,9 +293,9 @@
   gap:4px;
   margin-top:3px;
   color:#fff;
-  font-size:clamp(29px,9vw,39px);
+  font-size:clamp(24px,7.6vw,32px);
   line-height:.93;
-  font-weight:1000;
+  font-weight:800;
   letter-spacing:-.035em;
   text-shadow:0 0 20px rgba(239,196,90,.10);
 }
@@ -299,14 +305,14 @@
   gap:3px;
   margin-top:4px;
   color:#fff;
-  font-size:clamp(23px,7vw,30px);
+  font-size:clamp(19px,5.8vw,25px);
   line-height:.95;
-  font-weight:1000;
+  font-weight:800;
   text-shadow:0 0 18px rgba(239,196,90,.08);
 }
 .public-hero-unit-v211{
   color:#efc45a;
-  font-size:.34em;
+  font-size:.30em;
   font-weight:950;
 }
 .public-hero-total-sub-v211{
@@ -317,24 +323,24 @@
 .kbn-live-time-v248{
   position:absolute!important;
   z-index:4!important;
-  left:12px;
-  right:12px;
-  bottom:6px;
+  left:10px;
+  right:10px;
+  bottom:4px;
   display:flex;
   align-items:center;
   justify-content:space-between;
   gap:8px;
-  padding-top:5px;
+  padding-top:4px;
   border-top:1px solid rgba(255,255,255,.055);
   color:rgba(225,233,242,.45);
-  font-size:7.5px;
+  font-size:6px;
   line-height:1;
   letter-spacing:.035em;
   white-space:nowrap;
 }
 .kbn-live-time-v248 b{
   color:#89eeb2;
-  font-size:8px;
+  font-size:6.5px;
   font-variant-numeric:tabular-nums;
   letter-spacing:.08em;
 }
@@ -342,36 +348,36 @@
 @media(max-width:700px){
   .public-hero-stats-v211{margin:12px 0 16px}
   .public-hero-statbar-v211{
-    grid-template-columns:minmax(0,1.25fr) minmax(110px,.75fr);
+    grid-template-columns:minmax(0,1.16fr) minmax(96px,.70fr);
     gap:8px;
   }
   .public-hero-total-v211,
   .public-hero-area-v211{
-    min-height:82px;
-    border-radius:16px;
+    min-height:70px;
+    border-radius:14px;
   }
   .public-hero-total-v211{
-    grid-template-columns:35px minmax(0,1fr);
+    grid-template-columns:29px minmax(0,1fr);
     gap:8px;
-    padding:12px 10px 18px;
+    padding:9px 9px 14px;
   }
   .public-hero-area-v211{
-    grid-template-columns:27px minmax(0,1fr);
+    grid-template-columns:23px minmax(0,1fr);
     gap:6px;
-    padding:12px 9px 18px;
+    padding:9px 8px 14px;
   }
-  .public-hero-icon-v211{width:35px;height:35px;font-size:16px}
-  .public-hero-area-icon-v211{width:27px;height:27px;font-size:12px}
+  .public-hero-icon-v211{width:29px;height:29px;font-size:13px}
+  .public-hero-area-icon-v211{width:23px;height:23px;font-size:10px}
   .public-hero-total-copy-v211 small,
-  .public-hero-area-copy-v211 small{font-size:.50rem}
-  .public-hero-total-copy-v211 strong{font-size:clamp(27px,9vw,35px)}
-  .public-hero-area-copy-v211 strong{font-size:clamp(21px,6.8vw,28px)}
-  .kbn-live-badge-v248{top:6px;right:6px;height:18px;font-size:7px}
+  .public-hero-area-copy-v211 small{font-size:.46rem}
+  .public-hero-total-copy-v211 strong{font-size:clamp(22px,7vw,29px)}
+  .public-hero-area-copy-v211 strong{font-size:clamp(17px,5.4vw,23px)}
+  .kbn-live-badge-v248{top:6px;right:6px;height:18px;font-size:6.5px}
   .kbn-live-time-v248{
-    left:9px;right:9px;bottom:5px;
-    font-size:6.5px;
+    left:8px;right:8px;bottom:4px;
+    font-size:6px;
   }
-  .kbn-live-time-v248 b{font-size:7px}
+  .kbn-live-time-v248 b{font-size:6.5px}
 }
 </style>
 </head>
@@ -668,13 +674,17 @@
 
 
 
-<script id="kbn-home-stats-script-v248">
+<script id="kbn-home-stats-script-v249">
 (()=>{
   const totalEl=document.getElementById("heroTotalShopCount");
   const areaEl=document.getElementById("heroAreaCount");
   const noticeEl=document.getElementById("publicNoticeCountText");
   const totalCard=document.querySelector(".public-hero-total-v211");
   const areaCard=document.querySelector(".public-hero-area-v211");
+
+  let lastShopCount=null;
+  let lastAreaCount=null;
+  let refreshing=false;
 
   function ensureLiveUi(card,label){
     if(!card)return null;
@@ -728,38 +738,68 @@
     if(areaClock)areaClock.textContent=now;
   }
 
+  function pulse(el){
+    if(!el)return;
+    el.classList.remove("kbn-count-pop-v249");
+    void el.offsetWidth;
+    el.classList.add("kbn-count-pop-v249");
+  }
+
   async function refreshStats(){
+    if(refreshing)return;
+    refreshing=true;
     try{
-      const r=await fetch("/api/shops?live="+Date.now(),{cache:"no-store"});
+      const r=await fetch("/api/shops?live="+Date.now(),{
+        cache:"no-store",
+        headers:{"Cache-Control":"no-cache"}
+      });
       if(!r.ok)throw new Error("HTTP_"+r.status);
+
       const d=await r.json();
       const shops=Array.isArray(d?.shops)?d.shops:[];
+      const shopCount=shops.length;
       const areaCount=new Set(
         shops.map(x=>String(x?.area||"").trim()).filter(Boolean)
       ).size;
 
       if(totalEl){
-        totalEl.innerHTML=`${shops.length}<span class="public-hero-unit-v211">店舗</span>`;
+        totalEl.innerHTML=`${shopCount}<span class="public-hero-unit-v211">店舗</span>`;
+        if(lastShopCount!==null && lastShopCount!==shopCount)pulse(totalEl);
       }
+
       if(areaEl){
         areaEl.innerHTML=`${areaCount}<span class="public-hero-unit-v211">地域</span>`;
+        if(lastAreaCount!==null && lastAreaCount!==areaCount)pulse(areaEl);
       }
+
       if(noticeEl){
-        noticeEl.textContent=`熊本県内のBARを ${shops.length} 店舗掲載中`;
+        noticeEl.textContent=`熊本県内のBARを ${shopCount} 店舗掲載中`;
       }
+
+      lastShopCount=shopCount;
+      lastAreaCount=areaCount;
     }catch(e){
-      console.error("home stats load failed",e);
+      console.error("home stats realtime load failed",e);
+    }finally{
+      refreshing=false;
     }
   }
 
   updateClock();
   refreshStats();
 
-  // 現在時刻は1秒ごとに更新
+  // 現在時刻：1秒ごと
   setInterval(updateClock,1000);
 
-  // 店舗数・対応エリアは60秒ごとに再取得
-  setInterval(refreshStats,60000);
+  // 店舗数 / 対応エリア：5秒ごとにAPIから再取得
+  setInterval(refreshStats,5000);
+
+  // Safariで戻ってきた時・タブ復帰時も即時再取得
+  window.addEventListener("pageshow",refreshStats);
+  window.addEventListener("focus",refreshStats);
+  document.addEventListener("visibilitychange",()=>{
+    if(document.visibilityState==="visible")refreshStats();
+  });
 })();
 </script>
 <script id="kbn-public-member-state-v196">
