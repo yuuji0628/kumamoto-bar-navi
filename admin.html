@@ -3671,7 +3671,7 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 <section class="admin-welcome admin-welcome-mini">
   <div class="admin-welcome-mini-copy">
-    <span class="admin-mini-brand">KBN ADMIN <b>ver2.85</b></span>
+    <span class="admin-mini-brand">KBN ADMIN <b>ver2.86</b></span>
     <span class="admin-mini-title">運営管理</span>
   </div>
   <button type="button" id="adminLogoutBtn" class="admin-logout-compact">ログアウト</button>
@@ -6946,15 +6946,13 @@ async function renderInstaPost(shop,{forceNoImage=false}={}){
   ctx.strokeStyle=gold3;ctx.lineWidth=2;
   ctx.beginPath();ctx.moveTo(58,135);ctx.lineTo(720,135);ctx.stroke();
 
+  // Sub headline: 2-line layout with more breathing room
   ctx.fillStyle=white;
-  ctx.font="600 24px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif";
-  ctx.fillText("このたび、下記の店舗様を",60,177);
+  ctx.font="600 22px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif";
+  ctx.fillText("このたび、下記の店舗様を",60,184);
   ctx.fillStyle=gold2;
-  ctx.font="800 34px Georgia,'Times New Roman',serif";
-  ctx.fillText("KUMAMOTO BAR NAVI",60,219);
-  ctx.fillStyle=white;
-  ctx.font="900 40px 'Hiragino Mincho ProN','Yu Mincho',Georgia,serif";
-  ctx.fillText("に正式掲載しました！",60,258);
+  ctx.font="800 29px 'Hiragino Mincho ProN','Yu Mincho',Georgia,serif";
+  ctx.fillText("KUMAMOTO BAR NAVI に正式掲載しました",60,232);
 
   // Premium KBN badge
   ctx.save();
@@ -7097,30 +7095,26 @@ async function renderInstaPost(shop,{forceNoImage=false}={}){
 
   // Bottom left: real public-page QR
   drawRoundedRect(ctx,46,916,410,330,8,"rgba(4,4,4,.96)",gold3);
-  ctx.textAlign="left";ctx.fillStyle=gold2;
-  ctx.font="900 25px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif";
-  ctx.fillText("KUMAMOTO BAR NAVI をチェック！",68,972);
+  ctx.textAlign="center";ctx.fillStyle=gold2;
+  ctx.font="900 27px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif";
+  ctx.fillText("店舗ページをチェック",251,964);
   ctx.fillStyle=white;
-  ctx.font="500 18px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif";
-  ctx.fillText("店舗の公開ページはこちら",68,1006);
+  ctx.font="500 17px -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif";
+  ctx.fillText("QRから公開ページへ",251,997);
 
   const qrDataUrl=await makeShopQrDataUrlV282(shop);
   if(qrDataUrl){
     try{
       const qrImg=await loadCanvasImage(qrDataUrl);
-      ctx.fillStyle="#fff";ctx.fillRect(78,1020,196,196);
-      ctx.drawImage(qrImg,88,1030,176,176);
+      ctx.fillStyle="#fff";ctx.fillRect(143,1020,216,216);
+      ctx.drawImage(qrImg,153,1030,196,196);
     }catch(e){console.warn("QR image draw failed",e);}
   }else{
-    ctx.fillStyle="#fff";ctx.fillRect(78,1020,196,196);
+    ctx.fillStyle="#fff";ctx.fillRect(143,1020,216,216);
     ctx.fillStyle="#111";ctx.textAlign="center";ctx.font="900 22px sans-serif";
-    ctx.fillText("QR",176,1105);
-    ctx.font="600 14px sans-serif";ctx.fillText("公開ページ",176,1135);
+    ctx.fillText("QR",251,1110);
+    ctx.font="600 14px sans-serif";ctx.fillText("公開ページ",251,1140);
   }
-
-  ctx.textAlign="left";ctx.fillStyle=muted;
-  ctx.font="500 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
-  wrapCanvasText(ctx,publicUrl,292,1035,140,20,6);
 
   // Bottom right promo / recruiting
   drawRoundedRect(ctx,478,916,556,330,8,"rgba(4,4,4,.96)",gold3);
