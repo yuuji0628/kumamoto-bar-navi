@@ -5602,6 +5602,124 @@ async function refreshMissingPublishedLiteV242(env,{limit=20,afterId=0}={}){
   };
 }
 
+
+async function refreshSeoPublishedV311(env,{limit=20,afterId=0}={}){
+  const max=Math.max(1,Math.min(Number(limit)||20,20));
+  const cursor=Math.max(0,Number(afterId)||0);
+  const r=await env.DB.prepare(`
+    SELECT id,name,area,address,hours,genre,features,description,is_published
+    FROM shops
+    WHERE COALESCE(is_published,1)=1
+      AND id>?
+      AND (
+        LENGTH(TRIM(COALESCE(description,'')))<80 OR
+        COALESCE(TRIM(address),'')='' OR
+        COALESCE(TRIM(hours),'')='' OR
+        COALESCE(TRIM(genre),'')=''
+      )
+    ORDER BY
+      CASE WHEN COALESCE(TRIM(hours),'')='' THEN 0
+           WHEN COALESCE(TRIM(address),'')='' THEN 1
+           WHEN LENGTH(TRIM(COALESCE(description,'')))<80 THEN 2
+           ELSE 3 END,
+      id ASC
+    LIMIT ?
+  `).bind(cursor,max).all();
+
+  const rows=r.results||[];
+  const updated=[],unchanged=[],failed=[];
+
+  for(const shop of rows){
+    try{
+      const cleanName=String(shop.name||'').replace(/^【KBN独自掲載】/,'').trim();
+      let nextAddress=String(shop.address||'').trim();
+      let nextHours=String(shop.hours||'').trim();
+      let nextGenre=String(shop.genre||'').trim();
+      let gp=null;
+
+      // 住所・営業時間は推測せず、Google Placesで一致した店舗だけ補完する。
+      if(!nextAddress || !nextHours){
+        const found=await findGooglePlaceForShop(env,{name:cleanName,area:shop.area||'熊本'});
+        if(found?.ok && found?.matched){
+          const details=await googlePlaceDetails(env,found.place?.id);
+          gp=details?.ok&&details?.place?details.place:found.place;
+          if(!nextAddress)nextAddress=t(googlePlaceAddress(gp)||'',500);
+          if(!nextHours)nextHours=t(googleOpeningHours(gp)||'',800);
+        }
+      }
+
+      // ジャンルは既存情報がない場合に無理な推測をしない。
+      // 既存の特徴・店名に明確な語がある場合のみ安全側で補完する。
+      if(!nextGenre){
+        const hay=`${cleanName} ${shop.features||''}`.toLowerCase();
+        if(/スナック|snack/.test(hay))nextGenre='スナック';
+        else if(/ダーツ|darts/.test(hay))nextGenre='ダーツBAR';
+        else if(/カラオケ|karaoke/.test(hay))nextGenre='カラオケBAR';
+        else if(/シーシャ|shisha|hookah/.test(hay))nextGenre='シーシャBAR';
+        else if(/ワイン|wine/.test(hay))nextGenre='ワインBAR';
+      }
+
+      let nextDescription=String(shop.description||'').replace(/\s+/g,' ').trim();
+      if(nextDescription.length<80){
+        const area=String(shop.area||'熊本県').trim()||'熊本県';
+        const genre=nextGenre||'BAR・ナイトスポット';
+        const facts=[];
+        if(nextAddress)facts.push(`所在地は${nextAddress}`);
+        if(nextHours)facts.push(`営業時間は${nextHours}`);
+        const feat=String(shop.features||'').replace(/\s+/g,' ').trim();
+        if(feat)facts.push(`特徴は${feat.slice(0,120)}`);
+        const factual=facts.length?` ${facts.join('。')}。`:'';
+        nextDescription=t(`${cleanName||'この店舗'}は${area}に掲載されている${genre}です。KUMAMOTO BAR NAVIでは、来店前に確認しやすいよう店舗の基本情報を整理して掲載しています。${factual} 最新の営業状況は来店前に店舗へご確認ください。`,5000);
+      }
+
+      const changed=
+        nextAddress!==String(shop.address||'').trim() ||
+        nextHours!==String(shop.hours||'').trim() ||
+        nextGenre!==String(shop.genre||'').trim() ||
+        nextDescription!==String(shop.description||'').replace(/\s+/g,' ').trim();
+
+      if(!changed){
+        unchanged.push({id:shop.id,name:shop.name,reason:'NO_VERIFIED_CHANGE'});
+        continue;
+      }
+
+      await env.DB.prepare(`
+        UPDATE shops SET
+          address=?,hours=?,genre=?,description=?,updated_at=CURRENT_TIMESTAMP
+        WHERE id=?
+      `).bind(nextAddress,nextHours,nextGenre,nextDescription,shop.id).run();
+
+      const fields=[];
+      if(nextAddress!==String(shop.address||'').trim())fields.push('address');
+      if(nextHours!==String(shop.hours||'').trim())fields.push('hours');
+      if(nextGenre!==String(shop.genre||'').trim())fields.push('genre');
+      if(nextDescription!==String(shop.description||'').replace(/\s+/g,' ').trim())fields.push('description');
+      updated.push({id:shop.id,name:shop.name,fields});
+    }catch(e){
+      failed.push({id:shop.id,name:shop.name,reason:String(e?.message||e).slice(0,250)});
+    }
+  }
+
+  const nextAfterId=rows.length?Number(rows[rows.length-1].id||0):cursor;
+  const more=await env.DB.prepare(`
+    SELECT id FROM shops
+    WHERE COALESCE(is_published,1)=1
+      AND id>?
+      AND (
+        LENGTH(TRIM(COALESCE(description,'')))<80 OR
+        COALESCE(TRIM(address),'')='' OR
+        COALESCE(TRIM(hours),'')='' OR
+        COALESCE(TRIM(genre),'')=''
+      )
+    ORDER BY id ASC LIMIT 1
+  `).bind(nextAfterId).first();
+
+  return {
+    ok:true,checked:rows.length,updated,unchanged,failed,
+    next_after_id:nextAfterId,has_more:!!more
+  };
+}
+
 async function refreshInstagramPublishedV242(env,{limit=20,afterId=0}={}){
   const max=Math.max(1,Math.min(Number(limit)||20,20));
   const cursor=Math.max(0,Number(afterId)||0);
@@ -5665,6 +5783,8 @@ async function runMaintenanceBatchV242(env,task,{limit=20}={}){
   let result;
   if(key==="missing"){
     result=await refreshMissingPublishedLiteV242(env,{limit,afterId});
+  }else if(key==="seo"){
+    result=await refreshSeoPublishedV311(env,{limit,afterId});
   }else if(key==="closed"){
     result=await checkClosedShops(env,{limit,afterId});
   }else if(key==="instagram"){
@@ -5752,7 +5872,9 @@ async function kbnProcessQueuedMaintenanceV242(env){
     };
   }
 
-  const task=phase===1?"missing":phase===2?"closed":phase===3?"instagram":phase===4?"exclusion":"";
+  // v3.11: 既存店メンテナンスにSEO改善20店舗を追加。
+  // 情報不足 → SEO改善 → 閉業 → Instagram → 対象外候補 の順で進む。
+  const task=phase===1?"missing":phase===2?"seo":phase===3?"closed":phase===4?"instagram":phase===5?"exclusion":"";
   if(!task){
     await env.DB.prepare(`
       UPDATE kbn_maintenance_queue
@@ -5774,7 +5896,7 @@ async function kbnProcessQueuedMaintenanceV242(env){
     result={ok:false,error:String(e?.message||e),task};
   }
 
-  const nextPhase=phase>=4?0:phase+1;
+  const nextPhase=phase>=5?0:phase+1;
   await env.DB.prepare(`
     UPDATE kbn_maintenance_queue SET phase=?,updated_at=CURRENT_TIMESTAMP WHERE id=1
   `).bind(nextPhase).run();
@@ -5794,8 +5916,8 @@ async function kbnProcessQueuedMaintenanceV242(env){
       const closed=Array.isArray(result?.closed)?result.closed.length:0;
       await createKbnAlert(env,{
         type:"maintenance_batch",
-        title:`自動メンテナンス: ${task}`,
-        message:`${checked}店舗を確認 / 更新${updated}件${task==="closed"?` / 閉業候補${closed}件`:""} / 次回は続きから`
+        title:`自動メンテナンス: ${task==="seo"?"SEO自動改善":task}`,
+        message:`${checked}店舗を確認 / 更新${updated}件${task==="closed"?` / 閉業候補${closed}件`:""}${task==="seo"?" / 営業時間・住所・説明文などを安全に補完":""} / 次回は続きから`
       });
     }
   }catch{}
