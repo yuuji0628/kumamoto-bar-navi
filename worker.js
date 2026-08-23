@@ -842,11 +842,8 @@ function kbnHomeHeroLivePatchScriptV245(){
 }
 
 function kbnInjectHomeHeroLiveV245(html){
-  const script=kbnHomeHeroLivePatchScriptV245();
-  const source=String(html||'');
-  if(source.includes('kbnLiveHeroStatV245')) return source;
-  if(/<\/body>/i.test(source)) return source.replace(/<\/body>/i, script + '</body>');
-  return source + script;
+  // LIVE表示は index.html 側で管理。対応エリアへ旧LIVE演出を再注入しない。
+  return String(html||'');
 }
 
 function kbnCronToJstTime(cron){
