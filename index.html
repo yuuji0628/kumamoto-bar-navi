@@ -209,7 +209,8 @@
 }
 
 /* subtle moving highlight */
-.public-hero-total-v211 .kbn-live-sheen-v248{
+.public-hero-total-v211 .kbn-live-sheen-v248,
+.public-hero-area-v211 .kbn-live-sheen-v248{
   position:absolute;
   z-index:1;
   top:-40%;
@@ -318,7 +319,7 @@
   display:none!important;
 }
 
-/* last-updated line for the shop-count LIVE card */
+/* live time line shared by the two cards */
 .kbn-live-time-v248{
   position:absolute!important;
   z-index:4!important;
@@ -850,7 +851,7 @@
 
 
 
-<script id="kbn-home-stats-script-v250">
+<script id="kbn-home-stats-script-v249">
 (()=>{
   const totalEl=document.getElementById("heroTotalShopCount");
   const areaEl=document.getElementById("heroAreaCount");
@@ -859,37 +860,40 @@
   const areaCard=document.querySelector(".public-hero-area-v211");
 
   let lastShopCount=null;
+  let lastAreaCount=null;
   let refreshing=false;
 
-  function removeLegacyLiveUi(card){
-    if(!card)return;
-    card.querySelectorAll(".kbn-live-badge-v248,.kbn-live-sheen-v248,.kbn-live-time-v248,.kbn-live-badge-v245,.kbn-live-meta-v245").forEach(el=>el.remove());
-  }
+  function ensureLiveUi(card,label){
+    if(!card)return null;
 
-  function ensureShopLiveUi(){
-    if(!totalCard)return null;
-    removeLegacyLiveUi(totalCard);
-    removeLegacyLiveUi(areaCard);
-
-    let badge=totalCard.querySelector(".kbn-live-badge-v248");
+    let badge=card.querySelector(".kbn-live-badge-v248");
     if(!badge){
       badge=document.createElement("span");
       badge.className="kbn-live-badge-v248";
       badge.textContent="LIVE";
-      totalCard.appendChild(badge);
+      card.appendChild(badge);
     }
 
-    let time=totalCard.querySelector(".kbn-live-time-v248");
+    let sheen=card.querySelector(".kbn-live-sheen-v248");
+    if(!sheen){
+      sheen=document.createElement("span");
+      sheen.className="kbn-live-sheen-v248";
+      sheen.setAttribute("aria-hidden","true");
+      card.appendChild(sheen);
+    }
+
+    let time=card.querySelector(".kbn-live-time-v248");
     if(!time){
       time=document.createElement("span");
       time.className="kbn-live-time-v248";
-      time.innerHTML='<span>最終更新</span><b>--:--</b>';
-      totalCard.appendChild(time);
+      time.innerHTML=`<span>${label}</span><b>--:--:--</b>`;
+      card.appendChild(time);
     }
     return time.querySelector("b");
   }
 
-  const updatedEl=ensureShopLiveUi();
+  const totalClock=ensureLiveUi(totalCard,"リアルタイム");
+  const areaClock=ensureLiveUi(areaCard,"リアルタイム");
 
   function formatTime(){
     try{
@@ -897,11 +901,18 @@
         timeZone:"Asia/Tokyo",
         hour:"2-digit",
         minute:"2-digit",
+        second:"2-digit",
         hour12:false
       }).format(new Date());
     }catch{
-      return new Date().toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit",hour12:false});
+      return new Date().toLocaleTimeString("ja-JP",{hour12:false});
     }
+  }
+
+  function updateClock(){
+    const now=formatTime();
+    if(totalClock)totalClock.textContent=now;
+    if(areaClock)areaClock.textContent=now;
   }
 
   function pulse(el){
@@ -924,32 +935,41 @@
       const d=await r.json();
       const shops=Array.isArray(d?.shops)?d.shops:[];
       const shopCount=shops.length;
-      const areaCount=new Set(shops.map(x=>String(x?.area||"").trim()).filter(Boolean)).size;
+      const areaCount=new Set(
+        shops.map(x=>String(x?.area||"").trim()).filter(Boolean)
+      ).size;
 
       if(totalEl){
         totalEl.innerHTML=`${shopCount}<span class="public-hero-unit-v211">店舗</span>`;
         if(lastShopCount!==null && lastShopCount!==shopCount)pulse(totalEl);
       }
+
       if(areaEl){
         areaEl.innerHTML=`${areaCount}<span class="public-hero-unit-v211">地域</span>`;
+        if(lastAreaCount!==null && lastAreaCount!==areaCount)pulse(areaEl);
       }
+
       if(noticeEl){
         noticeEl.textContent=`熊本県内のBARを ${shopCount} 店舗掲載中`;
       }
-      if(updatedEl)updatedEl.textContent=formatTime();
 
       lastShopCount=shopCount;
+      lastAreaCount=areaCount;
     }catch(e){
-      console.error("home stats live load failed",e);
+      console.error("home stats realtime load failed",e);
     }finally{
       refreshing=false;
     }
   }
 
+  updateClock();
   refreshStats();
 
-  // 掲載店舗数を30秒ごとに実データから再取得。対応エリアはLIVE演出なし。
-  setInterval(refreshStats,30000);
+  // 現在時刻：1秒ごと
+  setInterval(updateClock,1000);
+
+  // 店舗数 / 対応エリア：5秒ごとにAPIから再取得
+  setInterval(refreshStats,5000);
 
   // Safariで戻ってきた時・タブ復帰時も即時再取得
   window.addEventListener("pageshow",refreshStats);
