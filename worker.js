@@ -5264,10 +5264,15 @@ async function renderSeoShopDetailV250(request,env,url){
   };
 
   const escAttr=v=>kbnSeoEsc(v);
+
+  // IMPORTANT: the shared shop asset must never leak a noindex directive into a real shop page.
+  // Remove every robots/googlebot meta (attribute order/quotes do not matter), then insert one
+  // authoritative index directive into <head> before doing the rest of the SEO substitutions.
   html=html
+    .replace(/<meta\b[^>]*\bname\s*=\s*["'](?:robots|googlebot)["'][^>]*>/gi,"")
+    .replace(/<head([^>]*)>/i,'<head$1><meta name="robots" content="index,follow,max-image-preview:large">')
     .replace(/<title>[\s\S]*?<\/title>/i,`<title>${escAttr(title)}</title>`)
     .replace(/<meta name="description" content="[^"]*">/i,`<meta name="description" content="${escAttr(description)}">`)
-    .replace(/<meta name="robots" content="[^"]*">/i,'<meta name="robots" content="index,follow,max-image-preview:large">')
     .replace(/<link id="dynamicCanonical" rel="canonical" href="[^"]*">/i,`<link id="dynamicCanonical" rel="canonical" href="${escAttr(canonical)}">`)
     .replace(/<meta id="dynamicOgTitle" property="og:title" content="[^"]*">/i,`<meta id="dynamicOgTitle" property="og:title" content="${escAttr(title)}">`)
     .replace(/<meta id="dynamicOgDescription" property="og:description" content="[^"]*">/i,`<meta id="dynamicOgDescription" property="og:description" content="${escAttr(description)}">`)
@@ -6046,15 +6051,34 @@ export default {
     }
 
 
-    if((url.pathname==="/shop" || url.pathname==="/shop.html") && request.method==="GET" && url.searchParams.get("slug")){
+    if((url.pathname==="/shop" || url.pathname==="/shop.html") && request.method==="GET"){
+      const shopSlug=String(url.searchParams.get("slug")||"").trim();
+
+      // The template itself is not a public landing page. Keep no-slug requests out of Google,
+      // while real shop URLs below are always rendered with an explicit index directive.
+      if(!shopSlug){
+        return new Response(`<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,follow"><title>店舗詳細｜KUMAMOTO BAR NAVI</title></head><body><main><h1>店舗が指定されていません</h1><p><a href="/bars.html">BARを探す</a></p></main></body></html>`,{
+          status:200,
+          headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-cache, max-age=0, must-revalidate","x-robots-tag":"noindex, follow"}
+        });
+      }
+
       // Keep one canonical public URL. Older /shop.html links are permanently redirected.
       if(url.pathname==="/shop.html"){
         const canonicalUrl=new URL("/shop",url.origin);
-        canonicalUrl.searchParams.set("slug",url.searchParams.get("slug"));
+        canonicalUrl.searchParams.set("slug",shopSlug);
         return Response.redirect(canonicalUrl.toString(),301);
       }
+
       const seoShop=await renderSeoShopDetailV250(request,env,url);
       if(seoShop)return seoShop;
+
+      // Never fall through to the raw asset for a real shop URL: that could reintroduce stale
+      // template directives. A temporary failure is safer than accidentally serving noindex.
+      return new Response("Temporary shop rendering error",{
+        status:503,
+        headers:{"content-type":"text/plain; charset=utf-8","cache-control":"no-store","x-robots-tag":"noindex, nofollow"}
+      });
     }
 
     if((url.pathname==="/all-shops" || url.pathname==="/all-shops/") && request.method==="GET"){
