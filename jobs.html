@@ -192,7 +192,7 @@ function renderJob(j){
   const area=areaFromText(j);
 
   const detailHref=j.shop_slug
-    ? `shop.html?slug=${encodeURIComponent(j.shop_slug)}`
+    ? `/shop?slug=${encodeURIComponent(j.shop_slug)}`
     : "bars.html";
 
   return `<article class="public-job-card public-job-card-v203">
