@@ -571,7 +571,7 @@ async function kbnSendNewListingDigest(env,created=[]){
   const shopRows=shops.map(s=>{
     const name=escHtml(String(s.name||"").replace(/^【KBN独自掲載】/,"").trim());
     const slug=encodeURIComponent(String(s.slug||""));
-    return `<li style="margin:8px 0"><a href="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/shop.html?slug=${slug}">${name}</a></li>`;
+    return `<li style="margin:8px 0"><a href="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/shop?slug=${slug}">${name}</a></li>`;
   }).join("");
 
   let sent=0,failed=0;
@@ -4797,7 +4797,7 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
         source_count:sourceCount,
         source:sourceKind,
         google_place_id:String(g.id||""),
-        public_url:`${origin}/shop.html?slug=${encodeURIComponent(slug)}`
+        public_url:`${origin}/shop?slug=${encodeURIComponent(slug)}`
       });
       made++;
     }
@@ -4917,7 +4917,7 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
           auto_confidence:gate.confidence,
           source_count:1,
           source:item.kind,
-          public_url:`${origin}/shop.html?slug=${encodeURIComponent(slug)}`
+          public_url:`${origin}/shop?slug=${encodeURIComponent(slug)}`
         });
         made++;
       }
@@ -5150,7 +5150,7 @@ async function renderLocalSeoAreaPage(env,slug){
     const name=kbnCleanShopName(s.name)||"BAR";
     const budget=kbnBudget(s);
     return `<article class="local-seo-card">
-      <a href="/shop.html?slug=${encodeURIComponent(s.slug||"")}">
+      <a href="/shop?slug=${encodeURIComponent(s.slug||"")}">
         <div class="local-seo-img">${s.image_url?`<img src="${kbnSeoEsc(s.image_url)}" alt="${kbnSeoEsc(name)} ${kbnSeoEsc(area)} BAR" loading="lazy">`:`<img src="/default-bar.svg" alt="" loading="lazy">`}</div>
         <div class="local-seo-body">
           <div class="local-seo-meta"><span>${kbnSeoEsc(s.genre||"BAR")}</span>${s.listing_status==="provisional"?"<small>KBN独自掲載</small>":""}</div>
@@ -5171,7 +5171,7 @@ async function renderLocalSeoAreaPage(env,slug){
     [`${area}のBARの料金や営業時間は確認できますか？`,`各店舗ページで公開されている料金目安、営業時間、住所などを掲載しています。`],
     [`${area}のBAR求人も探せますか？`,`求人情報が登録されている店舗はKUMAMOTO BAR NAVIの求人ページから確認できます。`]
   ];
-  const itemList=shops.slice(0,50).map((s,i)=>({"@type":"ListItem","position":i+1,"name":kbnCleanShopName(s.name),"url":`https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/shop.html?slug=${encodeURIComponent(s.slug||"")}`}));
+  const itemList=shops.slice(0,50).map((s,i)=>({"@type":"ListItem","position":i+1,"name":kbnCleanShopName(s.name),"url":`https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/shop?slug=${encodeURIComponent(s.slug||"")}`}));
   const jsonLd={"@context":"https://schema.org","@graph":[
     {"@type":"CollectionPage","name":`${area}のBAR・バー一覧`,"url":canonical,"description":description},
     {"@type":"ItemList","name":`${area}のBAR一覧`,"numberOfItems":shops.length,"itemListElement":itemList},
@@ -5225,7 +5225,7 @@ async function renderSeoShopDetailV250(request,env,url){
   const name=kbnCleanShopName(shop.name)||"BAR";
   const area=String(shop.area||"熊本").trim()||"熊本";
   const genre=String(shop.genre||"BAR").trim()||"BAR";
-  const canonical=`${url.origin}/shop.html?slug=${encodeURIComponent(shop.slug)}`;
+  const canonical=`${url.origin}/shop?slug=${encodeURIComponent(shop.slug)}`;
   const budget=kbnBudget(shop);
   const rawDesc=String(shop.description||"").replace(/※本ページ[\s\S]*/g,"").replace(/\s+/g," ").trim();
   const description=[
@@ -5316,7 +5316,7 @@ async function renderAllShopsSeoIndexV250(env,origin){
     if(!groups.has(area))groups.set(area,[]);
     groups.get(area).push(x);
   }
-  const sections=[...groups.entries()].map(([area,list])=>`<section><h2>${kbnSeoEsc(area)}</h2><ul>${list.map(x=>`<li><a href="/shop.html?slug=${encodeURIComponent(x.slug||"")}">${kbnSeoEsc(kbnCleanShopName(x.name)||"BAR")}</a>${x.genre?` <small>${kbnSeoEsc(x.genre)}</small>`:""}</li>`).join("")}</ul></section>`).join("");
+  const sections=[...groups.entries()].map(([area,list])=>`<section><h2>${kbnSeoEsc(area)}</h2><ul>${list.map(x=>`<li><a href="/shop?slug=${encodeURIComponent(x.slug||"")}">${kbnSeoEsc(kbnCleanShopName(x.name)||"BAR")}</a>${x.genre?` <small>${kbnSeoEsc(x.genre)}</small>`:""}</li>`).join("")}</ul></section>`).join("");
   const title=`熊本県の掲載BAR全店舗一覧（${shops.length}店舗）｜KUMAMOTO BAR NAVI`;
   const desc=`KUMAMOTO BAR NAVIに掲載中の熊本県内BAR全店舗一覧。現在${shops.length}店舗をエリア別に掲載しています。`;
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${kbnSeoEsc(title)}</title><meta name="description" content="${kbnSeoEsc(desc)}"><meta name="robots" content="index,follow,max-image-preview:large"><link rel="canonical" href="${canonical}"><link rel="stylesheet" href="/style.css?v=196"></head><body class="public-v109"><header class="public-header"><div class="container public-header-inner"><a class="public-brand" href="/"><img src="/logo.png" alt="KUMAMOTO BAR NAVI"><span><b>KUMAMOTO</b><strong>BAR NAVI</strong><small>BAR & JOB INFORMATION</small></span></a></div></header><main class="container" style="padding:32px 18px 100px"><nav style="margin-bottom:20px"><a href="/">ホーム</a> › <b>掲載店舗一覧</b></nav><h1>熊本県の掲載BAR全店舗一覧</h1><p>${kbnSeoEsc(desc)}</p><div style="display:grid;gap:28px">${sections}</div></main></body></html>`;
@@ -6046,7 +6046,13 @@ export default {
     }
 
 
-    if(url.pathname==="/shop.html" && request.method==="GET" && url.searchParams.get("slug")){
+    if((url.pathname==="/shop" || url.pathname==="/shop.html") && request.method==="GET" && url.searchParams.get("slug")){
+      // Keep one canonical public URL. Older /shop.html links are permanently redirected.
+      if(url.pathname==="/shop.html"){
+        const canonicalUrl=new URL("/shop",url.origin);
+        canonicalUrl.searchParams.set("slug",url.searchParams.get("slug"));
+        return Response.redirect(canonicalUrl.toString(),301);
+      }
       const seoShop=await renderSeoShopDetailV250(request,env,url);
       if(seoShop)return seoShop;
     }
@@ -6186,7 +6192,7 @@ export default {
           for(const s of (r.results||[])){
             const slug=String(s.slug||'').trim();
             if(!slug)continue;
-            const loc=`${base}/shop.html?slug=${encodeURIComponent(slug)}`;
+            const loc=`${base}/shop?slug=${encodeURIComponent(slug)}`;
             if(seenShopUrls.has(loc))continue;
             seenShopUrls.add(loc);
             urls.push({
@@ -7567,7 +7573,7 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
           shop_id:shopId,
           listing_status:"provisional",
           owner_url:`${origin}/owner.html?token=${encodeURIComponent(token)}`,
-          public_url:`${origin}/shop.html?slug=${encodeURIComponent(slug)}`
+          public_url:`${origin}/shop?slug=${encodeURIComponent(slug)}`
         },{status:201});
       }
 
