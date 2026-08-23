@@ -5193,6 +5193,135 @@ async function renderLocalSeoAreaPage(env,slug){
 }
 
 
+
+async function renderSeoShopDetailV250(request,env,url){
+  const slug=String(url.searchParams.get("slug")||"").trim();
+  if(!slug)return null;
+
+  let shop=null;
+  try{
+    shop=await env.DB.prepare(`
+      SELECT * FROM shops
+      WHERE slug=? AND is_published=1
+      LIMIT 1
+    `).bind(slug).first();
+  }catch(e){
+    console.error("seo shop query",e);
+    return null;
+  }
+
+  if(!shop){
+    return new Response(`<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,follow"><title>店舗が見つかりません｜KUMAMOTO BAR NAVI</title></head><body><main><h1>店舗が見つかりません</h1><p><a href="/bars.html">BARを探す</a></p></main></body></html>`,{
+      status:404,
+      headers:{"content-type":"text/html; charset=utf-8","cache-control":"public, max-age=300"}
+    });
+  }
+
+  const assetUrl=new URL("/shop.html",url.origin);
+  const asset=await env.ASSETS.fetch(new Request(assetUrl.toString(),{method:"GET",headers:request.headers}));
+  if(!asset.ok)return asset;
+  let html=await asset.text();
+
+  const name=kbnCleanShopName(shop.name)||"BAR";
+  const area=String(shop.area||"熊本").trim()||"熊本";
+  const genre=String(shop.genre||"BAR").trim()||"BAR";
+  const canonical=`${url.origin}/shop.html?slug=${encodeURIComponent(shop.slug)}`;
+  const budget=kbnBudget(shop);
+  const rawDesc=String(shop.description||"").replace(/※本ページ[\s\S]*/g,"").replace(/\s+/g," ").trim();
+  const description=[
+    `${area}の${genre}「${name}」の店舗情報`,
+    shop.address?`住所 ${String(shop.address).trim()}`:"",
+    shop.hours?`営業時間 ${String(shop.hours).trim()}`:"",
+    budget?`料金目安 ${budget}`:"",
+    rawDesc?rawDesc.slice(0,70):""
+  ].filter(Boolean).join("。").slice(0,155);
+  const title=`${name}｜${area}の${genre}｜KUMAMOTO BAR NAVI`;
+
+  const jsonLd={
+    "@context":"https://schema.org",
+    "@graph":[
+      {
+        "@type":"BarOrPub",
+        "@id":`${canonical}#shop`,
+        "name":name,
+        "url":canonical,
+        "description":description,
+        ...(shop.image_url?{"image":shop.image_url}:{}),
+        ...(shop.phone?{"telephone":String(shop.phone)}:{}),
+        ...(shop.address?{"address":{"@type":"PostalAddress","streetAddress":String(shop.address),"addressRegion":"熊本県","addressCountry":"JP"}}:{}),
+        ...(shop.hours?{"openingHours":String(shop.hours)}:{}),
+        ...(budget?{"priceRange":budget}:{})
+      },
+      {
+        "@type":"BreadcrumbList",
+        "itemListElement":[
+          {"@type":"ListItem","position":1,"name":"ホーム","item":`${url.origin}/`},
+          {"@type":"ListItem","position":2,"name":"BARを探す","item":`${url.origin}/bars.html`},
+          {"@type":"ListItem","position":3,"name":name,"item":canonical}
+        ]
+      }
+    ]
+  };
+
+  const escAttr=v=>kbnSeoEsc(v);
+  html=html
+    .replace(/<title>[\s\S]*?<\/title>/i,`<title>${escAttr(title)}</title>`)
+    .replace(/<meta name="description" content="[^"]*">/i,`<meta name="description" content="${escAttr(description)}">`)
+    .replace(/<meta name="robots" content="[^"]*">/i,'<meta name="robots" content="index,follow,max-image-preview:large">')
+    .replace(/<link id="dynamicCanonical" rel="canonical" href="[^"]*">/i,`<link id="dynamicCanonical" rel="canonical" href="${escAttr(canonical)}">`)
+    .replace(/<meta id="dynamicOgTitle" property="og:title" content="[^"]*">/i,`<meta id="dynamicOgTitle" property="og:title" content="${escAttr(title)}">`)
+    .replace(/<meta id="dynamicOgDescription" property="og:description" content="[^"]*">/i,`<meta id="dynamicOgDescription" property="og:description" content="${escAttr(description)}">`)
+    .replace(/<meta id="dynamicOgUrl" property="og:url" content="[^"]*">/i,`<meta id="dynamicOgUrl" property="og:url" content="${escAttr(canonical)}">`)
+    .replace(/<script id="shopJsonLd" type="application\/ld\+json">[\s\S]*?<\/script>/i,`<script id="shopJsonLd" type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g,"\\u003c")}</script>`);
+
+  const fallback=`<article class="public-shop-layout" data-seo-fallback="1">
+    <section class="public-shop-summary">
+      <p class="public-shop-location">${kbnSeoEsc([area,genre].filter(Boolean).join(" / "))}</p>
+      <h1>${kbnSeoEsc(name)}</h1>
+      ${description?`<p>${kbnSeoEsc(description)}</p>`:""}
+      <dl>
+        ${shop.address?`<div><dt>住所</dt><dd>${kbnSeoEsc(shop.address)}</dd></div>`:""}
+        ${shop.hours?`<div><dt>営業時間</dt><dd>${kbnSeoEsc(shop.hours)}</dd></div>`:""}
+        ${budget?`<div><dt>料金目安</dt><dd>${kbnSeoEsc(budget)}</dd></div>`:""}
+      </dl>
+      <p><a href="/bars.html?area=${encodeURIComponent(area)}">${kbnSeoEsc(area)}のBARをもっと見る</a></p>
+    </section>
+  </article>`;
+  html=html.replace('<div id="shopDetail"><div class="public-loading">店舗情報を読み込んでいます...</div></div>',`<div id="shopDetail">${fallback}</div>`);
+
+  const h=new Headers(asset.headers);
+  h.delete("content-length");
+  h.set("content-type","text/html; charset=utf-8");
+  h.set("cache-control","public, max-age=300, stale-while-revalidate=600");
+  h.set("x-robots-tag","index, follow, max-image-preview:large");
+  return new Response(html,{status:200,headers:h});
+}
+
+async function renderAllShopsSeoIndexV250(env,origin){
+  let shops=[];
+  try{
+    const r=await env.DB.prepare(`
+      SELECT slug,name,area,genre,updated_at
+      FROM shops
+      WHERE is_published=1
+      ORDER BY area ASC,name ASC
+      LIMIT 5000
+    `).all();
+    shops=r.results||[];
+  }catch(e){console.error("all shops seo index",e)}
+  const canonical=`${origin}/all-shops`;
+  const groups=new Map();
+  for(const x of shops){
+    const area=String(x.area||"その他").trim()||"その他";
+    if(!groups.has(area))groups.set(area,[]);
+    groups.get(area).push(x);
+  }
+  const sections=[...groups.entries()].map(([area,list])=>`<section><h2>${kbnSeoEsc(area)}</h2><ul>${list.map(x=>`<li><a href="/shop.html?slug=${encodeURIComponent(x.slug||"")}">${kbnSeoEsc(kbnCleanShopName(x.name)||"BAR")}</a>${x.genre?` <small>${kbnSeoEsc(x.genre)}</small>`:""}</li>`).join("")}</ul></section>`).join("");
+  const title=`熊本県の掲載BAR全店舗一覧（${shops.length}店舗）｜KUMAMOTO BAR NAVI`;
+  const desc=`KUMAMOTO BAR NAVIに掲載中の熊本県内BAR全店舗一覧。現在${shops.length}店舗をエリア別に掲載しています。`;
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${kbnSeoEsc(title)}</title><meta name="description" content="${kbnSeoEsc(desc)}"><meta name="robots" content="index,follow,max-image-preview:large"><link rel="canonical" href="${canonical}"><link rel="stylesheet" href="/style.css?v=196"></head><body class="public-v109"><header class="public-header"><div class="container public-header-inner"><a class="public-brand" href="/"><img src="/logo.png" alt="KUMAMOTO BAR NAVI"><span><b>KUMAMOTO</b><strong>BAR NAVI</strong><small>BAR & JOB INFORMATION</small></span></a></div></header><main class="container" style="padding:32px 18px 100px"><nav style="margin-bottom:20px"><a href="/">ホーム</a> › <b>掲載店舗一覧</b></nav><h1>熊本県の掲載BAR全店舗一覧</h1><p>${kbnSeoEsc(desc)}</p><div style="display:grid;gap:28px">${sections}</div></main></body></html>`;
+}
+
 async function ensureShopMaintenanceStatusColumn(env){
   try{
     await env.DB.prepare("ALTER TABLE shops ADD COLUMN business_status TEXT").run();
@@ -5917,6 +6046,17 @@ export default {
     }
 
 
+    if(url.pathname==="/shop.html" && request.method==="GET" && url.searchParams.get("slug")){
+      const seoShop=await renderSeoShopDetailV250(request,env,url);
+      if(seoShop)return seoShop;
+    }
+
+    if((url.pathname==="/all-shops" || url.pathname==="/all-shops/") && request.method==="GET"){
+      return new Response(await renderAllShopsSeoIndexV250(env,url.origin),{
+        headers:{"content-type":"text/html; charset=utf-8","cache-control":"public, max-age=900","x-robots-tag":"index, follow"}
+      });
+    }
+
     // ---------- SEO endpoints ----------
     if(url.pathname==="/robots.txt" && request.method==="GET"){
       const body=[
@@ -5977,6 +6117,7 @@ export default {
         {loc:`${base}/jobs.html`,priority:"0.8",freq:"daily"},
         {loc:`${base}/column.html`,priority:"0.6",freq:"weekly"},
         {loc:`${base}/areas.html`,priority:"0.8",freq:"weekly"},
+        {loc:`${base}/all-shops`,priority:"0.85",freq:"daily"},
         {loc:`${base}/area/kumamoto-city`,priority:"0.8",freq:"daily"},
         {loc:`${base}/area/yatsushiro`,priority:"0.8",freq:"daily"},
         {loc:`${base}/area/hitoyoshi`,priority:"0.8",freq:"daily"},
@@ -6072,7 +6213,7 @@ ${urls.map(x=>`  <url>
       return new Response(xml,{
         headers:{
           "content-type":"application/xml; charset=utf-8",
-          "cache-control":"public, max-age=1800"
+          "cache-control":"public, max-age=300"
         }
       });
     }
