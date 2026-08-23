@@ -64,7 +64,7 @@ function kbnCard(s){
   const image=s.image_url||"default-bar.svg";
   const features=kbnTokens(s.features).slice(0,2);
   const money=kbnMoney(s);
-  return `<a class="public-featured-card" href="shop.html?slug=${encodeURIComponent(s.slug)}">
+  return `<a class="public-featured-card" href="/shop?slug=${encodeURIComponent(s.slug)}">
     <div class="public-featured-photo${s.image_url?"":" is-placeholder"}">
       <img src="${escHtml(image)}" alt="${escHtml(name)}" loading="lazy" onerror="this.onerror=null;this.src='default-bar.svg'">
       ${s.is_new?'<span class="public-photo-badge">NEW</span>':""}
@@ -110,7 +110,7 @@ async function loadHomeShops(){
       const latest=[...shops].sort((a,b)=>Number(b.id||0)-Number(a.id||0)).slice(0,5);
       latestBox.innerHTML=latest.length?latest.map(s=>{
         const name=kbnCleanName(s.name);
-        return `<a href="shop.html?slug=${encodeURIComponent(s.slug)}" class="public-latest-item">
+        return `<a href="/shop?slug=${encodeURIComponent(s.slug)}" class="public-latest-item">
           <div>
             <small>${escHtml(kbnNormalizeArea(s.area)||"熊本県")} ${s.genre?`/ ${escHtml(s.genre)}`:""}</small>
             <b>${escHtml(name)}</b>
@@ -161,7 +161,7 @@ async function loadHomeNews(){
       return;
     }
 
-    const href=x=>x.slug?`shop.html?slug=${encodeURIComponent(x.slug)}`:"bars.html";
+    const href=x=>x.slug?`/shop?slug=${encodeURIComponent(x.slug)}`:"bars.html";
     const title=x=>`${kbnCleanName(x.name||"店舗")} を正式掲載しました`;
 
     const render=()=>{
