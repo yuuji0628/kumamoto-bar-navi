@@ -398,7 +398,7 @@ function setMeta(selector,content){
   if(el && content)el.setAttribute("content",content);
 }
 function updateShopSeo(s,name,desc){
-  const canonical=`https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/shop.html?slug=${encodeURIComponent(s.slug||slug||"")}`;
+  const canonical=`https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/shop?slug=${encodeURIComponent(s.slug||slug||"")}`;
   const title=`${name}｜${normalizeArea(s.area)||"熊本"}のBAR｜KUMAMOTO BAR NAVI`;
   const description=[
     `${normalizeArea(s.area)||"熊本"}の${s.genre||"BAR"}「${name}」`,
