@@ -5130,68 +5130,137 @@ function kbnBudget(s){
 async function renderLocalSeoAreaPage(env,slug){
   const area=KBN_LOCAL_SEO_AREAS[slug];
   if(!area)return null;
+
   let shops=[];
+  let total=0;
+  let updatedAt="";
   try{
-    const r=await env.DB.prepare(`
-      SELECT slug,name,area,address,hours,genre,features,budget_min,budget_max,image_url,listing_status,is_recruiting
-      FROM shops
-      WHERE is_published=1 AND area=?
-      ORDER BY COALESCE(is_featured,0) DESC, COALESCE(sort_order,100) ASC, updated_at DESC
-      LIMIT 100
-    `).bind(area).all();
-    shops=r.results||[];
+    const [listRes,countRes]=await Promise.all([
+      env.DB.prepare(`
+        SELECT slug,name,area,address,hours,holiday,genre,features,budget_min,budget_max,image_url,
+               listing_status,is_recruiting,description,updated_at
+        FROM shops
+        WHERE COALESCE(is_published,1)=1 AND area=? AND COALESCE(slug,'')<>''
+        ORDER BY COALESCE(is_featured,0) DESC, COALESCE(sort_order,100) ASC, updated_at DESC
+        LIMIT 120
+      `).bind(area).all(),
+      env.DB.prepare(`
+        SELECT COUNT(*) AS total, MAX(updated_at) AS updated_at
+        FROM shops
+        WHERE COALESCE(is_published,1)=1 AND area=? AND COALESCE(slug,'')<>''
+      `).bind(area).first()
+    ]);
+    shops=listRes.results||[];
+    total=Number(countRes?.total||shops.length||0);
+    updatedAt=String(countRes?.updated_at||shops[0]?.updated_at||"");
   }catch(e){ console.error("local seo area query",e); }
 
   const canonical=`https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/area/${slug}`;
-  const title=`${area}のBAR・バー一覧｜料金・営業時間・求人情報｜KUMAMOTO BAR NAVI`;
-  const description=`${area}のBAR・バーを探すならKUMAMOTO BAR NAVI。${shops.length?`現在${shops.length}店舗を掲載。`:""}料金、営業時間、ジャンル、特徴、求人情報を確認できます。`;
+  const indexable=total>0;
+  const shownCount=shops.length;
+
+  const genreCounts=new Map();
+  let hoursCount=0,addressCount=0,recruitCount=0,budgetCount=0,budgetSum=0,descCount=0;
+  for(const s of shops){
+    const genre=String(s.genre||"").trim();
+    if(genre){
+      for(const raw of genre.split(/[、,／/・|]/).map(x=>x.trim()).filter(Boolean).slice(0,3)){
+        genreCounts.set(raw,(genreCounts.get(raw)||0)+1);
+      }
+    }
+    if(String(s.hours||"").trim())hoursCount++;
+    if(String(s.address||"").trim())addressCount++;
+    if(Number(s.is_recruiting||0)===1)recruitCount++;
+    if(String(s.description||"").trim())descCount++;
+    const lo=Number(s.budget_min||0), hi=Number(s.budget_max||0);
+    const mid=lo&&hi?(lo+hi)/2:(lo||hi||0);
+    if(mid>0){budgetCount++;budgetSum+=mid;}
+  }
+  const topGenres=[...genreCounts.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'ja')).slice(0,6);
+  const avgBudget=budgetCount?Math.round((budgetSum/budgetCount)/100)*100:0;
+  const updateDate=updatedAt?String(updatedAt).slice(0,10).replace(/-/g,"/"):"";
+  const topGenreText=topGenres.slice(0,3).map(x=>x[0]).join("・");
+
+  const title=`${area}のBAR・バー${total?` ${total}店舗`:""}｜営業時間・料金・ジャンルから探す｜KUMAMOTO BAR NAVI`;
+  const description=indexable
+    ? `${area}のBAR・バーを${total}店舗掲載。${topGenreText?`${topGenreText}などのジャンル、`:""}営業時間、料金目安、住所、求人情報を比較して今夜行きたい一軒を探せます。KUMAMOTO BAR NAVIが公開店舗情報を随時更新しています。`
+    : `${area}のBAR・バー情報を掲載するKUMAMOTO BAR NAVIのエリアページです。`;
 
   const cards=shops.map(s=>{
     const name=kbnCleanShopName(s.name)||"BAR";
     const budget=kbnBudget(s);
+    const features=String(s.features||"").split(/[、,／/・|]/).map(x=>x.trim()).filter(Boolean).slice(0,3);
     return `<article class="local-seo-card">
       <a href="/shop?slug=${encodeURIComponent(s.slug||"")}">
-        <div class="local-seo-img">${s.image_url?`<img src="${kbnSeoEsc(s.image_url)}" alt="${kbnSeoEsc(name)} ${kbnSeoEsc(area)} BAR" loading="lazy">`:`<img src="/default-bar.svg" alt="" loading="lazy">`}</div>
+        <div class="local-seo-img">${s.image_url?`<img src="${kbnSeoEsc(s.image_url)}" alt="${kbnSeoEsc(name)}｜${kbnSeoEsc(area)}のBAR" loading="lazy">`:`<img src="/default-bar.svg" alt="" loading="lazy">`}</div>
         <div class="local-seo-body">
           <div class="local-seo-meta"><span>${kbnSeoEsc(s.genre||"BAR")}</span>${s.listing_status==="provisional"?"<small>KBN独自掲載</small>":""}</div>
           <h2>${kbnSeoEsc(name)}</h2>
           ${s.address?`<p>${kbnSeoEsc(s.address)}</p>`:""}
+          ${features.length?`<div class="kbn-area-tags">${features.map(f=>`<span>${kbnSeoEsc(f)}</span>`).join("")}</div>`:""}
           <div class="local-seo-facts">
             ${s.hours?`<span><small>営業時間</small><b>${kbnSeoEsc(s.hours)}</b></span>`:""}
             ${budget?`<span><small>料金目安</small><b>${kbnSeoEsc(budget)}</b></span>`:""}
           </div>
-          <div class="local-seo-bottom">${s.is_recruiting?`<em>求人あり</em>`:""}<b>店舗詳細を見る →</b></div>
+          <div class="local-seo-bottom">${Number(s.is_recruiting||0)===1?`<em>求人あり</em>`:""}<b>店舗詳細を見る →</b></div>
         </div>
       </a>
     </article>`;
   }).join("");
 
+  const facts=[];
+  facts.push(`<div><strong>${total}</strong><span>掲載店舗</span></div>`);
+  if(hoursCount)facts.push(`<div><strong>${hoursCount}</strong><span>営業時間掲載</span></div>`);
+  if(recruitCount)facts.push(`<div><strong>${recruitCount}</strong><span>求人あり</span></div>`);
+  if(avgBudget)facts.push(`<div><strong>約¥${avgBudget.toLocaleString()}</strong><span>料金目安平均*</span></div>`);
+
+  const genreLinks=topGenres.map(([genre,count])=>`<a href="/bars.html?area=${encodeURIComponent(area)}&genre=${encodeURIComponent(genre)}"><b>${kbnSeoEsc(genre)}</b><span>${count}店舗</span></a>`).join("");
+
+  const areaGuideParts=[];
+  if(total)areaGuideParts.push(`${area}では現在${total}店舗のBAR・バーを掲載しています。`);
+  if(topGenreText)areaGuideParts.push(`掲載データでは${topGenreText}などのジャンルを探せます。`);
+  if(hoursCount)areaGuideParts.push(`${hoursCount}店舗で営業時間を確認できるため、来店前の比較にも使えます。`);
+  if(recruitCount)areaGuideParts.push(`求人情報が登録されている店舗は${recruitCount}店舗あります。`);
+  areaGuideParts.push(`店舗ごとの最新情報は詳細ページで確認し、営業時間や料金など重要な情報は来店前に店舗へ直接確認することをおすすめします。`);
+  const areaGuide=areaGuideParts.join("");
+
   const faq=[
-    [`${area}のBARはどうやって探せますか？`,`このページで${area}に掲載されているBARを一覧で確認できます。`],
-    [`${area}のBARの料金や営業時間は確認できますか？`,`各店舗ページで公開されている料金目安、営業時間、住所などを掲載しています。`],
-    [`${area}のBAR求人も探せますか？`,`求人情報が登録されている店舗はKUMAMOTO BAR NAVIの求人ページから確認できます。`]
+    [`${area}のBARは何店舗掲載されていますか？`,indexable?`現在${total}店舗を掲載しています。掲載店舗数は公開データに合わせて自動更新されます。`:`現在掲載準備中です。`],
+    [`${area}のBARをジャンルから探せますか？`,topGenreText?`${topGenreText}など、登録されているジャンルから絞り込めます。`:`BAR一覧の検索機能からジャンルを指定できます。`],
+    [`${area}のBARの営業時間や料金は確認できますか？`,`店舗から公開されている情報がある場合、各店舗ページで営業時間、料金目安、住所などを確認できます。`],
+    [`${area}のBAR求人も探せますか？`,recruitCount?`現在${recruitCount}店舗で求人情報が登録されています。求人ページから詳細を確認できます。`:`求人情報が登録された店舗は求人ページに表示されます。`]
   ];
-  const itemList=shops.slice(0,50).map((s,i)=>({"@type":"ListItem","position":i+1,"name":kbnCleanShopName(s.name),"url":`https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/shop?slug=${encodeURIComponent(s.slug||"")}`}));
+
+  const itemList=shops.slice(0,100).map((s,i)=>({"@type":"ListItem","position":i+1,"name":kbnCleanShopName(s.name),"url":`https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/shop?slug=${encodeURIComponent(s.slug||"")}`}));
   const jsonLd={"@context":"https://schema.org","@graph":[
-    {"@type":"CollectionPage","name":`${area}のBAR・バー一覧`,"url":canonical,"description":description},
-    {"@type":"ItemList","name":`${area}のBAR一覧`,"numberOfItems":shops.length,"itemListElement":itemList},
+    {"@type":"CollectionPage","name":`${area}のBAR・バー一覧`,"url":canonical,"description":description,"isPartOf":{"@type":"WebSite","name":"KUMAMOTO BAR NAVI","url":"https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/"}},
+    {"@type":"BreadcrumbList","itemListElement":[
+      {"@type":"ListItem","position":1,"name":"ホーム","item":"https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/"},
+      {"@type":"ListItem","position":2,"name":"エリアから探す","item":"https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/areas.html"},
+      {"@type":"ListItem","position":3,"name":area,"item":canonical}
+    ]},
+    {"@type":"ItemList","name":`${area}のBAR一覧`,"numberOfItems":total,"itemListElement":itemList},
     {"@type":"FAQPage","mainEntity":faq.map(x=>({"@type":"Question","name":x[0],"acceptedAnswer":{"@type":"Answer","text":x[1]}}))}
   ]};
 
+  const robots=indexable?"index,follow,max-image-preview:large":"noindex,follow";
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>${kbnSeoEsc(title)}</title><meta name="description" content="${kbnSeoEsc(description)}"><link rel="canonical" href="${canonical}">
 <meta property="og:type" content="website"><meta property="og:title" content="${kbnSeoEsc(title)}"><meta property="og:description" content="${kbnSeoEsc(description)}"><meta property="og:url" content="${canonical}">
-<meta name="robots" content="index,follow,max-image-preview:large"><link rel="stylesheet" href="/style.css?v=118">
-<script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g,"\\u003c")}</script></head>
+<meta name="twitter:card" content="summary_large_image"><meta name="robots" content="${robots}"><link rel="stylesheet" href="/style.css?v=210">
+<script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g,"\\u003c")}</script>
+<style>
+.kbn-area-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:22px 0}.kbn-area-stats>div{padding:16px;border:1px solid rgba(255,255,255,.12);border-radius:16px;background:rgba(255,255,255,.035)}.kbn-area-stats strong{display:block;font-size:1.45rem}.kbn-area-stats span{font-size:.78rem;opacity:.7}.kbn-area-genres{display:flex;gap:10px;overflow:auto;padding:4px 0 10px}.kbn-area-genres a{min-width:145px;padding:14px;border:1px solid rgba(255,255,255,.12);border-radius:14px;text-decoration:none;color:inherit;background:rgba(255,255,255,.035)}.kbn-area-genres b,.kbn-area-genres span{display:block}.kbn-area-genres span{font-size:.78rem;opacity:.68;margin-top:4px}.kbn-area-tags{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.kbn-area-tags span{font-size:.72rem;padding:4px 7px;border-radius:999px;background:rgba(255,255,255,.06)}.kbn-area-updated{font-size:.78rem;opacity:.62;margin-top:10px}.kbn-area-note{font-size:.74rem;opacity:.58;margin-top:8px}@media(min-width:720px){.kbn-area-stats{grid-template-columns:repeat(4,minmax(0,1fr))}}
+</style></head>
 <body class="public-v109 local-seo-page">
 <header class="public-header"><div class="container public-header-inner"><a class="public-brand" href="/"><img src="/logo.png" alt="KUMAMOTO BAR NAVI"><span><b>KUMAMOTO</b><strong>BAR NAVI</strong><small>BAR & JOB INFORMATION</small></span></a><nav class="public-desktop-nav"><a href="/bars.html">BARを探す</a><a href="/areas.html" class="active">エリア</a><a href="/jobs.html">求人</a><a href="/column.html">コラム</a></nav><a class="public-header-cta" href="/bars.html">BARを探す</a></div></header>
-<main><section class="local-seo-hero"><div class="container"><nav class="local-seo-breadcrumb"><a href="/">ホーム</a><span>›</span><a href="/areas.html">エリア</a><span>›</span><b>${kbnSeoEsc(area)}</b></nav><p class="public-kicker">KUMAMOTO AREA GUIDE</p><h1>${kbnSeoEsc(area)}のBAR・バー</h1><p>${kbnSeoEsc(area)}で今夜行きたいBARを探せます。営業時間・料金・ジャンルを比較して自分に合う一軒を見つけてください。</p><div class="local-seo-count"><strong>${shops.length}</strong><span>店舗掲載中</span></div></div></section>
-<section class="local-seo-list"><div class="container"><div class="local-seo-head"><div><p class="public-kicker">BAR LIST</p><h2>${kbnSeoEsc(area)}のBAR一覧</h2></div><a href="/bars.html?area=${encodeURIComponent(area)}">絞り込み検索 →</a></div>${shops.length?`<div class="local-seo-grid">${cards}</div>`:`<div class="local-seo-empty"><h2>${kbnSeoEsc(area)}の掲載店舗を準備中です</h2><p>店舗情報を順次追加しています。</p></div>`}</div></section>
-<section class="local-seo-guide"><div class="container"><p class="public-kicker">AREA GUIDE</p><h2>${kbnSeoEsc(area)}でBARを探す</h2><p>${kbnSeoEsc(area)}のBAR選びでは、営業時間や料金だけでなく、ダーツ・カラオケ・ワイン・シーシャなど店舗ごとの特徴を比べるのがおすすめです。</p></div></section>
+<main><section class="local-seo-hero"><div class="container"><nav class="local-seo-breadcrumb"><a href="/">ホーム</a><span>›</span><a href="/areas.html">エリア</a><span>›</span><b>${kbnSeoEsc(area)}</b></nav><p class="public-kicker">KUMAMOTO AREA GUIDE</p><h1>${kbnSeoEsc(area)}のBAR・バー</h1><p>${indexable?`${kbnSeoEsc(area)}で今夜行きたいBARを${total}店舗から探せます。店舗ごとの営業時間・料金・ジャンル・特徴を比較して、自分に合う一軒を見つけてください。`:`${kbnSeoEsc(area)}のBAR情報を順次追加しています。`}</p>${indexable?`<div class="kbn-area-stats">${facts.join("")}</div>${avgBudget?`<p class="kbn-area-note">* 料金情報が登録されている掲載店舗の目安値から算出。</p>`:""}`:""}${updateDate?`<p class="kbn-area-updated">掲載情報 最終更新：${kbnSeoEsc(updateDate)}</p>`:""}</div></section>
+${topGenres.length?`<section class="local-seo-guide"><div class="container"><p class="public-kicker">POPULAR GENRES</p><h2>${kbnSeoEsc(area)}で探せるジャンル</h2><div class="kbn-area-genres">${genreLinks}</div></div></section>`:""}
+<section class="local-seo-list"><div class="container"><div class="local-seo-head"><div><p class="public-kicker">BAR LIST</p><h2>${kbnSeoEsc(area)}のBAR一覧</h2></div><a href="/bars.html?area=${encodeURIComponent(area)}">条件を指定して探す →</a></div>${shops.length?`<div class="local-seo-grid">${cards}</div>${total>shownCount?`<p class="kbn-area-note">このページでは代表的な${shownCount}店舗を表示しています。全店舗は「条件を指定して探す」から確認できます。</p>`:""}`:`<div class="local-seo-empty"><h2>${kbnSeoEsc(area)}の掲載店舗を準備中です</h2><p>店舗情報を順次追加しています。</p></div>`}</div></section>
+<section class="local-seo-guide"><div class="container"><p class="public-kicker">AREA GUIDE</p><h2>${kbnSeoEsc(area)}でBARを探すポイント</h2><p>${kbnSeoEsc(areaGuide)}</p></div></section>
 <section class="local-seo-faq"><div class="container"><p class="public-kicker">FAQ</p><h2>${kbnSeoEsc(area)}のBAR探し よくある質問</h2><div>${faq.map(x=>`<details><summary>${kbnSeoEsc(x[0])}</summary><p>${kbnSeoEsc(x[1])}</p></details>`).join("")}</div></div></section>
 </main><nav class="public-bottom-nav"><a href="/"><span>⌂</span><b>ホーム</b></a><a href="/bars.html"><span>⌕</span><b>BARを探す</b></a><a href="/jobs.html"><span>▣</span><b>求人</b></a><a href="/listing-form.html"><span>＋</span><b>店舗掲載</b></a></nav></body></html>`;
 }
-
 
 
 async function renderSeoShopDetailV250(request,env,url){
@@ -6412,7 +6481,18 @@ export default {
         {loc:`${base}/faq.html`,priority:"0.5",freq:"monthly"},
         {loc:`${base}/contact.html`,priority:"0.4",freq:"monthly"}
       ];
-      for(const slug of Object.keys(KBN_LOCAL_SEO_AREAS||{})){
+      // Area pages are included only when at least one public shop exists.
+      // This avoids sending empty/thin location pages to Google while keeping new areas automatic.
+      let liveAreas=new Set();
+      try{
+        const areaRes=await env.DB.prepare(`
+          SELECT DISTINCT area FROM shops
+          WHERE COALESCE(is_published,1)=1 AND COALESCE(slug,'')<>'' AND COALESCE(area,'')<>''
+        `).all();
+        liveAreas=new Set((areaRes.results||[]).map(r=>String(r.area||'').trim()).filter(Boolean));
+      }catch(e){ console.error("sitemap area inventory",e); }
+      for(const [slug,areaName] of Object.entries(KBN_LOCAL_SEO_AREAS||{})){
+        if(liveAreas.size && !liveAreas.has(areaName))continue;
         urls.push({loc:`${base}/area/${encodeURIComponent(slug)}`,priority:"0.8",freq:"daily"});
       }
       const escXml=v=>String(v||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&apos;");
