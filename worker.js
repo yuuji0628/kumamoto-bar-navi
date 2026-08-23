@@ -5213,7 +5213,7 @@ async function renderSeoShopDetailV250(request,env,url){
   if(!shop){
     return new Response(`<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,follow"><title>店舗が見つかりません｜KUMAMOTO BAR NAVI</title></head><body><main><h1>店舗が見つかりません</h1><p><a href="/bars.html">BARを探す</a></p></main></body></html>`,{
       status:404,
-      headers:{"content-type":"text/html; charset=utf-8","cache-control":"public, max-age=300"}
+      headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-cache, max-age=0, must-revalidate"}
     });
   }
 
@@ -6172,17 +6172,25 @@ export default {
 
       if(env.DB){
         try{
+          // 公開中かつslugを持つ全店舗をサイトマップへ収録する。
+          // COALESCEを使い、旧データでis_publishedがNULLでも公開扱いの店舗を取りこぼさない。
           const r=await env.DB.prepare(`
             SELECT slug,updated_at
             FROM shops
-            WHERE is_published=1
-            ORDER BY updated_at DESC
+            WHERE COALESCE(is_published,1)=1
+              AND TRIM(COALESCE(slug,''))<>''
+            ORDER BY COALESCE(updated_at,published_at,created_at) DESC, id DESC
           `).all();
 
+          const seenShopUrls=new Set();
           for(const s of (r.results||[])){
-            if(!s.slug)continue;
+            const slug=String(s.slug||'').trim();
+            if(!slug)continue;
+            const loc=`${base}/shop.html?slug=${encodeURIComponent(slug)}`;
+            if(seenShopUrls.has(loc))continue;
+            seenShopUrls.add(loc);
             urls.push({
-              loc:`${base}/shop.html?slug=${encodeURIComponent(s.slug)}`,
+              loc,
               lastmod:sitemapLastmodDate(s.updated_at),
               priority:"0.8",
               freq:"weekly"
@@ -6213,7 +6221,7 @@ ${urls.map(x=>`  <url>
       return new Response(xml,{
         headers:{
           "content-type":"application/xml; charset=utf-8",
-          "cache-control":"public, max-age=300"
+          "cache-control":"no-cache, max-age=0, must-revalidate"
         }
       });
     }
