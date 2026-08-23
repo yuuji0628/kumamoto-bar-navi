@@ -157,7 +157,7 @@ function render(list){
     const name=cleanName(s.name);
     const features=featureTokens(s.features).slice(0,2);
     const budget=money(s);
-    return `<a class="public-directory-card" href="shop.html?slug=${encodeURIComponent(s.slug)}">
+    return `<a class="public-directory-card" href="/shop?slug=${encodeURIComponent(s.slug)}">
       ${cardMedia(s)}
       <div class="public-directory-card-body">
         <div class="public-card-meta">
