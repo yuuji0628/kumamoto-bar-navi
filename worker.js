@@ -4453,7 +4453,7 @@ function strictAutoListingGate({
   };
 }
 
-async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit=3){
+async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit=3,uniqueAreas=false){
   await ensureLeadDiscoveryTables(env);
 
   const osmSnap=await fetchKumamotoOsmBars(env);
@@ -4468,7 +4468,26 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
     };
   }
 
-  const pairs=await autoDiscoveryPairs(env,Math.max(1,Math.min(Number(pairLimit)||15,20)));
+  const requestedPairLimit=Math.max(1,Math.min(Number(pairLimit)||15,20));
+  let pairs=await autoDiscoveryPairs(
+    env,
+    uniqueAreas ? Math.min(40,requestedPairLimit*Math.max(2,KBN_LEAD_TYPES.length||1)) : requestedPairLimit
+  );
+
+  // v2.90: 予約自動掲載では「地区×ジャンル」ではなく実際の地区数で上限管理。
+  // 同じ地区の別ジャンルが7枠を消費しないよう、検索地区を重複排除して最大7地区まで進める。
+  if(uniqueAreas){
+    const seenAreas=new Set();
+    pairs=pairs.filter(pair=>{
+      const key=String(pair?.search_area||pair?.area||"").trim();
+      if(!key||seenAreas.has(key))return false;
+      seenAreas.add(key);
+      return true;
+    }).slice(0,requestedPairLimit);
+  }else{
+    pairs=pairs.slice(0,requestedPairLimit);
+  }
+
   const created=[],searched=[],rejected=[];
   const existingR=await env.DB.prepare(
     "SELECT id,name,address,phone,instagram FROM shops"
@@ -5808,8 +5827,9 @@ async function runScheduledKbnAutoDiscoveryOnly(env){
       env,
       fakeRequest,
       remaining,
-      7,  // v2.88: 未開拓優先で7地区まで探索し、候補不足を減らす
-      4   // 1地区あたり最大4店舗。Details上限も4件でFree枠を守る
+      7,  // v2.90: 未開拓優先で「重複なしの7地区」まで探索
+      4,  // 1地区あたり最大4店舗。Details上限も4件でFree枠を守る
+      true // 同一地区の別ジャンルを重複カウントしない
     );
 
     const created=Array.isArray(result?.created)?result.created:[];
@@ -5859,7 +5879,7 @@ async function runScheduledKbnAutoDiscoveryOnly(env){
     title:"追加の予約自動開拓完了",
     message:[
       `新規掲載 ${created.length}/${targetListings}店舗`,
-      `探索 ${passStats.length}巡`,
+      `探索 ${Math.min(7,new Set(allSearched.map(x=>String(x?.area||"").trim()).filter(Boolean)).size)}地区`,
       `画像 ${createdEnrichment?.images?.updated?.length||0}件`,
       `Instagram ${createdEnrichment?.instagram?.updated?.length||0}件`
     ].join(" / ")
@@ -5873,6 +5893,8 @@ async function runScheduledKbnAutoDiscoveryOnly(env){
       rejected:allRejected,
       target:targetListings,
       passes:passStats.length,
+      districts_searched:new Set(allSearched.map(x=>String(x?.area||"").trim()).filter(Boolean)).size,
+      district_limit:7,
       pass_stats:passStats
     },
     created_enrichment:createdEnrichment
