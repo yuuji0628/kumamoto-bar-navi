@@ -5500,11 +5500,13 @@ async function ensureKbnMaintenanceQueueV242(env){
 }
 async function kbnQueueMaintenanceV242(env,runDate,initialCreated=0){
   await ensureKbnMaintenanceQueueV242(env);
+  // v2.89: 通常メンテナンス枠の新規掲載は、この直前に実行した最大20店舗だけ。
+  // 追加の自動開拓キューは作らず、そのまま既存店メンテナンスへ進む。
   await env.DB.prepare(`
     INSERT INTO kbn_maintenance_queue(id,phase,run_date,created_total,updated_at)
-    VALUES(1,11,?,?,CURRENT_TIMESTAMP)
+    VALUES(1,1,?,?,CURRENT_TIMESTAMP)
     ON CONFLICT(id) DO UPDATE SET
-      phase=11,
+      phase=1,
       run_date=excluded.run_date,
       created_total=excluded.created_total,
       updated_at=CURRENT_TIMESTAMP
@@ -5520,61 +5522,20 @@ async function kbnProcessQueuedMaintenanceV242(env){
   let createdTotal=Math.max(0,Number(q?.created_total||0));
   if(!phase)return {ok:true,processed:false};
 
-  // v2.55:
-  // 手動の120検索と同じ母集団を自動メンテナンスでも使う。
-  // 最初の1回 + 追加39回 = 40バッチ × 3検索 = 合計120検索。
-  // 各バッチは別Cron invocation。新規100店舗に到達したら早期終了。
+  // v2.89: 旧バージョンで残っている追加自動開拓キュー(phase 11〜49)は廃止。
+  // 新規掲載は通常メンテナンス開始時の最大20店舗だけにして、既存店チェックへ移行する。
   if(phase>=11 && phase<=49){
-    if(createdTotal>=100){
-      await env.DB.prepare(`
-        UPDATE kbn_maintenance_queue
-        SET phase=1,updated_at=CURRENT_TIMESTAMP
-        WHERE id=1
-      `).run();
-      return {
-        ok:true,processed:true,phase,
-        task:"discovery",
-        discovery_skipped:true,
-        reason:"TARGET_100_REACHED",
-        created_total:createdTotal
-      };
-    }
-
-    let result;
-    try{
-      result=await runScheduledKbnAutoDiscoveryOnly(env);
-    }catch(e){
-      console.error("queued discovery failed",phase,e);
-      result={ok:false,error:String(e?.message||e)};
-    }
-
-    const created=Number(result?.discovery?.created?.length||0);
-    createdTotal+=created;
-
-    const lastDiscoveryPhase=49;
-    const nextPhase=(phase>=lastDiscoveryPhase || createdTotal>=100)?1:phase+1;
-
     await env.DB.prepare(`
       UPDATE kbn_maintenance_queue
-      SET phase=?,created_total=?,updated_at=CURRENT_TIMESTAMP
+      SET phase=1,updated_at=CURRENT_TIMESTAMP
       WHERE id=1
-    `).bind(nextPhase,createdTotal).run();
-
-    try{
-      await createKbnAlert(env,{
-        type:"maintenance_discovery_batch",
-        title:`予約メンテナンス自動開拓 ${phase-9}/40`,
-        message:`今回 ${created}店舗 / 累計 ${createdTotal}店舗 / 120検索を3検索ずつ分割実行中`
-      });
-    }catch{}
-
+    `).run();
     return {
       ok:true,processed:true,phase,
       task:"discovery",
-      discovery_batch:phase-9,
-      discovery_batches_total:40,
-      created_total:createdTotal,
-      result
+      discovery_skipped:true,
+      reason:"MAINTENANCE_DISCOVERY_LIMIT_20",
+      created_total:createdTotal
     };
   }
 
@@ -5798,10 +5759,9 @@ async function enrichScheduledCreatedShops(env,created=[]){
 // KBN scheduled maintenance v1.81:
  // target 15 listings, multi-pass discovery + image + Instagram enrichment
 async function runScheduledKbnMaintenance(env){
-  // v2.42:
-  // 選択した通常メンテナンス回では、まず通常の自動掲載を実行。
-  // 自動開拓を合計40バッチ（120検索） → 情報不足20件 → 閉業20件 → Instagram20件 → 対象外候補チェック の順で、
-  // 毎分Cronに分けて実行しFree枠のsubrequest超過を避ける。新規100店舗で早期終了する。
+  // v2.89:
+  // 選択した通常メンテナンス回でも、まず新規掲載を最大20店舗まで実行。
+  // その後は追加の自動開拓を行わず、情報不足20件 → 閉業20件 → Instagram20件 → 対象外候補チェックへ進む。
   const discoveryResult=await runScheduledKbnAutoDiscoveryOnly(env);
 
   const now=new Date(Date.now()+9*60*60*1000);
@@ -5811,15 +5771,15 @@ async function runScheduledKbnMaintenance(env){
   await createKbnAlert(env,{
     type:"scheduled_summary",
     title:"予約メンテナンス開始",
-    message:"自動開拓を120検索・40バッチに分割し、503を避けながら最大100店舗を上限に新規掲載を狙った後、情報不足20店舗 → 閉業20店舗 → Instagram20店舗 → 対象外候補チェックを実行します。"
+    message:"新規掲載を最大20店舗まで実行した後、情報不足20店舗 → 閉業20店舗 → Instagram20店舗 → 対象外候補チェックを順番に実行します。"
   });
 
   return {
     ...discoveryResult,
     maintenance_queued:true,
     maintenance_batch_size:20,
-    discovery_batches:40,
-    discovery_target_max:100
+    discovery_batches:1,
+    discovery_target_max:20
   };
 }
 
