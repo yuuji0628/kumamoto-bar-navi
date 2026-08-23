@@ -842,8 +842,11 @@ function kbnHomeHeroLivePatchScriptV245(){
 }
 
 function kbnInjectHomeHeroLiveV245(html){
-  // LIVE表示は index.html 側で管理。対応エリアへ旧LIVE演出を再注入しない。
-  return String(html||'');
+  const script=kbnHomeHeroLivePatchScriptV245();
+  const source=String(html||'');
+  if(source.includes('kbnLiveHeroStatV245')) return source;
+  if(/<\/body>/i.test(source)) return source.replace(/<\/body>/i, script + '</body>');
+  return source + script;
 }
 
 function kbnCronToJstTime(cron){
@@ -2225,7 +2228,7 @@ function kbnHandle(v){
     .replace(/^@/,"").split(/[\/?#]/)[0].trim().toLowerCase();
 }
 
-async function autoDiscoveryPairs(env,limit=4){
+async function autoDiscoveryPairs(env,limit=4,uniqueAreas=false){
   await ensureLeadDiscoveryTables(env);
   const r=await env.DB.prepare(`
     SELECT area,lead_type,MAX(searched_at) last_searched
@@ -2271,7 +2274,26 @@ async function autoDiscoveryPairs(env,limit=4){
     return String(a.last).localeCompare(String(b.last));
   });
 
-  return p.slice(0,Math.max(1,Math.min(Number(limit)||4,40)));
+  const safeLimit=Math.max(1,Math.min(Number(limit)||4,40));
+
+  // v2.91: 自動掲載で地区数を指定した場合は、候補リストを先に切らず、
+  // ソート済み全候補から「実際に異なる地区」を必要数だけ選ぶ。
+  // これにより同一地区のBAR/スナック/ラウンジ等が上位を占めても、
+  // 3地区程度で止まらず、候補が存在する限り最大7地区まで必ず進む。
+  if(uniqueAreas){
+    const selected=[];
+    const seenAreas=new Set();
+    for(const pair of p){
+      const key=String(pair?.search_area||pair?.area||"").trim();
+      if(!key||seenAreas.has(key))continue;
+      seenAreas.add(key);
+      selected.push(pair);
+      if(selected.length>=safeLimit)break;
+    }
+    return selected;
+  }
+
+  return p.slice(0,safeLimit);
 }
 
 function likelyBar(x){
@@ -4466,24 +4488,9 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
   }
 
   const requestedPairLimit=Math.max(1,Math.min(Number(pairLimit)||15,20));
-  let pairs=await autoDiscoveryPairs(
-    env,
-    uniqueAreas ? Math.min(40,requestedPairLimit*Math.max(2,KBN_LEAD_TYPES.length||1)) : requestedPairLimit
-  );
-
-  // v2.90: 予約自動掲載では「地区×ジャンル」ではなく実際の地区数で上限管理。
-  // 同じ地区の別ジャンルが7枠を消費しないよう、検索地区を重複排除して最大7地区まで進める。
-  if(uniqueAreas){
-    const seenAreas=new Set();
-    pairs=pairs.filter(pair=>{
-      const key=String(pair?.search_area||pair?.area||"").trim();
-      if(!key||seenAreas.has(key))return false;
-      seenAreas.add(key);
-      return true;
-    }).slice(0,requestedPairLimit);
-  }else{
-    pairs=pairs.slice(0,requestedPairLimit);
-  }
+  // v2.91: uniqueAreas=true のときは autoDiscoveryPairs 側で全候補から
+  // 重複のない地区を選ぶため、7地区指定なら本当に最大7地区を返す。
+  let pairs=await autoDiscoveryPairs(env,requestedPairLimit,uniqueAreas);
 
   const created=[],searched=[],rejected=[];
   const existingR=await env.DB.prepare(
@@ -5808,7 +5815,7 @@ async function runScheduledKbnAutoDiscoveryOnly(env){
   const fakeRequest=new Request("https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/api/internal/scheduled-auto-only");
   // v2.54 Free枠: 1 invocation 最大10店舗は維持。
   // 未開拓地区優先ロジックを使い、5地区×1回を複数Cronに分割して安全に積み上げる。
-  // v2.88: 1回で見るエリアを3地区→7地区へ拡大し、最大20店舗を狙う。
+  // v2.91: 0件でも途中終了せず、候補がある限り重複なしで最大7地区まで探索して最大20店舗を狙う。
   // 1回のautoDiscover内でまとめて探索することで、OSM/Geoapifyの共通取得を使い回し、
   // 複数pass方式よりCloudflare Free枠のsubrequestを抑える。
   const targetListings=20;
@@ -5824,7 +5831,7 @@ async function runScheduledKbnAutoDiscoveryOnly(env){
       env,
       fakeRequest,
       remaining,
-      7,  // v2.90: 未開拓優先で「重複なしの7地区」まで探索
+      7,  // v2.91: 未開拓優先で「実際に異なる7地区」まで探索
       4,  // 1地区あたり最大4店舗。Details上限も4件でFree枠を守る
       true // 同一地区の別ジャンルを重複カウントしない
     );
