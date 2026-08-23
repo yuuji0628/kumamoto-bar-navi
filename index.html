@@ -832,7 +832,7 @@
     <div class="public-footer-brand">KUMAMOTO <b>BAR NAVI</b></div>
     <div class="public-footer-links">
       <a href="bars.html">BARを探す</a><a href="jobs.html">求人</a><a href="column.html">コラム</a>
-      <a href="listing-form.html">店舗掲載</a><a href="contact.html">お問い合わせ</a>
+      <a href="listing-form.html">店舗掲載</a><a href="/all-shops">掲載店舗一覧</a><a href="contact.html">お問い合わせ</a>
     </div>
     <small>© 2026 KUMAMOTO BAR NAVI</small>
   </div>
@@ -1044,7 +1044,7 @@
     const desc=strip(pick(shop.description,shop.features,shop.catch_copy));
     const img=pick(shop.image_url,shop.image,shop.photo_url);
     const slug=pick(shop.slug);
-    const href=slug ? `shop.html?slug=${encodeURIComponent(slug)}` : 'bars.html';
+    const href=slug ? `/shop?slug=${encodeURIComponent(slug)}` : 'bars.html';
     const thumb=img
       ? `<div class="kbn-featured-thumb-v289"><img src="${esc(img)}" alt="${esc(name)}" loading="lazy"></div>`
       : `<div class="kbn-featured-thumb-v289"><div class="kbn-featured-noimg-v289">KUMAMOTO BAR NAVI</div></div>`;
