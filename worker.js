@@ -842,11 +842,8 @@ function kbnHomeHeroLivePatchScriptV245(){
 }
 
 function kbnInjectHomeHeroLiveV245(html){
-  const script=kbnHomeHeroLivePatchScriptV245();
-  const source=String(html||'');
-  if(source.includes('kbnLiveHeroStatV245')) return source;
-  if(/<\/body>/i.test(source)) return source.replace(/<\/body>/i, script + '</body>');
-  return source + script;
+  // LIVE表示は index.html 側で管理。対応エリアへ旧LIVE演出を再注入しない。
+  return String(html||'');
 }
 
 function kbnCronToJstTime(cron){
@@ -9081,180 +9078,11 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
     }
 
     if(url.pathname==="/style.css"){
-      const css=await assetResponse.text();
-      const patched=css+`
-/* KBN v2.46: public home live stats */
-@keyframes kbnLiveGlow246{
-  0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.25),0 0 0 rgba(86,238,158,0)}
-  50%{box-shadow:0 12px 30px rgba(0,0,0,.30),0 0 22px rgba(86,238,158,.08)}
-}
-@keyframes kbnLiveDot246{
-  0%{box-shadow:0 0 0 0 rgba(89,241,163,.50)}
-  70%{box-shadow:0 0 0 7px rgba(89,241,163,0)}
-  100%{box-shadow:0 0 0 0 rgba(89,241,163,0)}
-}
-
-.public-hero-stats-v211{
-  margin:14px 0 18px!important;
-}
-
-.public-hero-statbar-v211{
-  grid-template-columns:minmax(0,1.35fr) minmax(118px,.72fr)!important;
-  gap:10px!important;
-  padding:0!important;
-  border:0!important;
-  border-radius:0!important;
-  background:transparent!important;
-  box-shadow:none!important;
-  overflow:visible!important;
-}
-
-.public-hero-statbar-v211::after{
-  display:none!important;
-}
-
-.public-hero-divider-v211{
-  display:none!important;
-}
-
-.public-hero-total-v211,
-.public-hero-area-v211{
-  position:relative!important;
-  min-height:88px!important;
-  border:1px solid rgba(239,196,90,.34)!important;
-  border-radius:18px!important;
-  background:
-    radial-gradient(circle at 90% 10%,rgba(239,196,90,.10),transparent 36%),
-    linear-gradient(135deg,rgba(8,18,30,.96),rgba(15,22,31,.94))!important;
-  animation:kbnLiveGlow246 3.2s ease-in-out infinite!important;
-  overflow:hidden!important;
-}
-
-.public-hero-total-v211{
-  grid-template-columns:40px minmax(0,1fr)!important;
-  gap:10px!important;
-  padding:13px 14px!important;
-}
-
-.public-hero-area-v211{
-  grid-template-columns:32px minmax(0,1fr)!important;
-  gap:8px!important;
-  padding:13px 12px!important;
-}
-
-.public-hero-total-v211::before,
-.public-hero-area-v211::before{
-  content:"LIVE"!important;
-  position:absolute!important;
-  top:9px!important;
-  right:10px!important;
-  display:inline-flex!important;
-  align-items:center!important;
-  justify-content:center!important;
-  min-width:37px!important;
-  height:18px!important;
-  padding-left:11px!important;
-  border:1px solid rgba(91,236,160,.26)!important;
-  border-radius:999px!important;
-  background:rgba(20,51,39,.46)!important;
-  color:#9ff2c0!important;
-  font-size:8px!important;
-  font-weight:900!important;
-  letter-spacing:.10em!important;
-  line-height:1!important;
-}
-
-.public-hero-total-v211::after,
-.public-hero-area-v211::after{
-  content:""!important;
-  position:absolute!important;
-  top:15px!important;
-  right:41px!important;
-  width:5px!important;
-  height:5px!important;
-  border-radius:50%!important;
-  background:#59f1a3!important;
-  animation:kbnLiveDot246 1.7s infinite!important;
-}
-
-.public-hero-icon-v211{
-  width:40px!important;
-  height:40px!important;
-  font-size:18px!important;
-  border-color:rgba(239,196,90,.34)!important;
-  background:rgba(239,196,90,.035)!important;
-}
-
-.public-hero-area-icon-v211{
-  width:32px!important;
-  height:32px!important;
-  font-size:15px!important;
-  border-color:rgba(239,196,90,.30)!important;
-  background:rgba(239,196,90,.03)!important;
-}
-
-.public-hero-total-copy-v211 small,
-.public-hero-area-copy-v211 small{
-  font-size:9px!important;
-  letter-spacing:.08em!important;
-  color:#efc45a!important;
-}
-
-.public-hero-total-copy-v211 strong{
-  margin-top:4px!important;
-  font-size:clamp(30px,8.8vw,39px)!important;
-  line-height:.92!important;
-}
-
-.public-hero-area-copy-v211 strong{
-  margin-top:5px!important;
-  font-size:clamp(25px,7.4vw,31px)!important;
-  line-height:.94!important;
-}
-
-.public-hero-unit-v211{
-  font-size:.34em!important;
-}
-
-.public-hero-total-sub-v211{
-  position:absolute!important;
-  left:64px!important;
-  bottom:8px!important;
-  max-width:calc(100% - 78px)!important;
-  padding:0!important;
-  font-size:8px!important;
-  color:rgba(255,255,255,.43)!important;
-  white-space:nowrap!important;
-  overflow:hidden!important;
-  text-overflow:ellipsis!important;
-}
-
-@media(max-width:700px){
-  .public-hero-stats-v211{margin:12px 0 16px!important}
-  .public-hero-statbar-v211{
-    grid-template-columns:minmax(0,1.25fr) minmax(110px,.78fr)!important;
-    gap:8px!important;
-  }
-  .public-hero-total-v211,
-  .public-hero-area-v211{
-    min-height:82px!important;
-    border-radius:16px!important;
-  }
-  .public-hero-total-v211{padding:12px 11px!important;grid-template-columns:36px minmax(0,1fr)!important;gap:8px!important}
-  .public-hero-area-v211{padding:12px 10px!important;grid-template-columns:28px minmax(0,1fr)!important;gap:7px!important}
-  .public-hero-icon-v211{width:36px!important;height:36px!important;font-size:16px!important}
-  .public-hero-area-icon-v211{width:28px!important;height:28px!important;font-size:13px!important}
-  .public-hero-total-copy-v211 strong{font-size:clamp(28px,9vw,36px)!important}
-  .public-hero-area-copy-v211 strong{font-size:clamp(23px,7vw,29px)!important}
-  .public-hero-total-sub-v211{left:55px!important;bottom:7px!important;font-size:7px!important}
-  .public-hero-total-v211::before,.public-hero-area-v211::before{top:7px!important;right:7px!important}
-  .public-hero-total-v211::after,.public-hero-area-v211::after{top:13px!important;right:38px!important}
-}
-`;
       const h=new Headers(assetResponse.headers);
-      h.delete("content-length");
       h.set("Cache-Control","no-store, no-cache, must-revalidate, max-age=0");
-      return new Response(patched,{
+      h.set("Pragma","no-cache");
+      h.set("Expires","0");
+      return new Response(assetResponse.body,{
         status:assetResponse.status,
         statusText:assetResponse.statusText,
         headers:h
