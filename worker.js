@@ -5263,6 +5263,54 @@ ${topGenres.length?`<section class="local-seo-guide"><div class="container"><p c
 }
 
 
+const KBN_LOCAL_SEO_GENRES={
+  "darts-bar":{label:"ダーツバー",terms:["ダーツ","darts"]},
+  "karaoke-bar":{label:"カラオケバー",terms:["カラオケ","karaoke"]},
+  "snack":{label:"スナック",terms:["スナック","snack"]},
+  "lounge":{label:"ラウンジ",terms:["ラウンジ","lounge"]},
+  "shisha-bar":{label:"シーシャバー",terms:["シーシャ","shisha"]},
+  "sports-bar":{label:"スポーツバー",terms:["スポーツ","sports"]},
+  "wine-bar":{label:"ワインバー",terms:["ワイン","wine"]},
+  "music-bar":{label:"ミュージックバー",terms:["ミュージック","music","ライブ"]},
+  "one-person":{label:"一人飲みにおすすめのBAR",terms:["一人","ひとり","おひとり","一人飲み"]},
+  "all-you-can-drink":{label:"飲み放題があるBAR",terms:["飲み放題","フリードリンク"]},
+  "late-night":{label:"深夜営業のBAR",terms:["深夜","翌","24:","25:","26:","27:","28:","29:"]}
+};
+
+async function renderLocalSeoGenrePage(env,slug){
+  const cfg=KBN_LOCAL_SEO_GENRES[slug];
+  if(!cfg)return null;
+  const terms=cfg.terms||[];
+  const like=terms.map(()=>`LOWER(COALESCE(genre,'') || ' ' || COALESCE(features,'') || ' ' || COALESCE(description,'') || ' ' || COALESCE(hours,'')) LIKE ?`).join(' OR ');
+  const binds=terms.map(t=>`%${String(t).toLowerCase()}%`);
+  let shops=[],total=0,updatedAt='';
+  try{
+    const [lr,cr]=await Promise.all([
+      env.DB.prepare(`SELECT slug,name,area,address,hours,holiday,genre,features,budget_min,budget_max,image_url,listing_status,is_recruiting,description,updated_at FROM shops WHERE COALESCE(is_published,1)=1 AND COALESCE(slug,'')<>'' AND (${like}) ORDER BY COALESCE(is_featured,0) DESC, COALESCE(sort_order,100) ASC, updated_at DESC LIMIT 120`).bind(...binds).all(),
+      env.DB.prepare(`SELECT COUNT(*) AS total, MAX(updated_at) AS updated_at FROM shops WHERE COALESCE(is_published,1)=1 AND COALESCE(slug,'')<>'' AND (${like})`).bind(...binds).first()
+    ]);
+    shops=lr.results||[]; total=Number(cr?.total||shops.length||0); updatedAt=String(cr?.updated_at||shops[0]?.updated_at||'');
+  }catch(e){console.error('local seo genre query',slug,e)}
+  const label=cfg.label, canonical=`https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/genre/${slug}`;
+  const indexable=total>=3;
+  const areaCounts=new Map(); let hoursCount=0,budgetCount=0,budgetSum=0,recruitCount=0;
+  for(const s of shops){ const a=String(s.area||'').trim(); if(a)areaCounts.set(a,(areaCounts.get(a)||0)+1); if(String(s.hours||'').trim())hoursCount++; if(Number(s.is_recruiting||0)===1)recruitCount++; const lo=Number(s.budget_min||0),hi=Number(s.budget_max||0),mid=lo&&hi?(lo+hi)/2:(lo||hi||0); if(mid){budgetCount++;budgetSum+=mid;} }
+  const topAreas=[...areaCounts.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'ja')).slice(0,8);
+  const avgBudget=budgetCount?Math.round((budgetSum/budgetCount)/100)*100:0;
+  const updateDate=updatedAt?updatedAt.slice(0,10).replace(/-/g,'/'):'';
+  const title=`熊本の${label}${total?` ${total}店舗`:''}｜エリア・営業時間・料金から探す｜KUMAMOTO BAR NAVI`;
+  const description=indexable?`熊本県内の${label}を${total}店舗掲載。${topAreas.slice(0,3).map(x=>x[0]).join('・')}などのエリア、営業時間、料金目安、特徴を比較して探せます。掲載情報は随時更新しています。`:`熊本県内の${label}情報を掲載するKUMAMOTO BAR NAVIのジャンルページです。`;
+  const cards=shops.map(s=>{const name=kbnCleanShopName(s.name)||'BAR',budget=kbnBudget(s),features=String(s.features||'').split(/[、,／/・|]/).map(x=>x.trim()).filter(Boolean).slice(0,3);return `<article class="local-seo-card"><a href="/shop?slug=${encodeURIComponent(s.slug||'')}"><div class="local-seo-img">${s.image_url?`<img src="${kbnSeoEsc(s.image_url)}" alt="${kbnSeoEsc(name)}｜熊本の${kbnSeoEsc(label)}" loading="lazy">`:`<img src="/default-bar.svg" alt="" loading="lazy">`}</div><div class="local-seo-body"><div class="local-seo-meta"><span>${kbnSeoEsc(s.area||'熊本')}</span><span>${kbnSeoEsc(s.genre||label)}</span></div><h2>${kbnSeoEsc(name)}</h2>${s.address?`<p>${kbnSeoEsc(s.address)}</p>`:''}${features.length?`<div class="kbn-area-tags">${features.map(f=>`<span>${kbnSeoEsc(f)}</span>`).join('')}</div>`:''}<div class="local-seo-facts">${s.hours?`<span><small>営業時間</small><b>${kbnSeoEsc(s.hours)}</b></span>`:''}${budget?`<span><small>料金目安</small><b>${kbnSeoEsc(budget)}</b></span>`:''}</div><div class="local-seo-bottom">${Number(s.is_recruiting||0)===1?'<em>求人あり</em>':''}<b>店舗詳細を見る →</b></div></div></a></article>`}).join('');
+  const areaLinks=topAreas.map(([a,c])=>`<a href="/bars.html?area=${encodeURIComponent(a)}&genre=${encodeURIComponent(label)}"><b>${kbnSeoEsc(a)}</b><span>${c}店舗</span></a>`).join('');
+  const faq=[[`熊本の${label}は何店舗掲載されていますか？`,indexable?`現在${total}店舗を掲載しています。公開店舗データに合わせて自動更新されます。`:'掲載情報を順次追加しています。'],[`${label}をエリアから探せますか？`,topAreas.length?`${topAreas.slice(0,4).map(x=>x[0]).join('・')}などのエリアから比較できます。`:'BAR一覧からエリアを指定して探せます。'],[`${label}の営業時間や料金は確認できますか？`,'公開情報が登録されている店舗は、店舗詳細ページで営業時間・料金目安・住所などを確認できます。'],[`${label}の求人も探せますか？`,recruitCount?`現在${recruitCount}店舗で求人情報が登録されています。`:'求人情報が登録された店舗は求人ページに表示されます。']];
+  const itemList=shops.slice(0,100).map((s,i)=>({"@type":"ListItem","position":i+1,"name":kbnCleanShopName(s.name),"url":`https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/shop?slug=${encodeURIComponent(s.slug||'')}`}));
+  const jsonLd={"@context":"https://schema.org","@graph":[{"@type":"CollectionPage","name":`熊本の${label}`,"url":canonical,"description":description},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"ホーム","item":"https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/"},{"@type":"ListItem","position":2,"name":"BARを探す","item":"https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/bars.html"},{"@type":"ListItem","position":3,"name":label,"item":canonical}]},{"@type":"ItemList","name":`熊本の${label}一覧`,"numberOfItems":total,"itemListElement":itemList},{"@type":"FAQPage","mainEntity":faq.map(x=>({"@type":"Question","name":x[0],"acceptedAnswer":{"@type":"Answer","text":x[1]}}))}]};
+  const robots=indexable?'index,follow,max-image-preview:large':'noindex,follow';
+  const facts=[`<div><strong>${total}</strong><span>掲載店舗</span></div>`,hoursCount?`<div><strong>${hoursCount}</strong><span>営業時間掲載</span></div>`:'',topAreas.length?`<div><strong>${topAreas.length}</strong><span>主な掲載エリア</span></div>`:'',avgBudget?`<div><strong>約¥${avgBudget.toLocaleString()}</strong><span>料金目安平均*</span></div>`:''].join('');
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>${kbnSeoEsc(title)}</title><meta name="description" content="${kbnSeoEsc(description)}"><link rel="canonical" href="${canonical}"><meta name="robots" content="${robots}"><meta property="og:type" content="website"><meta property="og:title" content="${kbnSeoEsc(title)}"><meta property="og:description" content="${kbnSeoEsc(description)}"><meta property="og:url" content="${canonical}"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/style.css?v=210"><script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g,'\u003c')}</script><style>.kbn-area-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:22px 0}.kbn-area-stats>div{padding:16px;border:1px solid rgba(255,255,255,.12);border-radius:16px;background:rgba(255,255,255,.035)}.kbn-area-stats strong{display:block;font-size:1.45rem}.kbn-area-stats span{font-size:.78rem;opacity:.7}.kbn-area-genres{display:flex;gap:10px;overflow:auto;padding:4px 0 10px}.kbn-area-genres a{min-width:145px;padding:14px;border:1px solid rgba(255,255,255,.12);border-radius:14px;text-decoration:none;color:inherit;background:rgba(255,255,255,.035)}.kbn-area-genres b,.kbn-area-genres span{display:block}.kbn-area-genres span{font-size:.78rem;opacity:.68;margin-top:4px}.kbn-area-tags{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.kbn-area-tags span{font-size:.72rem;padding:4px 7px;border-radius:999px;background:rgba(255,255,255,.06)}@media(min-width:720px){.kbn-area-stats{grid-template-columns:repeat(4,minmax(0,1fr))}}</style></head><body class="public-v109 local-seo-page"><header class="public-header"><div class="container public-header-inner"><a class="public-brand" href="/"><img src="/logo.png" alt="KUMAMOTO BAR NAVI"><span><b>KUMAMOTO</b><strong>BAR NAVI</strong><small>BAR & JOB INFORMATION</small></span></a><nav class="public-desktop-nav"><a href="/bars.html" class="active">BARを探す</a><a href="/areas.html">エリア</a><a href="/jobs.html">求人</a><a href="/column.html">コラム</a></nav><a class="public-header-cta" href="/bars.html">BARを探す</a></div></header><main><section class="local-seo-hero"><div class="container"><nav class="local-seo-breadcrumb"><a href="/">ホーム</a><span>›</span><a href="/bars.html">BARを探す</a><span>›</span><b>${kbnSeoEsc(label)}</b></nav><p class="public-kicker">KUMAMOTO GENRE GUIDE</p><h1>熊本の${kbnSeoEsc(label)}</h1><p>${indexable?`熊本県内の${kbnSeoEsc(label)}を${total}店舗から比較できます。エリア・営業時間・料金・特徴から今夜行きたい一軒を探してください。`:`${kbnSeoEsc(label)}の掲載情報を順次追加しています。`}</p>${indexable?`<div class="kbn-area-stats">${facts}</div>`:''}${updateDate?`<p class="kbn-area-updated">掲載情報 最終更新：${kbnSeoEsc(updateDate)}</p>`:''}</div></section>${topAreas.length?`<section class="local-seo-guide"><div class="container"><p class="public-kicker">POPULAR AREAS</p><h2>${kbnSeoEsc(label)}をエリアから探す</h2><div class="kbn-area-genres">${areaLinks}</div></div></section>`:''}<section class="local-seo-list"><div class="container"><div class="local-seo-head"><div><p class="public-kicker">BAR LIST</p><h2>熊本の${kbnSeoEsc(label)}一覧</h2></div><a href="/bars.html?genre=${encodeURIComponent(label)}">条件を指定して探す →</a></div>${shops.length?`<div class="local-seo-grid">${cards}</div>${total>shops.length?`<p class="kbn-area-note">このページでは代表的な${shops.length}店舗を表示しています。</p>`:''}`:`<div class="local-seo-empty"><h2>掲載店舗を準備中です</h2></div>`}</div></section><section class="local-seo-guide"><div class="container"><p class="public-kicker">GENRE GUIDE</p><h2>熊本で${kbnSeoEsc(label)}を探すポイント</h2><p>掲載店舗のエリア、営業時間、料金目安、特徴を比較できます。店舗情報は随時更新していますが、営業時間や料金など重要な情報は来店前に各店舗へ直接確認してください。</p></div></section><section class="local-seo-faq"><div class="container"><p class="public-kicker">FAQ</p><h2>${kbnSeoEsc(label)}探し よくある質問</h2><div>${faq.map(x=>`<details><summary>${kbnSeoEsc(x[0])}</summary><p>${kbnSeoEsc(x[1])}</p></details>`).join('')}</div></div></section></main><nav class="public-bottom-nav"><a href="/"><span>⌂</span><b>ホーム</b></a><a href="/bars.html"><span>⌕</span><b>BARを探す</b></a><a href="/jobs.html"><span>▣</span><b>求人</b></a><a href="/listing-form.html"><span>＋</span><b>店舗掲載</b></a></nav></body></html>`;
+}
+
+
 async function renderSeoShopDetailV250(request,env,url){
   const slug=String(url.searchParams.get("slug")||"").trim();
   if(!slug)return null;
@@ -6361,6 +6409,14 @@ export default {
     }
 
 
+
+    const localSeoGenreMatch=url.pathname.match(/^\/genre\/([a-z0-9-]+)\/?$/);
+    if(localSeoGenreMatch && request.method==="GET"){
+      const html=await renderLocalSeoGenrePage(env,localSeoGenreMatch[1]);
+      if(!html)return new Response("Not Found",{status:404});
+      return new Response(html,{headers:{"content-type":"text/html; charset=utf-8","cache-control":"public, max-age=900","x-robots-tag":"index, follow, max-image-preview:large"}});
+    }
+
     if((url.pathname==="/shop" || url.pathname==="/shop.html") && request.method==="GET"){
       const shopSlug=String(url.searchParams.get("slug")||"").trim();
 
@@ -6495,6 +6551,17 @@ export default {
         if(liveAreas.size && !liveAreas.has(areaName))continue;
         urls.push({loc:`${base}/area/${encodeURIComponent(slug)}`,priority:"0.8",freq:"daily"});
       }
+      // Genre landing pages are included only when at least 3 matching public shops exist.
+      // This prevents thin genre pages from being submitted while allowing useful pages to appear automatically.
+      try{
+        for(const [gslug,gcfg] of Object.entries(KBN_LOCAL_SEO_GENRES||{})){
+          const terms=gcfg.terms||[];
+          if(!terms.length)continue;
+          const cond=terms.map(()=>`LOWER(COALESCE(genre,'') || ' ' || COALESCE(features,'') || ' ' || COALESCE(description,'') || ' ' || COALESCE(hours,'')) LIKE ?`).join(' OR ');
+          const row=await env.DB.prepare(`SELECT COUNT(*) AS total FROM shops WHERE COALESCE(is_published,1)=1 AND COALESCE(slug,'')<>'' AND (${cond})`).bind(...terms.map(t=>`%${String(t).toLowerCase()}%`)).first();
+          if(Number(row?.total||0)>=3)urls.push({loc:`${base}/genre/${encodeURIComponent(gslug)}`,priority:"0.8",freq:"daily"});
+        }
+      }catch(e){ console.error("sitemap genre inventory",e); }
       const escXml=v=>String(v||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&apos;");
       const xml=`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map(x=>`  <url>\n    <loc>${escXml(x.loc)}</loc>\n    <changefreq>${x.freq}</changefreq>\n    <priority>${x.priority}</priority>\n  </url>`).join("\n")}\n</urlset>`;
       return new Response(xml,{headers:{"content-type":"application/xml; charset=utf-8","cache-control":"no-cache, max-age=0, must-revalidate","x-robots-tag":"noindex"}});
@@ -6524,6 +6591,17 @@ export default {
           }
         }catch(e){ console.error("shop sitemap generation error",e); }
       }
+      // Genre landing pages are included only when at least 3 matching public shops exist.
+      // This prevents thin genre pages from being submitted while allowing useful pages to appear automatically.
+      try{
+        for(const [gslug,gcfg] of Object.entries(KBN_LOCAL_SEO_GENRES||{})){
+          const terms=gcfg.terms||[];
+          if(!terms.length)continue;
+          const cond=terms.map(()=>`LOWER(COALESCE(genre,'') || ' ' || COALESCE(features,'') || ' ' || COALESCE(description,'') || ' ' || COALESCE(hours,'')) LIKE ?`).join(' OR ');
+          const row=await env.DB.prepare(`SELECT COUNT(*) AS total FROM shops WHERE COALESCE(is_published,1)=1 AND COALESCE(slug,'')<>'' AND (${cond})`).bind(...terms.map(t=>`%${String(t).toLowerCase()}%`)).first();
+          if(Number(row?.total||0)>=3)urls.push({loc:`${base}/genre/${encodeURIComponent(gslug)}`,priority:"0.8",freq:"daily"});
+        }
+      }catch(e){ console.error("sitemap genre inventory",e); }
       const escXml=v=>String(v||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&apos;");
       const xml=`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map(x=>`  <url>\n    <loc>${escXml(x.loc)}</loc>${x.lastmod?`\n    <lastmod>${escXml(x.lastmod)}</lastmod>`:""}\n    <changefreq>weekly</changefreq>\n    <priority>0.8</priority>\n  </url>`).join("\n")}\n</urlset>`;
       return new Response(xml,{headers:{
