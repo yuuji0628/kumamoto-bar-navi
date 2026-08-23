@@ -3659,6 +3659,15 @@ html,body{max-width:100%;overflow-x:hidden}
 </style>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+<style id="kbnSeoMonitorStyles">
+.kbn-seo-monitor-card{margin:18px 0;padding:16px;border:1px solid #344556;border-radius:18px;background:linear-gradient(180deg,#0d151e,#0a1118);box-shadow:0 12px 28px rgba(0,0,0,.18)}
+.kbn-seo-monitor-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.kbn-seo-monitor-kicker{display:block;color:#68d6a0;font-size:.67rem;font-weight:900;letter-spacing:.12em}.kbn-seo-monitor-head h3{margin:3px 0 3px;font-size:1.05rem}.kbn-seo-monitor-head p{margin:0;color:#9da9b5;font-size:.74rem;line-height:1.55}.kbn-seo-monitor-head button{flex:0 0 auto;border:1px solid #4b5d6f;background:#111b25;color:#eef3f7;border-radius:11px;padding:9px 13px;font-weight:800}.kbn-seo-monitor-head button:disabled{opacity:.55}
+.kbn-seo-monitor-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:14px}.kbn-seo-monitor-summary>div{padding:12px;border:1px solid #273645;border-radius:13px;background:#0f1922}.kbn-seo-monitor-summary span,.kbn-seo-monitor-summary small{display:block;color:#8f9ba7;font-size:.68rem}.kbn-seo-monitor-summary strong{display:block;margin:3px 0;color:#f5f7f9;font-size:1.45rem;line-height:1}.kbn-seo-monitor-summary>div:nth-child(2) strong{color:#65d99c}.kbn-seo-monitor-summary>div:nth-child(3) strong{color:#efc45a}.kbn-seo-monitor-summary>div:nth-child(4) strong{color:#ff8e8e}
+.kbn-seo-monitor-details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-top:9px}.kbn-seo-monitor-details>div{display:flex;justify-content:space-between;gap:8px;padding:9px 10px;border-radius:10px;background:#101820;color:#9faab5;font-size:.71rem}.kbn-seo-monitor-details b{color:#e8edf2}
+.kbn-seo-monitor-meter{height:7px;margin-top:12px;border-radius:99px;background:#1b2732;overflow:hidden}.kbn-seo-monitor-meter i{display:block;width:0;height:100%;border-radius:inherit;background:linear-gradient(90deg,#e8b84f,#64d99c);transition:width .35s ease}.kbn-seo-monitor-foot{display:flex;justify-content:space-between;gap:10px;margin-top:8px;color:#aab4be;font-size:.69rem}.kbn-seo-monitor-foot span{font-weight:800;color:#dfe6ec}.kbn-seo-monitor-note{margin-top:10px;color:#7f8c98;font-size:.65rem;line-height:1.55}
+@media(min-width:720px){.kbn-seo-monitor-summary{grid-template-columns:repeat(4,minmax(0,1fr))}.kbn-seo-monitor-details{grid-template-columns:repeat(4,minmax(0,1fr))}}
+</style>
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
 <div id="topMaintenanceResult" class="top-maintenance-result">
@@ -4262,6 +4271,35 @@ html,body{max-width:100%;overflow-x:hidden}
       </small>
     </div>
     <div id="maintenanceStatus" class="auto-discovery-status"></div>
+
+    <div class="kbn-seo-monitor-card" id="kbnSeoMonitorCard">
+      <div class="kbn-seo-monitor-head">
+        <div>
+          <span class="kbn-seo-monitor-kicker">SEO / INDEX READINESS</span>
+          <h3>SEO・インデックス監視</h3>
+          <p>公開店舗のサイトマップ掲載状況と、Googleに評価されやすい情報量を自動チェックします。</p>
+        </div>
+        <button type="button" id="reloadSeoMonitorBtn">更新</button>
+      </div>
+      <div class="kbn-seo-monitor-summary">
+        <div><span>サイトマップ掲載</span><strong id="seoSitemapCount">—</strong><small>公開店舗URL</small></div>
+        <div><span>SEO良好</span><strong id="seoGoodCount">—</strong><small>主要項目が充実</small></div>
+        <div><span>改善必要</span><strong id="seoNeedsCount">—</strong><small>情報不足あり</small></div>
+        <div><span>URL要確認</span><strong id="seoUrlRiskCount">—</strong><small>slug不足・重複</small></div>
+      </div>
+      <div class="kbn-seo-monitor-details">
+        <div><span>説明文不足</span><b id="seoDescriptionCount">—</b></div>
+        <div><span>住所不足</span><b id="seoAddressCount">—</b></div>
+        <div><span>営業時間不足</span><b id="seoHoursCount">—</b></div>
+        <div><span>ジャンル不足</span><b id="seoGenreCount">—</b></div>
+      </div>
+      <div class="kbn-seo-monitor-meter"><i id="seoQualityBar"></i></div>
+      <div class="kbn-seo-monitor-foot">
+        <span id="seoQualityText">SEO状態を読み込み中...</span>
+        <small id="seoCheckedAt"></small>
+      </div>
+      <div class="kbn-seo-monitor-note">※ Search Consoleの「実際のインデックス登録数」ではなく、サイト側で自動判定できるSEO準備状況です。実際の登録数はSearch Consoleで確認します。</div>
+    </div>
     <div class="kbn-alert-head">
       <b>通知</b>
       <button type="button" id="reloadKbnAlertsBtn">更新</button>
@@ -10778,4 +10816,31 @@ document.addEventListener("DOMContentLoaded",()=>{
   </div>
 </div>
 
+
+<script id="kbnSeoMonitorScript">
+(function(){
+  const n=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=Number(v||0).toLocaleString('ja-JP');};
+  async function loadSeoMonitor(){
+    const btn=document.getElementById('reloadSeoMonitorBtn');
+    if(btn){btn.disabled=true;btn.textContent='確認中...';}
+    try{
+      const d=await api('/api/admin/seo-monitor');
+      const s=d.summary||{}; const m=d.missing||{};
+      n('seoSitemapCount',s.sitemap_urls); n('seoGoodCount',s.seo_good); n('seoNeedsCount',s.needs_improvement); n('seoUrlRiskCount',s.url_risk);
+      n('seoDescriptionCount',m.description); n('seoAddressCount',m.address); n('seoHoursCount',m.hours); n('seoGenreCount',m.genre);
+      const pct=Math.max(0,Math.min(100,Number(s.quality_percent||0)));
+      const bar=document.getElementById('seoQualityBar'); if(bar)bar.style.width=pct+'%';
+      const qt=document.getElementById('seoQualityText'); if(qt)qt.textContent=`SEO充実率 ${pct}% ／ 公開 ${Number(s.published||0).toLocaleString('ja-JP')}店舗`;
+      const at=document.getElementById('seoCheckedAt'); if(at)at.textContent='更新 '+new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+    }catch(e){
+      const qt=document.getElementById('seoQualityText');if(qt)qt.textContent='SEO状態を取得できませんでした: '+(e?.message||e);
+    }finally{if(btn){btn.disabled=false;btn.textContent='更新';}}
+  }
+  document.addEventListener('DOMContentLoaded',()=>{
+    document.getElementById('reloadSeoMonitorBtn')?.addEventListener('click',loadSeoMonitor);
+    loadSeoMonitor();
+  });
+  window.loadSeoMonitor=loadSeoMonitor;
+})();
+</script>
 </body></html>
