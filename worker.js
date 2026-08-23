@@ -5358,7 +5358,7 @@ async function renderAllShopsSeoIndexV250(env,origin){
     const r=await env.DB.prepare(`
       SELECT slug,name,area,genre,updated_at
       FROM shops
-      WHERE is_published=1
+      WHERE COALESCE(is_published,1)=1 AND TRIM(COALESCE(slug,''))<>''
       ORDER BY area ASC,name ASC
       LIMIT 5000
     `).all();
@@ -5371,10 +5371,16 @@ async function renderAllShopsSeoIndexV250(env,origin){
     if(!groups.has(area))groups.set(area,[]);
     groups.get(area).push(x);
   }
-  const sections=[...groups.entries()].map(([area,list])=>`<section><h2>${kbnSeoEsc(area)}</h2><ul>${list.map(x=>`<li><a href="/shop?slug=${encodeURIComponent(x.slug||"")}">${kbnSeoEsc(kbnCleanShopName(x.name)||"BAR")}</a>${x.genre?` <small>${kbnSeoEsc(x.genre)}</small>`:""}</li>`).join("")}</ul></section>`).join("");
+  const areaSlugByName=new Map(Object.entries(KBN_LOCAL_SEO_AREAS||{}).map(([slug,name])=>[String(name),slug]));
+  const sections=[...groups.entries()].map(([area,list])=>{
+    const areaSlug=areaSlugByName.get(area);
+    const areaLink=areaSlug?` <a href="/area/${encodeURIComponent(areaSlug)}" style="font-size:.8em">${kbnSeoEsc(area)}のエリアページ →</a>`:"";
+    return `<section><h2>${kbnSeoEsc(area)}${areaLink}</h2><ul>${list.map(x=>`<li><a href="/shop?slug=${encodeURIComponent(x.slug||"")}">${kbnSeoEsc(kbnCleanShopName(x.name)||"BAR")}</a>${x.genre?` <small>${kbnSeoEsc(x.genre)}</small>`:""}</li>`).join("")}</ul></section>`;
+  }).join("");
   const title=`熊本県の掲載BAR全店舗一覧（${shops.length}店舗）｜KUMAMOTO BAR NAVI`;
   const desc=`KUMAMOTO BAR NAVIに掲載中の熊本県内BAR全店舗一覧。現在${shops.length}店舗をエリア別に掲載しています。`;
-  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${kbnSeoEsc(title)}</title><meta name="description" content="${kbnSeoEsc(desc)}"><meta name="robots" content="index,follow,max-image-preview:large"><link rel="canonical" href="${canonical}"><link rel="stylesheet" href="/style.css?v=196"></head><body class="public-v109"><header class="public-header"><div class="container public-header-inner"><a class="public-brand" href="/"><img src="/logo.png" alt="KUMAMOTO BAR NAVI"><span><b>KUMAMOTO</b><strong>BAR NAVI</strong><small>BAR & JOB INFORMATION</small></span></a></div></header><main class="container" style="padding:32px 18px 100px"><nav style="margin-bottom:20px"><a href="/">ホーム</a> › <b>掲載店舗一覧</b></nav><h1>熊本県の掲載BAR全店舗一覧</h1><p>${kbnSeoEsc(desc)}</p><div style="display:grid;gap:28px">${sections}</div></main></body></html>`;
+  const itemList={"@context":"https://schema.org","@type":"ItemList","name":"熊本県の掲載BAR全店舗一覧","numberOfItems":shops.length,"itemListElement":shops.slice(0,5000).map((x,i)=>({"@type":"ListItem","position":i+1,"name":kbnCleanShopName(x.name)||"BAR","url":`${origin}/shop?slug=${encodeURIComponent(x.slug||"")}`}))};
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${kbnSeoEsc(title)}</title><meta name="description" content="${kbnSeoEsc(desc)}"><meta name="robots" content="index,follow,max-image-preview:large"><link rel="canonical" href="${canonical}"><script type="application/ld+json">${JSON.stringify(itemList).replace(/</g,"\u003c")}</script><link rel="stylesheet" href="/style.css?v=196"></head><body class="public-v109"><header class="public-header"><div class="container public-header-inner"><a class="public-brand" href="/"><img src="/logo.png" alt="KUMAMOTO BAR NAVI"><span><b>KUMAMOTO</b><strong>BAR NAVI</strong><small>BAR & JOB INFORMATION</small></span></a></div></header><main class="container" style="padding:32px 18px 100px"><nav style="margin-bottom:20px"><a href="/">ホーム</a> › <b>掲載店舗一覧</b></nav><h1>熊本県の掲載BAR全店舗一覧</h1><p>${kbnSeoEsc(desc)}</p><div style="display:grid;gap:28px">${sections}</div></main></body></html>`;
 }
 
 async function ensureShopMaintenanceStatusColumn(env){
@@ -6189,7 +6195,25 @@ export default {
       return "";
     };
 
-    if(url.pathname==="/sitemap.xml" && request.method==="GET"){
+    // Split sitemap architecture: the submitted /sitemap.xml is an index.
+    // This makes Search Console discover static/area pages and every public shop separately,
+    // and keeps the shop inventory scalable as listings grow.
+    if((url.pathname==="/sitemap.xml" || url.pathname==="/sitemap-index.xml") && request.method==="GET"){
+      const base="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev";
+      const now=new Date().toISOString().slice(0,10);
+      const xml=`<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap><loc>${base}/sitemap-pages.xml</loc><lastmod>${now}</lastmod></sitemap>
+  <sitemap><loc>${base}/sitemap-shops.xml</loc><lastmod>${now}</lastmod></sitemap>
+</sitemapindex>`;
+      return new Response(xml,{headers:{
+        "content-type":"application/xml; charset=utf-8",
+        "cache-control":"no-cache, max-age=0, must-revalidate",
+        "x-robots-tag":"noindex"
+      }});
+    }
+
+    if(url.pathname==="/sitemap-pages.xml" && request.method==="GET"){
       const base="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev";
       const urls=[
         {loc:`${base}/`,priority:"1.0",freq:"daily"},
@@ -6197,115 +6221,53 @@ export default {
         {loc:`${base}/jobs.html`,priority:"0.8",freq:"daily"},
         {loc:`${base}/column.html`,priority:"0.6",freq:"weekly"},
         {loc:`${base}/areas.html`,priority:"0.8",freq:"weekly"},
-        {loc:`${base}/all-shops`,priority:"0.85",freq:"daily"},
-        {loc:`${base}/area/kumamoto-city`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/yatsushiro`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/hitoyoshi`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/arao`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/minamata`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/tamana`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/yamaga`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/kikuchi`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/uto`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/kamiamakusa`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/uki`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/aso`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/amakusa`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/koshi`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/misato`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/gyokuto`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/nankan`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/nagasu`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/nagomi`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/ozu`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/kikuyo`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/minamioguni`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/oguni`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/ubuyama`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/takamori`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/nishihara`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/minamiaso`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/mifune`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/kashima`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/mashiki`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/kosa`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/yamato`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/hikawa`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/ashikita`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/tsunagi`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/nishiki`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/taragi`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/yunomae`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/mizukami`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/sagara`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/itsuki`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/yamae`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/kuma`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/asagiri`,priority:"0.8",freq:"daily"},
-        {loc:`${base}/area/reihoku`,priority:"0.8",freq:"daily"},
-
+        {loc:`${base}/all-shops`,priority:"0.9",freq:"daily"},
         {loc:`${base}/listing-form.html`,priority:"0.6",freq:"monthly"},
         {loc:`${base}/about.html`,priority:"0.5",freq:"monthly"},
         {loc:`${base}/faq.html`,priority:"0.5",freq:"monthly"},
         {loc:`${base}/contact.html`,priority:"0.4",freq:"monthly"}
       ];
+      for(const slug of Object.keys(KBN_LOCAL_SEO_AREAS||{})){
+        urls.push({loc:`${base}/area/${encodeURIComponent(slug)}`,priority:"0.8",freq:"daily"});
+      }
+      const escXml=v=>String(v||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&apos;");
+      const xml=`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map(x=>`  <url>\n    <loc>${escXml(x.loc)}</loc>\n    <changefreq>${x.freq}</changefreq>\n    <priority>${x.priority}</priority>\n  </url>`).join("\n")}\n</urlset>`;
+      return new Response(xml,{headers:{"content-type":"application/xml; charset=utf-8","cache-control":"no-cache, max-age=0, must-revalidate","x-robots-tag":"noindex"}});
+    }
 
+    if(url.pathname==="/sitemap-shops.xml" && request.method==="GET"){
+      const base="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev";
+      const urls=[];
       if(env.DB){
         try{
-          // 公開中かつslugを持つ全店舗をサイトマップへ収録する。
-          // COALESCEを使い、旧データでis_publishedがNULLでも公開扱いの店舗を取りこぼさない。
           const r=await env.DB.prepare(`
             SELECT slug,updated_at
             FROM shops
             WHERE COALESCE(is_published,1)=1
               AND TRIM(COALESCE(slug,''))<>''
             ORDER BY COALESCE(updated_at,published_at,created_at) DESC, id DESC
+            LIMIT 45000
           `).all();
-
-          const seenShopUrls=new Set();
-          for(const s of (r.results||[])){
-            const slug=String(s.slug||'').trim();
+          const seen=new Set();
+          for(const row of (r.results||[])){
+            const slug=String(row.slug||"").trim();
             if(!slug)continue;
             const loc=`${base}/shop?slug=${encodeURIComponent(slug)}`;
-            if(seenShopUrls.has(loc))continue;
-            seenShopUrls.add(loc);
-            urls.push({
-              loc,
-              lastmod:sitemapLastmodDate(s.updated_at),
-              priority:"0.8",
-              freq:"weekly"
-            });
+            if(seen.has(loc))continue;
+            seen.add(loc);
+            urls.push({loc,lastmod:sitemapLastmodDate(row.updated_at)});
           }
-        }catch(e){
-          console.error("sitemap generation error",e);
-        }
+        }catch(e){ console.error("shop sitemap generation error",e); }
       }
-
-      const escXml=v=>String(v||"")
-        .replace(/&/g,"&amp;")
-        .replace(/</g,"&lt;")
-        .replace(/>/g,"&gt;")
-        .replace(/"/g,"&quot;")
-        .replace(/'/g,"&apos;");
-
-      const xml=`<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls.map(x=>`  <url>
-    <loc>${escXml(x.loc)}</loc>${x.lastmod?`
-    <lastmod>${escXml(x.lastmod)}</lastmod>`:""}
-    <changefreq>${x.freq}</changefreq>
-    <priority>${x.priority}</priority>
-  </url>`).join("\n")}
-</urlset>`;
-
-      return new Response(xml,{
-        headers:{
-          "content-type":"application/xml; charset=utf-8",
-          "cache-control":"no-cache, max-age=0, must-revalidate"
-        }
-      });
+      const escXml=v=>String(v||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&apos;");
+      const xml=`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map(x=>`  <url>\n    <loc>${escXml(x.loc)}</loc>${x.lastmod?`\n    <lastmod>${escXml(x.lastmod)}</lastmod>`:""}\n    <changefreq>weekly</changefreq>\n    <priority>0.8</priority>\n  </url>`).join("\n")}\n</urlset>`;
+      return new Response(xml,{headers:{
+        "content-type":"application/xml; charset=utf-8",
+        "cache-control":"no-cache, max-age=0, must-revalidate",
+        "x-robots-tag":"noindex",
+        "x-kbn-shop-url-count":String(urls.length)
+      }});
     }
-
 
     if(url.pathname==="/admin-login"){
       if(await validAdminRequest(request,env)){
