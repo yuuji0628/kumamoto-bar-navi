@@ -466,7 +466,7 @@
 </style>
 
 
-<style id="kbn-featured-random-official-style-v290">
+<style id="kbn-featured-random-official-style-v291">
 /* v289 正式掲載のみランダム表示 */
 #barCards.kbn-random-featured-grid{
   display:grid;
@@ -1004,7 +1004,7 @@
 </script>
 
 
-<script id="kbn-featured-random-official-script-v290">
+<script id="kbn-featured-random-official-script-v291">
 (()=>{
   const mount=document.getElementById('barCards');
   if(!mount) return;
@@ -1067,23 +1067,33 @@
   };
 
   let cached=[];
+  let rendering=false;
   const rerender=()=>{
     if(!cached.length){
       mount.innerHTML='<div class="kbn-featured-empty-v289">現在、表示できる正式掲載店舗がありません。</div>';
       return;
     }
-    const withImage=cached.filter(hasImage);
-    const withoutImage=cached.filter(shop=>!hasImage(shop));
-    const selected=shuffle(withImage).concat(shuffle(withoutImage));
+    const selected=shuffle(cached);
+    rendering=true;
     mount.classList.add('kbn-random-featured-grid');
     mount.innerHTML=selected.map(renderCard).join('');
+    queueMicrotask(()=>{ rendering=false; });
   };
+
+  // Existing script.js also writes to #barCards after its API request finishes.
+  // If it overwrites this list, immediately restore the formal-listing random order.
+  const observer=new MutationObserver(()=>{
+    if(rendering || !cached.length) return;
+    const firstCard=mount.querySelector('.kbn-featured-official-card-v289');
+    if(!firstCard) rerender();
+  });
+  observer.observe(mount,{childList:true,subtree:false});
 
   const load=async()=>{
     mount.classList.add('kbn-random-featured-grid');
     mount.innerHTML='<div class="kbn-featured-loading-v289">正式掲載店舗をランダムで読み込んでいます...</div>';
     try{
-      const r=await fetch('/api/shops?featuredRandomOfficial=290&ts='+Date.now(),{
+      const r=await fetch('/api/shops?featuredRandomOfficial=291&ts='+Date.now(),{
         cache:'no-store',
         headers:{'Cache-Control':'no-cache'}
       });
