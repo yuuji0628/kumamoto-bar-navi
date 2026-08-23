@@ -6872,9 +6872,9 @@ export default {
       if(url.pathname==="/api/admin/seo-monitor" && request.method==="GET"){
         const summary=await env.DB.prepare(`
           WITH published AS (
+            -- sitemap-shops.xml と同じ公開条件。仮掲載も含め、Google に公開している全店舗を監視する。
             SELECT * FROM shops
             WHERE COALESCE(is_published,1)=1
-              AND COALESCE(listing_status,'published')!='provisional'
           ), slug_dupes AS (
             SELECT slug FROM published
             WHERE TRIM(COALESCE(slug,''))!=''
@@ -6918,7 +6918,7 @@ export default {
             hours:Number(summary?.missing_hours||0),
             genre:Number(summary?.missing_genre||0)
           },
-          note:"Search Consoleの実インデックス数ではなく、DBから算出したSEO準備状況です。"
+          note:"sitemap-shops.xml と同じ公開条件で、全公開店舗をDBから集計したSEO準備状況です。Search Consoleの実インデックス数ではありません。"
         });
       }
 
