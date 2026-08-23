@@ -6221,6 +6221,46 @@ export default {
   async fetch(request, env, ctx) {
     const url=new URL(request.url);
 
+    // v2.86: Search Console redirect-error fix for legacy SEO landing pages.
+    // Cloudflare Static Assets defaults to auto-trailing-slash, where /file.html is
+    // redirected to /file. These pages intentionally use the .html URL as canonical,
+    // so run them through the Worker and serve the extensionless asset body directly
+    // with a 200 response at the original .html URL.
+    const kbnSeoHtml200Paths=new Set([
+      "/kumamoto-bar.html",
+      "/shimotori-bar.html",
+      "/karaoke-bar-kumamoto.html",
+      "/darts-bar-kumamoto.html",
+      "/snack-kumamoto.html",
+      "/kumamoto-station-bar.html",
+      "/suizenji-bar.html",
+      "/kengun-bar.html",
+      "/hikarinomori-bar.html",
+      "/yatsushiro-bar.html",
+      "/hitoyoshi-bar.html",
+      "/tamana-bar.html",
+      "/amakusa-bar.html"
+    ]);
+    if(request.method==="GET" && kbnSeoHtml200Paths.has(url.pathname)){
+      const assetUrl=new URL(request.url);
+      assetUrl.pathname=url.pathname.replace(/\.html$/i,"");
+      const raw=await env.ASSETS.fetch(new Request(assetUrl.toString(),request));
+      if(raw.status===200){
+        const headers=new Headers(raw.headers);
+        headers.delete("location");
+        headers.set("content-type","text/html; charset=utf-8");
+        headers.set("cache-control","public, max-age=900");
+        headers.set("x-robots-tag","index, follow, max-image-preview:large");
+        headers.set("x-kbn-seo-route","direct-html-200-v286");
+        return new Response(raw.body,{status:200,statusText:"OK",headers});
+      }
+      // If the canonical asset cannot be loaded, do not manufacture another redirect.
+      return new Response("SEO page temporarily unavailable",{
+        status:503,
+        headers:{"content-type":"text/plain; charset=utf-8","cache-control":"no-store","x-robots-tag":"noindex, nofollow"}
+      });
+    }
+
     const localSeoAreaMatch=url.pathname.match(/^\/area\/([a-z0-9-]+)\/?$/);
     if(localSeoAreaMatch && request.method==="GET"){
       const html=await renderLocalSeoAreaPage(env,localSeoAreaMatch[1]);
