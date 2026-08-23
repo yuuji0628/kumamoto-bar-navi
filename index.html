@@ -465,6 +465,73 @@
 @media(max-width:700px){.kbn-area-link-mini-grid-v278{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 
+
+<style id="kbn-featured-random-official-style-v289">
+/* v289 正式掲載のみランダム表示 */
+#barCards.kbn-random-featured-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+  gap:16px;
+}
+#barCards .kbn-featured-official-card-v289{
+  display:flex;
+  flex-direction:column;
+  min-height:100%;
+  border-radius:22px;
+  overflow:hidden;
+  background:linear-gradient(180deg,#121820 0%,#0c1117 100%);
+  border:1px solid rgba(232,194,94,.18);
+  box-shadow:0 18px 42px rgba(0,0,0,.24);
+}
+#barCards .kbn-featured-thumb-v289{
+  aspect-ratio:4 / 3;
+  background:#12161d;
+  overflow:hidden;
+}
+#barCards .kbn-featured-thumb-v289 img{
+  width:100%;height:100%;display:block;object-fit:cover;
+}
+#barCards .kbn-featured-thumb-v289 .kbn-featured-noimg-v289{
+  width:100%;height:100%;display:flex;align-items:center;justify-content:center;
+  color:#efc45a;font-weight:900;letter-spacing:.12em;font-size:1.05rem;
+  background:radial-gradient(circle at top left,rgba(239,196,90,.14),transparent 44%),linear-gradient(135deg,#151a22,#0b0f15);
+}
+#barCards .kbn-featured-body-v289{
+  padding:16px 16px 18px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  flex:1;
+}
+#barCards .kbn-featured-badges-v289{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+#barCards .kbn-featured-badge-v289{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-height:26px;padding:0 10px;border-radius:999px;
+  font-size:.73rem;font-weight:900;letter-spacing:.02em;
+}
+#barCards .kbn-featured-badge-v289.is-official{background:#efc45a;color:#111}
+#barCards .kbn-featured-badge-v289.is-area,
+#barCards .kbn-featured-badge-v289.is-genre{background:rgba(255,255,255,.07);color:#dbe3eb;border:1px solid rgba(255,255,255,.08)}
+#barCards .kbn-featured-name-v289{margin:0;color:#fff;font-size:1.28rem;line-height:1.35}
+#barCards .kbn-featured-desc-v289{margin:0;color:rgba(255,255,255,.76);line-height:1.72;font-size:.94rem}
+#barCards .kbn-featured-footer-v289{margin-top:auto;padding-top:6px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+#barCards .kbn-featured-link-v289{
+  display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 14px;border-radius:999px;text-decoration:none;
+  background:#efc45a;color:#111;font-weight:900;white-space:nowrap;
+}
+#barCards .kbn-featured-note-v289{font-size:.78rem;color:rgba(255,255,255,.52)}
+#barCards .kbn-featured-empty-v289,
+#barCards .kbn-featured-loading-v289{
+  grid-column:1/-1;padding:26px 18px;border-radius:18px;
+  border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);
+  color:rgba(255,255,255,.7);text-align:center;
+}
+@media (max-width:700px){
+  #barCards.kbn-random-featured-grid{grid-template-columns:1fr;gap:14px}
+  #barCards .kbn-featured-body-v289{padding:14px 14px 16px}
+  #barCards .kbn-featured-name-v289{font-size:1.18rem}
+}
+</style>
 </head>
 <body class="public-v109">
 
@@ -933,6 +1000,106 @@
   }catch{
     cta.href="member.html";
   }
+})();
+</script>
+
+
+<script id="kbn-featured-random-official-script-v289">
+(()=>{
+  const mount=document.getElementById('barCards');
+  if(!mount) return;
+
+  const esc=(v)=>String(v ?? '').replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",""":"&quot;","'":"&#39;"}[m]));
+  const norm=(v)=>String(v ?? '').trim();
+  const hasVal=(v)=>norm(v).length>0;
+  const pick=(...vals)=>vals.map(norm).find(Boolean) || '';
+  const strip=(s,max=72)=>{
+    const t=norm(s).replace(/\s+/g,' ');
+    if(!t) return '熊本で楽しめる正式掲載店舗をランダムでご紹介しています。';
+    return t.length>max ? t.slice(0,max-1)+'…' : t;
+  };
+  const isOfficial=(shop)=>Number(shop?.is_published ?? 1)!==0 && String(shop?.listing_status || 'published') !== 'provisional';
+  const hasImage=(shop)=>hasVal(pick(shop.image_url,shop.image,shop.photo_url));
+  const uniqBy=(arr, keyFn)=>{
+    const seen=new Set();
+    return arr.filter(item=>{
+      const key=keyFn(item);
+      if(seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
+  const shuffle=(arr)=>{
+    const a=[...arr];
+    for(let i=a.length-1;i>0;i--){
+      const j=Math.floor(Math.random()*(i+1));
+      [a[i],a[j]]=[a[j],a[i]];
+    }
+    return a;
+  };
+  const renderCard=(shop)=>{
+    const name=pick(shop.name,'店舗名未登録');
+    const area=pick(shop.area,'熊本県');
+    const genre=pick(shop.genre,'BAR');
+    const desc=strip(pick(shop.description,shop.features,shop.catch_copy));
+    const img=pick(shop.image_url,shop.image,shop.photo_url);
+    const slug=pick(shop.slug);
+    const href=slug ? `shop.html?slug=${encodeURIComponent(slug)}` : 'bars.html';
+    const thumb=img
+      ? `<div class="kbn-featured-thumb-v289"><img src="${esc(img)}" alt="${esc(name)}" loading="lazy"></div>`
+      : `<div class="kbn-featured-thumb-v289"><div class="kbn-featured-noimg-v289">KUMAMOTO BAR NAVI</div></div>`;
+    return `<article class="kbn-featured-official-card-v289">
+      ${thumb}
+      <div class="kbn-featured-body-v289">
+        <div class="kbn-featured-badges-v289">
+          <span class="kbn-featured-badge-v289 is-official">正式掲載</span>
+          <span class="kbn-featured-badge-v289 is-area">${esc(area)}</span>
+          <span class="kbn-featured-badge-v289 is-genre">${esc(genre)}</span>
+        </div>
+        <h3 class="kbn-featured-name-v289">${esc(name)}</h3>
+        <p class="kbn-featured-desc-v289">${esc(desc)}</p>
+        <div class="kbn-featured-footer-v289">
+          <span class="kbn-featured-note-v289">おすすめは毎回ランダム表示</span>
+          <a class="kbn-featured-link-v289" href="${esc(href)}">詳細を見る</a>
+        </div>
+      </div>
+    </article>`;
+  };
+
+  let cached=[];
+  const rerender=()=>{
+    if(!cached.length){
+      mount.innerHTML='<div class="kbn-featured-empty-v289">現在、表示できる正式掲載店舗がありません。</div>';
+      return;
+    }
+    const withImage=cached.filter(hasImage);
+    const withoutImage=cached.filter(shop=>!hasImage(shop));
+    const selected=shuffle(withImage).concat(shuffle(withoutImage)).slice(0,6);
+    mount.classList.add('kbn-random-featured-grid');
+    mount.innerHTML=selected.map(renderCard).join('');
+  };
+
+  const load=async()=>{
+    mount.classList.add('kbn-random-featured-grid');
+    mount.innerHTML='<div class="kbn-featured-loading-v289">正式掲載のおすすめBARを読み込んでいます...</div>';
+    try{
+      const r=await fetch('/api/shops?featuredRandomOfficial=289&ts='+Date.now(),{
+        cache:'no-store',
+        headers:{'Cache-Control':'no-cache'}
+      });
+      if(!r.ok) throw new Error('HTTP_'+r.status);
+      const d=await r.json();
+      const shops=Array.isArray(d?.shops) ? d.shops : [];
+      cached=uniqBy(shops.filter(isOfficial), shop=>pick(shop.slug, shop.id, shop.name, Math.random()));
+      rerender();
+    }catch(err){
+      console.error('featured random official load failed', err);
+      mount.innerHTML='<div class="kbn-featured-empty-v289">おすすめBARを読み込めませんでした。しばらくしてからお試しください。</div>';
+    }
+  };
+
+  load();
+  window.addEventListener('pageshow', (e)=>{ if(e.persisted && cached.length) rerender(); });
 })();
 </script>
 
