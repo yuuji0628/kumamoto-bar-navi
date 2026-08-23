@@ -6867,6 +6867,61 @@ export default {
 
 
 
+
+      // ---------- SEO / index readiness monitor v3.10 ----------
+      if(url.pathname==="/api/admin/seo-monitor" && request.method==="GET"){
+        const summary=await env.DB.prepare(`
+          WITH published AS (
+            SELECT * FROM shops
+            WHERE COALESCE(is_published,1)=1
+              AND COALESCE(listing_status,'published')!='provisional'
+          ), slug_dupes AS (
+            SELECT slug FROM published
+            WHERE TRIM(COALESCE(slug,''))!=''
+            GROUP BY slug HAVING COUNT(*)>1
+          )
+          SELECT
+            COUNT(*) AS published,
+            SUM(CASE WHEN TRIM(COALESCE(slug,''))!='' THEN 1 ELSE 0 END) AS sitemap_urls,
+            SUM(CASE WHEN LENGTH(TRIM(COALESCE(description,'')))<80 THEN 1 ELSE 0 END) AS missing_description,
+            SUM(CASE WHEN TRIM(COALESCE(address,''))='' THEN 1 ELSE 0 END) AS missing_address,
+            SUM(CASE WHEN TRIM(COALESCE(hours,''))='' THEN 1 ELSE 0 END) AS missing_hours,
+            SUM(CASE WHEN TRIM(COALESCE(genre,''))='' THEN 1 ELSE 0 END) AS missing_genre,
+            SUM(CASE WHEN TRIM(COALESCE(slug,''))='' OR slug IN (SELECT slug FROM slug_dupes) THEN 1 ELSE 0 END) AS url_risk,
+            SUM(CASE WHEN
+              TRIM(COALESCE(slug,''))!='' AND
+              LENGTH(TRIM(COALESCE(name,'')))>=2 AND
+              TRIM(COALESCE(area,''))!='' AND
+              TRIM(COALESCE(address,''))!='' AND
+              TRIM(COALESCE(hours,''))!='' AND
+              TRIM(COALESCE(genre,''))!='' AND
+              LENGTH(TRIM(COALESCE(description,'')))>=80
+            THEN 1 ELSE 0 END) AS seo_good
+          FROM published
+        `).first();
+        const published=Number(summary?.published||0);
+        const good=Number(summary?.seo_good||0);
+        const risk=Number(summary?.url_risk||0);
+        return json({
+          ok:true,
+          summary:{
+            published,
+            sitemap_urls:Number(summary?.sitemap_urls||0),
+            seo_good:good,
+            needs_improvement:Math.max(0,published-good),
+            url_risk:risk,
+            quality_percent:published?Math.round(good/published*100):0
+          },
+          missing:{
+            description:Number(summary?.missing_description||0),
+            address:Number(summary?.missing_address||0),
+            hours:Number(summary?.missing_hours||0),
+            genre:Number(summary?.missing_genre||0)
+          },
+          note:"Search Consoleの実インデックス数ではなく、DBから算出したSEO準備状況です。"
+        });
+      }
+
       // ---------- Free members dashboard v2.05 ----------
       if(url.pathname==="/api/admin/members" && request.method==="GET"){
         await ensureKbnMemberSchema(env);
