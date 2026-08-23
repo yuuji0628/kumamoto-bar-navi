@@ -3667,6 +3667,7 @@ html,body{max-width:100%;overflow-x:hidden}
 .kbn-seo-monitor-details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-top:9px}.kbn-seo-monitor-details>div{display:flex;justify-content:space-between;gap:8px;padding:9px 10px;border-radius:10px;background:#101820;color:#9faab5;font-size:.71rem}.kbn-seo-monitor-details b{color:#e8edf2}
 .kbn-seo-monitor-meter{height:7px;margin-top:12px;border-radius:99px;background:#1b2732;overflow:hidden}.kbn-seo-monitor-meter i{display:block;width:0;height:100%;border-radius:inherit;background:linear-gradient(90deg,#e8b84f,#64d99c);transition:width .35s ease}.kbn-seo-monitor-foot{display:flex;justify-content:space-between;gap:10px;margin-top:8px;color:#aab4be;font-size:.69rem}.kbn-seo-monitor-foot span{font-weight:800;color:#dfe6ec}.kbn-seo-monitor-note{margin-top:10px;color:#7f8c98;font-size:.65rem;line-height:1.55}
 @media(min-width:720px){.kbn-seo-monitor-summary{grid-template-columns:repeat(4,minmax(0,1fr))}.kbn-seo-monitor-details{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.kbn-seo-score100{margin-top:12px;padding:12px;border:1px solid #2b3b49;border-radius:14px;background:#0c151d}.kbn-seo-score100-head{display:flex;align-items:end;justify-content:space-between;gap:10px}.kbn-seo-score100-head span{color:#9eabb6;font-size:.68rem}.kbn-seo-score100-head strong{font-size:2rem;line-height:1;color:#69dda2}.kbn-seo-score100-head small{color:#8e9aa5;font-size:.66rem}.kbn-seo-score-buckets{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin-top:10px}.kbn-seo-score-buckets div{padding:8px 6px;border-radius:9px;background:#101b24;text-align:center}.kbn-seo-score-buckets span{display:block;color:#82909c;font-size:.58rem}.kbn-seo-score-buckets b{display:block;margin-top:2px;color:#eef4f7;font-size:.82rem}.kbn-seo-lowlist{margin-top:10px}.kbn-seo-lowlist>div{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 8px;border-top:1px solid #1d2a34;font-size:.65rem}.kbn-seo-lowlist strong{color:#f0c45a;min-width:32px;text-align:right}.kbn-seo-lowlist span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#aab5be}.kbn-seo-lowlist em{font-style:normal;color:#73818d;font-size:.58rem}
 </style>
 </head>
 <body class="admin-body"><main class="admin-page"><div class="container">
@@ -4279,7 +4280,7 @@ html,body{max-width:100%;overflow-x:hidden}
           <h3>SEO・インデックス監視</h3>
           <p>公開店舗のサイトマップ掲載状況と、Googleに評価されやすい情報量を自動チェックします。</p>
         </div>
-        <button type="button" id="reloadSeoMonitorBtn">更新</button>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button type="button" id="improveLowSeoBtn">低スコア20店舗を改善</button><button type="button" id="reloadSeoMonitorBtn">更新</button></div>
       </div>
       <div class="kbn-seo-monitor-summary">
         <div><span>サイトマップ掲載</span><strong id="seoSitemapCount">—</strong><small>公開店舗URL</small></div>
@@ -4292,6 +4293,19 @@ html,body{max-width:100%;overflow-x:hidden}
         <div><span>住所不足</span><b id="seoAddressCount">—</b></div>
         <div><span>営業時間不足</span><b id="seoHoursCount">—</b></div>
         <div><span>ジャンル不足</span><b id="seoGenreCount">—</b></div>
+      </div>
+      <div class="kbn-seo-score100">
+        <div class="kbn-seo-score100-head">
+          <div><span>平均SEOスコア</span><br><strong id="seoAverageScore">—</strong><small> / 100</small></div>
+          <small>90点以上をSEO良好判定</small>
+        </div>
+        <div class="kbn-seo-score-buckets">
+          <div><span>90〜100</span><b id="seoScore90">—</b></div>
+          <div><span>80〜89</span><b id="seoScore80">—</b></div>
+          <div><span>70〜79</span><b id="seoScore70">—</b></div>
+          <div><span>70未満</span><b id="seoScoreUnder70">—</b></div>
+        </div>
+        <div class="kbn-seo-lowlist" id="seoLowestList"><div><span>低スコア店舗を確認中...</span></div></div>
       </div>
       <div class="kbn-seo-monitor-meter"><i id="seoQualityBar"></i></div>
       <div class="kbn-seo-monitor-foot">
@@ -10829,16 +10843,38 @@ document.addEventListener("DOMContentLoaded",()=>{
       const s=d.summary||{}; const m=d.missing||{};
       n('seoSitemapCount',s.sitemap_urls); n('seoGoodCount',s.seo_good); n('seoNeedsCount',s.needs_improvement); n('seoUrlRiskCount',s.url_risk);
       n('seoDescriptionCount',m.description); n('seoAddressCount',m.address); n('seoHoursCount',m.hours); n('seoGenreCount',m.genre);
+      const avg=document.getElementById('seoAverageScore'); if(avg)avg.textContent=Number(s.average_score||0).toFixed(1);
+      n('seoScore90',s.score_90_plus); n('seoScore80',s.score_80s); n('seoScore70',s.score_70s); n('seoScoreUnder70',s.score_under70);
+      const low=document.getElementById('seoLowestList');
+      if(low){
+        const rows=Array.isArray(d.lowest)?d.lowest:[];
+        low.innerHTML=rows.length?rows.map(x=>`<div><span>${esc(x.name||'店舗')} <em>${esc(x.area||'')}${x.missing?.length?' ・ '+esc(x.missing.join('/')):''}</em></span><strong>${Number(x.score||0)}点</strong></div>`).join(''):'<div><span>低スコア店舗はありません</span></div>';
+      }
       const pct=Math.max(0,Math.min(100,Number(s.quality_percent||0)));
       const bar=document.getElementById('seoQualityBar'); if(bar)bar.style.width=pct+'%';
-      const qt=document.getElementById('seoQualityText'); if(qt)qt.textContent=`SEO充実率 ${pct}% ／ 公開 ${Number(s.published||0).toLocaleString('ja-JP')}店舗`;
+      const qt=document.getElementById('seoQualityText'); if(qt)qt.textContent=`SEO良好率 ${pct}% ／ 公開 ${Number(s.published||0).toLocaleString('ja-JP')}店舗`;
       const at=document.getElementById('seoCheckedAt'); if(at)at.textContent='更新 '+new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
     }catch(e){
       const qt=document.getElementById('seoQualityText');if(qt)qt.textContent='SEO状態を取得できませんでした: '+(e?.message||e);
     }finally{if(btn){btn.disabled=false;btn.textContent='更新';}}
   }
+  async function improveLowSeo(){
+    const btn=document.getElementById('improveLowSeoBtn');
+    if(btn){btn.disabled=true;btn.textContent='改善中...';}
+    try{
+      const d=await api('/api/admin/seo-improve-low',{method:'POST'});
+      const updated=Array.isArray(d.updated)?d.updated.length:0;
+      const checked=Number(d.checked||0);
+      if(btn)btn.textContent=`更新 ${updated}/${checked}`;
+      await loadSeoMonitor();
+      setTimeout(()=>{if(btn){btn.disabled=false;btn.textContent='低スコア20店舗を改善';}},1400);
+    }catch(e){
+      if(btn){btn.disabled=false;btn.textContent='改善失敗・再試行';}
+    }
+  }
   document.addEventListener('DOMContentLoaded',()=>{
     document.getElementById('reloadSeoMonitorBtn')?.addEventListener('click',loadSeoMonitor);
+    document.getElementById('improveLowSeoBtn')?.addEventListener('click',improveLowSeo);
     loadSeoMonitor();
   });
   window.loadSeoMonitor=loadSeoMonitor;
