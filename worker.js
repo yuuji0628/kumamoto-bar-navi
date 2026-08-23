@@ -5603,53 +5603,82 @@ async function refreshMissingPublishedLiteV242(env,{limit=20,afterId=0}={}){
 }
 
 
+const KBN_SEO_SCORE_SQL_V312 = `
+  (CASE WHEN TRIM(COALESCE(s.slug,''))!='' THEN 10 ELSE 0 END) +
+  (CASE WHEN LENGTH(TRIM(COALESCE(s.name,'')))>=2 THEN 8 ELSE 0 END) +
+  (CASE WHEN TRIM(COALESCE(s.area,''))!='' THEN 7 ELSE 0 END) +
+  (CASE WHEN TRIM(COALESCE(s.address,''))!='' THEN 12 ELSE 0 END) +
+  (CASE WHEN TRIM(COALESCE(s.hours,''))!='' THEN 15 ELSE 0 END) +
+  (CASE WHEN TRIM(COALESCE(s.genre,''))!='' THEN 10 ELSE 0 END) +
+  (CASE WHEN LENGTH(TRIM(COALESCE(s.description,'')))>=120 THEN 15
+        WHEN LENGTH(TRIM(COALESCE(s.description,'')))>=80 THEN 10
+        WHEN LENGTH(TRIM(COALESCE(s.description,'')))>=40 THEN 5 ELSE 0 END) +
+  (CASE WHEN TRIM(COALESCE(s.image_url,''))!='' OR TRIM(COALESCE(s.image_key,''))!='' THEN 7 ELSE 0 END) +
+  (CASE WHEN TRIM(COALESCE(s.instagram,''))!='' THEN 5 ELSE 0 END) +
+  (CASE WHEN TRIM(COALESCE(s.phone,''))!='' THEN 4 ELSE 0 END) +
+  (CASE WHEN TRIM(COALESCE(s.features,''))!='' THEN 3 ELSE 0 END) +
+  (CASE WHEN TRIM(COALESCE(s.holiday,''))!='' THEN 2 ELSE 0 END) +
+  (CASE WHEN COALESCE(s.budget_min,0)>0 OR COALESCE(s.budget_max,0)>0 OR COALESCE(s.seats,0)>0 THEN 2 ELSE 0 END)
+`;
+
+async function ensureKbnSeoAttemptTableV312(env){
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS kbn_seo_attempts(
+      shop_id INTEGER PRIMARY KEY,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      last_score INTEGER NOT NULL DEFAULT 0,
+      last_fields TEXT,
+      last_attempt_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run();
+}
+
 async function refreshSeoPublishedV311(env,{limit=20,afterId=0}={}){
+  await ensureKbnSeoAttemptTableV312(env);
   const max=Math.max(1,Math.min(Number(limit)||20,20));
-  const cursor=Math.max(0,Number(afterId)||0);
+
+  // v3.12: ID順ではなくSEOスコアが低い店舗を優先。
+  // 同じ低スコア店舗だけを毎回触り続けないよう、最終試行が古い順で回す。
   const r=await env.DB.prepare(`
-    SELECT id,name,area,address,hours,genre,features,description,is_published
-    FROM shops
-    WHERE COALESCE(is_published,1)=1
-      AND id>?
-      AND (
-        LENGTH(TRIM(COALESCE(description,'')))<80 OR
-        COALESCE(TRIM(address),'')='' OR
-        COALESCE(TRIM(hours),'')='' OR
-        COALESCE(TRIM(genre),'')=''
-      )
-    ORDER BY
-      CASE WHEN COALESCE(TRIM(hours),'')='' THEN 0
-           WHEN COALESCE(TRIM(address),'')='' THEN 1
-           WHEN LENGTH(TRIM(COALESCE(description,'')))<80 THEN 2
-           ELSE 3 END,
-      id ASC
+    SELECT s.id,s.name,s.area,s.address,s.hours,s.genre,s.features,s.description,
+           s.holiday,s.instagram,s.phone,s.image_url,s.image_key,s.budget_min,s.budget_max,s.seats,
+           s.is_published, (${KBN_SEO_SCORE_SQL_V312}) AS seo_score,
+           a.last_attempt_at
+    FROM shops s
+    LEFT JOIN kbn_seo_attempts a ON a.shop_id=s.id
+    WHERE COALESCE(s.is_published,1)=1
+      AND (${KBN_SEO_SCORE_SQL_V312}) < 90
+    ORDER BY (${KBN_SEO_SCORE_SQL_V312}) ASC,
+             CASE WHEN a.last_attempt_at IS NULL THEN 0 ELSE 1 END ASC,
+             COALESCE(a.last_attempt_at,'1970-01-01') ASC,
+             s.id ASC
     LIMIT ?
-  `).bind(cursor,max).all();
+  `).bind(max).all();
 
   const rows=r.results||[];
   const updated=[],unchanged=[],failed=[];
 
   for(const shop of rows){
+    const beforeScore=Math.max(0,Math.min(100,Number(shop.seo_score||0)));
+    let changedFields=[];
     try{
       const cleanName=String(shop.name||'').replace(/^【KBN独自掲載】/,'').trim();
       let nextAddress=String(shop.address||'').trim();
       let nextHours=String(shop.hours||'').trim();
       let nextGenre=String(shop.genre||'').trim();
-      let gp=null;
 
-      // 住所・営業時間は推測せず、Google Placesで一致した店舗だけ補完する。
+      // 住所・営業時間は推測せず、Google Placesで店舗一致した場合のみ補完。
       if(!nextAddress || !nextHours){
         const found=await findGooglePlaceForShop(env,{name:cleanName,area:shop.area||'熊本'});
         if(found?.ok && found?.matched){
           const details=await googlePlaceDetails(env,found.place?.id);
-          gp=details?.ok&&details?.place?details.place:found.place;
+          const gp=details?.ok&&details?.place?details.place:found.place;
           if(!nextAddress)nextAddress=t(googlePlaceAddress(gp)||'',500);
           if(!nextHours)nextHours=t(googleOpeningHours(gp)||'',800);
         }
       }
 
-      // ジャンルは既存情報がない場合に無理な推測をしない。
-      // 既存の特徴・店名に明確な語がある場合のみ安全側で補完する。
+      // ジャンルは明確な語がある場合のみ安全側で補完。
       if(!nextGenre){
         const hay=`${cleanName} ${shop.features||''}`.toLowerCase();
         if(/スナック|snack/.test(hay))nextGenre='スナック';
@@ -5660,7 +5689,7 @@ async function refreshSeoPublishedV311(env,{limit=20,afterId=0}={}){
       }
 
       let nextDescription=String(shop.description||'').replace(/\s+/g,' ').trim();
-      if(nextDescription.length<80){
+      if(nextDescription.length<120){
         const area=String(shop.area||'熊本県').trim()||'熊本県';
         const genre=nextGenre||'BAR・ナイトスポット';
         const facts=[];
@@ -5668,55 +5697,49 @@ async function refreshSeoPublishedV311(env,{limit=20,afterId=0}={}){
         if(nextHours)facts.push(`営業時間は${nextHours}`);
         const feat=String(shop.features||'').replace(/\s+/g,' ').trim();
         if(feat)facts.push(`特徴は${feat.slice(0,120)}`);
-        const factual=facts.length?` ${facts.join('。')}。`:'';
-        nextDescription=t(`${cleanName||'この店舗'}は${area}に掲載されている${genre}です。KUMAMOTO BAR NAVIでは、来店前に確認しやすいよう店舗の基本情報を整理して掲載しています。${factual} 最新の営業状況は来店前に店舗へご確認ください。`,5000);
+        const holiday=String(shop.holiday||'').trim();
+        if(holiday)facts.push(`定休日は${holiday}`);
+        const factual=facts.length?` ${facts.join('。')}。`:' ';
+        nextDescription=t(`${cleanName||'この店舗'}は${area}で探せる${genre}です。KUMAMOTO BAR NAVIでは、店選びの比較に役立つよう所在地・営業時間・ジャンルなど確認できる店舗情報を整理して掲載しています。${factual}来店前には最新の営業状況や料金、予約可否などを店舗へご確認ください。`,5000);
       }
 
-      const changed=
-        nextAddress!==String(shop.address||'').trim() ||
-        nextHours!==String(shop.hours||'').trim() ||
-        nextGenre!==String(shop.genre||'').trim() ||
-        nextDescription!==String(shop.description||'').replace(/\s+/g,' ').trim();
+      if(nextAddress!==String(shop.address||'').trim())changedFields.push('address');
+      if(nextHours!==String(shop.hours||'').trim())changedFields.push('hours');
+      if(nextGenre!==String(shop.genre||'').trim())changedFields.push('genre');
+      if(nextDescription!==String(shop.description||'').replace(/\s+/g,' ').trim())changedFields.push('description');
 
-      if(!changed){
-        unchanged.push({id:shop.id,name:shop.name,reason:'NO_VERIFIED_CHANGE'});
-        continue;
+      if(changedFields.length){
+        await env.DB.prepare(`
+          UPDATE shops SET address=?,hours=?,genre=?,description=?,updated_at=CURRENT_TIMESTAMP WHERE id=?
+        `).bind(nextAddress,nextHours,nextGenre,nextDescription,shop.id).run();
+        updated.push({id:shop.id,name:shop.name,fields:changedFields,score_before:beforeScore});
+      }else{
+        unchanged.push({id:shop.id,name:shop.name,reason:'NO_VERIFIED_CHANGE',score_before:beforeScore});
       }
-
-      await env.DB.prepare(`
-        UPDATE shops SET
-          address=?,hours=?,genre=?,description=?,updated_at=CURRENT_TIMESTAMP
-        WHERE id=?
-      `).bind(nextAddress,nextHours,nextGenre,nextDescription,shop.id).run();
-
-      const fields=[];
-      if(nextAddress!==String(shop.address||'').trim())fields.push('address');
-      if(nextHours!==String(shop.hours||'').trim())fields.push('hours');
-      if(nextGenre!==String(shop.genre||'').trim())fields.push('genre');
-      if(nextDescription!==String(shop.description||'').replace(/\s+/g,' ').trim())fields.push('description');
-      updated.push({id:shop.id,name:shop.name,fields});
     }catch(e){
-      failed.push({id:shop.id,name:shop.name,reason:String(e?.message||e).slice(0,250)});
+      failed.push({id:shop.id,name:shop.name,reason:String(e?.message||e).slice(0,250),score_before:beforeScore});
+    }finally{
+      try{
+        await env.DB.prepare(`
+          INSERT INTO kbn_seo_attempts(shop_id,attempts,last_score,last_fields,last_attempt_at)
+          VALUES(?,1,?,?,CURRENT_TIMESTAMP)
+          ON CONFLICT(shop_id) DO UPDATE SET
+            attempts=attempts+1,last_score=excluded.last_score,last_fields=excluded.last_fields,last_attempt_at=CURRENT_TIMESTAMP
+        `).bind(shop.id,beforeScore,changedFields.join(',')).run();
+      }catch{}
     }
   }
 
-  const nextAfterId=rows.length?Number(rows[rows.length-1].id||0):cursor;
   const more=await env.DB.prepare(`
-    SELECT id FROM shops
-    WHERE COALESCE(is_published,1)=1
-      AND id>?
-      AND (
-        LENGTH(TRIM(COALESCE(description,'')))<80 OR
-        COALESCE(TRIM(address),'')='' OR
-        COALESCE(TRIM(hours),'')='' OR
-        COALESCE(TRIM(genre),'')=''
-      )
-    ORDER BY id ASC LIMIT 1
-  `).bind(nextAfterId).first();
+    SELECT COUNT(*) AS c FROM shops s
+    WHERE COALESCE(s.is_published,1)=1 AND (${KBN_SEO_SCORE_SQL_V312}) < 90
+  `).first();
 
   return {
     ok:true,checked:rows.length,updated,unchanged,failed,
-    next_after_id:nextAfterId,has_more:!!more
+    prioritized_by_score:true,
+    next_after_id:0,
+    has_more:Number(more?.c||0)>rows.length
   };
 }
 
@@ -7030,13 +7053,14 @@ export default {
 
 
 
-      // ---------- SEO / index readiness monitor v3.10 ----------
+      // ---------- SEO / index readiness monitor v3.12 ----------
       if(url.pathname==="/api/admin/seo-monitor" && request.method==="GET"){
+        const scoreExpr=KBN_SEO_SCORE_SQL_V312;
         const summary=await env.DB.prepare(`
           WITH published AS (
-            -- sitemap-shops.xml と同じ公開条件。仮掲載も含め、Google に公開している全店舗を監視する。
-            SELECT * FROM shops
-            WHERE COALESCE(is_published,1)=1
+            SELECT s.*, (${scoreExpr}) AS seo_score
+            FROM shops s
+            WHERE COALESCE(s.is_published,1)=1
           ), slug_dupes AS (
             SELECT slug FROM published
             WHERE TRIM(COALESCE(slug,''))!=''
@@ -7050,20 +7074,29 @@ export default {
             SUM(CASE WHEN TRIM(COALESCE(hours,''))='' THEN 1 ELSE 0 END) AS missing_hours,
             SUM(CASE WHEN TRIM(COALESCE(genre,''))='' THEN 1 ELSE 0 END) AS missing_genre,
             SUM(CASE WHEN TRIM(COALESCE(slug,''))='' OR slug IN (SELECT slug FROM slug_dupes) THEN 1 ELSE 0 END) AS url_risk,
-            SUM(CASE WHEN
-              TRIM(COALESCE(slug,''))!='' AND
-              LENGTH(TRIM(COALESCE(name,'')))>=2 AND
-              TRIM(COALESCE(area,''))!='' AND
-              TRIM(COALESCE(address,''))!='' AND
-              TRIM(COALESCE(hours,''))!='' AND
-              TRIM(COALESCE(genre,''))!='' AND
-              LENGTH(TRIM(COALESCE(description,'')))>=80
-            THEN 1 ELSE 0 END) AS seo_good
+            SUM(CASE WHEN seo_score>=90 THEN 1 ELSE 0 END) AS score_90_plus,
+            SUM(CASE WHEN seo_score>=80 AND seo_score<90 THEN 1 ELSE 0 END) AS score_80s,
+            SUM(CASE WHEN seo_score>=70 AND seo_score<80 THEN 1 ELSE 0 END) AS score_70s,
+            SUM(CASE WHEN seo_score<70 THEN 1 ELSE 0 END) AS score_under70,
+            ROUND(AVG(seo_score),1) AS avg_score,
+            MIN(seo_score) AS min_score,
+            MAX(seo_score) AS max_score
           FROM published
         `).first();
+
+        const low=await env.DB.prepare(`
+          SELECT s.id,s.slug,s.name,s.area,(${scoreExpr}) AS seo_score,
+                 CASE WHEN TRIM(COALESCE(s.hours,''))='' THEN 1 ELSE 0 END AS miss_hours,
+                 CASE WHEN TRIM(COALESCE(s.address,''))='' THEN 1 ELSE 0 END AS miss_address,
+                 CASE WHEN LENGTH(TRIM(COALESCE(s.description,'')))<80 THEN 1 ELSE 0 END AS miss_description
+          FROM shops s
+          WHERE COALESCE(s.is_published,1)=1
+          ORDER BY (${scoreExpr}) ASC,s.id ASC
+          LIMIT 8
+        `).all();
+
         const published=Number(summary?.published||0);
-        const good=Number(summary?.seo_good||0);
-        const risk=Number(summary?.url_risk||0);
+        const good=Number(summary?.score_90_plus||0);
         return json({
           ok:true,
           summary:{
@@ -7071,8 +7104,15 @@ export default {
             sitemap_urls:Number(summary?.sitemap_urls||0),
             seo_good:good,
             needs_improvement:Math.max(0,published-good),
-            url_risk:risk,
-            quality_percent:published?Math.round(good/published*100):0
+            url_risk:Number(summary?.url_risk||0),
+            quality_percent:published?Math.round(good/published*100):0,
+            average_score:Number(summary?.avg_score||0),
+            min_score:Number(summary?.min_score||0),
+            max_score:Number(summary?.max_score||0),
+            score_90_plus:good,
+            score_80s:Number(summary?.score_80s||0),
+            score_70s:Number(summary?.score_70s||0),
+            score_under70:Number(summary?.score_under70||0)
           },
           missing:{
             description:Number(summary?.missing_description||0),
@@ -7080,8 +7120,25 @@ export default {
             hours:Number(summary?.missing_hours||0),
             genre:Number(summary?.missing_genre||0)
           },
-          note:"sitemap-shops.xml と同じ公開条件で、全公開店舗をDBから集計したSEO準備状況です。Search Consoleの実インデックス数ではありません。"
+          lowest:(low.results||[]).map(x=>({
+            id:Number(x.id||0),slug:x.slug||'',name:x.name||'',area:x.area||'',score:Number(x.seo_score||0),
+            missing:[x.miss_hours?'営業時間':'',x.miss_address?'住所':'',x.miss_description?'説明文':''].filter(Boolean)
+          })),
+          score_rule:"100点満点。90点以上をSEO良好として、通常メンテナンスでは低スコア店舗から最大20店舗を優先改善します。",
+          note:"Search Consoleの実インデックス数ではなく、全公開店舗のSEO準備度スコアです。"
         });
+      }
+
+      if(url.pathname==="/api/admin/seo-improve-low" && request.method==="POST"){
+        const result=await refreshSeoPublishedV311(env,{limit:20,afterId:0});
+        try{
+          await createKbnAlert(env,{
+            type:"seo_score_improve",
+            title:"SEOスコア改善: 低スコア店舗",
+            message:`${Number(result?.checked||0)}店舗を確認 / 更新${Array.isArray(result?.updated)?result.updated.length:0}件 / 100点満点の低スコア順で処理`
+          });
+        }catch{}
+        return json({ok:true,...result});
       }
 
       // ---------- Free members dashboard v2.05 ----------
