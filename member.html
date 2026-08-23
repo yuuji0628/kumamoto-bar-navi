@@ -371,7 +371,7 @@ async function loadFavorites(){
     return;
   }
   box.innerHTML=rows.map(s=>`
-    <a class="member-fav" href="shop.html?slug=${encodeURIComponent(s.slug||"")}">
+    <a class="member-fav" href="/shop?slug=${encodeURIComponent(s.slug||"")}">
       <img src="${esc(s.image_url||"default-bar.svg")}" onerror="this.src='default-bar.svg'" alt="">
       <span><b>${esc(String(s.name||"").replace(/^【KBN独自掲載】/,""))}</b><small>${esc([s.area,s.genre].filter(Boolean).join(" / "))}</small></span>
       <i>›</i>
