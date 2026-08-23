@@ -5202,7 +5202,7 @@ async function renderSeoShopDetailV250(request,env,url){
   try{
     shop=await env.DB.prepare(`
       SELECT * FROM shops
-      WHERE slug=? AND is_published=1
+      WHERE slug=? AND COALESCE(is_published,1)=1
       LIMIT 1
     `).bind(slug).first();
   }catch(e){
@@ -5211,9 +5211,9 @@ async function renderSeoShopDetailV250(request,env,url){
   }
 
   if(!shop){
-    return new Response(`<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,follow"><title>店舗が見つかりません｜KUMAMOTO BAR NAVI</title></head><body><main><h1>店舗が見つかりません</h1><p><a href="/bars.html">BARを探す</a></p></main></body></html>`,{
+    return new Response(`<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,follow"><title>店舗が見つかりません｜KUMAMOTO BAR NAVI</title><link rel="canonical" href="${url.origin}/bars.html"></head><body><main><h1>店舗が見つかりません</h1><p>指定された店舗は現在公開されていません。</p><p><a href="/bars.html">熊本のBARを探す</a></p></main></body></html>`,{
       status:404,
-      headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-cache, max-age=0, must-revalidate"}
+      headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-cache, max-age=0, must-revalidate","x-robots-tag":"noindex, follow"}
     });
   }
 
@@ -5228,14 +5228,35 @@ async function renderSeoShopDetailV250(request,env,url){
   const canonical=`${url.origin}/shop?slug=${encodeURIComponent(shop.slug)}`;
   const budget=kbnBudget(shop);
   const rawDesc=String(shop.description||"").replace(/※本ページ[\s\S]*/g,"").replace(/\s+/g," ").trim();
+  const featureList=String(shop.features||"")
+    .split(/[、,\/｜|・\n]+/).map(x=>x.trim()).filter(Boolean).slice(0,8);
   const description=[
     `${area}の${genre}「${name}」の店舗情報`,
+    rawDesc?rawDesc.slice(0,82):"",
     shop.address?`住所 ${String(shop.address).trim()}`:"",
     shop.hours?`営業時間 ${String(shop.hours).trim()}`:"",
-    budget?`料金目安 ${budget}`:"",
-    rawDesc?rawDesc.slice(0,70):""
-  ].filter(Boolean).join("。").slice(0,155);
-  const title=`${name}｜${area}の${genre}｜KUMAMOTO BAR NAVI`;
+    budget?`料金目安 ${budget}`:""
+  ].filter(Boolean).join("。").slice(0,158);
+  const title=`${name}｜${area}の${genre}・営業時間・料金｜KUMAMOTO BAR NAVI`;
+
+  let related=[];
+  try{
+    const rr=await env.DB.prepare(`
+      SELECT slug,name,area,genre,address,hours
+      FROM shops
+      WHERE COALESCE(is_published,1)=1 AND area=? AND slug<>?
+      ORDER BY CASE WHEN genre=? THEN 0 ELSE 1 END, COALESCE(updated_at,created_at) DESC, id DESC
+      LIMIT 6
+    `).bind(area,shop.slug,genre).all();
+    related=rr.results||[];
+  }catch(e){
+    console.error("seo related shops query",e);
+  }
+
+  const instagram=String(shop.instagram||"").trim();
+  const sameAs=[];
+  if(/^https?:\/\//i.test(instagram))sameAs.push(instagram);
+  else if(/^@?[A-Za-z0-9._]+$/.test(instagram))sameAs.push(`https://www.instagram.com/${instagram.replace(/^@/,"")}/`);
 
   const jsonLd={
     "@context":"https://schema.org",
@@ -5245,12 +5266,25 @@ async function renderSeoShopDetailV250(request,env,url){
         "@id":`${canonical}#shop`,
         "name":name,
         "url":canonical,
+        "mainEntityOfPage":{"@type":"WebPage","@id":canonical},
         "description":description,
-        ...(shop.image_url?{"image":shop.image_url}:{}),
+        ...(shop.image_url?{"image":[shop.image_url]}:{}),
         ...(shop.phone?{"telephone":String(shop.phone)}:{}),
         ...(shop.address?{"address":{"@type":"PostalAddress","streetAddress":String(shop.address),"addressRegion":"熊本県","addressCountry":"JP"}}:{}),
         ...(shop.hours?{"openingHours":String(shop.hours)}:{}),
-        ...(budget?{"priceRange":budget}:{})
+        ...(budget?{"priceRange":budget}:{}),
+        ...(sameAs.length?{"sameAs":sameAs}:{}),
+        ...(genre?{"additionalType":"https://schema.org/BarOrPub"}:{})
+      },
+      {
+        "@type":"WebPage",
+        "@id":canonical,
+        "url":canonical,
+        "name":title,
+        "description":description,
+        "inLanguage":"ja-JP",
+        "isPartOf":{"@type":"WebSite","name":"KUMAMOTO BAR NAVI","url":`${url.origin}/`},
+        "about":{"@id":`${canonical}#shop`}
       },
       {
         "@type":"BreadcrumbList",
@@ -5264,13 +5298,13 @@ async function renderSeoShopDetailV250(request,env,url){
   };
 
   const escAttr=v=>kbnSeoEsc(v);
+  const ogImage=shop.image_url?String(shop.image_url).trim():`${url.origin}/logo.png`;
 
-  // IMPORTANT: the shared shop asset must never leak a noindex directive into a real shop page.
-  // Remove every robots/googlebot meta (attribute order/quotes do not matter), then insert one
-  // authoritative index directive into <head> before doing the rest of the SEO substitutions.
+  // Real shop pages are indexable from the first byte Google receives.
+  // Remove stale robots/googlebot directives from the shared template, then add one authoritative directive.
   html=html
     .replace(/<meta\b[^>]*\bname\s*=\s*["'](?:robots|googlebot)["'][^>]*>/gi,"")
-    .replace(/<head([^>]*)>/i,'<head$1><meta name="robots" content="index,follow,max-image-preview:large">')
+    .replace(/<head([^>]*)>/i,'<head$1><meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">')
     .replace(/<title>[\s\S]*?<\/title>/i,`<title>${escAttr(title)}</title>`)
     .replace(/<meta name="description" content="[^"]*">/i,`<meta name="description" content="${escAttr(description)}">`)
     .replace(/<link id="dynamicCanonical" rel="canonical" href="[^"]*">/i,`<link id="dynamicCanonical" rel="canonical" href="${escAttr(canonical)}">`)
@@ -5279,17 +5313,31 @@ async function renderSeoShopDetailV250(request,env,url){
     .replace(/<meta id="dynamicOgUrl" property="og:url" content="[^"]*">/i,`<meta id="dynamicOgUrl" property="og:url" content="${escAttr(canonical)}">`)
     .replace(/<script id="shopJsonLd" type="application\/ld\+json">[\s\S]*?<\/script>/i,`<script id="shopJsonLd" type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g,"\\u003c")}</script>`);
 
-  const fallback=`<article class="public-shop-layout" data-seo-fallback="1">
+  const socialMeta=`\n<meta property="og:site_name" content="KUMAMOTO BAR NAVI">\n<meta property="og:locale" content="ja_JP">\n<meta property="og:image" content="${escAttr(ogImage)}">\n<meta name="twitter:card" content="summary_large_image">\n<meta name="twitter:title" content="${escAttr(title)}">\n<meta name="twitter:description" content="${escAttr(description)}">\n<meta name="twitter:image" content="${escAttr(ogImage)}">`;
+  html=html.replace('</head>',`${socialMeta}\n</head>`);
+
+  const updated=String(shop.updated_at||shop.published_at||shop.created_at||"").trim();
+  const updatedLabel=updated?updated.slice(0,10).replace(/-/g,"/"):"";
+  const facts=[
+    shop.address?["住所",shop.address]:null,
+    shop.hours?["営業時間",shop.hours]:null,
+    shop.holiday?["定休日",shop.holiday]:null,
+    budget?["料金目安",budget]:null,
+    shop.seats?["席数",`${shop.seats}席`]:null,
+    shop.phone?["電話",shop.phone]:null
+  ].filter(Boolean);
+  const relatedHtml=related.length?`<section class="kbn-seo-related"><h2>${kbnSeoEsc(area)}の近くのBAR</h2><ul>${related.map(r=>`<li><a href="/shop?slug=${encodeURIComponent(r.slug||"")}"><strong>${kbnSeoEsc(kbnCleanShopName(r.name)||"BAR")}</strong><span>${kbnSeoEsc([r.area,r.genre].filter(Boolean).join(" / "))}</span></a></li>`).join("")}</ul><p><a href="/bars.html?area=${encodeURIComponent(area)}">${kbnSeoEsc(area)}のBARを一覧で見る</a></p></section>`:"";
+  const fallback=`<article class="public-shop-layout kbn-seo-server-shop" data-seo-fallback="1">
     <section class="public-shop-summary">
+      <nav aria-label="パンくず"><a href="/">ホーム</a> › <a href="/bars.html">BARを探す</a> › <span>${kbnSeoEsc(name)}</span></nav>
       <p class="public-shop-location">${kbnSeoEsc([area,genre].filter(Boolean).join(" / "))}</p>
       <h1>${kbnSeoEsc(name)}</h1>
-      ${description?`<p>${kbnSeoEsc(description)}</p>`:""}
-      <dl>
-        ${shop.address?`<div><dt>住所</dt><dd>${kbnSeoEsc(shop.address)}</dd></div>`:""}
-        ${shop.hours?`<div><dt>営業時間</dt><dd>${kbnSeoEsc(shop.hours)}</dd></div>`:""}
-        ${budget?`<div><dt>料金目安</dt><dd>${kbnSeoEsc(budget)}</dd></div>`:""}
-      </dl>
-      <p><a href="/bars.html?area=${encodeURIComponent(area)}">${kbnSeoEsc(area)}のBARをもっと見る</a></p>
+      ${rawDesc?`<p class="kbn-seo-description">${kbnSeoEsc(rawDesc)}</p>`:`<p class="kbn-seo-description">${kbnSeoEsc(`${name}は${area}で掲載中の${genre}です。住所・営業時間・料金目安など、来店前に確認したい店舗情報をまとめています。`)}</p>`}
+      ${featureList.length?`<div class="kbn-seo-features" aria-label="店舗の特徴">${featureList.map(x=>`<span>${kbnSeoEsc(x)}</span>`).join("")}</div>`:""}
+      ${facts.length?`<section><h2>${kbnSeoEsc(name)}の基本情報</h2><dl>${facts.map(([k,v])=>`<div><dt>${kbnSeoEsc(k)}</dt><dd>${kbnSeoEsc(v)}</dd></div>`).join("")}</dl></section>`:""}
+      ${(sameAs.length||shop.phone)?`<section><h2>公式・連絡先</h2><p>${shop.phone?`<a href="tel:${kbnSeoEsc(String(shop.phone).replace(/[^0-9+]/g,""))}">電話で確認する</a> `:""}${sameAs.length?`<a href="${kbnSeoEsc(sameAs[0])}" rel="nofollow noopener">Instagramを確認する</a>`:""}</p></section>`:""}
+      ${updatedLabel?`<p class="kbn-seo-updated"><small>店舗情報 最終更新：${kbnSeoEsc(updatedLabel)}</small></p>`:""}
+      ${relatedHtml}
     </section>
   </article>`;
   html=html.replace('<div id="shopDetail"><div class="public-loading">店舗情報を読み込んでいます...</div></div>',`<div id="shopDetail">${fallback}</div>`);
@@ -5297,8 +5345,10 @@ async function renderSeoShopDetailV250(request,env,url){
   const h=new Headers(asset.headers);
   h.delete("content-length");
   h.set("content-type","text/html; charset=utf-8");
+  h.set("content-language","ja");
   h.set("cache-control","public, max-age=300, stale-while-revalidate=600");
-  h.set("x-robots-tag","index, follow, max-image-preview:large");
+  h.set("x-robots-tag","index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1");
+  h.set("link",`<${canonical}>; rel="canonical"`);
   return new Response(html,{status:200,headers:h});
 }
 
