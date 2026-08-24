@@ -3786,6 +3786,15 @@ html,body{max-width:100%;overflow-x:hidden}
       <span class="dashboard-arrow">›</span>
     </button>
 
+    <button type="button" class="dashboard-primary-card" data-go-tab="seo">
+      <span class="dashboard-icon">🔎</span>
+      <span class="dashboard-copy">
+        <b>SEO・インデックス</b>
+        <small>SEOスコア・構造化データを確認</small>
+      </span>
+      <span class="dashboard-arrow">›</span>
+    </button>
+
     <button type="button" class="dashboard-primary-card" data-go-tab="siteupdate">
       <span class="dashboard-icon">🔄</span>
       <span class="dashboard-copy">
@@ -3807,6 +3816,70 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
 </section>
 
+
+<section id="tab-seo" class="admin-block" hidden>
+  <div class="admin-block-head">
+    <div>
+      <p class="eyebrow">SEO / INDEX</p>
+      <h2>SEO・インデックス</h2>
+      <p>公開店舗のSEO品質・サイトマップ・構造化データをまとめて確認します。</p>
+    </div>
+  </div>
+
+<div class="kbn-seo-monitor-card" id="kbnSeoMonitorCard">
+      <div class="kbn-seo-monitor-head">
+        <div>
+          <span class="kbn-seo-monitor-kicker">SEO / INDEX READINESS</span>
+          <h3>SEO・インデックス監視</h3>
+          <p>公開店舗のサイトマップ掲載状況と、Googleに評価されやすい情報量を自動チェックします。</p>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button type="button" id="improveLowSeoBtn">低スコア20店舗を改善</button><button type="button" id="reloadSeoMonitorBtn">更新</button></div>
+      </div>
+      <div class="kbn-seo-monitor-summary">
+        <div><span>サイトマップ掲載</span><strong id="seoSitemapCount">—</strong><small>公開店舗URL</small></div>
+        <div><span>SEO良好</span><strong id="seoGoodCount">—</strong><small>主要項目が充実</small></div>
+        <div><span>改善必要</span><strong id="seoNeedsCount">—</strong><small>情報不足あり</small></div>
+        <div><span>URL要確認</span><strong id="seoUrlRiskCount">—</strong><small>slug不足・重複</small></div>
+      </div>
+      <div class="kbn-seo-monitor-details">
+        <div><span>説明文不足</span><b id="seoDescriptionCount">—</b></div>
+        <div><span>説明文 高品質</span><b id="seoDescriptionGood">—</b></div>
+        <div><span>説明文 改善余地</span><b id="seoDescriptionMid">—</b></div>
+        <div><span>住所不足</span><b id="seoAddressCount">—</b></div>
+        <div><span>営業時間不足</span><b id="seoHoursCount">—</b></div>
+        <div><span>ジャンル不足</span><b id="seoGenreCount">—</b></div>
+        <div><span>画像不足</span><b id="seoImageCount">—</b></div>
+        <div><span>画像あり</span><b id="seoImageGood">—</b></div>
+      </div>
+      <div class="kbn-seo-score100">
+        <div class="kbn-seo-score100-head">
+          <div><span>平均SEOスコア</span><br><strong id="seoAverageScore">—</strong><small> / 100</small></div>
+          <small>90点以上をSEO良好判定</small>
+        </div>
+        <div class="kbn-seo-score-buckets">
+          <div><span>90〜100</span><b id="seoScore90">—</b></div>
+          <div><span>80〜89</span><b id="seoScore80">—</b></div>
+          <div><span>70〜79</span><b id="seoScore70">—</b></div>
+          <div><span>70未満</span><b id="seoScoreUnder70">—</b></div>
+        </div>
+        <div class="kbn-seo-lowlist" id="seoLowestList"><div><span>低スコア店舗を確認中...</span></div></div>
+      </div>
+
+      <div class="kbn-structured-check">
+        <div class="kbn-structured-check-head">
+          <input id="structuredDataSlug" type="text" value="bar" placeholder="店舗slug（例: bar）" aria-label="構造化データを確認する店舗slug">
+          <button type="button" id="checkStructuredDataBtn">構造化データ確認</button>
+        </div>
+        <div id="structuredDataResult" class="kbn-structured-result">代表店舗のJSON-LDをサイト側で事前チェックできます。</div>
+      </div>
+      <div class="kbn-seo-monitor-meter"><i id="seoQualityBar"></i></div>
+      <div class="kbn-seo-monitor-foot">
+        <span id="seoQualityText">SEO状態を読み込み中...</span>
+        <small id="seoCheckedAt"></small>
+      </div>
+      <div class="kbn-seo-monitor-note">※ Search Consoleの「実際のインデックス登録数」ではなく、サイト側で自動判定できるSEO準備状況です。画像SEOは店舗固有画像だけを評価し、画像なし店舗にはSEO目的のダミー画像を付けません。</div>
+    </div>
+</section>
 
 
 <section id="tab-shops" class="admin-block">
@@ -4276,59 +4349,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div id="maintenanceStatus" class="auto-discovery-status"></div>
 
-    <div class="kbn-seo-monitor-card" id="kbnSeoMonitorCard">
-      <div class="kbn-seo-monitor-head">
-        <div>
-          <span class="kbn-seo-monitor-kicker">SEO / INDEX READINESS</span>
-          <h3>SEO・インデックス監視</h3>
-          <p>公開店舗のサイトマップ掲載状況と、Googleに評価されやすい情報量を自動チェックします。</p>
-        </div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button type="button" id="improveLowSeoBtn">低スコア20店舗を改善</button><button type="button" id="reloadSeoMonitorBtn">更新</button></div>
-      </div>
-      <div class="kbn-seo-monitor-summary">
-        <div><span>サイトマップ掲載</span><strong id="seoSitemapCount">—</strong><small>公開店舗URL</small></div>
-        <div><span>SEO良好</span><strong id="seoGoodCount">—</strong><small>主要項目が充実</small></div>
-        <div><span>改善必要</span><strong id="seoNeedsCount">—</strong><small>情報不足あり</small></div>
-        <div><span>URL要確認</span><strong id="seoUrlRiskCount">—</strong><small>slug不足・重複</small></div>
-      </div>
-      <div class="kbn-seo-monitor-details">
-        <div><span>説明文不足</span><b id="seoDescriptionCount">—</b></div>
-        <div><span>説明文 高品質</span><b id="seoDescriptionGood">—</b></div>
-        <div><span>説明文 改善余地</span><b id="seoDescriptionMid">—</b></div>
-        <div><span>住所不足</span><b id="seoAddressCount">—</b></div>
-        <div><span>営業時間不足</span><b id="seoHoursCount">—</b></div>
-        <div><span>ジャンル不足</span><b id="seoGenreCount">—</b></div>
-        <div><span>画像不足</span><b id="seoImageCount">—</b></div>
-        <div><span>画像あり</span><b id="seoImageGood">—</b></div>
-      </div>
-      <div class="kbn-seo-score100">
-        <div class="kbn-seo-score100-head">
-          <div><span>平均SEOスコア</span><br><strong id="seoAverageScore">—</strong><small> / 100</small></div>
-          <small>90点以上をSEO良好判定</small>
-        </div>
-        <div class="kbn-seo-score-buckets">
-          <div><span>90〜100</span><b id="seoScore90">—</b></div>
-          <div><span>80〜89</span><b id="seoScore80">—</b></div>
-          <div><span>70〜79</span><b id="seoScore70">—</b></div>
-          <div><span>70未満</span><b id="seoScoreUnder70">—</b></div>
-        </div>
-        <div class="kbn-seo-lowlist" id="seoLowestList"><div><span>低スコア店舗を確認中...</span></div></div>
-      </div>
-
-      <div class="kbn-structured-check">
-        <div class="kbn-structured-check-head">
-          <input id="structuredDataSlug" type="text" value="bar" placeholder="店舗slug（例: bar）" aria-label="構造化データを確認する店舗slug">
-          <button type="button" id="checkStructuredDataBtn">構造化データ確認</button>
-        </div>
-        <div id="structuredDataResult" class="kbn-structured-result">代表店舗のJSON-LDをサイト側で事前チェックできます。</div>
-      </div>
-      <div class="kbn-seo-monitor-meter"><i id="seoQualityBar"></i></div>
-      <div class="kbn-seo-monitor-foot">
-        <span id="seoQualityText">SEO状態を読み込み中...</span>
-        <small id="seoCheckedAt"></small>
-      </div>
-      <div class="kbn-seo-monitor-note">※ Search Consoleの「実際のインデックス登録数」ではなく、サイト側で自動判定できるSEO準備状況です。画像SEOは店舗固有画像だけを評価し、画像なし店舗にはSEO目的のダミー画像を付けません。</div>
-    </div>
+    
     <div class="kbn-alert-head">
       <b>通知</b>
       <button type="button" id="reloadKbnAlertsBtn">更新</button>
@@ -9835,6 +9856,7 @@ window.switchAdminTab=function(tab,opts={}){
       subs:window.loadSubs,
       ownerreq:window.loadOwnerReq,
       analytics:window.loadAnalytics,
+      seo:window.loadSeoMonitor,
       members:window.loadMembers,
       siteupdate:window.loadKbnGithubStatus
     };
