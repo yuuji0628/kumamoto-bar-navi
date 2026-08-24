@@ -1,4 +1,4 @@
-// KBN v3.10: 自動開拓 重複判定改善＋拡張探索
+// KBN v3.11: 自動開拓 小分けバッチ＋503自動復旧＋続きから再開
 
 function kbnNormInstagram(v){
   let s=String(v||"").trim().toLowerCase();
