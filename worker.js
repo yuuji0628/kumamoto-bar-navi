@@ -5156,6 +5156,45 @@ function kbnSchemaShopNode(shop,{origin,canonical,name,area,genre,description,bu
   };
 }
 
+
+// Structured data self-check v270
+function kbnStructuredDataAudit(shop,origin){
+  const slug=String(shop?.slug||"").trim();
+  const name=kbnCleanShopName(shop?.name)||"";
+  const area=String(shop?.area||"熊本").trim()||"熊本";
+  const genre=String(shop?.genre||"BAR").trim()||"BAR";
+  const canonical=`${origin}/shop?slug=${encodeURIComponent(slug)}`;
+  const featureList=String(shop?.features||"").split(/[、,\\/｜|・\\n]+/).map(x=>x.trim()).filter(Boolean).slice(0,8);
+  const budget=kbnBudget(shop);
+  const rawDesc=String(shop?.description||"").replace(/※本ページ[\\s\\S]*/g,"").replace(/\\s+/g," ").trim();
+  const description=[`${area}の${genre}「${name}」の店舗情報`,rawDesc?rawDesc.slice(0,82):"",shop?.address?`住所 ${String(shop.address).trim()}`:"",shop?.hours?`営業時間 ${String(shop.hours).trim()}`:"",budget?`料金目安 ${budget}`:""].filter(Boolean).join("。").slice(0,158);
+  const node=kbnSchemaShopNode(shop,{origin,canonical,name,area,genre,description,budget,featureList});
+  const errors=[],warnings=[],passed=[];
+  const req=(ok,label,msg)=>{if(ok)passed.push(label);else errors.push(msg||label)};
+  const warn=(ok,msg)=>{if(!ok)warnings.push(msg)};
+  req(slug,'固有URL','slugがありません');
+  req(name,'店舗名','店舗名がありません');
+  req(canonical.startsWith('https://'),'canonical','canonical URLが不正です');
+  req(Array.isArray(node['@type'])&&node['@type'].includes('BarOrPub'),'BarOrPub','BarOrPub型がありません');
+  req(node['@id']===`${canonical}#business`,'@id','店舗@idがcanonicalと一致していません');
+  req(node.url===canonical,'URL一致','構造化データURLがcanonicalと一致していません');
+  req(Boolean(node.description)&&String(node.description).length>=50,'説明文','構造化データの説明文が短すぎます');
+  warn(Boolean(node.address),'住所が未設定です。LocalBusiness理解のため補完推奨');
+  warn(Boolean(node.openingHours),'営業時間が未設定です');
+  warn(Boolean(node.telephone),'電話番号が未設定です');
+  warn(Boolean(node.image&&node.image.length),'画像が未設定です');
+  warn(Boolean(node.priceRange),'料金目安が未設定です');
+  warn(Boolean(node.sameAs&&node.sameAs.length),'Instagram等のsameAsが未設定です');
+  if(node.address){
+    warn(node.address.addressCountry==='JP','addressCountry が JP ではありません');
+    warn(Boolean(node.address.addressRegion),'addressRegion が未設定です');
+  }
+  const max=100;
+  let score=max-errors.length*20-warnings.length*5;
+  score=Math.max(0,Math.min(100,score));
+  return {score,errors,warnings,passed,canonical,node};
+}
+
 function kbnCleanShopName(v){
   return String(v||"").replace(/^【KBN独自掲載】/,"")
     .replace(/\s*[（(]\s*@[A-Za-z0-9._]+\s*[）)]\s*$/,"")
@@ -7473,6 +7512,26 @@ export default {
 
 
 
+
+
+      // ---------- Structured data validator v270 ----------
+      if(url.pathname==="/api/admin/structured-data-check" && request.method==="GET"){
+        const slug=String(url.searchParams.get("slug")||"").trim();
+        if(!slug)return json({ok:false,error:"SLUG_REQUIRED"},{status:400});
+        const shop=await env.DB.prepare(`SELECT * FROM shops WHERE slug=? AND COALESCE(is_published,1)=1 LIMIT 1`).bind(slug).first();
+        if(!shop)return json({ok:false,error:"SHOP_NOT_FOUND"},{status:404});
+        const audit=kbnStructuredDataAudit(shop,url.origin);
+        return json({
+          ok:true,
+          shop:{id:shop.id,slug:shop.slug,name:kbnCleanShopName(shop.name),area:shop.area,genre:shop.genre},
+          score:audit.score,
+          errors:audit.errors,
+          warnings:audit.warnings,
+          passed:audit.passed,
+          canonical:audit.canonical,
+          jsonld:audit.node
+        },{headers:{"Cache-Control":"no-store"}});
+      }
 
       // ---------- SEO / index readiness monitor v3.12 ----------
       if(url.pathname==="/api/admin/seo-monitor" && request.method==="GET"){
