@@ -6203,6 +6203,54 @@ async function refreshSeoPublishedV311(env,{limit=20,afterId=0}={}){
   };
 }
 
+
+async function refreshSeoUntilImprovedV321(env,{targetUpdated=20,maxChecked=200,batchSize=20}={}){
+  const target=Math.max(1,Math.min(Number(targetUpdated)||20,20));
+  const cap=Math.max(target,Math.min(Number(maxChecked)||200,200));
+  const batch=Math.max(1,Math.min(Number(batchSize)||20,20));
+  let checked=0;
+  const updated=[];
+  const unchanged=[];
+  const failed=[];
+  const field_counts={address:0,hours:0,genre:0,description:0};
+  let rounds=0;
+
+  while(updated.length<target && checked<cap){
+    const remaining=Math.max(1,Math.min(batch,cap-checked));
+    const r=await refreshSeoPublishedV311(env,{limit:remaining,afterId:0});
+    rounds++;
+    const batchChecked=Number(r?.checked||0);
+    if(batchChecked<=0)break;
+    checked+=batchChecked;
+
+    for(const item of (r?.updated||[])){
+      if(updated.length>=target)break;
+      updated.push(item);
+      for(const f of (item?.fields||[])){
+        if(Object.prototype.hasOwnProperty.call(field_counts,f))field_counts[f]++;
+      }
+    }
+    unchanged.push(...(r?.unchanged||[]));
+    failed.push(...(r?.failed||[]));
+
+    if(batchChecked<remaining)break;
+  }
+
+  return {
+    ok:true,
+    checked,
+    updated_count:updated.length,
+    updated,
+    unchanged,
+    failed,
+    field_counts,
+    rounds,
+    target_updated:target,
+    max_checked:cap,
+    reached_target:updated.length>=target
+  };
+}
+
 async function refreshInstagramPublishedV242(env,{limit=20,afterId=0}={}){
   const max=Math.max(1,Math.min(Number(limit)||20,20));
   const cursor=Math.max(0,Number(afterId)||0);
@@ -7807,20 +7855,24 @@ export default {
           return {under70:Number(r?.under70||0),score70:Number(r?.score70||0),score80:Number(r?.score80||0),good90:Number(r?.good90||0),average_score:Number(r?.avg_score||0)};
         };
         const before=await snap();
-        const result=await refreshSeoPublishedV311(env,{limit:20,afterId:0});
+        // v3.21: 20件を「確認」して終わらず、更新できない店舗は次候補へ。
+        // 実更新が最大20件に達するまで、最大200店舗を安全に確認する。
+        const result=await refreshSeoUntilImprovedV321(env,{targetUpdated:20,maxChecked:200,batchSize:20});
         const after=await snap();
         try{
           await createKbnAlert(env,{
             type:"index_promotion",
             title:"インデックス促進モード",
-            message:`${Number(result?.checked||0)}店舗を確認 / 更新${Array.isArray(result?.updated)?result.updated.length:0}件 / 70点未満 ${before.under70}→${after.under70} / 90点以上 ${before.good90}→${after.good90}`
+            message:`${Number(result?.checked||0)}店舗を確認 / 更新${Number(result?.updated_count||0)}件 / 営業時間${Number(result?.field_counts?.hours||0)}・住所${Number(result?.field_counts?.address||0)}・説明文${Number(result?.field_counts?.description||0)}・ジャンル${Number(result?.field_counts?.genre||0)} / 70点未満 ${before.under70}→${after.under70} / 90点以上 ${before.good90}→${after.good90}`
           });
         }catch{}
         return json({
           ok:true,
           checked:Number(result?.checked||0),
-          updated_count:Array.isArray(result?.updated)?result.updated.length:0,
+          updated_count:Number(result?.updated_count||0),
           updated:result?.updated||[],unchanged:result?.unchanged||[],failed:result?.failed||[],
+          field_counts:result?.field_counts||{},rounds:Number(result?.rounds||0),
+          reached_target:!!result?.reached_target,max_checked:Number(result?.max_checked||200),
           before,after,
           priority:"under70_then_70s_then_80s",
           target_score:90,
