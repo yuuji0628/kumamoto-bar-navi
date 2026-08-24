@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.18";
+      config.vars.KBN_CONFIG_VERSION="4.19";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -7772,7 +7772,11 @@ export default {
       "/area-kumamoto.html":"/area/kumamoto-city",
       "/area-kumamoto":"/area/kumamoto-city",
       "/area-yatsushiro.html":"/area/yatsushiro",
-      "/area-yatsushiro":"/area/yatsushiro"
+      "/area-yatsushiro":"/area/yatsushiro",
+
+      // v4.19: duplicate home URL found by Search Console.
+      "/index.html":"/",
+      "/index":"/"
     };
     if((request.method==="GET" || request.method==="HEAD") && kbnLegacySeoRedirectsV417[url.pathname]){
       const target=new URL(kbnLegacySeoRedirectsV417[url.pathname],url.origin);
@@ -7788,26 +7792,43 @@ export default {
       });
     }
 
-    // v4.18: keep current public pages as real index targets.
-    // Search Console "Discovered - currently not indexed" is not a redirect problem,
-    // so these URLs must stay 200 and indexable.
-    const kbnCurrentIndexTargetsV418=new Set([
+    // v4.19: keep current public .html pages as true 200 index targets.
+    // Cloudflare Static Assets can normalize "/page.html" -> "/page". Search Console
+    // discovered the .html URLs from our own sitemap/internal links, so fetch the
+    // extensionless asset internally and serve its body at the original .html URL.
+    // This removes an unnecessary redirect while keeping one canonical URL format.
+    const kbnCurrentIndexTargetsV419=new Set([
       "/about.html",
       "/areas.html",
       "/bars.html",
+      "/column.html",
       "/column-bar-beginner.html",
       "/column-kumamoto-night.html",
-      "/column-solo-bar.html"
+      "/column-solo-bar.html",
+      "/contact.html",
+      "/coupons.html",
+      "/events.html",
+      "/faq.html",
+      "/jobs.html",
+      "/listing-form.html",
+      "/pricing.html"
     ]);
-    if(request.method==="GET" && kbnCurrentIndexTargetsV418.has(url.pathname)){
-      const raw=await env.ASSETS.fetch(request);
+    if((request.method==="GET" || request.method==="HEAD") && kbnCurrentIndexTargetsV419.has(url.pathname)){
+      const assetUrl=new URL(request.url);
+      assetUrl.pathname=url.pathname.replace(/\.html$/i,"");
+      const raw=await env.ASSETS.fetch(new Request(assetUrl.toString(),request));
       if(raw.status===200){
         const headers=new Headers(raw.headers);
         headers.delete("location");
+        headers.set("content-type","text/html; charset=utf-8");
         headers.set("x-robots-tag","index, follow, max-image-preview:large");
         headers.set("cache-control","public, max-age=900");
-        headers.set("x-kbn-index-target","current-200-v418");
-        return new Response(raw.body,{status:200,statusText:"OK",headers});
+        headers.set("x-kbn-index-target","direct-html-200-v419");
+        return new Response(request.method==="HEAD"?null:raw.body,{
+          status:200,
+          statusText:"OK",
+          headers
+        });
       }
       return raw;
     }
@@ -7959,7 +7980,11 @@ export default {
         // v4.18: current editorial pages found in Search Console are explicit sitemap targets.
         {loc:`${base}/column-bar-beginner.html`,priority:"0.6",freq:"monthly"},
         {loc:`${base}/column-kumamoto-night.html`,priority:"0.6",freq:"monthly"},
-        {loc:`${base}/column-solo-bar.html`,priority:"0.6",freq:"monthly"}
+        {loc:`${base}/column-solo-bar.html`,priority:"0.6",freq:"monthly"},
+        // v4.19: remaining current public pages discovered by Search Console.
+        {loc:`${base}/pricing.html`,priority:"0.5",freq:"monthly"},
+        {loc:`${base}/coupons.html`,priority:"0.4",freq:"weekly"},
+        {loc:`${base}/events.html`,priority:"0.4",freq:"weekly"}
       ];
       // Area pages are included only when at least one public shop exists.
       // This avoids sending empty/thin location pages to Google while keeping new areas automatic.
