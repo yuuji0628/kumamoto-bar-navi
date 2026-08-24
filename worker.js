@@ -6223,7 +6223,7 @@ async function refreshSeoLocalOnlyV322(env,{targetUpdated=20,maxChecked=500}={})
     FROM shops s
     WHERE COALESCE(s.is_published,1)=1
       AND (${KBN_SEO_SCORE_SQL_V312}) < 90
-      AND LENGTH(TRIM(COALESCE(s.description,''))) < 160
+      AND LENGTH(TRIM(COALESCE(s.description,''))) < 120
       AND LENGTH(TRIM(COALESCE(s.name,''))) >= 2
       AND TRIM(COALESCE(s.area,'')) != ''
       AND TRIM(COALESCE(s.genre,'')) != ''
@@ -6290,8 +6290,21 @@ async function refreshSeoLocalOnlyV322(env,{targetUpdated=20,maxChecked=500}={})
 
       if(next!==original && next.length>original.length){
         await env.DB.prepare(`UPDATE shops SET description=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(next,shop.id).run();
-        updated.push({id:shop.id,name:shop.name,fields:['description'],score_before:beforeScore});
-        field_counts.description++;
+        const scored=await env.DB.prepare(`SELECT (${KBN_SEO_SCORE_SQL_V312}) AS seo_score FROM shops s WHERE s.id=?`).bind(shop.id).first();
+        const afterScore=Math.max(0,Math.min(100,Number(scored?.seo_score||beforeScore)));
+        const delta=afterScore-beforeScore;
+        if(delta>0){
+          updated.push({
+            id:shop.id,name:shop.name,fields:['description'],
+            score_before:beforeScore,score_after:afterScore,score_delta:delta,
+            crossed70:beforeScore<70&&afterScore>=70,
+            crossed80:beforeScore<80&&afterScore>=80,
+            crossed90:beforeScore<90&&afterScore>=90
+          });
+          field_counts.description++;
+        }else{
+          unchanged.push({id:shop.id,name:shop.name,reason:'UPDATED_WITHOUT_SCORE_GAIN',score_before:beforeScore,score_after:afterScore});
+        }
       }else{
         unchanged.push({id:shop.id,name:shop.name,reason:'NO_SAFE_LOCAL_CHANGE',score_before:beforeScore});
       }
@@ -6300,10 +6313,197 @@ async function refreshSeoLocalOnlyV322(env,{targetUpdated=20,maxChecked=500}={})
     }
   }
 
-  return {
-    ok:true,mode:'local_only',checked,updated_count:updated.length,updated,unchanged,failed,
-    field_counts,target_updated:target,max_checked:cap,reached_target:updated.length>=target
+  const score_gain_total=updated.reduce((n,x)=>n+Number(x.score_delta||0),0);
+  const average_score_gain=updated.length?Math.round((score_gain_total/updated.length)*10)/10:0;
+  const crossed={
+    score70:updated.filter(x=>x.crossed70).length,
+    score80:updated.filter(x=>x.crossed80).length,
+    score90:updated.filter(x=>x.crossed90).length
   };
+  return {
+    ok:true,mode:'local_only_real_score',checked,updated_count:updated.length,updated,unchanged,failed,
+    field_counts,target_updated:target,max_checked:cap,reached_target:updated.length>=target,
+    score_gain_total,average_score_gain,crossed
+  };
+}
+
+
+function kbnAnalyzeSeoDeficitsV323(shop){
+  const text=`${shop?.name||''}\n${shop?.features||''}\n${shop?.description||''}`.replace(/\s+/g,' ').trim();
+  const missing={
+    description:String(shop?.description||'').trim().length<120,
+    address:!String(shop?.address||'').trim(),
+    hours:!String(shop?.hours||'').trim(),
+    genre:!String(shop?.genre||'').trim(),
+    image:!String(shop?.image_url||'').trim()&&!String(shop?.image_key||'').trim(),
+    instagram:!String(shop?.instagram||'').trim(),
+    phone:!String(shop?.phone||'').trim(),
+    features:!String(shop?.features||'').trim(),
+    holiday:!String(shop?.holiday||'').trim(),
+    budget_seats:!(Number(shop?.budget_min||0)>0||Number(shop?.budget_max||0)>0||Number(shop?.seats||0)>0)
+  };
+  const extractable={};
+  extractable.description=missing.description && !!(String(shop?.name||'').trim()&&String(shop?.area||'').trim()&&String(shop?.genre||'').trim());
+  if(missing.genre){
+    extractable.genre=/(?:スナック|snack|ダーツ|darts|カラオケ|karaoke|シーシャ|shisha|hookah|ワイン|wine|スポーツバー|sports?\s*bar|ミュージックバー|music\s*bar|ラウンジ|lounge)/i.test(text);
+  }
+  if(missing.phone){
+    extractable.phone=/(?:電話|TEL)\s*(?:は|[:：])\s*0\d{1,4}[-‐ー−]?\d{1,4}[-‐ー−]?\d{3,4}/i.test(text);
+  }
+  if(missing.hours){
+    const m=text.match(/(?:営業時間|営業 ?時間|OPEN)\s*(?:は|[:：])\s*([^。]{3,100})/i);
+    extractable.hours=!!(m&&/(?:\d{1,2}\s*[:：]\s*\d{2}|\d{1,2}\s*時)/.test(m[1]));
+  }
+  if(missing.holiday){
+    const m=text.match(/(?:定休日|休業日|店休日)\s*(?:は|[:：])\s*([^。]{1,60})/i);
+    extractable.holiday=!!(m&&m[1].trim()&&!/変更|確認|場合/.test(m[1]));
+  }
+  if(missing.address){
+    const m=text.match(/(?:住所|所在地)\s*(?:は|[:：])\s*([^。]{4,120})/i);
+    extractable.address=!!(m&&/(?:熊本|市|区|郡|町|村)/.test(m[1])&&/\d/.test(m[1]));
+  }
+  if(missing.instagram){
+    extractable.instagram=/(?:https?:\/\/(?:www\.)?instagram\.com\/[A-Za-z0-9_.-]+\/?|(?:Instagram|インスタ)\s*(?:は|[:：])\s*@[A-Za-z0-9_.]+)/i.test(text);
+  }
+  if(missing.budget_seats){
+    const budget=/(?:予算|料金目安|平均予算)\s*(?:は|[:：])\s*[0-9,]+\s*円/i.test(text);
+    const seats=/(?:席数|座席)\s*(?:は|[:：])\s*\d{1,3}\s*席/i.test(text);
+    extractable.budget_seats=budget||seats;
+  }
+  const fixable=Object.keys(extractable).filter(k=>extractable[k]);
+  return {missing,extractable,fixable,auto_fixable:fixable.length>0};
+}
+
+function kbnBuildSafeSeoPatchV323(shop){
+  const out={
+    address:String(shop?.address||'').trim(), hours:String(shop?.hours||'').trim(), holiday:String(shop?.holiday||'').trim(),
+    instagram:String(shop?.instagram||'').trim(), genre:String(shop?.genre||'').trim(), description:String(shop?.description||'').replace(/\s+/g,' ').trim(),
+    budget_min:Number(shop?.budget_min||0)||null, budget_max:Number(shop?.budget_max||0)||null, seats:Number(shop?.seats||0)||null,
+    phone:String(shop?.phone||'').trim()
+  };
+  const fields=[];
+  const text=`${shop?.name||''}\n${shop?.features||''}\n${shop?.description||''}`.replace(/\s+/g,' ').trim();
+  const cleanName=String(shop?.name||'').replace(/^【KBN独自掲載】/,'').trim();
+  const area=String(shop?.area||'').trim();
+
+  if(!out.genre){
+    const h=text.toLowerCase(); let g='';
+    if(/スナック|snack/.test(h))g='スナック';
+    else if(/ダーツ|darts/.test(h))g='ダーツBAR';
+    else if(/カラオケ|karaoke/.test(h))g='カラオケBAR';
+    else if(/シーシャ|shisha|hookah/.test(h))g='シーシャBAR';
+    else if(/ワイン|wine/.test(h))g='ワインBAR';
+    else if(/スポーツバー|sports?\s*bar/.test(h))g='スポーツBAR';
+    else if(/ミュージックバー|music\s*bar/.test(h))g='ミュージックBAR';
+    else if(/ラウンジ|lounge/.test(h))g='ラウンジ';
+    if(g){out.genre=g;fields.push('genre');}
+  }
+  if(!out.phone){
+    const m=text.match(/(?:電話|TEL)\s*(?:は|[:：])\s*(0\d{1,4}[-‐ー−]?\d{1,4}[-‐ー−]?\d{3,4})/i);
+    if(m){out.phone=m[1].replace(/[‐ー−]/g,'-');fields.push('phone');}
+  }
+  if(!out.hours){
+    const m=text.match(/(?:営業時間|営業 ?時間|OPEN)\s*(?:は|[:：])\s*([^。]{3,100})/i);
+    const v=String(m?.[1]||'').trim();
+    if(v&&/(?:\d{1,2}\s*[:：]\s*\d{2}|\d{1,2}\s*時)/.test(v)&&!/変更|確認|場合/.test(v)){out.hours=v.slice(0,180);fields.push('hours');}
+  }
+  if(!out.holiday){
+    const m=text.match(/(?:定休日|休業日|店休日)\s*(?:は|[:：])\s*([^。]{1,60})/i);
+    const v=String(m?.[1]||'').trim();
+    if(v&&!/変更|確認|場合/.test(v)){out.holiday=v.slice(0,100);fields.push('holiday');}
+  }
+  if(!out.address){
+    const m=text.match(/(?:住所|所在地)\s*(?:は|[:：])\s*([^。]{4,120})/i);
+    const v=String(m?.[1]||'').trim();
+    if(v&&/(?:熊本|市|区|郡|町|村)/.test(v)&&/\d/.test(v)){out.address=v.slice(0,300);fields.push('address');}
+  }
+  if(!out.instagram){
+    let m=text.match(/https?:\/\/(?:www\.)?instagram\.com\/([A-Za-z0-9_.-]+)\/?/i);
+    if(m){out.instagram=`https://www.instagram.com/${m[1]}/`;fields.push('instagram');}
+    else {
+      m=text.match(/(?:Instagram|インスタ)\s*(?:は|[:：])\s*@([A-Za-z0-9_.]+)/i);
+      if(m){out.instagram=`https://www.instagram.com/${m[1]}/`;fields.push('instagram');}
+    }
+  }
+  if(!(out.budget_min>0||out.budget_max>0)){
+    const m=text.match(/(?:予算|料金目安|平均予算)\s*(?:は|[:：])\s*([0-9,]+)\s*円(?:\s*[〜~～-]\s*([0-9,]+)\s*円)?/i);
+    if(m){
+      const a=Number(String(m[1]).replace(/,/g,''))||0,b=Number(String(m[2]||'').replace(/,/g,''))||0;
+      if(a>=300&&a<=100000){out.budget_min=a; if(b>=a&&b<=100000)out.budget_max=b; fields.push('budget');}
+    }
+  }
+  if(!(out.seats>0)){
+    const m=text.match(/(?:席数|座席)\s*(?:は|[:：])\s*(\d{1,3})\s*席/i);
+    const v=Number(m?.[1]||0);
+    if(v>0&&v<=500){out.seats=v;fields.push('seats');}
+  }
+
+  if(out.description.length<120 && cleanName && area && out.genre){
+    const seed=Math.abs(Number(shop?.id||0))%4;
+    const intro=[
+      `${cleanName}は${area}エリアで掲載中の${out.genre}です。`,
+      `${area}で${out.genre}を探す方に向けて、${cleanName}の確認済み店舗情報をまとめています。`,
+      `${cleanName}は熊本の${area}にある${out.genre}として掲載されています。`,
+      `${area}エリアの${out.genre}「${cleanName}」について、現在確認できている情報を掲載しています。`
+    ][seed];
+    const facts=[];
+    if(out.address)facts.push(`所在地は${out.address}`);
+    if(out.hours)facts.push(`営業時間は${out.hours}`);
+    if(out.holiday)facts.push(`定休日は${out.holiday}`);
+    if(out.budget_min>0||out.budget_max>0){
+      const b=out.budget_min>0&&out.budget_max>0?`${out.budget_min.toLocaleString('ja-JP')}〜${out.budget_max.toLocaleString('ja-JP')}円`:out.budget_min>0?`${out.budget_min.toLocaleString('ja-JP')}円〜`:`〜${out.budget_max.toLocaleString('ja-JP')}円`;
+      facts.push(`料金目安は${b}`);
+    }
+    if(out.seats>0)facts.push(`席数は${out.seats}席`);
+    if(String(shop?.features||'').trim())facts.push(`特徴として「${String(shop.features).replace(/\s+/g,' ').trim().slice(0,100)}」が掲載されています`);
+    const original=out.description&&!/KUMAMOTO BAR NAVIに掲載|店舗情報を掲載/.test(out.description)?`${out.description.replace(/[。．]+$/,'')}。`:'';
+    const factText=facts.length?`${facts.slice(0,5).join('。')}。`:'';
+    const close='掲載内容は変更される場合があります。来店前に営業時間や営業状況などの最新情報をご確認ください。';
+    let next=t(`${intro}${original}${factText}${close}`,5000);
+    if(next.length<120)next=t(`${next}${area}・${out.genre}でお店を比較するときの参考情報としてご利用いただけます。`,5000);
+    if(next.length>out.description.length){out.description=next;fields.push('description');}
+  }
+  return {values:out,fields:[...new Set(fields)]};
+}
+
+async function refreshSeoDeficitPromotionV323(env,{targetUpdated=20,maxChecked=500}={}){
+  const target=Math.max(1,Math.min(Number(targetUpdated)||20,20));
+  const cap=Math.max(target,Math.min(Number(maxChecked)||500,500));
+  const r=await env.DB.prepare(`
+    SELECT s.id,s.name,s.slug,s.area,s.address,s.hours,s.holiday,s.instagram,s.genre,s.features,s.description,
+           s.phone,s.image_url,s.image_key,s.budget_min,s.budget_max,s.seats,(${KBN_SEO_SCORE_SQL_V312}) AS seo_score
+    FROM shops s
+    WHERE COALESCE(s.is_published,1)=1 AND (${KBN_SEO_SCORE_SQL_V312})<90
+    ORDER BY (${KBN_SEO_SCORE_SQL_V312}) ASC,s.id ASC LIMIT ?
+  `).bind(cap).all();
+  const rows=r.results||[]; let checked=0;
+  const updated=[],unchanged=[],failed=[];
+  const field_counts={description:0,address:0,hours:0,genre:0,instagram:0,phone:0,holiday:0,budget:0,seats:0,image:0,features:0};
+  const deficit_counts={description:0,address:0,hours:0,genre:0,image:0,instagram:0,phone:0,features:0,holiday:0,budget_seats:0,auto_fixable:0,blocked_only:0};
+  for(const shop of rows){
+    if(updated.length>=target)break;
+    checked++;
+    const audit=kbnAnalyzeSeoDeficitsV323(shop);
+    for(const k of Object.keys(audit.missing))if(audit.missing[k])deficit_counts[k]=(deficit_counts[k]||0)+1;
+    if(audit.auto_fixable)deficit_counts.auto_fixable++; else deficit_counts.blocked_only++;
+    const beforeScore=Math.max(0,Math.min(100,Number(shop.seo_score||0)));
+    try{
+      const patch=kbnBuildSafeSeoPatchV323(shop);
+      if(!patch.fields.length){unchanged.push({id:shop.id,name:shop.name,score_before:beforeScore,reason:'NO_SAFE_INTERNAL_SOURCE',missing:Object.keys(audit.missing).filter(k=>audit.missing[k])});continue;}
+      const v=patch.values;
+      await env.DB.prepare(`UPDATE shops SET address=?,hours=?,holiday=?,instagram=?,genre=?,description=?,budget_min=?,budget_max=?,seats=?,phone=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`)
+        .bind(v.address,v.hours,v.holiday,v.instagram,v.genre,v.description,v.budget_min,v.budget_max,v.seats,v.phone,shop.id).run();
+      const scored=await env.DB.prepare(`SELECT (${KBN_SEO_SCORE_SQL_V312}) AS seo_score FROM shops s WHERE s.id=?`).bind(shop.id).first();
+      const afterScore=Math.max(0,Math.min(100,Number(scored?.seo_score||beforeScore)));
+      const delta=afterScore-beforeScore;
+      if(delta>0){
+        updated.push({id:shop.id,name:shop.name,fields:patch.fields,score_before:beforeScore,score_after:afterScore,score_delta:delta,crossed70:beforeScore<70&&afterScore>=70,crossed80:beforeScore<80&&afterScore>=80,crossed90:beforeScore<90&&afterScore>=90});
+        for(const f of patch.fields)if(f in field_counts)field_counts[f]++;
+      }else unchanged.push({id:shop.id,name:shop.name,score_before:beforeScore,score_after:afterScore,reason:'PATCH_WITHOUT_SCORE_GAIN',fields:patch.fields});
+    }catch(e){failed.push({id:shop.id,name:shop.name,reason:String(e?.message||e).slice(0,250),score_before:beforeScore});}
+  }
+  const score_gain_total=updated.reduce((n,x)=>n+Number(x.score_delta||0),0);
+  return {ok:true,mode:'deficit_phase2_internal',checked,updated_count:updated.length,updated,unchanged,failed,field_counts,deficit_counts,target_updated:target,max_checked:cap,reached_target:updated.length>=target,score_gain_total,average_score_gain:updated.length?Math.round(score_gain_total/updated.length*10)/10:0,crossed:{score70:updated.filter(x=>x.crossed70).length,score80:updated.filter(x=>x.crossed80).length,score90:updated.filter(x=>x.crossed90).length}};
 }
 
 async function refreshSeoUntilImprovedV321(env,{targetUpdated=20,maxChecked=200,batchSize=20}={}){
@@ -7867,6 +8067,11 @@ export default {
             SUM(CASE WHEN TRIM(COALESCE(genre,''))='' THEN 1 ELSE 0 END) AS missing_genre,
             SUM(CASE WHEN TRIM(COALESCE(image_url,''))='' AND TRIM(COALESCE(image_key,''))='' THEN 1 ELSE 0 END) AS missing_image,
             SUM(CASE WHEN TRIM(COALESCE(image_url,''))!='' OR TRIM(COALESCE(image_key,''))!='' THEN 1 ELSE 0 END) AS image_good,
+            SUM(CASE WHEN TRIM(COALESCE(instagram,''))='' THEN 1 ELSE 0 END) AS missing_instagram,
+            SUM(CASE WHEN TRIM(COALESCE(phone,''))='' THEN 1 ELSE 0 END) AS missing_phone,
+            SUM(CASE WHEN TRIM(COALESCE(features,''))='' THEN 1 ELSE 0 END) AS missing_features,
+            SUM(CASE WHEN TRIM(COALESCE(holiday,''))='' THEN 1 ELSE 0 END) AS missing_holiday,
+            SUM(CASE WHEN COALESCE(budget_min,0)<=0 AND COALESCE(budget_max,0)<=0 AND COALESCE(seats,0)<=0 THEN 1 ELSE 0 END) AS missing_budget_seats,
             SUM(CASE WHEN TRIM(COALESCE(slug,''))='' OR slug IN (SELECT slug FROM slug_dupes) THEN 1 ELSE 0 END) AS url_risk,
             SUM(CASE WHEN seo_score>=90 THEN 1 ELSE 0 END) AS score_90_plus,
             SUM(CASE WHEN seo_score>=80 AND seo_score<90 THEN 1 ELSE 0 END) AS score_80s,
@@ -7875,6 +8080,25 @@ export default {
             ROUND(AVG(seo_score),1) AS avg_score,
             MIN(seo_score) AS min_score,
             MAX(seo_score) AS max_score
+          FROM published
+        `).first();
+
+        const deficit90=await env.DB.prepare(`
+          WITH published AS (
+            SELECT s.*, (${scoreExpr}) AS seo_score
+            FROM shops s WHERE COALESCE(s.is_published,1)=1
+          )
+          SELECT
+            SUM(CASE WHEN seo_score<90 AND TRIM(COALESCE(address,''))='' THEN 1 ELSE 0 END) AS address,
+            SUM(CASE WHEN seo_score<90 AND TRIM(COALESCE(hours,''))='' THEN 1 ELSE 0 END) AS hours,
+            SUM(CASE WHEN seo_score<90 AND TRIM(COALESCE(genre,''))='' THEN 1 ELSE 0 END) AS genre,
+            SUM(CASE WHEN seo_score<90 AND TRIM(COALESCE(image_url,''))='' AND TRIM(COALESCE(image_key,''))='' THEN 1 ELSE 0 END) AS image,
+            SUM(CASE WHEN seo_score<90 AND TRIM(COALESCE(instagram,''))='' THEN 1 ELSE 0 END) AS instagram,
+            SUM(CASE WHEN seo_score<90 AND TRIM(COALESCE(phone,''))='' THEN 1 ELSE 0 END) AS phone,
+            SUM(CASE WHEN seo_score<90 AND TRIM(COALESCE(features,''))='' THEN 1 ELSE 0 END) AS features,
+            SUM(CASE WHEN seo_score<90 AND TRIM(COALESCE(holiday,''))='' THEN 1 ELSE 0 END) AS holiday,
+            SUM(CASE WHEN seo_score<90 AND COALESCE(budget_min,0)<=0 AND COALESCE(budget_max,0)<=0 AND COALESCE(seats,0)<=0 THEN 1 ELSE 0 END) AS budget_seats,
+            SUM(CASE WHEN seo_score<90 AND LENGTH(TRIM(COALESCE(description,'')))<120 THEN 1 ELSE 0 END) AS description
           FROM published
         `).first();
 
@@ -7918,7 +8142,15 @@ export default {
             hours:Number(summary?.missing_hours||0),
             genre:Number(summary?.missing_genre||0),
             image:Number(summary?.missing_image||0),
-            image_good:Number(summary?.image_good||0)
+            image_good:Number(summary?.image_good||0),
+            instagram:Number(summary?.missing_instagram||0),
+            phone:Number(summary?.missing_phone||0),
+            features:Number(summary?.missing_features||0),
+            holiday:Number(summary?.missing_holiday||0),
+            budget_seats:Number(summary?.missing_budget_seats||0)
+          },
+          deficit_under90:{
+            description:Number(deficit90?.description||0),address:Number(deficit90?.address||0),hours:Number(deficit90?.hours||0),genre:Number(deficit90?.genre||0),image:Number(deficit90?.image||0),instagram:Number(deficit90?.instagram||0),phone:Number(deficit90?.phone||0),features:Number(deficit90?.features||0),holiday:Number(deficit90?.holiday||0),budget_seats:Number(deficit90?.budget_seats||0)
           },
           lowest:(low.results||[]).map(x=>({
             id:Number(x.id||0),slug:x.slug||'',name:x.name||'',area:x.area||'',score:Number(x.seo_score||0),
@@ -7959,7 +8191,7 @@ export default {
         const before=await snap();
         // v3.21: 20件を「確認」して終わらず、更新できない店舗は次候補へ。
         // 実更新が最大20件に達するまで、最大200店舗を安全に確認する。
-        const result=await refreshSeoLocalOnlyV322(env,{targetUpdated:20,maxChecked:500});
+        const result=await refreshSeoDeficitPromotionV323(env,{targetUpdated:20,maxChecked:500});
         const after=await snap();
         try{
           await createKbnAlert(env,{
@@ -7973,12 +8205,13 @@ export default {
           checked:Number(result?.checked||0),
           updated_count:Number(result?.updated_count||0),
           updated:result?.updated||[],unchanged:result?.unchanged||[],failed:result?.failed||[],
-          field_counts:result?.field_counts||{},rounds:Number(result?.rounds||0),mode:result?.mode||"local_only",
+          field_counts:result?.field_counts||{},deficit_counts:result?.deficit_counts||{},rounds:Number(result?.rounds||0),mode:result?.mode||"deficit_phase2_internal",
+          score_gain_total:Number(result?.score_gain_total||0),average_score_gain:Number(result?.average_score_gain||0),crossed:result?.crossed||{},
           reached_target:!!result?.reached_target,max_checked:Number(result?.max_checked||200),
           before,after,
           priority:"under70_then_70s_then_80s",
           target_score:90,
-          note:"Search Consoleの未登録URLを直接取得せず、外部APIにも依存せず、既存の店舗名・エリア・ジャンル等の内部データだけで安全に説明文品質を底上げします。"
+          note:"Search Consoleの未登録URLを直接取得せず、外部APIにも依存せず、既存データ内に明示されている事実だけを抽出・整理して改善します。画像など内部情報だけでは補えない項目は自動生成しません。SEOスコアが実際に上昇した店舗だけを『改善』として数えます。"
         });
       }
 
