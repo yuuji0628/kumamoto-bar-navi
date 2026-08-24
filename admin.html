@@ -3666,6 +3666,9 @@ html,body{max-width:100%;overflow-x:hidden}
 .kbn-seo-monitor-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:14px}.kbn-seo-monitor-summary>div{padding:12px;border:1px solid #273645;border-radius:13px;background:#0f1922}.kbn-seo-monitor-summary span,.kbn-seo-monitor-summary small{display:block;color:#8f9ba7;font-size:.68rem}.kbn-seo-monitor-summary strong{display:block;margin:3px 0;color:#f5f7f9;font-size:1.45rem;line-height:1}.kbn-seo-monitor-summary>div:nth-child(2) strong{color:#65d99c}.kbn-seo-monitor-summary>div:nth-child(3) strong{color:#efc45a}.kbn-seo-monitor-summary>div:nth-child(4) strong{color:#ff8e8e}
 .kbn-seo-monitor-details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-top:9px}.kbn-seo-monitor-details>div{display:flex;justify-content:space-between;gap:8px;padding:9px 10px;border-radius:10px;background:#101820;color:#9faab5;font-size:.71rem}.kbn-seo-monitor-details b{color:#e8edf2}
 .kbn-seo-monitor-meter{height:7px;margin-top:12px;border-radius:99px;background:#1b2732;overflow:hidden}.kbn-seo-monitor-meter i{display:block;width:0;height:100%;border-radius:inherit;background:linear-gradient(90deg,#e8b84f,#64d99c);transition:width .35s ease}.kbn-seo-monitor-foot{display:flex;justify-content:space-between;gap:10px;margin-top:8px;color:#aab4be;font-size:.69rem}.kbn-seo-monitor-foot span{font-weight:800;color:#dfe6ec}.kbn-seo-monitor-note{margin-top:10px;color:#7f8c98;font-size:.65rem;line-height:1.55}
+
+.kbn-structured-check{margin-top:14px;padding:13px;border:1px solid #2a3a49;border-radius:14px;background:#0b141d}.kbn-structured-check-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.kbn-structured-check input{flex:1;min-width:180px;background:#0e1923;color:#eef3f7;border:1px solid #3a4b5c;border-radius:10px;padding:10px 11px}.kbn-structured-check button{border:1px solid #4b5d6f;background:#111b25;color:#eef3f7;border-radius:10px;padding:10px 12px;font-weight:800}.kbn-structured-result{margin-top:10px;font-size:.72rem;line-height:1.6}.kbn-structured-score{font-size:1.35rem;font-weight:900}.kbn-structured-ok{color:#65d99c}.kbn-structured-warn{color:#efc45a}.kbn-structured-error{color:#ff8e8e}.kbn-structured-list{margin:7px 0 0;padding-left:18px}.kbn-structured-canonical{margin-top:7px;color:#8f9ba7;word-break:break-all;font-size:.66rem}
+
 @media(min-width:720px){.kbn-seo-monitor-summary{grid-template-columns:repeat(4,minmax(0,1fr))}.kbn-seo-monitor-details{grid-template-columns:repeat(4,minmax(0,1fr))}}
 .kbn-seo-score100{margin-top:12px;padding:12px;border:1px solid #2b3b49;border-radius:14px;background:#0c151d}.kbn-seo-score100-head{display:flex;align-items:end;justify-content:space-between;gap:10px}.kbn-seo-score100-head span{color:#9eabb6;font-size:.68rem}.kbn-seo-score100-head strong{font-size:2rem;line-height:1;color:#69dda2}.kbn-seo-score100-head small{color:#8e9aa5;font-size:.66rem}.kbn-seo-score-buckets{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin-top:10px}.kbn-seo-score-buckets div{padding:8px 6px;border-radius:9px;background:#101b24;text-align:center}.kbn-seo-score-buckets span{display:block;color:#82909c;font-size:.58rem}.kbn-seo-score-buckets b{display:block;margin-top:2px;color:#eef4f7;font-size:.82rem}.kbn-seo-lowlist{margin-top:10px}.kbn-seo-lowlist>div{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 8px;border-top:1px solid #1d2a34;font-size:.65rem}.kbn-seo-lowlist strong{color:#f0c45a;min-width:32px;text-align:right}.kbn-seo-lowlist span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#aab5be}.kbn-seo-lowlist em{font-style:normal;color:#73818d;font-size:.58rem}
 </style>
@@ -4306,6 +4309,14 @@ html,body{max-width:100%;overflow-x:hidden}
           <div><span>70未満</span><b id="seoScoreUnder70">—</b></div>
         </div>
         <div class="kbn-seo-lowlist" id="seoLowestList"><div><span>低スコア店舗を確認中...</span></div></div>
+      </div>
+
+      <div class="kbn-structured-check">
+        <div class="kbn-structured-check-head">
+          <input id="structuredDataSlug" type="text" value="bar" placeholder="店舗slug（例: bar）" aria-label="構造化データを確認する店舗slug">
+          <button type="button" id="checkStructuredDataBtn">構造化データ確認</button>
+        </div>
+        <div id="structuredDataResult" class="kbn-structured-result">代表店舗のJSON-LDをサイト側で事前チェックできます。</div>
       </div>
       <div class="kbn-seo-monitor-meter"><i id="seoQualityBar"></i></div>
       <div class="kbn-seo-monitor-foot">
@@ -10858,6 +10869,28 @@ document.addEventListener("DOMContentLoaded",()=>{
       const qt=document.getElementById('seoQualityText');if(qt)qt.textContent='SEO状態を取得できませんでした: '+(e?.message||e);
     }finally{if(btn){btn.disabled=false;btn.textContent='更新';}}
   }
+
+  async function checkStructuredData(){
+    const input=document.getElementById('structuredDataSlug');
+    const out=document.getElementById('structuredDataResult');
+    const btn=document.getElementById('checkStructuredDataBtn');
+    const slug=String(input?.value||'').trim();
+    if(!slug){if(out)out.textContent='店舗slugを入力してください。';return;}
+    if(btn){btn.disabled=true;btn.textContent='確認中...';}
+    try{
+      const d=await api('/api/admin/structured-data-check?slug='+encodeURIComponent(slug));
+      const errors=Array.isArray(d.errors)?d.errors:[];
+      const warnings=Array.isArray(d.warnings)?d.warnings:[];
+      const cls=errors.length?'kbn-structured-error':warnings.length?'kbn-structured-warn':'kbn-structured-ok';
+      const lines=[];
+      if(errors.length)lines.push('<div class="kbn-structured-error"><b>エラー</b><ul class="kbn-structured-list">'+errors.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul></div>');
+      if(warnings.length)lines.push('<div class="kbn-structured-warn"><b>改善候補</b><ul class="kbn-structured-list">'+warnings.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul></div>');
+      if(!errors.length&&!warnings.length)lines.push('<div class="kbn-structured-ok"><b>主要チェックはすべてOK</b></div>');
+      if(out)out.innerHTML='<div class="'+cls+'"><span class="kbn-structured-score">'+Number(d.score||0)+'点</span> / 100　'+esc(d.shop?.name||slug)+'</div>'+lines.join('')+'<div class="kbn-structured-canonical">canonical: '+esc(d.canonical||'')+'</div>';
+    }catch(e){if(out)out.innerHTML='<span class="kbn-structured-error">確認できませんでした: '+esc(e?.message||e)+'</span>';}
+    finally{if(btn){btn.disabled=false;btn.textContent='構造化データ確認';}}
+  }
+
   async function improveLowSeo(){
     const btn=document.getElementById('improveLowSeoBtn');
     if(btn){btn.disabled=true;btn.textContent='改善中...';}
@@ -10875,6 +10908,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   document.addEventListener('DOMContentLoaded',()=>{
     document.getElementById('reloadSeoMonitorBtn')?.addEventListener('click',loadSeoMonitor);
     document.getElementById('improveLowSeoBtn')?.addEventListener('click',improveLowSeo);
+    document.getElementById('checkStructuredDataBtn')?.addEventListener('click',checkStructuredData);
     loadSeoMonitor();
   });
   window.loadSeoMonitor=loadSeoMonitor;
