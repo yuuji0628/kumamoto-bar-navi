@@ -3871,6 +3871,16 @@ html,body{max-width:100%;overflow-x:hidden}
       <button type="button" id="runPriorityInfoEnrichBtn" style="border:1px solid #3f7f68;background:#10271f;color:#7ee3b7;border-radius:11px;padding:9px 12px;font-weight:900">補完 20店舗</button>
     </div>
     <div id="priorityInfoEnrichStatus" style="margin-top:9px;color:#8c9aa6;font-size:.65rem;line-height:1.5">未確認。Cloudflareの外部通信上限を避けるため8店舗ずつ小分けで処理し、最大500店舗まで自動継続します。検索結果は24時間キャッシュし、20店舗補完できた時点で停止します。</div>
+    <div style="margin-top:11px;padding:10px;border-radius:11px;background:#0b151d;border:1px solid #243846">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b style="font-size:.72rem">今日の補完合計</b><small id="todayEnrichRunCount" style="color:#65d8a4">集計中...</small></div>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:8px">
+        <div style="padding:8px;border-radius:9px;background:#101b24"><small style="display:block;color:#7f8c98">更新店舗</small><b id="todayEnrichUpdated" style="color:#fff">—</b></div>
+        <div style="padding:8px;border-radius:9px;background:#101b24"><small style="display:block;color:#7f8c98">SEO上昇</small><b id="todayEnrichGain" style="color:#7ee3b7">—</b></div>
+        <div style="padding:8px;border-radius:9px;background:#101b24"><small style="display:block;color:#7f8c98">確認店舗</small><b id="todayEnrichChecked" style="color:#fff">—</b></div>
+      </div>
+      <div id="todayEnrichFields" style="margin-top:8px;color:#7f8c98;font-size:.61rem;line-height:1.45">今日の補完内容を集計しています...</div>
+      <div style="margin-top:5px;color:#6f7d89;font-size:.59rem;line-height:1.4">通常メンテナンス時にも、VERIFIED情報補完を8店舗ずつ3回に分けて自動実行します。</div>
+    </div>
   </div>
   <div style="margin-top:7px;color:#6f7d89;font-size:.61rem;line-height:1.5">※ Search Consoleの「検出 - インデックス未登録」URLを直接取得する機能ではありません。店舗情報の充実度と技術SEOを分けて監視し、推測情報で点数を水増ししません。</div>
 </div>
@@ -11012,6 +11022,21 @@ document.addEventListener("DOMContentLoaded",()=>{
     }finally{if(btn){btn.disabled=false;btn.textContent='促進 20店舗';}}
   }
 
+  async function loadTodayInfoEnrichSummary(){
+    try{
+      const d=await api('/api/admin/info-enrich-daily-summary');
+      const x=d.summary||{},f=x.fields||{};
+      const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+      set('todayEnrichRunCount',`${Number(x.runs||0)}回（手動 ${Number(x.manual_runs||0)} / メンテ ${Number(x.maintenance_runs||0)}）`);
+      set('todayEnrichUpdated',`${Number(x.updated||0)}店舗`);
+      set('todayEnrichGain',`+${Number(x.score_gain||0)}点`);
+      set('todayEnrichChecked',`${Number(x.checked||0)}店舗`);
+      set('todayEnrichFields',`電話 ${Number(f.phone||0)} / 画像 ${Number(f.image||0)} / 定休日 ${Number(f.holiday||0)} / 料金 ${Number(f.budget||0)} / Instagram ${Number(f.instagram||0)} / 営業時間 ${Number(f.hours||0)} / 住所 ${Number(f.address||0)} / 特徴 ${Number(f.features||0)} ｜ 更新店舗の平均 +${Number(x.average_gain||0).toFixed(1)}点`);
+    }catch(e){
+      const el=document.getElementById('todayEnrichFields');if(el)el.textContent='今日の補完集計を取得できませんでした: '+(e?.message||e);
+    }
+  }
+
   async function runPriorityInfoEnrich(){
     const btn=document.getElementById('runPriorityInfoEnrichBtn');
     const status=document.getElementById('priorityInfoEnrichStatus');
@@ -11053,6 +11078,7 @@ document.addEventListener("DOMContentLoaded",()=>{
       else stop='今回の優先キュー確認を終了';
       if(status)status.textContent=`完了：${totalChecked}店舗を確認 / ${totalUpdated}店舗を更新 ｜ ${fieldText} ｜ SEO合計 +${totalGain}点 / 平均 +${avg.toFixed(1)}点 ｜ ${reasonText} ｜ ${queueText} ｜ ${stop}`;
       await loadSeoMonitor();
+      await loadTodayInfoEnrichSummary();
     }catch(e){
       if(status)status.textContent='情報補完に失敗しました：'+(e?.message||e)+'。保存済みの優先キューは維持されるため、次回は未処理・再試行可能な候補から続けます。';
     }finally{
@@ -11067,6 +11093,7 @@ document.addEventListener("DOMContentLoaded",()=>{
     document.getElementById('runPriorityInfoEnrichBtn')?.addEventListener('click',runPriorityInfoEnrich);
     document.getElementById('checkStructuredDataBtn')?.addEventListener('click',checkStructuredData);
     loadSeoMonitor();
+    loadTodayInfoEnrichSummary();
   });
   window.loadSeoMonitor=loadSeoMonitor;
 })();
