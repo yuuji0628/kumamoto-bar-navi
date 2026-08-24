@@ -6525,6 +6525,39 @@ async function ensureInfoEnrichQueueV402(env){
   await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_kbn_info_enrich_queue_retry ON kbn_info_enrich_queue(next_retry_at,status)`).run();
 }
 
+
+async function ensureInfoEnrichCacheV403(env){
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS kbn_info_enrich_cache(
+      shop_id INTEGER PRIMARY KEY,
+      found_json TEXT DEFAULT '',
+      details_json TEXT DEFAULT '',
+      expires_at TEXT DEFAULT NULL,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run();
+  await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_kbn_info_enrich_cache_expiry ON kbn_info_enrich_cache(expires_at)`).run();
+}
+
+async function loadInfoEnrichCacheV403(env,shopId){
+  await ensureInfoEnrichCacheV403(env);
+  const row=await env.DB.prepare(`SELECT found_json,details_json,expires_at FROM kbn_info_enrich_cache WHERE shop_id=? AND expires_at>datetime('now') LIMIT 1`).bind(shopId).first();
+  if(!row)return null;
+  const parse=(x)=>{try{return x?JSON.parse(x):null}catch{return null}};
+  return {found:parse(row.found_json),details:parse(row.details_json),expires_at:row.expires_at||null};
+}
+
+async function saveInfoEnrichCacheV403(env,shopId,{found=null,details=null,hours=24}={}){
+  await ensureInfoEnrichCacheV403(env);
+  const ttl=Math.max(1,Math.min(Number(hours)||24,168));
+  await env.DB.prepare(`
+    INSERT INTO kbn_info_enrich_cache(shop_id,found_json,details_json,expires_at,updated_at)
+    VALUES(?,?,?,datetime('now','+' || ? || ' hours'),CURRENT_TIMESTAMP)
+    ON CONFLICT(shop_id) DO UPDATE SET found_json=excluded.found_json,details_json=excluded.details_json,
+      expires_at=excluded.expires_at,updated_at=CURRENT_TIMESTAMP
+  `).bind(shopId,JSON.stringify(found||null),JSON.stringify(details||null),ttl).run();
+}
+
 function kbnRetryHoursV402(errorCount){
   const n=Math.max(1,Number(errorCount)||1);
   return Math.min(72,Math.max(2,2*Math.pow(2,Math.min(n-1,5))));
@@ -6568,8 +6601,9 @@ async function infoEnrichQueueStatsV402(env){
 
 async function enrichPriorityPublishedInfoV401(env,{targetUpdated=20,maxChecked=80}={}){
   const target=Math.max(1,Math.min(Number(targetUpdated)||20,20));
-  const cap=Math.max(1,Math.min(Number(maxChecked)||80,80));
+  const cap=Math.max(1,Math.min(Number(maxChecked)||8,8));
   await ensureInfoEnrichQueueV402(env);
+  await ensureInfoEnrichCacheV403(env);
 
   // v4.02: 未確認を最優先。過去失敗は next_retry_at 到来後だけ再試行。
   // 同じ「新情報なし」店舗を毎回なめず、実際に補完できる可能性がある候補へ枠を回す。
@@ -6604,7 +6638,7 @@ async function enrichPriorityPublishedInfoV401(env,{targetUpdated=20,maxChecked=
   let checked=0;
   const updated=[],unchanged=[],failed=[];
   const field_counts={address:0,hours:0,holiday:0,instagram:0,phone:0,features:0,budget:0,image:0};
-  const reason_counts={no_candidate:0,match_below_threshold:0,matched_no_new_data:0,search_error:0,updated:0,failed:0,official_site_found:0,instagram_verified:0,circuit_breaker:0,skipped_cooldown:0};
+  const reason_counts={no_candidate:0,match_below_threshold:0,matched_no_new_data:0,search_error:0,updated:0,failed:0,official_site_found:0,instagram_verified:0,circuit_breaker:0,skipped_cooldown:0,cache_hit_search:0,cache_hit_details:0};
   let consecutiveSearchErrors=0;
   let breakerReason='';
 
@@ -6614,7 +6648,10 @@ async function enrichPriorityPublishedInfoV401(env,{targetUpdated=20,maxChecked=
     const beforeScore=Math.max(0,Math.min(100,Number(shop.seo_score||0)));
     try{
       const cleanName=String(shop.name||'').replace(/^【KBN独自掲載】/,'').trim();
-      const found=await findGooglePlaceForShop(env,{name:cleanName,area:shop.area||'熊本'});
+      const cached=await loadInfoEnrichCacheV403(env,shop.id).catch(()=>null);
+      let found=cached?.found||null;
+      if(found)reason_counts.cache_hit_search++;
+      else found=await findGooglePlaceForShop(env,{name:cleanName,area:shop.area||'熊本'});
       if(!found?.ok){
         reason_counts.search_error++; consecutiveSearchErrors++;
         const priorErrors=Number(shop.queue_error_count||0)+1;
@@ -6622,7 +6659,9 @@ async function enrichPriorityPublishedInfoV401(env,{targetUpdated=20,maxChecked=
         await saveInfoEnrichQueueV402(env,shop.id,{status:'search_error',reason:found?.error||'GOOGLE_SEARCH_ERROR',errorIncrement:true,retryHours});
         unchanged.push({id:shop.id,name:shop.name,reason:found?.error||'GOOGLE_SEARCH_ERROR',retry_hours:retryHours});
         // 連続エラーはAPI制限/一時障害の可能性が高い。大量に叩かず、その場で止める。
-        if(consecutiveSearchErrors>=5){
+        const errText=String(found?.error||'');
+        const isSubrequestLimit=/too many subrequests|subrequest/i.test(errText);
+        if(isSubrequestLimit || consecutiveSearchErrors>=3){
           reason_counts.circuit_breaker=1;
           breakerReason=String(found?.error||'SEARCH_ERROR_RATE_GUARD').slice(0,160);
           break;
@@ -6642,7 +6681,12 @@ async function enrichPriorityPublishedInfoV401(env,{targetUpdated=20,maxChecked=
         unchanged.push({id:shop.id,name:shop.name,reason:sc>0?'MATCH_BELOW_THRESHOLD':'GOOGLE_MATCH_NOT_FOUND',match_score:sc});
         continue;
       }
-      const details=await googlePlaceDetails(env,found.place?.id);
+      let details=cached?.details||null;
+      if(details)reason_counts.cache_hit_details++;
+      else details=await googlePlaceDetails(env,found.place?.id);
+      if(!cached || !cached.found || !cached.details){
+        await saveInfoEnrichCacheV403(env,shop.id,{found,details,hours:24}).catch(()=>{});
+      }
       const gp=details?.ok&&details?.place?details.place:found.place;
       const website=googleWebsite(gp);
       if(website)reason_counts.official_site_found++;
@@ -6704,7 +6748,7 @@ async function enrichPriorityPublishedInfoV401(env,{targetUpdated=20,maxChecked=
   }
   const gain=updated.reduce((n,x)=>n+Number(x.score_delta||0),0);
   const queue_stats=await infoEnrichQueueStatsV402(env);
-  return {ok:true,mode:'verified_public_info_priority_v402_queue',checked,updated_count:updated.length,updated,unchanged,failed,field_counts,reason_counts,target_updated:target,max_checked:cap,reached_target:updated.length>=target,score_gain_total:gain,average_score_gain:updated.length?Math.round(gain/updated.length*10)/10:0,cursor_before:0,cursor_after:0,cycle_completed:false,cycle_count:0,circuit_breaker:!!reason_counts.circuit_breaker,breaker_reason:breakerReason,queue_stats};
+  return {ok:true,mode:'verified_public_info_priority_v403_microbatch_cache',checked,updated_count:updated.length,updated,unchanged,failed,field_counts,reason_counts,target_updated:target,max_checked:cap,reached_target:updated.length>=target,score_gain_total:gain,average_score_gain:updated.length?Math.round(gain/updated.length*10)/10:0,cursor_before:0,cursor_after:0,cycle_completed:false,cycle_count:0,circuit_breaker:!!reason_counts.circuit_breaker,breaker_reason:breakerReason,queue_stats};
 }
 
 async function refreshSeoUntilImprovedV321(env,{targetUpdated=20,maxChecked=200,batchSize=20}={}){
@@ -8438,7 +8482,7 @@ export default {
       // ---------- Verified public info enrichment v4.00 ----------
       if(url.pathname==="/api/admin/info-enrich-priority" && request.method==="POST"){
         const target=Number(url.searchParams.get('target')||20);
-        const max=Number(url.searchParams.get('max')||80);
+        const max=Number(url.searchParams.get('max')||8);
         const result=await enrichPriorityPublishedInfoV401(env,{targetUpdated:target,maxChecked:max});
         try{
           await createKbnAlert(env,{
