@@ -4072,8 +4072,9 @@ function googlePhotoName(place){
   return /^places\/[^/]+\/photos\/[^/]+$/.test(name)?name:"";
 }
 
-function googlePhotoProxyUrl(shopId){
-  return `/api/shop-photo?id=${encodeURIComponent(String(shopId||""))}`;
+function googlePhotoProxyUrl(shopId,width=640){
+  const w=Math.max(240,Math.min(1200,Number(width)||640));
+  return `/api/shop-photo?id=${encodeURIComponent(String(shopId||""))}&w=${w}`;
 }
 
 function googlePriceInfo(place){
@@ -7099,7 +7100,8 @@ export default {
       if(!/^places\/[^/]+\/photos\/[^/]+$/.test(photoName))return new Response("Not found",{status:404});
       const cfg=googlePlacesConfig(env);
       if(!cfg.apiKey)return new Response("Photo service unavailable",{status:503});
-      const endpoint=`https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=1200&skipHttpRedirect=true&key=${encodeURIComponent(cfg.apiKey)}`;
+      const requestedWidth=Math.max(240,Math.min(1200,Number(url.searchParams.get("w")||640)));
+      const endpoint=`https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=${requestedWidth}&skipHttpRedirect=true&key=${encodeURIComponent(cfg.apiKey)}`;
       try{
         const metaRes=await fetch(endpoint,{headers:{"Accept":"application/json"}});
         if(!metaRes.ok)return new Response("Photo unavailable",{status:metaRes.status});
@@ -7109,7 +7111,8 @@ export default {
         const img=await fetch(photoUri);
         if(!img.ok)return new Response("Photo unavailable",{status:img.status});
         const h=new Headers(img.headers);
-        h.set("Cache-Control","public, max-age=86400, stale-while-revalidate=604800");
+        h.set("Cache-Control","public, max-age=604800, stale-while-revalidate=2592000");
+        h.set("Vary","Accept");
         h.delete("set-cookie");
         return new Response(img.body,{status:200,headers:h});
       }catch(e){
@@ -9349,6 +9352,33 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
       }
 
       return json({ok:false,error:"ADMIN_ROUTE_NOT_FOUND"},{status:404});
+    }
+
+    // v2.97 LCP phase 2: render hero stats into the first HTML response.
+    // This avoids a late above-the-fold repaint after the stats API returns, which can
+    // move the Lighthouse LCP timestamp several seconds even when FCP is already fast.
+    if(request.method==="GET" && url.pathname==="/" && env.DB){
+      try{
+        const [assetResponse,row]=await Promise.all([
+          env.ASSETS.fetch(request),
+          env.DB.prepare(`SELECT COUNT(*) AS shop_count, COUNT(DISTINCT NULLIF(TRIM(area),'')) AS area_count FROM shops WHERE is_published=1`).first()
+        ]);
+        if(assetResponse.ok){
+          let html=await assetResponse.text();
+          const shopCount=Number(row?.shop_count||0);
+          const areaCount=Number(row?.area_count||0);
+          html=html
+            .replace('<body class="public-v109">','<body class="public-v109" data-kbn-ssr-stats="1">')
+            .replace(/<strong id="heroTotalShopCount">[\s\S]*?<\/strong>/,'<strong id="heroTotalShopCount">'+shopCount+'<span class="public-hero-unit-v211">店舗</span></strong>')
+            .replace(/<strong id="heroAreaCount">[\s\S]*?<\/strong>/,'<strong id="heroAreaCount">'+areaCount+'<span class="public-hero-unit-v211">地域</span></strong>')
+            .replace(/<span id="publicNoticeCountText">[\s\S]*?<\/span>/,'<span id="publicNoticeCountText">熊本県内のBARを '+shopCount+' 店舗掲載中</span>');
+          const h=new Headers(assetResponse.headers);
+          h.set('Content-Type','text/html; charset=utf-8');
+          h.set('Cache-Control','public, max-age=30, stale-while-revalidate=120');
+          h.set('X-KBN-LCP','phase2-ssr-stats');
+          return kbnApplyPublicPerformanceHeaders(new Response(html,{status:assetResponse.status,statusText:assetResponse.statusText,headers:h}),url);
+        }
+      }catch(e){ console.error('homepage SSR stats failed',e); }
     }
 
     const assetResponse=await env.ASSETS.fetch(request);
