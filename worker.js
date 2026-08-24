@@ -5112,6 +5112,50 @@ const KBN_LOCAL_SEO_AREAS={
 function kbnSeoEsc(v){
   return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
+
+// KBN structured data SEO complete v260
+function kbnSchemaAbsUrl(v,origin){
+  const s=String(v||"").trim();
+  if(!s)return "";
+  try{return new URL(s,origin).toString();}catch{return "";}
+}
+function kbnSchemaSiteNodes(origin){
+  const orgId=`${origin}/#organization`, siteId=`${origin}/#website`;
+  return [
+    {
+      "@type":"Organization","@id":orgId,"name":"KUMAMOTO BAR NAVI","url":`${origin}/`,
+      "logo":{"@type":"ImageObject","url":`${origin}/logo.png`}
+    },
+    {
+      "@type":"WebSite","@id":siteId,"url":`${origin}/`,"name":"KUMAMOTO BAR NAVI","inLanguage":"ja-JP",
+      "publisher":{"@id":orgId},
+      "potentialAction":{"@type":"SearchAction","target":{"@type":"EntryPoint","urlTemplate":`${origin}/bars.html?keyword={search_term_string}`},"query-input":"required name=search_term_string"}
+    }
+  ];
+}
+function kbnSchemaShopNode(shop,{origin,canonical,name,area,genre,description,budget,featureList=[]}){
+  const image=kbnSchemaAbsUrl(shop?.image_url,origin);
+  const instagram=String(shop?.instagram||"").trim();
+  const sameAs=[];
+  if(/^https?:\/\//i.test(instagram))sameAs.push(instagram);
+  else if(/^@?[A-Za-z0-9._]+$/.test(instagram))sameAs.push(`https://www.instagram.com/${instagram.replace(/^@/,"")}/`);
+  const amenities=(featureList||[]).slice(0,12).map(x=>({"@type":"LocationFeatureSpecification","name":String(x),"value":true}));
+  return {
+    "@type":["BarOrPub","LocalBusiness"],
+    "@id":`${canonical}#business`,
+    "name":name,"url":canonical,"description":description,
+    "mainEntityOfPage":{"@id":canonical},
+    ...(image?{"image":[image]}:{}),
+    ...(shop?.phone?{"telephone":String(shop.phone)}:{}),
+    ...(shop?.address?{"address":{"@type":"PostalAddress","streetAddress":String(shop.address),"addressLocality":String(area||"熊本"),"addressRegion":"熊本県","addressCountry":"JP"}}:{}),
+    ...(shop?.hours?{"openingHours":String(shop.hours)}:{}),
+    ...(budget?{"priceRange":budget,"currenciesAccepted":"JPY"}:{}),
+    ...(genre?{"category":String(genre)}:{}),
+    ...(amenities.length?{"amenityFeature":amenities}:{}),
+    ...(sameAs.length?{"sameAs":sameAs}:{})
+  };
+}
+
 function kbnCleanShopName(v){
   return String(v||"").replace(/^【KBN独自掲載】/,"")
     .replace(/\s*[（(]\s*@[A-Za-z0-9._]+\s*[）)]\s*$/,"")
@@ -5233,14 +5277,16 @@ async function renderLocalSeoAreaPage(env,slug){
   ];
 
   const itemList=shops.slice(0,100).map((s,i)=>({"@type":"ListItem","position":i+1,"name":kbnCleanShopName(s.name),"url":`https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/shop?slug=${encodeURIComponent(s.slug||"")}`}));
+  const areaOrigin="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev";
   const jsonLd={"@context":"https://schema.org","@graph":[
-    {"@type":"CollectionPage","name":`${area}のBAR・バー一覧`,"url":canonical,"description":description,"isPartOf":{"@type":"WebSite","name":"KUMAMOTO BAR NAVI","url":"https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/"}},
+    ...kbnSchemaSiteNodes(areaOrigin),
+    {"@type":"CollectionPage","@id":canonical,"name":`${area}のBAR・バー一覧`,"url":canonical,"description":description,"inLanguage":"ja-JP","isPartOf":{"@id":`${areaOrigin}/#website`},"publisher":{"@id":`${areaOrigin}/#organization`},"mainEntity":{"@id":`${canonical}#items`}},
     {"@type":"BreadcrumbList","itemListElement":[
       {"@type":"ListItem","position":1,"name":"ホーム","item":"https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/"},
       {"@type":"ListItem","position":2,"name":"エリアから探す","item":"https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/areas.html"},
       {"@type":"ListItem","position":3,"name":area,"item":canonical}
     ]},
-    {"@type":"ItemList","name":`${area}のBAR一覧`,"numberOfItems":total,"itemListElement":itemList},
+    {"@type":"ItemList","@id":`${canonical}#items`,"name":`${area}のBAR一覧`,"numberOfItems":total,"itemListElement":itemList},
     {"@type":"FAQPage","mainEntity":faq.map(x=>({"@type":"Question","name":x[0],"acceptedAnswer":{"@type":"Answer","text":x[1]}}))}
   ]};
 
@@ -5305,7 +5351,8 @@ async function renderLocalSeoGenrePage(env,slug){
   const areaLinks=topAreas.map(([a,c])=>{const aslug=kbnAreaSlugForName(a);const href=aslug&&c>=5?`/area/${encodeURIComponent(aslug)}/${encodeURIComponent(slug)}`:`/bars.html?area=${encodeURIComponent(a)}&genre=${encodeURIComponent(label)}`;return `<a href="${href}"><b>${kbnSeoEsc(a)}</b><span>${c}店舗</span></a>`}).join('');
   const faq=[[`熊本の${label}は何店舗掲載されていますか？`,indexable?`現在${total}店舗を掲載しています。公開店舗データに合わせて自動更新されます。`:'掲載情報を順次追加しています。'],[`${label}をエリアから探せますか？`,topAreas.length?`${topAreas.slice(0,4).map(x=>x[0]).join('・')}などのエリアから比較できます。`:'BAR一覧からエリアを指定して探せます。'],[`${label}の営業時間や料金は確認できますか？`,'公開情報が登録されている店舗は、店舗詳細ページで営業時間・料金目安・住所などを確認できます。'],[`${label}の求人も探せますか？`,recruitCount?`現在${recruitCount}店舗で求人情報が登録されています。`:'求人情報が登録された店舗は求人ページに表示されます。']];
   const itemList=shops.slice(0,100).map((s,i)=>({"@type":"ListItem","position":i+1,"name":kbnCleanShopName(s.name),"url":`https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/shop?slug=${encodeURIComponent(s.slug||'')}`}));
-  const jsonLd={"@context":"https://schema.org","@graph":[{"@type":"CollectionPage","name":`熊本の${label}`,"url":canonical,"description":description},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"ホーム","item":"https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/"},{"@type":"ListItem","position":2,"name":"BARを探す","item":"https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/bars.html"},{"@type":"ListItem","position":3,"name":label,"item":canonical}]},{"@type":"ItemList","name":`熊本の${label}一覧`,"numberOfItems":total,"itemListElement":itemList},{"@type":"FAQPage","mainEntity":faq.map(x=>({"@type":"Question","name":x[0],"acceptedAnswer":{"@type":"Answer","text":x[1]}}))}]};
+  const genreOrigin="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev";
+  const jsonLd={"@context":"https://schema.org","@graph":[...kbnSchemaSiteNodes(genreOrigin),{"@type":"CollectionPage","@id":canonical,"name":`熊本の${label}`,"url":canonical,"description":description,"inLanguage":"ja-JP","isPartOf":{"@id":`${genreOrigin}/#website`},"publisher":{"@id":`${genreOrigin}/#organization`},"mainEntity":{"@id":`${canonical}#items`}},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"ホーム","item":"https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/"},{"@type":"ListItem","position":2,"name":"BARを探す","item":"https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/bars.html"},{"@type":"ListItem","position":3,"name":label,"item":canonical}]},{"@type":"ItemList","@id":`${canonical}#items`,"name":`熊本の${label}一覧`,"numberOfItems":total,"itemListElement":itemList},{"@type":"FAQPage","mainEntity":faq.map(x=>({"@type":"Question","name":x[0],"acceptedAnswer":{"@type":"Answer","text":x[1]}}))}]};
   const robots=indexable?'index,follow,max-image-preview:large':'noindex,follow';
   const facts=[`<div><strong>${total}</strong><span>掲載店舗</span></div>`,hoursCount?`<div><strong>${hoursCount}</strong><span>営業時間掲載</span></div>`:'',topAreas.length?`<div><strong>${topAreas.length}</strong><span>主な掲載エリア</span></div>`:'',avgBudget?`<div><strong>約¥${avgBudget.toLocaleString()}</strong><span>料金目安平均*</span></div>`:''].join('');
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>${kbnSeoEsc(title)}</title><meta name="description" content="${kbnSeoEsc(description)}"><link rel="canonical" href="${canonical}"><meta name="robots" content="${robots}"><meta property="og:type" content="website"><meta property="og:title" content="${kbnSeoEsc(title)}"><meta property="og:description" content="${kbnSeoEsc(description)}"><meta property="og:url" content="${canonical}"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/style.css?v=210"><script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g,'\u003c')}</script><style>.kbn-area-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:22px 0}.kbn-area-stats>div{padding:16px;border:1px solid rgba(255,255,255,.12);border-radius:16px;background:rgba(255,255,255,.035)}.kbn-area-stats strong{display:block;font-size:1.45rem}.kbn-area-stats span{font-size:.78rem;opacity:.7}.kbn-area-genres{display:flex;gap:10px;overflow:auto;padding:4px 0 10px}.kbn-area-genres a{min-width:145px;padding:14px;border:1px solid rgba(255,255,255,.12);border-radius:14px;text-decoration:none;color:inherit;background:rgba(255,255,255,.035)}.kbn-area-genres b,.kbn-area-genres span{display:block}.kbn-area-genres span{font-size:.78rem;opacity:.68;margin-top:4px}.kbn-area-tags{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.kbn-area-tags span{font-size:.72rem;padding:4px 7px;border-radius:999px;background:rgba(255,255,255,.06)}@media(min-width:720px){.kbn-area-stats{grid-template-columns:repeat(4,minmax(0,1fr))}}</style></head><body class="public-v109 local-seo-page"><header class="public-header"><div class="container public-header-inner"><a class="public-brand" href="/"><img src="/logo.png" alt="KUMAMOTO BAR NAVI"><span><b>KUMAMOTO</b><strong>BAR NAVI</strong><small>BAR & JOB INFORMATION</small></span></a><nav class="public-desktop-nav"><a href="/bars.html" class="active">BARを探す</a><a href="/areas.html">エリア</a><a href="/jobs.html">求人</a><a href="/column.html">コラム</a></nav><a class="public-header-cta" href="/bars.html">BARを探す</a></div></header><main><section class="local-seo-hero"><div class="container"><nav class="local-seo-breadcrumb"><a href="/">ホーム</a><span>›</span><a href="/bars.html">BARを探す</a><span>›</span><b>${kbnSeoEsc(label)}</b></nav><p class="public-kicker">KUMAMOTO GENRE GUIDE</p><h1>熊本の${kbnSeoEsc(label)}</h1><p>${indexable?`熊本県内の${kbnSeoEsc(label)}を${total}店舗から比較できます。エリア・営業時間・料金・特徴から今夜行きたい一軒を探してください。`:`${kbnSeoEsc(label)}の掲載情報を順次追加しています。`}</p>${indexable?`<div class="kbn-area-stats">${facts}</div>`:''}${updateDate?`<p class="kbn-area-updated">掲載情報 最終更新：${kbnSeoEsc(updateDate)}</p>`:''}</div></section>${topAreas.length?`<section class="local-seo-guide"><div class="container"><p class="public-kicker">POPULAR AREAS</p><h2>${kbnSeoEsc(label)}をエリアから探す</h2><div class="kbn-area-genres">${areaLinks}</div></div></section>`:''}<section class="local-seo-list"><div class="container"><div class="local-seo-head"><div><p class="public-kicker">BAR LIST</p><h2>熊本の${kbnSeoEsc(label)}一覧</h2></div><a href="/bars.html?genre=${encodeURIComponent(label)}">条件を指定して探す →</a></div>${shops.length?`<div class="local-seo-grid">${cards}</div>${total>shops.length?`<p class="kbn-area-note">このページでは代表的な${shops.length}店舗を表示しています。</p>`:''}`:`<div class="local-seo-empty"><h2>掲載店舗を準備中です</h2></div>`}</div></section><section class="local-seo-guide"><div class="container"><p class="public-kicker">GENRE GUIDE</p><h2>熊本で${kbnSeoEsc(label)}を探すポイント</h2><p>掲載店舗のエリア、営業時間、料金目安、特徴を比較できます。店舗情報は随時更新していますが、営業時間や料金など重要な情報は来店前に各店舗へ直接確認してください。</p></div></section><section class="local-seo-faq"><div class="container"><p class="public-kicker">FAQ</p><h2>${kbnSeoEsc(label)}探し よくある質問</h2><div>${faq.map(x=>`<details><summary>${kbnSeoEsc(x[0])}</summary><p>${kbnSeoEsc(x[1])}</p></details>`).join('')}</div></div></section></main><nav class="public-bottom-nav"><a href="/"><span>⌂</span><b>ホーム</b></a><a href="/bars.html"><span>⌕</span><b>BARを探す</b></a><a href="/jobs.html"><span>▣</span><b>求人</b></a><a href="/listing-form.html"><span>＋</span><b>店舗掲載</b></a></nav></body></html>`;
@@ -5451,14 +5498,16 @@ async function renderLocalSeoAreaGenrePage(env,areaSlug,genreSlug){
   ];
 
   const itemList=shops.slice(0,100).map((shop,i)=>({"@type":"ListItem","position":i+1,"name":kbnCleanShopName(shop.name),"url":`https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/shop?slug=${encodeURIComponent(shop.slug||"")}`}));
+  const areaGenreOrigin="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev";
   const jsonLd={"@context":"https://schema.org","@graph":[
-    {"@type":"CollectionPage","name":`${area}の${label}`,"url":canonical,"description":description,"isPartOf":{"@type":"WebSite","name":"KUMAMOTO BAR NAVI","url":"https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/"}},
+    ...kbnSchemaSiteNodes(areaGenreOrigin),
+    {"@type":"CollectionPage","@id":canonical,"name":`${area}の${label}`,"url":canonical,"description":description,"inLanguage":"ja-JP","isPartOf":{"@id":`${areaGenreOrigin}/#website`},"publisher":{"@id":`${areaGenreOrigin}/#organization`},"mainEntity":{"@id":`${canonical}#items`}},
     {"@type":"BreadcrumbList","itemListElement":[
       {"@type":"ListItem","position":1,"name":"ホーム","item":"https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/"},
       {"@type":"ListItem","position":2,"name":area,"item":`https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/area/${encodeURIComponent(areaSlug)}`},
       {"@type":"ListItem","position":3,"name":label,"item":canonical}
     ]},
-    {"@type":"ItemList","name":`${area}の${label}一覧`,"numberOfItems":total,"itemListElement":itemList},
+    {"@type":"ItemList","@id":`${canonical}#items`,"name":`${area}の${label}一覧`,"numberOfItems":total,"itemListElement":itemList},
     {"@type":"FAQPage","mainEntity":faq.map(x=>({"@type":"Question","name":x[0],"acceptedAnswer":{"@type":"Answer","text":x[1]}}))}
   ]};
 
@@ -5561,29 +5610,16 @@ async function renderSeoShopDetailV250(request,env,url){
     console.error("seo related shops query",e);
   }
 
-  const instagram=String(shop.instagram||"").trim();
-  const sameAs=[];
-  if(/^https?:\/\//i.test(instagram))sameAs.push(instagram);
-  else if(/^@?[A-Za-z0-9._]+$/.test(instagram))sameAs.push(`https://www.instagram.com/${instagram.replace(/^@/,"")}/`);
-
+  const origin=url.origin;
+  const siteNodes=kbnSchemaSiteNodes(origin);
+  const businessNode=kbnSchemaShopNode(shop,{origin,canonical,name,area,genre,description,budget,featureList});
+  const published=String(shop.published_at||shop.created_at||"").trim();
+  const modified=String(shop.updated_at||shop.published_at||shop.created_at||"").trim();
   const jsonLd={
     "@context":"https://schema.org",
     "@graph":[
-      {
-        "@type":"BarOrPub",
-        "@id":`${canonical}#shop`,
-        "name":name,
-        "url":canonical,
-        "mainEntityOfPage":{"@type":"WebPage","@id":canonical},
-        "description":description,
-        ...(shop.image_url?{"image":[shop.image_url]}:{}),
-        ...(shop.phone?{"telephone":String(shop.phone)}:{}),
-        ...(shop.address?{"address":{"@type":"PostalAddress","streetAddress":String(shop.address),"addressRegion":"熊本県","addressCountry":"JP"}}:{}),
-        ...(shop.hours?{"openingHours":String(shop.hours)}:{}),
-        ...(budget?{"priceRange":budget}:{}),
-        ...(sameAs.length?{"sameAs":sameAs}:{}),
-        ...(genre?{"additionalType":"https://schema.org/BarOrPub"}:{})
-      },
+      ...siteNodes,
+      businessNode,
       {
         "@type":"WebPage",
         "@id":canonical,
@@ -5591,15 +5627,20 @@ async function renderSeoShopDetailV250(request,env,url){
         "name":title,
         "description":description,
         "inLanguage":"ja-JP",
-        "isPartOf":{"@type":"WebSite","name":"KUMAMOTO BAR NAVI","url":`${url.origin}/`},
-        "about":{"@id":`${canonical}#shop`}
+        "isPartOf":{"@id":`${origin}/#website`},
+        "publisher":{"@id":`${origin}/#organization`},
+        "about":{"@id":`${canonical}#business`},
+        "mainEntity":{"@id":`${canonical}#business`},
+        ...(published?{"datePublished":published}:{}),
+        ...(modified?{"dateModified":modified}:{})
       },
       {
         "@type":"BreadcrumbList",
+        "@id":`${canonical}#breadcrumb`,
         "itemListElement":[
-          {"@type":"ListItem","position":1,"name":"ホーム","item":`${url.origin}/`},
-          {"@type":"ListItem","position":2,"name":"BARを探す","item":`${url.origin}/bars.html`},
-          ...(areaSlug?[{"@type":"ListItem","position":3,"name":area,"item":`${url.origin}/area/${encodeURIComponent(areaSlug)}`}]:[]),
+          {"@type":"ListItem","position":1,"name":"ホーム","item":`${origin}/`},
+          {"@type":"ListItem","position":2,"name":"BARを探す","item":`${origin}/bars.html`},
+          ...(areaSlug?[{"@type":"ListItem","position":3,"name":area,"item":`${origin}/area/${encodeURIComponent(areaSlug)}`}]:[]),
           {"@type":"ListItem","position":areaSlug?4:3,"name":name,"item":canonical}
         ]
       }
@@ -5696,7 +5737,7 @@ async function renderAllShopsSeoIndexV250(env,origin){
   }).join("");
   const title=`熊本県の掲載BAR全店舗一覧（${shops.length}店舗）｜KUMAMOTO BAR NAVI`;
   const desc=`KUMAMOTO BAR NAVIに掲載中の熊本県内BAR全店舗一覧。現在${shops.length}店舗をエリア別に掲載しています。`;
-  const itemList={"@context":"https://schema.org","@type":"ItemList","name":"熊本県の掲載BAR全店舗一覧","numberOfItems":shops.length,"itemListElement":shops.slice(0,5000).map((x,i)=>({"@type":"ListItem","position":i+1,"name":kbnCleanShopName(x.name)||"BAR","url":`${origin}/shop?slug=${encodeURIComponent(x.slug||"")}`}))};
+  const itemList={"@context":"https://schema.org","@graph":[...kbnSchemaSiteNodes(origin),{"@type":"CollectionPage","@id":canonical,"url":canonical,"name":"熊本県の掲載BAR全店舗一覧","description":desc,"inLanguage":"ja-JP","isPartOf":{"@id":`${origin}/#website`},"publisher":{"@id":`${origin}/#organization`},"mainEntity":{"@id":`${canonical}#items`}},{"@type":"ItemList","@id":`${canonical}#items`,"name":"熊本県の掲載BAR全店舗一覧","numberOfItems":shops.length,"itemListElement":shops.slice(0,5000).map((x,i)=>({"@type":"ListItem","position":i+1,"name":kbnCleanShopName(x.name)||"BAR","url":`${origin}/shop?slug=${encodeURIComponent(x.slug||"")}`}))}]};
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${kbnSeoEsc(title)}</title><meta name="description" content="${kbnSeoEsc(desc)}"><meta name="robots" content="index,follow,max-image-preview:large"><link rel="canonical" href="${canonical}"><script type="application/ld+json">${JSON.stringify(itemList).replace(/</g,"\u003c")}</script><link rel="stylesheet" href="/style.css?v=196"></head><body class="public-v109"><header class="public-header"><div class="container public-header-inner"><a class="public-brand" href="/"><img src="/logo.png" alt="KUMAMOTO BAR NAVI"><span><b>KUMAMOTO</b><strong>BAR NAVI</strong><small>BAR & JOB INFORMATION</small></span></a></div></header><main class="container" style="padding:32px 18px 100px"><nav style="margin-bottom:20px"><a href="/">ホーム</a> › <b>掲載店舗一覧</b></nav><h1>熊本県の掲載BAR全店舗一覧</h1><p>${kbnSeoEsc(desc)}</p><div style="display:grid;gap:28px">${sections}</div></main></body></html>`;
 }
 
