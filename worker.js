@@ -5119,6 +5119,24 @@ function kbnSchemaAbsUrl(v,origin){
   if(!s)return "";
   try{return new URL(s,origin).toString();}catch{return "";}
 }
+function kbnSeoImageData(shop,{origin,canonical,name,area,genre}={}){
+  const raw=String(shop?.image_url||"").trim();
+  const url=kbnSchemaAbsUrl(raw,origin);
+  if(!url)return null;
+  const safeName=String(name||kbnCleanShopName(shop?.name)||"店舗").trim();
+  const safeArea=String(area||shop?.area||"熊本").trim()||"熊本";
+  const safeGenre=String(genre||shop?.genre||"BAR").trim()||"BAR";
+  const alt=`${safeName}｜${safeArea}の${safeGenre}`.slice(0,120);
+  return {
+    url,alt,
+    object:{
+      "@type":"ImageObject",
+      ...(canonical?{"@id":`${canonical}#primaryimage`}:{}),
+      "url":url,"contentUrl":url,"caption":alt,"name":alt,
+      "representativeOfPage":true
+    }
+  };
+}
 function kbnSchemaSiteNodes(origin){
   const orgId=`${origin}/#organization`, siteId=`${origin}/#website`;
   return [
@@ -5134,7 +5152,7 @@ function kbnSchemaSiteNodes(origin){
   ];
 }
 function kbnSchemaShopNode(shop,{origin,canonical,name,area,genre,description,budget,featureList=[]}){
-  const image=kbnSchemaAbsUrl(shop?.image_url,origin);
+  const imageData=kbnSeoImageData(shop,{origin,canonical,name,area,genre});
   const instagram=String(shop?.instagram||"").trim();
   const sameAs=[];
   if(/^https?:\/\//i.test(instagram))sameAs.push(instagram);
@@ -5145,7 +5163,7 @@ function kbnSchemaShopNode(shop,{origin,canonical,name,area,genre,description,bu
     "@id":`${canonical}#business`,
     "name":name,"url":canonical,"description":description,
     "mainEntityOfPage":{"@id":canonical},
-    ...(image?{"image":[image]}:{}),
+    ...(imageData?{"image":[imageData.object]}:{}),
     ...(shop?.phone?{"telephone":String(shop.phone)}:{}),
     ...(shop?.address?{"address":{"@type":"PostalAddress","streetAddress":String(shop.address),"addressLocality":String(area||"熊本"),"addressRegion":"熊本県","addressCountry":"JP"}}:{}),
     ...(shop?.hours?{"openingHours":String(shop.hours)}:{}),
@@ -5272,7 +5290,7 @@ async function renderLocalSeoAreaPage(env,slug){
     const features=String(s.features||"").split(/[、,／/・|]/).map(x=>x.trim()).filter(Boolean).slice(0,3);
     return `<article class="local-seo-card">
       <a href="/shop?slug=${encodeURIComponent(s.slug||"")}">
-        <div class="local-seo-img">${s.image_url?`<img src="${kbnSeoEsc(s.image_url)}" alt="${kbnSeoEsc(name)}｜${kbnSeoEsc(area)}のBAR" loading="lazy">`:`<img src="/default-bar.svg" alt="" loading="lazy">`}</div>
+        <div class="local-seo-img">${s.image_url?`<img src="${kbnSeoEsc(s.image_url)}" alt="${kbnSeoEsc(name)}｜${kbnSeoEsc(area)}のBAR" loading="lazy" decoding="async" fetchpriority="low">`:`<img src="/default-bar.svg" alt="" loading="lazy" decoding="async" fetchpriority="low">`}</div>
         <div class="local-seo-body">
           <div class="local-seo-meta"><span>${kbnSeoEsc(s.genre||"BAR")}</span>${s.listing_status==="provisional"?"<small>KBN独自掲載</small>":""}</div>
           <h2>${kbnSeoEsc(name)}</h2>
@@ -5386,7 +5404,7 @@ async function renderLocalSeoGenrePage(env,slug){
   const updateDate=updatedAt?updatedAt.slice(0,10).replace(/-/g,'/'):'';
   const title=`熊本の${label}${total?` ${total}店舗`:''}｜エリア・営業時間・料金から探す｜KUMAMOTO BAR NAVI`;
   const description=indexable?`熊本県内の${label}を${total}店舗掲載。${topAreas.slice(0,3).map(x=>x[0]).join('・')}などのエリア、営業時間、料金目安、特徴を比較して探せます。掲載情報は随時更新しています。`:`熊本県内の${label}情報を掲載するKUMAMOTO BAR NAVIのジャンルページです。`;
-  const cards=shops.map(s=>{const name=kbnCleanShopName(s.name)||'BAR',budget=kbnBudget(s),features=String(s.features||'').split(/[、,／/・|]/).map(x=>x.trim()).filter(Boolean).slice(0,3);return `<article class="local-seo-card"><a href="/shop?slug=${encodeURIComponent(s.slug||'')}"><div class="local-seo-img">${s.image_url?`<img src="${kbnSeoEsc(s.image_url)}" alt="${kbnSeoEsc(name)}｜熊本の${kbnSeoEsc(label)}" loading="lazy">`:`<img src="/default-bar.svg" alt="" loading="lazy">`}</div><div class="local-seo-body"><div class="local-seo-meta"><span>${kbnSeoEsc(s.area||'熊本')}</span><span>${kbnSeoEsc(s.genre||label)}</span></div><h2>${kbnSeoEsc(name)}</h2>${s.address?`<p>${kbnSeoEsc(s.address)}</p>`:''}${features.length?`<div class="kbn-area-tags">${features.map(f=>`<span>${kbnSeoEsc(f)}</span>`).join('')}</div>`:''}<div class="local-seo-facts">${s.hours?`<span><small>営業時間</small><b>${kbnSeoEsc(s.hours)}</b></span>`:''}${budget?`<span><small>料金目安</small><b>${kbnSeoEsc(budget)}</b></span>`:''}</div><div class="local-seo-bottom">${Number(s.is_recruiting||0)===1?'<em>求人あり</em>':''}<b>店舗詳細を見る →</b></div></div></a></article>`}).join('');
+  const cards=shops.map(s=>{const name=kbnCleanShopName(s.name)||'BAR',budget=kbnBudget(s),features=String(s.features||'').split(/[、,／/・|]/).map(x=>x.trim()).filter(Boolean).slice(0,3);return `<article class="local-seo-card"><a href="/shop?slug=${encodeURIComponent(s.slug||'')}"><div class="local-seo-img">${s.image_url?`<img src="${kbnSeoEsc(s.image_url)}" alt="${kbnSeoEsc(name)}｜熊本の${kbnSeoEsc(label)}" loading="lazy" decoding="async" fetchpriority="low">`:`<img src="/default-bar.svg" alt="" loading="lazy" decoding="async" fetchpriority="low">`}</div><div class="local-seo-body"><div class="local-seo-meta"><span>${kbnSeoEsc(s.area||'熊本')}</span><span>${kbnSeoEsc(s.genre||label)}</span></div><h2>${kbnSeoEsc(name)}</h2>${s.address?`<p>${kbnSeoEsc(s.address)}</p>`:''}${features.length?`<div class="kbn-area-tags">${features.map(f=>`<span>${kbnSeoEsc(f)}</span>`).join('')}</div>`:''}<div class="local-seo-facts">${s.hours?`<span><small>営業時間</small><b>${kbnSeoEsc(s.hours)}</b></span>`:''}${budget?`<span><small>料金目安</small><b>${kbnSeoEsc(budget)}</b></span>`:''}</div><div class="local-seo-bottom">${Number(s.is_recruiting||0)===1?'<em>求人あり</em>':''}<b>店舗詳細を見る →</b></div></div></a></article>`}).join('');
   const areaLinks=topAreas.map(([a,c])=>{const aslug=kbnAreaSlugForName(a);const href=aslug&&c>=5?`/area/${encodeURIComponent(aslug)}/${encodeURIComponent(slug)}`:`/bars.html?area=${encodeURIComponent(a)}&genre=${encodeURIComponent(label)}`;return `<a href="${href}"><b>${kbnSeoEsc(a)}</b><span>${c}店舗</span></a>`}).join('');
   const faq=[[`熊本の${label}は何店舗掲載されていますか？`,indexable?`現在${total}店舗を掲載しています。公開店舗データに合わせて自動更新されます。`:'掲載情報を順次追加しています。'],[`${label}をエリアから探せますか？`,topAreas.length?`${topAreas.slice(0,4).map(x=>x[0]).join('・')}などのエリアから比較できます。`:'BAR一覧からエリアを指定して探せます。'],[`${label}の営業時間や料金は確認できますか？`,'公開情報が登録されている店舗は、店舗詳細ページで営業時間・料金目安・住所などを確認できます。'],[`${label}の求人も探せますか？`,recruitCount?`現在${recruitCount}店舗で求人情報が登録されています。`:'求人情報が登録された店舗は求人ページに表示されます。']];
   const itemList=shops.slice(0,100).map((s,i)=>({"@type":"ListItem","position":i+1,"name":kbnCleanShopName(s.name),"url":`https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/shop?slug=${encodeURIComponent(s.slug||'')}`}));
@@ -5516,7 +5534,7 @@ async function renderLocalSeoAreaGenrePage(env,areaSlug,genreSlug){
     const name=kbnCleanShopName(s.name)||"BAR";
     const budget=kbnBudget(s);
     const features=String(s.features||"").split(/[、,／/・|]/).map(x=>x.trim()).filter(Boolean).slice(0,3);
-    return `<article class="local-seo-card"><a href="/shop?slug=${encodeURIComponent(s.slug||"")}"><div class="local-seo-img">${s.image_url?`<img src="${kbnSeoEsc(s.image_url)}" alt="${kbnSeoEsc(name)}｜${kbnSeoEsc(area)}の${kbnSeoEsc(label)}" loading="lazy">`:`<img src="/default-bar.svg" alt="" loading="lazy">`}</div><div class="local-seo-body"><div class="local-seo-meta"><span>${kbnSeoEsc(area)}</span><span>${kbnSeoEsc(s.genre||label)}</span></div><h2>${kbnSeoEsc(name)}</h2>${s.address?`<p>${kbnSeoEsc(s.address)}</p>`:""}${features.length?`<div class="kbn-area-tags">${features.map(f=>`<span>${kbnSeoEsc(f)}</span>`).join("")}</div>`:""}<div class="local-seo-facts">${s.hours?`<span><small>営業時間</small><b>${kbnSeoEsc(s.hours)}</b></span>`:""}${budget?`<span><small>料金目安</small><b>${kbnSeoEsc(budget)}</b></span>`:""}</div><div class="local-seo-bottom">${Number(s.is_recruiting||0)===1?"<em>求人あり</em>":""}<b>店舗詳細を見る →</b></div></div></a></article>`;
+    return `<article class="local-seo-card"><a href="/shop?slug=${encodeURIComponent(s.slug||"")}"><div class="local-seo-img">${s.image_url?`<img src="${kbnSeoEsc(s.image_url)}" alt="${kbnSeoEsc(name)}｜${kbnSeoEsc(area)}の${kbnSeoEsc(label)}" loading="lazy" decoding="async" fetchpriority="low">`:`<img src="/default-bar.svg" alt="" loading="lazy" decoding="async" fetchpriority="low">`}</div><div class="local-seo-body"><div class="local-seo-meta"><span>${kbnSeoEsc(area)}</span><span>${kbnSeoEsc(s.genre||label)}</span></div><h2>${kbnSeoEsc(name)}</h2>${s.address?`<p>${kbnSeoEsc(s.address)}</p>`:""}${features.length?`<div class="kbn-area-tags">${features.map(f=>`<span>${kbnSeoEsc(f)}</span>`).join("")}</div>`:""}<div class="local-seo-facts">${s.hours?`<span><small>営業時間</small><b>${kbnSeoEsc(s.hours)}</b></span>`:""}${budget?`<span><small>料金目安</small><b>${kbnSeoEsc(budget)}</b></span>`:""}</div><div class="local-seo-bottom">${Number(s.is_recruiting||0)===1?"<em>求人あり</em>":""}<b>店舗詳細を見る →</b></div></div></a></article>`;
   }).join("");
 
   const facts=[
@@ -5670,6 +5688,7 @@ async function renderSeoShopDetailV250(request,env,url){
         "publisher":{"@id":`${origin}/#organization`},
         "about":{"@id":`${canonical}#business`},
         "mainEntity":{"@id":`${canonical}#business`},
+        ...(kbnSeoImageData(shop,{origin,canonical,name,area,genre})?{"primaryImageOfPage":{"@id":`${canonical}#primaryimage`}}:{}),
         ...(published?{"datePublished":published}:{}),
         ...(modified?{"dateModified":modified}:{})
       },
@@ -5687,7 +5706,9 @@ async function renderSeoShopDetailV250(request,env,url){
   };
 
   const escAttr=v=>kbnSeoEsc(v);
-  const ogImage=shop.image_url?String(shop.image_url).trim():`${url.origin}/logo.png`;
+  const primaryImage=kbnSeoImageData(shop,{origin:url.origin,canonical,name,area,genre});
+  const ogImage=primaryImage?.url||`${url.origin}/logo.png`;
+  const ogImageAlt=primaryImage?.alt||`KUMAMOTO BAR NAVI｜${name}`;
 
   // Real shop pages are indexable from the first byte Google receives.
   // Remove stale robots/googlebot directives from the shared template, then add one authoritative directive.
@@ -5702,8 +5723,8 @@ async function renderSeoShopDetailV250(request,env,url){
     .replace(/<meta id="dynamicOgUrl" property="og:url" content="[^"]*">/i,`<meta id="dynamicOgUrl" property="og:url" content="${escAttr(canonical)}">`)
     .replace(/<script id="shopJsonLd" type="application\/ld\+json">[\s\S]*?<\/script>/i,`<script id="shopJsonLd" type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g,"\\u003c")}</script>`);
 
-  const socialMeta=`\n<meta property="og:site_name" content="KUMAMOTO BAR NAVI">\n<meta property="og:locale" content="ja_JP">\n<meta property="og:image" content="${escAttr(ogImage)}">\n<meta name="twitter:card" content="summary_large_image">\n<meta name="twitter:title" content="${escAttr(title)}">\n<meta name="twitter:description" content="${escAttr(description)}">\n<meta name="twitter:image" content="${escAttr(ogImage)}">`;
-  const internalLinkCss=`<style>.kbn-seo-link-hub{margin:28px 0}.kbn-seo-link-hub h2{margin:0 0 12px}.kbn-seo-link-hub>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.kbn-seo-link-hub a{display:block;padding:14px;border:1px solid rgba(255,255,255,.13);border-radius:14px;text-decoration:none;color:inherit;background:rgba(255,255,255,.035)}.kbn-seo-link-hub strong,.kbn-seo-link-hub span{display:block}.kbn-seo-link-hub span{margin-top:4px;font-size:.76rem;opacity:.68}.kbn-seo-related{margin:28px 0}.kbn-seo-related ul{list-style:none;padding:0;margin:12px 0}.kbn-seo-related li+li{margin-top:8px}.kbn-seo-related li a{display:flex;justify-content:space-between;gap:12px;padding:12px;border:1px solid rgba(255,255,255,.10);border-radius:12px;text-decoration:none;color:inherit}.kbn-seo-related li span{font-size:.76rem;opacity:.66;text-align:right}@media(max-width:560px){.kbn-seo-link-hub>div{grid-template-columns:1fr}}</style>`;
+  const socialMeta=`\n<meta property="og:site_name" content="KUMAMOTO BAR NAVI">\n<meta property="og:locale" content="ja_JP">\n<meta property="og:image" content="${escAttr(ogImage)}">\n<meta property="og:image:secure_url" content="${escAttr(ogImage)}">\n<meta property="og:image:alt" content="${escAttr(ogImageAlt)}">\n<meta name="twitter:card" content="summary_large_image">\n<meta name="twitter:title" content="${escAttr(title)}">\n<meta name="twitter:description" content="${escAttr(description)}">\n<meta name="twitter:image" content="${escAttr(ogImage)}">\n<meta name="twitter:image:alt" content="${escAttr(ogImageAlt)}">`;
+  const internalLinkCss=`<style>.kbn-seo-primary-image{margin:16px 0 22px;border-radius:18px;overflow:hidden;background:#0d141b}.kbn-seo-primary-image img{display:block;width:100%;height:auto;max-height:640px;object-fit:cover}.kbn-seo-primary-image figcaption{padding:8px 11px;font-size:.7rem;opacity:.66}.kbn-seo-link-hub{margin:28px 0}.kbn-seo-link-hub h2{margin:0 0 12px}.kbn-seo-link-hub>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.kbn-seo-link-hub a{display:block;padding:14px;border:1px solid rgba(255,255,255,.13);border-radius:14px;text-decoration:none;color:inherit;background:rgba(255,255,255,.035)}.kbn-seo-link-hub strong,.kbn-seo-link-hub span{display:block}.kbn-seo-link-hub span{margin-top:4px;font-size:.76rem;opacity:.68}.kbn-seo-related{margin:28px 0}.kbn-seo-related ul{list-style:none;padding:0;margin:12px 0}.kbn-seo-related li+li{margin-top:8px}.kbn-seo-related li a{display:flex;justify-content:space-between;gap:12px;padding:12px;border:1px solid rgba(255,255,255,.10);border-radius:12px;text-decoration:none;color:inherit}.kbn-seo-related li span{font-size:.76rem;opacity:.66;text-align:right}@media(max-width:560px){.kbn-seo-link-hub>div{grid-template-columns:1fr}}</style>`;
   html=html.replace('</head>',`${socialMeta}\n${internalLinkCss}\n</head>`);
 
   const updated=String(shop.updated_at||shop.published_at||shop.created_at||"").trim();
@@ -5727,6 +5748,7 @@ async function renderSeoShopDetailV250(request,env,url){
       <nav aria-label="パンくず"><a href="/">ホーム</a> › <a href="/bars.html">BARを探す</a>${areaSlug?` › <a href="${areaHref}">${kbnSeoEsc(area)}</a>`:""} › <span>${kbnSeoEsc(name)}</span></nav>
       <p class="public-shop-location">${kbnSeoEsc([area,genre].filter(Boolean).join(" / "))}</p>
       <h1>${kbnSeoEsc(name)}</h1>
+      ${primaryImage?`<figure class="kbn-seo-primary-image"><img src="${escAttr(primaryImage.url)}" alt="${escAttr(primaryImage.alt)}" loading="eager" decoding="async" fetchpriority="high" referrerpolicy="no-referrer-when-downgrade"><figcaption>${escAttr(primaryImage.alt)}</figcaption></figure>`:""}
       ${rawDesc?`<p class="kbn-seo-description">${kbnSeoEsc(rawDesc)}</p>`:`<p class="kbn-seo-description">${kbnSeoEsc(`${name}は${area}で掲載中の${genre}です。住所・営業時間・料金目安など、来店前に確認したい店舗情報をまとめています。`)}</p>`}
       ${featureList.length?`<div class="kbn-seo-features" aria-label="店舗の特徴">${featureList.map(x=>`<span>${kbnSeoEsc(x)}</span>`).join("")}</div>`:""}
       ${facts.length?`<section><h2>${kbnSeoEsc(name)}の基本情報</h2><dl>${facts.map(([k,v])=>`<div><dt>${kbnSeoEsc(k)}</dt><dd>${kbnSeoEsc(v)}</dd></div>`).join("")}</dl></section>`:""}
@@ -7575,6 +7597,8 @@ export default {
             SUM(CASE WHEN TRIM(COALESCE(address,''))='' THEN 1 ELSE 0 END) AS missing_address,
             SUM(CASE WHEN TRIM(COALESCE(hours,''))='' THEN 1 ELSE 0 END) AS missing_hours,
             SUM(CASE WHEN TRIM(COALESCE(genre,''))='' THEN 1 ELSE 0 END) AS missing_genre,
+            SUM(CASE WHEN TRIM(COALESCE(image_url,''))='' AND TRIM(COALESCE(image_key,''))='' THEN 1 ELSE 0 END) AS missing_image,
+            SUM(CASE WHEN TRIM(COALESCE(image_url,''))!='' OR TRIM(COALESCE(image_key,''))!='' THEN 1 ELSE 0 END) AS image_good,
             SUM(CASE WHEN TRIM(COALESCE(slug,''))='' OR slug IN (SELECT slug FROM slug_dupes) THEN 1 ELSE 0 END) AS url_risk,
             SUM(CASE WHEN seo_score>=90 THEN 1 ELSE 0 END) AS score_90_plus,
             SUM(CASE WHEN seo_score>=80 AND seo_score<90 THEN 1 ELSE 0 END) AS score_80s,
@@ -7590,7 +7614,8 @@ export default {
           SELECT s.id,s.slug,s.name,s.area,(${scoreExpr}) AS seo_score,
                  CASE WHEN TRIM(COALESCE(s.hours,''))='' THEN 1 ELSE 0 END AS miss_hours,
                  CASE WHEN TRIM(COALESCE(s.address,''))='' THEN 1 ELSE 0 END AS miss_address,
-                 CASE WHEN LENGTH(TRIM(COALESCE(s.description,'')))<80 THEN 1 ELSE 0 END AS miss_description
+                 CASE WHEN LENGTH(TRIM(COALESCE(s.description,'')))<80 THEN 1 ELSE 0 END AS miss_description,
+                 CASE WHEN TRIM(COALESCE(s.image_url,''))='' AND TRIM(COALESCE(s.image_key,''))='' THEN 1 ELSE 0 END AS miss_image
           FROM shops s
           WHERE COALESCE(s.is_published,1)=1
           ORDER BY (${scoreExpr}) ASC,s.id ASC
@@ -7623,13 +7648,15 @@ export default {
             description_low:Number(summary?.description_low||0),
             address:Number(summary?.missing_address||0),
             hours:Number(summary?.missing_hours||0),
-            genre:Number(summary?.missing_genre||0)
+            genre:Number(summary?.missing_genre||0),
+            image:Number(summary?.missing_image||0),
+            image_good:Number(summary?.image_good||0)
           },
           lowest:(low.results||[]).map(x=>({
             id:Number(x.id||0),slug:x.slug||'',name:x.name||'',area:x.area||'',score:Number(x.seo_score||0),
-            missing:[x.miss_hours?'営業時間':'',x.miss_address?'住所':'',x.miss_description?'説明文':''].filter(Boolean)
+            missing:[x.miss_hours?'営業時間':'',x.miss_address?'住所':'',x.miss_description?'説明文':'',x.miss_image?'画像':''].filter(Boolean)
           })),
-          score_rule:"100点満点。90点以上をSEO良好として、通常メンテナンスでは低スコア店舗から最大20店舗を優先改善します。紹介文は確認済み固有情報が2項目以上ある場合のみ自動強化します。",
+          score_rule:"100点満点。90点以上をSEO良好として、通常メンテナンスでは低スコア店舗から最大20店舗を優先改善します。画像は店舗固有画像のみSEO評価し、画像なし店舗に偽の代替画像は付けません。",
           note:"Search Consoleの実インデックス数ではなく、全公開店舗のSEO準備度スコアです。"
         });
       }
