@@ -5512,16 +5512,51 @@ async function renderSeoShopDetailV250(request,env,url){
   ].filter(Boolean).join("。").slice(0,158);
   const title=`${name}｜${area}の${genre}・営業時間・料金｜KUMAMOTO BAR NAVI`;
 
-  let related=[];
+  const areaSlug=kbnAreaSlugForName(area);
+  const genreSlug=kbnGenreSlugForText(genre);
+  const genreCfg=genreSlug?KBN_LOCAL_SEO_GENRES?.[genreSlug]:null;
+  let relatedArea=[],relatedGenre=[],areaGenreCount=0,genreCount=0;
   try{
-    const rr=await env.DB.prepare(`
-      SELECT slug,name,area,genre,address,hours
-      FROM shops
-      WHERE COALESCE(is_published,1)=1 AND area=? AND slug<>?
-      ORDER BY CASE WHEN genre=? THEN 0 ELSE 1 END, COALESCE(updated_at,created_at) DESC, id DESC
-      LIMIT 6
-    `).bind(area,shop.slug,genre).all();
-    related=rr.results||[];
+    const tasks=[
+      env.DB.prepare(`
+        SELECT slug,name,area,genre,address,hours
+        FROM shops
+        WHERE COALESCE(is_published,1)=1 AND area=? AND slug<>?
+        ORDER BY CASE WHEN genre=? THEN 0 ELSE 1 END, COALESCE(updated_at,created_at) DESC, id DESC
+        LIMIT 6
+      `).bind(area,shop.slug,genre).all()
+    ];
+    if(genreCfg){
+      const gp=kbnGenreSqlParts(genreCfg);
+      tasks.push(
+        env.DB.prepare(`
+          SELECT slug,name,area,genre,address,hours
+          FROM shops
+          WHERE COALESCE(is_published,1)=1 AND slug<>? AND (${gp.condition})
+          ORDER BY CASE WHEN area=? THEN 0 ELSE 1 END, COALESCE(updated_at,created_at) DESC, id DESC
+          LIMIT 8
+        `).bind(shop.slug,...gp.binds,area).all(),
+        env.DB.prepare(`
+          SELECT COUNT(*) AS total
+          FROM shops
+          WHERE COALESCE(is_published,1)=1 AND (${gp.condition})
+        `).bind(...gp.binds).first()
+      );
+      if(areaSlug){
+        tasks.push(env.DB.prepare(`
+          SELECT COUNT(*) AS total
+          FROM shops
+          WHERE COALESCE(is_published,1)=1 AND area=? AND (${gp.condition})
+        `).bind(area,...gp.binds).first());
+      }
+    }
+    const results=await Promise.all(tasks);
+    relatedArea=results[0]?.results||[];
+    if(genreCfg){
+      relatedGenre=(results[1]?.results||[]).filter(r=>String(r.area||'').trim()!==area).slice(0,6);
+      genreCount=Number(results[2]?.total||0);
+      if(areaSlug)areaGenreCount=Number(results[3]?.total||0);
+    }
   }catch(e){
     console.error("seo related shops query",e);
   }
@@ -5564,7 +5599,8 @@ async function renderSeoShopDetailV250(request,env,url){
         "itemListElement":[
           {"@type":"ListItem","position":1,"name":"ホーム","item":`${url.origin}/`},
           {"@type":"ListItem","position":2,"name":"BARを探す","item":`${url.origin}/bars.html`},
-          {"@type":"ListItem","position":3,"name":name,"item":canonical}
+          ...(areaSlug?[{"@type":"ListItem","position":3,"name":area,"item":`${url.origin}/area/${encodeURIComponent(areaSlug)}`}]:[]),
+          {"@type":"ListItem","position":areaSlug?4:3,"name":name,"item":canonical}
         ]
       }
     ]
@@ -5587,7 +5623,8 @@ async function renderSeoShopDetailV250(request,env,url){
     .replace(/<script id="shopJsonLd" type="application\/ld\+json">[\s\S]*?<\/script>/i,`<script id="shopJsonLd" type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g,"\\u003c")}</script>`);
 
   const socialMeta=`\n<meta property="og:site_name" content="KUMAMOTO BAR NAVI">\n<meta property="og:locale" content="ja_JP">\n<meta property="og:image" content="${escAttr(ogImage)}">\n<meta name="twitter:card" content="summary_large_image">\n<meta name="twitter:title" content="${escAttr(title)}">\n<meta name="twitter:description" content="${escAttr(description)}">\n<meta name="twitter:image" content="${escAttr(ogImage)}">`;
-  html=html.replace('</head>',`${socialMeta}\n</head>`);
+  const internalLinkCss=`<style>.kbn-seo-link-hub{margin:28px 0}.kbn-seo-link-hub h2{margin:0 0 12px}.kbn-seo-link-hub>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.kbn-seo-link-hub a{display:block;padding:14px;border:1px solid rgba(255,255,255,.13);border-radius:14px;text-decoration:none;color:inherit;background:rgba(255,255,255,.035)}.kbn-seo-link-hub strong,.kbn-seo-link-hub span{display:block}.kbn-seo-link-hub span{margin-top:4px;font-size:.76rem;opacity:.68}.kbn-seo-related{margin:28px 0}.kbn-seo-related ul{list-style:none;padding:0;margin:12px 0}.kbn-seo-related li+li{margin-top:8px}.kbn-seo-related li a{display:flex;justify-content:space-between;gap:12px;padding:12px;border:1px solid rgba(255,255,255,.10);border-radius:12px;text-decoration:none;color:inherit}.kbn-seo-related li span{font-size:.76rem;opacity:.66;text-align:right}@media(max-width:560px){.kbn-seo-link-hub>div{grid-template-columns:1fr}}</style>`;
+  html=html.replace('</head>',`${socialMeta}\n${internalLinkCss}\n</head>`);
 
   const updated=String(shop.updated_at||shop.published_at||shop.created_at||"").trim();
   const updatedLabel=updated?updated.slice(0,10).replace(/-/g,"/"):"";
@@ -5599,10 +5636,15 @@ async function renderSeoShopDetailV250(request,env,url){
     shop.seats?["席数",`${shop.seats}席`]:null,
     shop.phone?["電話",shop.phone]:null
   ].filter(Boolean);
-  const relatedHtml=related.length?`<section class="kbn-seo-related"><h2>${kbnSeoEsc(area)}の近くのBAR</h2><ul>${related.map(r=>`<li><a href="/shop?slug=${encodeURIComponent(r.slug||"")}"><strong>${kbnSeoEsc(kbnCleanShopName(r.name)||"BAR")}</strong><span>${kbnSeoEsc([r.area,r.genre].filter(Boolean).join(" / "))}</span></a></li>`).join("")}</ul><p><a href="/bars.html?area=${encodeURIComponent(area)}">${kbnSeoEsc(area)}のBARを一覧で見る</a></p></section>`:"";
+  const areaHref=areaSlug?`/area/${encodeURIComponent(areaSlug)}`:`/bars.html?area=${encodeURIComponent(area)}`;
+  const genreHref=genreSlug&&genreCount>=3?`/genre/${encodeURIComponent(genreSlug)}`:`/bars.html?genre=${encodeURIComponent(genre)}`;
+  const areaGenreHref=areaSlug&&genreSlug&&areaGenreCount>=5?`/area/${encodeURIComponent(areaSlug)}/${encodeURIComponent(genreSlug)}`:`/bars.html?area=${encodeURIComponent(area)}&genre=${encodeURIComponent(genre)}`;
+  const seoNav=`<section class="kbn-seo-link-hub" aria-label="関連するBAR検索"><h2>条件を変えてBARを探す</h2><div><a href="${areaHref}"><strong>${kbnSeoEsc(area)}のBAR</strong><span>同じエリアから探す</span></a><a href="${genreHref}"><strong>${kbnSeoEsc(genre)}</strong><span>熊本県内の同ジャンル</span></a>${areaGenreCount>=5?`<a href="${areaGenreHref}"><strong>${kbnSeoEsc(area)} × ${kbnSeoEsc(genre)}</strong><span>${areaGenreCount}店舗を比較</span></a>`:""}<a href="/all-shops"><strong>掲載BAR全店舗</strong><span>全エリアから探す</span></a></div></section>`;
+  const relatedAreaHtml=relatedArea.length?`<section class="kbn-seo-related"><h2>${kbnSeoEsc(area)}の近くのBAR</h2><ul>${relatedArea.map(r=>`<li><a href="/shop?slug=${encodeURIComponent(r.slug||"")}"><strong>${kbnSeoEsc(kbnCleanShopName(r.name)||"BAR")}</strong><span>${kbnSeoEsc([r.area,r.genre].filter(Boolean).join(" / "))}</span></a></li>`).join("")}</ul><p><a href="${areaHref}">${kbnSeoEsc(area)}のBARを一覧で見る →</a></p></section>`:"";
+  const relatedGenreHtml=relatedGenre.length?`<section class="kbn-seo-related"><h2>熊本の${kbnSeoEsc(genre)}をもっと見る</h2><ul>${relatedGenre.map(r=>`<li><a href="/shop?slug=${encodeURIComponent(r.slug||"")}"><strong>${kbnSeoEsc(kbnCleanShopName(r.name)||"BAR")}</strong><span>${kbnSeoEsc([r.area,r.genre].filter(Boolean).join(" / "))}</span></a></li>`).join("")}</ul><p><a href="${genreHref}">熊本の${kbnSeoEsc(genre)}を一覧で見る →</a></p></section>`:"";
   const fallback=`<article class="public-shop-layout kbn-seo-server-shop" data-seo-fallback="1">
     <section class="public-shop-summary">
-      <nav aria-label="パンくず"><a href="/">ホーム</a> › <a href="/bars.html">BARを探す</a> › <span>${kbnSeoEsc(name)}</span></nav>
+      <nav aria-label="パンくず"><a href="/">ホーム</a> › <a href="/bars.html">BARを探す</a>${areaSlug?` › <a href="${areaHref}">${kbnSeoEsc(area)}</a>`:""} › <span>${kbnSeoEsc(name)}</span></nav>
       <p class="public-shop-location">${kbnSeoEsc([area,genre].filter(Boolean).join(" / "))}</p>
       <h1>${kbnSeoEsc(name)}</h1>
       ${rawDesc?`<p class="kbn-seo-description">${kbnSeoEsc(rawDesc)}</p>`:`<p class="kbn-seo-description">${kbnSeoEsc(`${name}は${area}で掲載中の${genre}です。住所・営業時間・料金目安など、来店前に確認したい店舗情報をまとめています。`)}</p>`}
@@ -5610,7 +5652,9 @@ async function renderSeoShopDetailV250(request,env,url){
       ${facts.length?`<section><h2>${kbnSeoEsc(name)}の基本情報</h2><dl>${facts.map(([k,v])=>`<div><dt>${kbnSeoEsc(k)}</dt><dd>${kbnSeoEsc(v)}</dd></div>`).join("")}</dl></section>`:""}
       ${(sameAs.length||shop.phone)?`<section><h2>公式・連絡先</h2><p>${shop.phone?`<a href="tel:${kbnSeoEsc(String(shop.phone).replace(/[^0-9+]/g,""))}">電話で確認する</a> `:""}${sameAs.length?`<a href="${kbnSeoEsc(sameAs[0])}" rel="nofollow noopener">Instagramを確認する</a>`:""}</p></section>`:""}
       ${updatedLabel?`<p class="kbn-seo-updated"><small>店舗情報 最終更新：${kbnSeoEsc(updatedLabel)}</small></p>`:""}
-      ${relatedHtml}
+      ${seoNav}
+      ${relatedAreaHtml}
+      ${relatedGenreHtml}
     </section>
   </article>`;
   html=html.replace('<div id="shopDetail"><div class="public-loading">店舗情報を読み込んでいます...</div></div>',`<div id="shopDetail">${fallback}</div>`);
