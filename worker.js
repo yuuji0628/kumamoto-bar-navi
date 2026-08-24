@@ -6086,18 +6086,37 @@ async function refreshSeoPublishedV311(env,{limit=20,afterId=0}={}){
       }
 
       let nextDescription=String(shop.description||'').replace(/\s+/g,' ').trim();
-      if(nextDescription.length<120){
-        const area=String(shop.area||'熊本県').trim()||'熊本県';
-        const genre=nextGenre||'BAR・ナイトスポット';
-        const facts=[];
-        if(nextAddress)facts.push(`所在地は${nextAddress}`);
-        if(nextHours)facts.push(`営業時間は${nextHours}`);
+      // v3.15: 説明文は「長さ」だけで埋めず、確認済みの店舗固有情報が2項目以上ある場合だけ強化。
+      // 既存の紹介文は残し、店舗ごとに並び・表現を少し変えてテンプレートの完全重複を避ける。
+      if(nextDescription.length<160){
+        const area=String(shop.area||'').trim();
+        const genre=nextGenre||String(shop.genre||'').trim();
         const feat=String(shop.features||'').replace(/\s+/g,' ').trim();
-        if(feat)facts.push(`特徴は${feat.slice(0,120)}`);
         const holiday=String(shop.holiday||'').trim();
-        if(holiday)facts.push(`定休日は${holiday}`);
-        const factual=facts.length?` ${facts.join('。')}。`:' ';
-        nextDescription=t(`${cleanName||'この店舗'}は${area}で探せる${genre}です。KUMAMOTO BAR NAVIでは、店選びの比較に役立つよう所在地・営業時間・ジャンルなど確認できる店舗情報を整理して掲載しています。${factual}来店前には最新の営業状況や料金、予約可否などを店舗へご確認ください。`,5000);
+        const budgetMin=Number(shop.budget_min||0), budgetMax=Number(shop.budget_max||0);
+        const seats=Number(shop.seats||0);
+        const facts=[];
+        if(area)facts.push({k:'area',v:`${area}エリア`});
+        if(genre)facts.push({k:'genre',v:`ジャンルは${genre}`});
+        if(nextAddress)facts.push({k:'address',v:`所在地は${nextAddress}`});
+        if(nextHours)facts.push({k:'hours',v:`営業時間は${nextHours}`});
+        if(holiday)facts.push({k:'holiday',v:`定休日は${holiday}`});
+        if(budgetMin>0||budgetMax>0){
+          const b=budgetMin>0&&budgetMax>0?`${budgetMin.toLocaleString('ja-JP')}〜${budgetMax.toLocaleString('ja-JP')}円`:budgetMin>0?`${budgetMin.toLocaleString('ja-JP')}円〜`:`〜${budgetMax.toLocaleString('ja-JP')}円`;
+          facts.push({k:'budget',v:`料金目安は${b}`});
+        }
+        if(seats>0)facts.push({k:'seats',v:`席数は${seats}席`});
+        if(feat)facts.push({k:'features',v:`店舗の特徴として「${feat.slice(0,110)}」が掲載されています`});
+        const strongFacts=facts.filter(x=>!['area','genre'].includes(x.k));
+        if(strongFacts.length>=2){
+          const seed=Math.abs(Number(shop.id||0))%3;
+          const ordered=seed===1?[...facts.slice(1),facts[0]].filter(Boolean):seed===2?[...facts].reverse():facts;
+          const factText=ordered.slice(0,6).map(x=>x.v).join('。');
+          const intro=area&&genre?`${cleanName}は${area}で掲載中の${genre}です。`:area?`${cleanName}は${area}で掲載中の店舗です。`:genre?`${cleanName}は${genre}として掲載中です。`:`${cleanName}の店舗情報です。`;
+          const original=nextDescription && !/KUMAMOTO BAR NAVIでは、店選びの比較/.test(nextDescription)?`${nextDescription.replace(/[。．]+$/,'')}。`:'';
+          const close=seed===0?'営業時間や料金などは変更される場合があるため、来店前に店舗の最新情報をご確認ください。':seed===1?'掲載内容は変更されることがあります。来店前に営業時間・料金・予約可否などを店舗へご確認ください。':'営業状況や料金は変更される場合があります。最新情報は来店前に店舗へ直接ご確認ください。';
+          nextDescription=t(`${intro}${original}${factText}。${close}`,5000);
+        }
       }
 
       if(nextAddress!==String(shop.address||'').trim())changedFields.push('address');
@@ -7550,6 +7569,9 @@ export default {
             COUNT(*) AS published,
             SUM(CASE WHEN TRIM(COALESCE(slug,''))!='' THEN 1 ELSE 0 END) AS sitemap_urls,
             SUM(CASE WHEN LENGTH(TRIM(COALESCE(description,'')))<80 THEN 1 ELSE 0 END) AS missing_description,
+            SUM(CASE WHEN LENGTH(TRIM(COALESCE(description,'')))>=160 THEN 1 ELSE 0 END) AS description_good,
+            SUM(CASE WHEN LENGTH(TRIM(COALESCE(description,'')))>=80 AND LENGTH(TRIM(COALESCE(description,'')))<160 THEN 1 ELSE 0 END) AS description_mid,
+            SUM(CASE WHEN LENGTH(TRIM(COALESCE(description,'')))<80 THEN 1 ELSE 0 END) AS description_low,
             SUM(CASE WHEN TRIM(COALESCE(address,''))='' THEN 1 ELSE 0 END) AS missing_address,
             SUM(CASE WHEN TRIM(COALESCE(hours,''))='' THEN 1 ELSE 0 END) AS missing_hours,
             SUM(CASE WHEN TRIM(COALESCE(genre,''))='' THEN 1 ELSE 0 END) AS missing_genre,
@@ -7596,6 +7618,9 @@ export default {
           },
           missing:{
             description:Number(summary?.missing_description||0),
+            description_good:Number(summary?.description_good||0),
+            description_mid:Number(summary?.description_mid||0),
+            description_low:Number(summary?.description_low||0),
             address:Number(summary?.missing_address||0),
             hours:Number(summary?.missing_hours||0),
             genre:Number(summary?.missing_genre||0)
@@ -7604,7 +7629,7 @@ export default {
             id:Number(x.id||0),slug:x.slug||'',name:x.name||'',area:x.area||'',score:Number(x.seo_score||0),
             missing:[x.miss_hours?'営業時間':'',x.miss_address?'住所':'',x.miss_description?'説明文':''].filter(Boolean)
           })),
-          score_rule:"100点満点。90点以上をSEO良好として、通常メンテナンスでは低スコア店舗から最大20店舗を優先改善します。",
+          score_rule:"100点満点。90点以上をSEO良好として、通常メンテナンスでは低スコア店舗から最大20店舗を優先改善します。紹介文は確認済み固有情報が2項目以上ある場合のみ自動強化します。",
           note:"Search Consoleの実インデックス数ではなく、全公開店舗のSEO準備度スコアです。"
         });
       }
