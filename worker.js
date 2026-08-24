@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.15";
+      config.vars.KBN_CONFIG_VERSION="4.17";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -7730,43 +7730,49 @@ export default {
       }});
     }
 
-    // v2.86: Search Console redirect-error fix for legacy SEO landing pages.
-    // Cloudflare Static Assets defaults to auto-trailing-slash, where /file.html is
-    // redirected to /file. These pages intentionally use the .html URL as canonical,
-    // so run them through the Worker and serve the extensionless asset body directly
-    // with a 200 response at the original .html URL.
-    const kbnSeoHtml200Paths=new Set([
-      "/kumamoto-bar.html",
-      "/shimotori-bar.html",
-      "/karaoke-bar-kumamoto.html",
-      "/darts-bar-kumamoto.html",
-      "/snack-kumamoto.html",
-      "/kumamoto-station-bar.html",
-      "/suizenji-bar.html",
-      "/kengun-bar.html",
-      "/hikarinomori-bar.html",
-      "/yatsushiro-bar.html",
-      "/hitoyoshi-bar.html",
-      "/tamana-bar.html",
-      "/amakusa-bar.html"
-    ]);
-    if(request.method==="GET" && kbnSeoHtml200Paths.has(url.pathname)){
-      const assetUrl=new URL(request.url);
-      assetUrl.pathname=url.pathname.replace(/\.html$/i,"");
-      const raw=await env.ASSETS.fetch(new Request(assetUrl.toString(),request));
-      if(raw.status===200){
-        const headers=new Headers(raw.headers);
-        headers.delete("location");
-        headers.set("content-type","text/html; charset=utf-8");
-        headers.set("cache-control","public, max-age=900");
-        headers.set("x-robots-tag","index, follow, max-image-preview:large");
-        headers.set("x-kbn-seo-route","direct-html-200-v286");
-        return new Response(raw.body,{status:200,statusText:"OK",headers});
-      }
-      // If the canonical asset cannot be loaded, do not manufacture another redirect.
-      return new Response("SEO page temporarily unavailable",{
-        status:503,
-        headers:{"content-type":"text/plain; charset=utf-8","cache-control":"no-store","x-robots-tag":"noindex, nofollow"}
+    // v4.17: Search Console legacy URL redirect cleanup.
+    // Old SEO landing pages are no longer index targets. Redirect each old URL directly
+    // to ONE current canonical page. Also catch extensionless variants so Cloudflare's
+    // static-asset slash/extension normalization cannot create a chain or loop.
+    const kbnLegacySeoRedirectsV417={
+      "/kumamoto-bar.html":"/area/kumamoto-city",
+      "/kumamoto-bar":"/area/kumamoto-city",
+      "/shimotori-bar.html":"/area/kumamoto-city",
+      "/shimotori-bar":"/area/kumamoto-city",
+      "/karaoke-bar-kumamoto.html":"/genre/karaoke-bar",
+      "/karaoke-bar-kumamoto":"/genre/karaoke-bar",
+      "/darts-bar-kumamoto.html":"/genre/darts-bar",
+      "/darts-bar-kumamoto":"/genre/darts-bar",
+      "/snack-kumamoto.html":"/genre/snack",
+      "/snack-kumamoto":"/genre/snack",
+      "/kumamoto-station-bar.html":"/area/kumamoto-city",
+      "/kumamoto-station-bar":"/area/kumamoto-city",
+      "/suizenji-bar.html":"/area/kumamoto-city",
+      "/suizenji-bar":"/area/kumamoto-city",
+      "/kengun-bar.html":"/area/kumamoto-city",
+      "/kengun-bar":"/area/kumamoto-city",
+      "/hikarinomori-bar.html":"/area/kikuyo",
+      "/hikarinomori-bar":"/area/kikuyo",
+      "/yatsushiro-bar.html":"/area/yatsushiro",
+      "/yatsushiro-bar":"/area/yatsushiro",
+      "/hitoyoshi-bar.html":"/area/hitoyoshi",
+      "/hitoyoshi-bar":"/area/hitoyoshi",
+      "/tamana-bar.html":"/area/tamana",
+      "/tamana-bar":"/area/tamana",
+      "/amakusa-bar.html":"/area/amakusa",
+      "/amakusa-bar":"/area/amakusa"
+    };
+    if((request.method==="GET" || request.method==="HEAD") && kbnLegacySeoRedirectsV417[url.pathname]){
+      const target=new URL(kbnLegacySeoRedirectsV417[url.pathname],url.origin);
+      // Do not carry old query parameters into the new canonical URL.
+      return new Response(null,{
+        status:301,
+        headers:{
+          "location":target.toString(),
+          "cache-control":"public, max-age=86400",
+          "x-robots-tag":"noindex, follow",
+          "x-kbn-legacy-redirect":"direct-301-v417"
+        }
       });
     }
 
@@ -7901,6 +7907,8 @@ export default {
 
     if(url.pathname==="/sitemap-pages.xml" && request.method==="GET"){
       const base="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev";
+      // v4.17: legacy *.html SEO landing URLs are intentionally excluded.
+      // Only current canonical /area/* and /genre/* pages are submitted.
       const urls=[
         {loc:`${base}/`,priority:"1.0",freq:"daily"},
         {loc:`${base}/bars.html`,priority:"0.9",freq:"daily"},
