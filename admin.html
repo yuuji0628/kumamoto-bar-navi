@@ -3870,7 +3870,7 @@ html,body{max-width:100%;overflow-x:hidden}
       </div>
       <button type="button" id="runPriorityInfoEnrichBtn" style="border:1px solid #3f7f68;background:#10271f;color:#7ee3b7;border-radius:11px;padding:9px 12px;font-weight:900">補完 20店舗</button>
     </div>
-    <div id="priorityInfoEnrichStatus" style="margin-top:9px;color:#8c9aa6;font-size:.65rem;line-height:1.5">未確認。優先キューから最大500店舗まで探索し、20店舗補完できた時点で停止します。検索エラーが続いた場合はAPI保護のため自動停止し、時間を空けて再試行します。</div>
+    <div id="priorityInfoEnrichStatus" style="margin-top:9px;color:#8c9aa6;font-size:.65rem;line-height:1.5">未確認。Cloudflareの外部通信上限を避けるため8店舗ずつ小分けで処理し、最大500店舗まで自動継続します。検索結果は24時間キャッシュし、20店舗補完できた時点で停止します。</div>
   </div>
   <div style="margin-top:7px;color:#6f7d89;font-size:.61rem;line-height:1.5">※ Search Consoleの「検出 - インデックス未登録」URLを直接取得する機能ではありません。店舗情報の充実度と技術SEOを分けて監視し、推測情報で点数を水増ししません。</div>
 </div>
@@ -11016,18 +11016,19 @@ document.addEventListener("DOMContentLoaded",()=>{
     const btn=document.getElementById('runPriorityInfoEnrichBtn');
     const status=document.getElementById('priorityInfoEnrichStatus');
     if(btn){btn.disabled=true;btn.textContent='補完中...';}
-    const maxTotal=500,targetTotal=20,batchSize=80;
+    const maxTotal=500,targetTotal=20,batchSize=8;
     let totalChecked=0,totalUpdated=0,totalGain=0;
     const fields={hours:0,address:0,phone:0,instagram:0,holiday:0,image:0,budget:0,features:0};
-    const reasons={no_candidate:0,match_below_threshold:0,matched_no_new_data:0,search_error:0,updated:0,failed:0,official_site_found:0,instagram_verified:0,circuit_breaker:0};
+    const reasons={no_candidate:0,match_below_threshold:0,matched_no_new_data:0,search_error:0,updated:0,failed:0,official_site_found:0,instagram_verified:0,circuit_breaker:0,cache_hit_search:0,cache_hit_details:0};
     let queueStats={known:0,cooldown:0,no_new:0,no_candidate:0,below:0,updated:0};
-    let breaker=false,breakerReason='';
+    let breaker=false,breakerReason='',batchCount=0;
     try{
       while(totalChecked<maxTotal && totalUpdated<targetTotal && !breaker){
         const remainTarget=Math.max(1,targetTotal-totalUpdated);
         const batch=Math.min(batchSize,maxTotal-totalChecked);
-        if(status)status.textContent=`優先キューを確認中… ${totalChecked}/${maxTotal}店舗確認、${totalUpdated}/${targetTotal}店舗補完。検索エラー中の店舗はクールダウン中なら自動スキップします。`;
+        if(status)status.textContent=`小分けバッチ処理中… ${totalChecked}/${maxTotal}店舗確認、${totalUpdated}/${targetTotal}店舗補完（バッチ ${batchCount+1}）。検索結果は24時間キャッシュし、エラー待機中の店舗は自動スキップします。`;
         const d=await api(`/api/admin/info-enrich-priority?target=${remainTarget}&max=${batch}`,{method:'POST'});
+        batchCount++;
         const checked=Number(d.checked||0),updated=Number(d.updated_count||0);
         totalChecked+=checked; totalUpdated+=updated; totalGain+=Number(d.score_gain_total||0);
         const f=d.field_counts||{},r=d.reason_counts||{};
@@ -11038,15 +11039,15 @@ document.addEventListener("DOMContentLoaded",()=>{
         breakerReason=String(d.breaker_reason||'');
         if(checked===0)break;
         // 健全時も短い間隔を置き、外部APIへ連続集中しないようにする。
-        if(!breaker && totalUpdated<targetTotal && totalChecked<maxTotal)await new Promise(r=>setTimeout(r,900));
+        if(!breaker && totalUpdated<targetTotal && totalChecked<maxTotal)await new Promise(r=>setTimeout(r,1400));
       }
       const avg=totalUpdated?Math.round((totalGain/totalUpdated)*10)/10:0;
       const fieldText=`営業時間 ${fields.hours} / 住所 ${fields.address} / 電話 ${fields.phone} / Instagram ${fields.instagram} / 定休日 ${fields.holiday} / 画像 ${fields.image} / 料金 ${fields.budget} / 特徴 ${fields.features}`;
-      const reasonText=`候補なし ${reasons.no_candidate} / 一致基準未達 ${reasons.match_below_threshold} / 一致済み・新情報なし ${reasons.matched_no_new_data} / 検索エラー ${reasons.search_error} / 公式サイト発見 ${reasons.official_site_found} / Instagram確認 ${reasons.instagram_verified}`;
+      const reasonText=`候補なし ${reasons.no_candidate} / 一致基準未達 ${reasons.match_below_threshold} / 一致済み・新情報なし ${reasons.matched_no_new_data} / 検索エラー ${reasons.search_error} / 公式サイト発見 ${reasons.official_site_found} / Instagram確認 ${reasons.instagram_verified} / 検索キャッシュ ${reasons.cache_hit_search} / 詳細キャッシュ ${reasons.cache_hit_details} / バッチ ${batchCount}`;
       const queueText=`優先キュー：記録 ${Number(queueStats.known||0)} / エラー待機 ${Number(queueStats.cooldown||0)} / 新情報なし待機 ${Number(queueStats.no_new||0)} / 候補なし待機 ${Number(queueStats.no_candidate||0)} / 一致弱め待機 ${Number(queueStats.below||0)}`;
       let stop='';
       if(totalUpdated>=targetTotal)stop='20店舗の補完目標に到達';
-      else if(breaker)stop=`検索エラーが連続したためAPI保護で自動停止。エラー店舗はクールダウン後に再試行します${breakerReason?'（'+breakerReason+'）':''}`;
+      else if(breaker)stop=`外部API保護で自動停止。今回の小分け処理でも上限・一時障害が検出されたため、エラー店舗はクールダウン後に再試行します${breakerReason?'（'+breakerReason+'）':''}`;
       else if(totalChecked>=maxTotal)stop='500店舗で一旦停止。次回も優先キューから補完可能性の高い候補を確認します';
       else if(totalChecked===0)stop='今すぐ再確認できる候補がありません。クールダウン中の店舗は時間経過後に自動で再候補になります';
       else stop='今回の優先キュー確認を終了';
