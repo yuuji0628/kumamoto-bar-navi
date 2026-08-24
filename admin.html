@@ -3831,7 +3831,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <div>
       <span style="display:block;color:#efc45a;font-size:.67rem;font-weight:900;letter-spacing:.12em">INDEX PROMOTION</span>
       <h3 style="margin:4px 0 4px;font-size:1.03rem">インデックス促進モード</h3>
-      <p style="margin:0;color:#9da9b5;font-size:.73rem;line-height:1.55">外部情報に頼らず、保存済みの事実だけを使って、SEOスコアが実際に上がる店舗を最大20件まで優先改善します。改善前後の点数と70・80・90点到達件数も確認できます。</p>
+      <p style="margin:0;color:#9da9b5;font-size:.73rem;line-height:1.55">店舗情報の安全な改善に加えて、ページ側の技術SEOを別枠で自動監視します。店舗情報の点数を無理に水増しせず、canonical・構造化データ・内部リンクなどを全公開ページへ適用します。</p>
     </div>
     <button type="button" id="runIndexPromotionBtn" style="border:1px solid #b88a2b;background:#2a2110;color:#f3ca63;border-radius:11px;padding:10px 13px;font-weight:900">促進 20店舗</button>
   </div>
@@ -3851,7 +3851,18 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div id="promoDeficitResult" style="margin-top:8px;color:#7f8c98;font-size:.63rem;line-height:1.45">不足項目を確認中...</div>
   </div>
-  <div style="margin-top:7px;color:#6f7d89;font-size:.61rem;line-height:1.5">※ Search Consoleの「検出 - インデックス未登録」URLを直接取得する機能ではありません。サイト側のSEO準備度を使って、登録されやすいページから優先的に底上げします。</div>
+  <div style="margin-top:12px;padding:11px;border-radius:12px;background:#0d171f;border:1px solid #263745">
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b style="font-size:.76rem">技術SEO 自動底上げ</b><small id="techSeoPercent" style="color:#65d8a4;font-weight:800">確認中...</small></div>
+    <p style="margin:7px 0 9px;color:#7f8c98;font-size:.63rem;line-height:1.45">店舗情報の不足とは分離して、公開ページ側のcanonical・title/meta・robots・構造化データ・パンくず・内部リンク・hreflangを自動適用します。</p>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;font-size:.67rem;color:#9da9b5">
+      <div>canonical <b id="techSeoCanonical" style="float:right;color:#fff">—</b></div><div>title / meta <b id="techSeoTitleMeta" style="float:right;color:#fff">—</b></div>
+      <div>構造化データ <b id="techSeoSchema" style="float:right;color:#fff">—</b></div><div>パンくず <b id="techSeoBreadcrumb" style="float:right;color:#fff">—</b></div>
+      <div>内部リンク <b id="techSeoLinks" style="float:right;color:#fff">—</b></div><div>hreflang <b id="techSeoHreflang" style="float:right;color:#fff">—</b></div>
+      <div>画像alt <b id="techSeoImageAlt" style="float:right;color:#fff">—</b></div><div>URL要確認 <b id="techSeoUrlRisk" style="float:right;color:#fff">—</b></div>
+    </div>
+    <div id="techSeoResult" style="margin-top:8px;color:#7f8c98;font-size:.63rem;line-height:1.45">技術SEOを確認中...</div>
+  </div>
+  <div style="margin-top:7px;color:#6f7d89;font-size:.61rem;line-height:1.5">※ Search Consoleの「検出 - インデックス未登録」URLを直接取得する機能ではありません。店舗情報の充実度と技術SEOを分けて監視し、推測情報で点数を水増ししません。</div>
 </div>
 
 <div class="kbn-seo-monitor-card" id="kbnSeoMonitorCard">
@@ -10909,6 +10920,11 @@ document.addEventListener("DOMContentLoaded",()=>{
       n('seoSitemapCount',s.sitemap_urls); n('seoGoodCount',s.seo_good); n('seoNeedsCount',s.needs_improvement); n('seoUrlRiskCount',s.url_risk);
       n('seoDescriptionCount',m.description); n('seoDescriptionGood',m.description_good); n('seoDescriptionMid',m.description_mid); n('seoAddressCount',m.address); n('seoHoursCount',m.hours); n('seoGenreCount',m.genre); n('seoImageCount',m.image); n('seoImageGood',m.image_good);
       const d90=d.deficit_under90||{}; n('promoMissHours',d90.hours); n('promoMissAddress',d90.address); n('promoMissImage',d90.image); n('promoMissPhone',d90.phone); n('promoMissInstagram',d90.instagram); n('promoMissHoliday',d90.holiday); n('promoMissFeatures',d90.features); n('promoMissBudget',d90.budget_seats);
+      const tech=d.technical_seo||{};
+      n('techSeoCanonical',tech.canonical); n('techSeoTitleMeta',tech.title_meta); n('techSeoSchema',tech.structured_data); n('techSeoBreadcrumb',tech.breadcrumbs); n('techSeoLinks',tech.internal_links); n('techSeoHreflang',tech.hreflang); n('techSeoUrlRisk',tech.url_risk);
+      const ia=document.getElementById('techSeoImageAlt'); if(ia)ia.textContent=`${Number(tech.image_alt_covered||0).toLocaleString('ja-JP')}/${Number(tech.image_alt_required||0).toLocaleString('ja-JP')}`;
+      const tp=document.getElementById('techSeoPercent'); if(tp)tp.textContent=`${Number(tech.ready_percent||0)}%`;
+      const tr=document.getElementById('techSeoResult'); if(tr)tr.textContent=`技術SEO適用 ${Number(tech.ready_pages||0).toLocaleString('ja-JP')}/${Number(tech.total_pages||0).toLocaleString('ja-JP')}ページ。店舗情報不足 ${Number(tech.data_incomplete||0).toLocaleString('ja-JP')}店舗は別枠で継続改善します。`;
       const avg=document.getElementById('seoAverageScore'); if(avg)avg.textContent=Number(s.average_score||0).toFixed(1);
       n('seoScore90',s.score_90_plus); n('seoScore80',s.score_80s); n('seoScore70',s.score_70s); n('seoScoreUnder70',s.score_under70);
       n('indexPromoUnder70',s.score_under70); n('indexPromo70s',s.score_70s); n('indexPromo80s',s.score_80s);
@@ -10965,7 +10981,7 @@ document.addEventListener("DOMContentLoaded",()=>{
     const btn=document.getElementById('runIndexPromotionBtn');
     const status=document.getElementById('indexPromotionStatus');
     if(btn){btn.disabled=true;btn.textContent='促進中...';}
-    if(status)status.textContent='90点未満の不足原因を分類し、保存済みテキスト内に明示された住所・営業時間・電話・定休日・Instagram・料金・席数・ジャンル・説明文だけを安全に整理しています...';
+    if(status)status.textContent='店舗情報の安全な改善を確認しながら、技術SEOは全公開ページへ自動適用されているか別枠で監視しています...';
     try{
       const d=await api('/api/admin/index-promotion',{method:'POST'});
       const updated=Number(d.updated_count||0),checked=Number(d.checked||0);
