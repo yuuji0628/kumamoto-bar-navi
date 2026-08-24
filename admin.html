@@ -4298,6 +4298,8 @@ html,body{max-width:100%;overflow-x:hidden}
         <div><span>住所不足</span><b id="seoAddressCount">—</b></div>
         <div><span>営業時間不足</span><b id="seoHoursCount">—</b></div>
         <div><span>ジャンル不足</span><b id="seoGenreCount">—</b></div>
+        <div><span>画像不足</span><b id="seoImageCount">—</b></div>
+        <div><span>画像あり</span><b id="seoImageGood">—</b></div>
       </div>
       <div class="kbn-seo-score100">
         <div class="kbn-seo-score100-head">
@@ -4325,7 +4327,7 @@ html,body{max-width:100%;overflow-x:hidden}
         <span id="seoQualityText">SEO状態を読み込み中...</span>
         <small id="seoCheckedAt"></small>
       </div>
-      <div class="kbn-seo-monitor-note">※ Search Consoleの「実際のインデックス登録数」ではなく、サイト側で自動判定できるSEO準備状況です。説明文は確認済みの固有情報が2項目以上ある店舗だけ自動強化し、情報が少ない店舗では推測文を作りません。</div>
+      <div class="kbn-seo-monitor-note">※ Search Consoleの「実際のインデックス登録数」ではなく、サイト側で自動判定できるSEO準備状況です。画像SEOは店舗固有画像だけを評価し、画像なし店舗にはSEO目的のダミー画像を付けません。</div>
     </div>
     <div class="kbn-alert-head">
       <b>通知</b>
@@ -10855,7 +10857,7 @@ document.addEventListener("DOMContentLoaded",()=>{
       const d=await api('/api/admin/seo-monitor');
       const s=d.summary||{}; const m=d.missing||{};
       n('seoSitemapCount',s.sitemap_urls); n('seoGoodCount',s.seo_good); n('seoNeedsCount',s.needs_improvement); n('seoUrlRiskCount',s.url_risk);
-      n('seoDescriptionCount',m.description); n('seoDescriptionGood',m.description_good); n('seoDescriptionMid',m.description_mid); n('seoAddressCount',m.address); n('seoHoursCount',m.hours); n('seoGenreCount',m.genre);
+      n('seoDescriptionCount',m.description); n('seoDescriptionGood',m.description_good); n('seoDescriptionMid',m.description_mid); n('seoAddressCount',m.address); n('seoHoursCount',m.hours); n('seoGenreCount',m.genre); n('seoImageCount',m.image); n('seoImageGood',m.image_good);
       const avg=document.getElementById('seoAverageScore'); if(avg)avg.textContent=Number(s.average_score||0).toFixed(1);
       n('seoScore90',s.score_90_plus); n('seoScore80',s.score_80s); n('seoScore70',s.score_70s); n('seoScoreUnder70',s.score_under70);
       const low=document.getElementById('seoLowestList');
