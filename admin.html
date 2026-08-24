@@ -3866,11 +3866,11 @@ html,body{max-width:100%;overflow-x:hidden}
     <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap">
       <div style="min-width:0;flex:1">
         <div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b style="font-size:.78rem">情報補完 優先20店舗</b><small style="color:#65d8a4">VERIFIED DATA</small></div>
-        <p style="margin:7px 0 0;color:#7f8c98;font-size:.63rem;line-height:1.5">90点未満の店舗から、Google Places・公式サイト・高信頼Instagram候補などで店舗一致を確認できた情報だけを補完します。既存データは上書きしません。</p>
+        <p style="margin:7px 0 0;color:#7f8c98;font-size:.63rem;line-height:1.5">90点未満の店舗を最大500店舗まで続きから探索し、Google Places・公式サイト・高信頼Instagram候補などで店舗一致を確認できた情報だけを最大20店舗補完します。既存データは上書きしません。</p>
       </div>
       <button type="button" id="runPriorityInfoEnrichBtn" style="border:1px solid #3f7f68;background:#10271f;color:#7ee3b7;border-radius:11px;padding:9px 12px;font-weight:900">補完 20店舗</button>
     </div>
-    <div id="priorityInfoEnrichStatus" style="margin-top:9px;color:#8c9aa6;font-size:.65rem;line-height:1.5">未確認。営業時間・住所・電話・Instagram・画像・料金など、確認できた項目のみ安全に追加します。</div>
+    <div id="priorityInfoEnrichStatus" style="margin-top:9px;color:#8c9aa6;font-size:.65rem;line-height:1.5">未確認。1回最大500店舗まで探索し、20店舗補完できた時点で停止します。次回は前回の続きから確認します。</div>
   </div>
   <div style="margin-top:7px;color:#6f7d89;font-size:.61rem;line-height:1.5">※ Search Consoleの「検出 - インデックス未登録」URLを直接取得する機能ではありません。店舗情報の充実度と技術SEOを分けて監視し、推測情報で点数を水増ししません。</div>
 </div>
@@ -11016,17 +11016,36 @@ document.addEventListener("DOMContentLoaded",()=>{
     const btn=document.getElementById('runPriorityInfoEnrichBtn');
     const status=document.getElementById('priorityInfoEnrichStatus');
     if(btn){btn.disabled=true;btn.textContent='補完中...';}
-    if(status)status.textContent='90点未満の店舗を優先して、公開情報との店舗一致を確認しています...';
+    const maxTotal=500,targetTotal=20,batchSize=80;
+    let totalChecked=0,totalUpdated=0,totalGain=0,cycleCompleted=false,lastCursor=0;
+    const fields={hours:0,address:0,phone:0,instagram:0,holiday:0,image:0,budget:0,features:0};
+    const reasons={no_candidate:0,match_below_threshold:0,matched_no_new_data:0,search_error:0,updated:0,failed:0,official_site_found:0,instagram_verified:0};
     try{
-      const d=await api('/api/admin/info-enrich-priority',{method:'POST'});
-      const f=d.field_counts||{};
-      const updated=Number(d.updated_count||0),checked=Number(d.checked||0),avg=Number(d.average_score_gain||0),gain=Number(d.score_gain_total||0);
-      const fields=`営業時間 ${Number(f.hours||0)} / 住所 ${Number(f.address||0)} / 電話 ${Number(f.phone||0)} / Instagram ${Number(f.instagram||0)} / 定休日 ${Number(f.holiday||0)} / 画像 ${Number(f.image||0)} / 料金 ${Number(f.budget||0)} / 特徴 ${Number(f.features||0)}`;
-      const cap=d.reached_target?'20店舗の補完目標に到達':`確認 ${checked}/${Number(d.max_checked||80)}店舗で終了`;
-      if(status)status.textContent=`完了：${checked}店舗を確認 / ${updated}店舗を更新 ｜ ${fields} ｜ SEO合計 +${gain}点 / 平均 +${avg.toFixed(1)}点 ｜ ${cap}`;
+      while(totalChecked<maxTotal && totalUpdated<targetTotal && !cycleCompleted){
+        const remainTarget=Math.max(1,targetTotal-totalUpdated);
+        const batch=Math.min(batchSize,maxTotal-totalChecked);
+        if(status)status.textContent=`公開情報を確認中… ${totalChecked}/${maxTotal}店舗確認、${totalUpdated}/${targetTotal}店舗補完。前回の続きから探索しています。`;
+        const d=await api(`/api/admin/info-enrich-priority?target=${remainTarget}&max=${batch}`,{method:'POST'});
+        const checked=Number(d.checked||0),updated=Number(d.updated_count||0);
+        totalChecked+=checked; totalUpdated+=updated; totalGain+=Number(d.score_gain_total||0); lastCursor=Number(d.cursor_after||0);
+        cycleCompleted=!!d.cycle_completed;
+        const f=d.field_counts||{},r=d.reason_counts||{};
+        for(const k of Object.keys(fields))fields[k]+=Number(f[k]||0);
+        for(const k of Object.keys(reasons))reasons[k]+=Number(r[k]||0);
+        if(checked===0)break;
+      }
+      const avg=totalUpdated?Math.round((totalGain/totalUpdated)*10)/10:0;
+      const fieldText=`営業時間 ${fields.hours} / 住所 ${fields.address} / 電話 ${fields.phone} / Instagram ${fields.instagram} / 定休日 ${fields.holiday} / 画像 ${fields.image} / 料金 ${fields.budget} / 特徴 ${fields.features}`;
+      const reasonText=`候補なし ${reasons.no_candidate} / 一致基準未達 ${reasons.match_below_threshold} / 一致済み・新情報なし ${reasons.matched_no_new_data} / 検索エラー ${reasons.search_error} / 公式サイト発見 ${reasons.official_site_found} / Instagram確認 ${reasons.instagram_verified}`;
+      let stop='';
+      if(totalUpdated>=targetTotal)stop='20店舗の補完目標に到達';
+      else if(cycleCompleted)stop='90点未満の候補を一巡しました。次回は先頭から再確認します';
+      else if(totalChecked>=maxTotal)stop=`500店舗で一旦停止。次回は続き（カーソル ${lastCursor}）から再開`;
+      else stop='今回の確認を終了';
+      if(status)status.textContent=`完了：${totalChecked}店舗を確認 / ${totalUpdated}店舗を更新 ｜ ${fieldText} ｜ SEO合計 +${totalGain}点 / 平均 +${avg.toFixed(1)}点 ｜ ${reasonText} ｜ ${stop}`;
       await loadSeoMonitor();
     }catch(e){
-      if(status)status.textContent='情報補完に失敗しました：'+(e?.message||e);
+      if(status)status.textContent='情報補完に失敗しました：'+(e?.message||e)+'。次回実行時は保存済みの続き位置から再開します。';
     }finally{
       if(btn){btn.disabled=false;btn.textContent='補完 20店舗';}
     }
