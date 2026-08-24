@@ -6507,39 +6507,55 @@ async function refreshSeoDeficitPromotionV323(env,{targetUpdated=20,maxChecked=5
 }
 
 
-async function enrichPriorityPublishedInfoV400(env,{targetUpdated=20,maxChecked=80}={}){
+async function enrichPriorityPublishedInfoV401(env,{targetUpdated=20,maxChecked=80}={}){
   const target=Math.max(1,Math.min(Number(targetUpdated)||20,20));
-  const cap=Math.max(target,Math.min(Number(maxChecked)||80,120));
+  const cap=Math.max(1,Math.min(Number(maxChecked)||80,80));
+  const task='seo_info_enrich_priority_v401';
+  const cursor=await kbnMaintenanceCursorV242(env,task);
+  const afterId=Math.max(0,Number(cursor?.after_id||0));
   const r=await env.DB.prepare(`
     SELECT s.id,s.name,s.slug,s.area,s.address,s.hours,s.holiday,s.instagram,s.genre,s.features,s.description,
            s.phone,s.image_url,s.image_key,s.budget_min,s.budget_max,s.seats,(${KBN_SEO_SCORE_SQL_V312}) AS seo_score
     FROM shops s
-    WHERE COALESCE(s.is_published,1)=1 AND (${KBN_SEO_SCORE_SQL_V312})<90
+    WHERE COALESCE(s.is_published,1)=1 AND (${KBN_SEO_SCORE_SQL_V312})<90 AND s.id>?
       AND (
         COALESCE(TRIM(s.address),'')='' OR COALESCE(TRIM(s.hours),'')='' OR COALESCE(TRIM(s.holiday),'')='' OR
         COALESCE(TRIM(s.instagram),'')='' OR COALESCE(TRIM(s.phone),'')='' OR COALESCE(TRIM(s.features),'')='' OR
         COALESCE(TRIM(s.image_url),'')='' OR (COALESCE(s.budget_min,0)<=0 AND COALESCE(s.budget_max,0)<=0)
       )
-    ORDER BY (${KBN_SEO_SCORE_SQL_V312}) ASC,s.id ASC LIMIT ?
-  `).bind(cap).all();
+    ORDER BY s.id ASC LIMIT ?
+  `).bind(afterId,cap).all();
   const rows=r.results||[];
-  let checked=0;
+  let checked=0,lastProcessedId=afterId;
   const updated=[],unchanged=[],failed=[];
   const field_counts={address:0,hours:0,holiday:0,instagram:0,phone:0,features:0,budget:0,image:0};
+  const reason_counts={no_candidate:0,match_below_threshold:0,matched_no_new_data:0,search_error:0,updated:0,failed:0,official_site_found:0,instagram_verified:0};
+  if(!rows.length){
+    const saved=await kbnSaveMaintenanceCursorV242(env,task,0,true);
+    return {ok:true,mode:'verified_public_info_priority_v401',checked:0,updated_count:0,updated,unchanged,failed,field_counts,reason_counts,target_updated:target,max_checked:cap,reached_target:false,score_gain_total:0,average_score_gain:0,cursor_before:afterId,cursor_after:saved.after_id,cycle_completed:true,cycle_count:saved.cycle_count};
+  }
   for(const shop of rows){
     if(updated.length>=target)break;
-    checked++;
+    checked++; lastProcessedId=Number(shop.id||lastProcessedId);
     const beforeScore=Math.max(0,Math.min(100,Number(shop.seo_score||0)));
     try{
       const cleanName=String(shop.name||'').replace(/^【KBN独自掲載】/,'').trim();
       const found=await findGooglePlaceForShop(env,{name:cleanName,area:shop.area||'熊本'});
-      if(!found?.ok||!found?.matched){
-        unchanged.push({id:shop.id,name:shop.name,reason:found?.error||'GOOGLE_MATCH_NOT_FOUND'});
+      if(!found?.ok){
+        reason_counts.search_error++;
+        unchanged.push({id:shop.id,name:shop.name,reason:found?.error||'GOOGLE_SEARCH_ERROR'});
+        continue;
+      }
+      if(!found?.matched){
+        const sc=Number(found?.score||0);
+        if(sc>0)reason_counts.match_below_threshold++; else reason_counts.no_candidate++;
+        unchanged.push({id:shop.id,name:shop.name,reason:sc>0?'MATCH_BELOW_THRESHOLD':'GOOGLE_MATCH_NOT_FOUND',match_score:sc});
         continue;
       }
       const details=await googlePlaceDetails(env,found.place?.id);
       const gp=details?.ok&&details?.place?details.place:found.place;
       const website=googleWebsite(gp);
+      if(website)reason_counts.official_site_found++;
       let webMeta={ok:false,price:{min:null,max:null},hours:'',holiday:'',features:'',instagram:''};
       if(website){
         try{webMeta=await fetchOfficialWebsiteMetadata(website);}catch{}
@@ -6569,14 +6585,15 @@ async function enrichPriorityPublishedInfoV400(env,{targetUpdated=20,maxChecked=
             if(d?.instagram && Number(d?.score||0)>=90)ig=d.instagram;
           }catch{}
         }
-        if(ig){patch.instagram=ig;fields.push('instagram');}
+        if(ig){patch.instagram=ig;fields.push('instagram');reason_counts.instagram_verified++;}
       }
       if(!patch.image_url){
         const photoName=googlePhotoName(gp);
         if(photoName){patch.image_url=googlePhotoProxyUrl(shop.id);patch.image_key=`google:${photoName}`;fields.push('image');}
       }
       if(!fields.length){
-        unchanged.push({id:shop.id,name:shop.name,reason:'MATCHED_BUT_NO_NEW_VERIFIED_DATA',match_score:Number(found?.score||0)});
+        reason_counts.matched_no_new_data++;
+        unchanged.push({id:shop.id,name:shop.name,reason:'MATCHED_BUT_NO_NEW_VERIFIED_DATA',match_score:Number(found?.score||0),website:!!website});
         continue;
       }
       await env.DB.prepare(`UPDATE shops SET address=?,hours=?,holiday=?,instagram=?,phone=?,features=?,image_url=?,image_key=?,budget_min=?,budget_max=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`)
@@ -6584,14 +6601,18 @@ async function enrichPriorityPublishedInfoV400(env,{targetUpdated=20,maxChecked=
       const scored=await env.DB.prepare(`SELECT (${KBN_SEO_SCORE_SQL_V312}) AS seo_score FROM shops s WHERE s.id=?`).bind(shop.id).first();
       const afterScore=Math.max(0,Math.min(100,Number(scored?.seo_score||beforeScore)));
       const item={id:shop.id,name:shop.name,fields:[...new Set(fields)],score_before:beforeScore,score_after:afterScore,score_delta:afterScore-beforeScore,match_score:Number(found?.score||0)};
-      updated.push(item);
+      updated.push(item); reason_counts.updated++;
       for(const f of item.fields)if(f in field_counts)field_counts[f]++;
     }catch(e){
+      reason_counts.failed++;
       failed.push({id:shop.id,name:shop.name,reason:String(e?.message||e).slice(0,250)});
     }
   }
+  const processedAllRows=checked>=rows.length;
+  const cycleCompleted=processedAllRows && rows.length<cap;
+  const saved=await kbnSaveMaintenanceCursorV242(env,task,lastProcessedId,cycleCompleted);
   const gain=updated.reduce((n,x)=>n+Number(x.score_delta||0),0);
-  return {ok:true,mode:'verified_public_info_priority',checked,updated_count:updated.length,updated,unchanged,failed,field_counts,target_updated:target,max_checked:cap,reached_target:updated.length>=target,score_gain_total:gain,average_score_gain:updated.length?Math.round(gain/updated.length*10)/10:0};
+  return {ok:true,mode:'verified_public_info_priority_v401',checked,updated_count:updated.length,updated,unchanged,failed,field_counts,reason_counts,target_updated:target,max_checked:cap,reached_target:updated.length>=target,score_gain_total:gain,average_score_gain:updated.length?Math.round(gain/updated.length*10)/10:0,cursor_before:afterId,cursor_after:saved.after_id,cycle_completed:cycleCompleted,cycle_count:saved.cycle_count};
 }
 
 async function refreshSeoUntilImprovedV321(env,{targetUpdated=20,maxChecked=200,batchSize=20}={}){
@@ -8324,7 +8345,9 @@ export default {
 
       // ---------- Verified public info enrichment v4.00 ----------
       if(url.pathname==="/api/admin/info-enrich-priority" && request.method==="POST"){
-        const result=await enrichPriorityPublishedInfoV400(env,{targetUpdated:20,maxChecked:80});
+        const target=Number(url.searchParams.get('target')||20);
+        const max=Number(url.searchParams.get('max')||80);
+        const result=await enrichPriorityPublishedInfoV401(env,{targetUpdated:target,maxChecked:max});
         try{
           await createKbnAlert(env,{
             type:"info_enrich_priority",
