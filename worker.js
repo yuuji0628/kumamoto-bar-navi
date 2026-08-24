@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.17";
+      config.vars.KBN_CONFIG_VERSION="4.18";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -7760,7 +7760,19 @@ export default {
       "/tamana-bar.html":"/area/tamana",
       "/tamana-bar":"/area/tamana",
       "/amakusa-bar.html":"/area/amakusa",
-      "/amakusa-bar":"/area/amakusa"
+      "/amakusa-bar":"/area/amakusa",
+
+      // v4.18: old area landing URLs still discovered by Google.
+      "/area-amakusa.html":"/area/amakusa",
+      "/area-amakusa":"/area/amakusa",
+      "/area-aso.html":"/area/aso",
+      "/area-aso":"/area/aso",
+      "/area-hitoyoshi.html":"/area/hitoyoshi",
+      "/area-hitoyoshi":"/area/hitoyoshi",
+      "/area-kumamoto.html":"/area/kumamoto-city",
+      "/area-kumamoto":"/area/kumamoto-city",
+      "/area-yatsushiro.html":"/area/yatsushiro",
+      "/area-yatsushiro":"/area/yatsushiro"
     };
     if((request.method==="GET" || request.method==="HEAD") && kbnLegacySeoRedirectsV417[url.pathname]){
       const target=new URL(kbnLegacySeoRedirectsV417[url.pathname],url.origin);
@@ -7774,6 +7786,30 @@ export default {
           "x-kbn-legacy-redirect":"direct-301-v417"
         }
       });
+    }
+
+    // v4.18: keep current public pages as real index targets.
+    // Search Console "Discovered - currently not indexed" is not a redirect problem,
+    // so these URLs must stay 200 and indexable.
+    const kbnCurrentIndexTargetsV418=new Set([
+      "/about.html",
+      "/areas.html",
+      "/bars.html",
+      "/column-bar-beginner.html",
+      "/column-kumamoto-night.html",
+      "/column-solo-bar.html"
+    ]);
+    if(request.method==="GET" && kbnCurrentIndexTargetsV418.has(url.pathname)){
+      const raw=await env.ASSETS.fetch(request);
+      if(raw.status===200){
+        const headers=new Headers(raw.headers);
+        headers.delete("location");
+        headers.set("x-robots-tag","index, follow, max-image-preview:large");
+        headers.set("cache-control","public, max-age=900");
+        headers.set("x-kbn-index-target","current-200-v418");
+        return new Response(raw.body,{status:200,statusText:"OK",headers});
+      }
+      return raw;
     }
 
     const localSeoAreaMatch=url.pathname.match(/^\/area\/([a-z0-9-]+)\/?$/);
@@ -7917,9 +7953,13 @@ export default {
         {loc:`${base}/areas.html`,priority:"0.8",freq:"weekly"},
         {loc:`${base}/all-shops`,priority:"0.9",freq:"daily"},
         {loc:`${base}/listing-form.html`,priority:"0.6",freq:"monthly"},
-        {loc:`${base}/about.html`,priority:"0.5",freq:"monthly"},
+        {loc:`${base}/about.html`,priority:"0.6",freq:"monthly"},
         {loc:`${base}/faq.html`,priority:"0.5",freq:"monthly"},
-        {loc:`${base}/contact.html`,priority:"0.4",freq:"monthly"}
+        {loc:`${base}/contact.html`,priority:"0.4",freq:"monthly"},
+        // v4.18: current editorial pages found in Search Console are explicit sitemap targets.
+        {loc:`${base}/column-bar-beginner.html`,priority:"0.6",freq:"monthly"},
+        {loc:`${base}/column-kumamoto-night.html`,priority:"0.6",freq:"monthly"},
+        {loc:`${base}/column-solo-bar.html`,priority:"0.6",freq:"monthly"}
       ];
       // Area pages are included only when at least one public shop exists.
       // This avoids sending empty/thin location pages to Google while keeping new areas automatic.
