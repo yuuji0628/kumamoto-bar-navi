@@ -3831,7 +3831,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <div>
       <span style="display:block;color:#efc45a;font-size:.67rem;font-weight:900;letter-spacing:.12em">INDEX PROMOTION</span>
       <h3 style="margin:4px 0 4px;font-size:1.03rem">インデックス促進モード</h3>
-      <p style="margin:0;color:#9da9b5;font-size:.73rem;line-height:1.55">Googleに評価されやすい状態へ、SEOスコアの低い公開店舗から最大20店舗を優先改善します。</p>
+      <p style="margin:0;color:#9da9b5;font-size:.73rem;line-height:1.55">Googleに評価されやすい状態へ、SEOスコアの低い公開店舗から実際に改善できた店舗を最大20件まで優先処理します。</p>
     </div>
     <button type="button" id="runIndexPromotionBtn" style="border:1px solid #b88a2b;background:#2a2110;color:#f3ca63;border-radius:11px;padding:10px 13px;font-weight:900">促進 20店舗</button>
   </div>
@@ -3840,7 +3840,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <div style="padding:10px;border-radius:11px;background:#101b24"><small style="display:block;color:#85929e">次に改善</small><b id="indexPromo70s" style="font-size:1.15rem;color:#efc45a">—</b><small style="display:block;color:#73818d">70〜79点</small></div>
     <div style="padding:10px;border-radius:11px;background:#101b24"><small style="display:block;color:#85929e">仕上げ</small><b id="indexPromo80s" style="font-size:1.15rem;color:#b7d983">—</b><small style="display:block;color:#73818d">80〜89点</small></div>
   </div>
-  <div id="indexPromotionStatus" style="margin-top:10px;color:#9da9b5;font-size:.69rem;line-height:1.5">70点未満 → 70点台 → 80点台の順で、90点以上を目標に改善します。</div>
+  <div id="indexPromotionStatus" style="margin-top:10px;color:#9da9b5;font-size:.69rem;line-height:1.5">70点未満 → 70点台 → 80点台の順で、更新できない店舗はスキップしながら最大20件の実改善を目標にします。</div>
   <div style="margin-top:7px;color:#6f7d89;font-size:.61rem;line-height:1.5">※ Search Consoleの「検出 - インデックス未登録」URLを直接取得する機能ではありません。サイト側のSEO準備度を使って、登録されやすいページから優先的に底上げします。</div>
 </div>
 
@@ -10954,12 +10954,15 @@ document.addEventListener("DOMContentLoaded",()=>{
     const btn=document.getElementById('runIndexPromotionBtn');
     const status=document.getElementById('indexPromotionStatus');
     if(btn){btn.disabled=true;btn.textContent='促進中...';}
-    if(status)status.textContent='低スコア店舗から最大20店舗を確認・改善しています...';
+    if(status)status.textContent='低スコア店舗を順番に確認し、実際に改善できた店舗が最大20件になるまで処理しています...';
     try{
       const d=await api('/api/admin/index-promotion',{method:'POST'});
       const updated=Number(d.updated_count||0),checked=Number(d.checked||0);
       const b=d.before||{},a=d.after||{};
-      if(status)status.textContent=`完了：${checked}店舗を確認 / ${updated}店舗を更新　｜ 70点未満 ${Number(b.under70||0).toLocaleString('ja-JP')}→${Number(a.under70||0).toLocaleString('ja-JP')} / 90点以上 ${Number(b.good90||0).toLocaleString('ja-JP')}→${Number(a.good90||0).toLocaleString('ja-JP')}`;
+      const f=d.field_counts||{};
+      const detail=`営業時間 ${Number(f.hours||0)} / 住所 ${Number(f.address||0)} / 説明文 ${Number(f.description||0)} / ジャンル ${Number(f.genre||0)}`;
+      const capNote=d.reached_target?'20件の改善目標に到達':`確認上限 ${Number(d.max_checked||200)}件以内で終了`;
+      if(status)status.textContent=`完了：${checked}店舗を確認 / ${updated}店舗を更新 ｜ ${detail} ｜ 70点未満 ${Number(b.under70||0).toLocaleString('ja-JP')}→${Number(a.under70||0).toLocaleString('ja-JP')} / 90点以上 ${Number(b.good90||0).toLocaleString('ja-JP')}→${Number(a.good90||0).toLocaleString('ja-JP')} ｜ ${capNote}`;
       await loadSeoMonitor();
     }catch(e){
       if(status)status.textContent='インデックス促進に失敗しました：'+(e?.message||e);
