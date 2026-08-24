@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.13";
+      config.vars.KBN_CONFIG_VERSION="4.14";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -7077,6 +7077,143 @@ function kbnHourlyMaintenanceSlotV413(event){
     run_key:`${y}-${m}-${day} ${h}:00 JST`
   };
 }
+
+async function ensureKbnMaintenanceHistoryV414(env){
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS kbn_maintenance_history(
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      run_key TEXT,
+      run_kind TEXT NOT NULL,
+      task TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'success',
+      checked_count INTEGER DEFAULT 0,
+      updated_count INTEGER DEFAULT 0,
+      created_count INTEGER DEFAULT 0,
+      seo_gain INTEGER DEFAULT 0,
+      error_count INTEGER DEFAULT 0,
+      note TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run();
+  try{await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_kbn_maintenance_history_created_at ON kbn_maintenance_history(created_at)`).run()}catch{}
+  try{await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_kbn_maintenance_history_run_kind ON kbn_maintenance_history(run_kind,created_at)`).run()}catch{}
+}
+
+function kbnMaintenanceRunKindV414(q,phase,task){
+  if(task==='verified_auto' || phase===9)return 'auto_recheck';
+  const key=String(q?.run_date||'');
+  if(/\bJST\b/i.test(key) || /hourly/i.test(key))return 'hourly';
+  if(phase>=11 && phase<=49)return 'full_maintenance';
+  return 'full_maintenance';
+}
+
+function kbnMaintenanceStatsV414(result,task){
+  const r=result||{};
+  const arrLen=v=>Array.isArray(v)?v.length:0;
+  let checked=Number(r.checked||0);
+  if(!checked && Array.isArray(r.searched))checked=r.searched.length;
+  let updated=Number(r.updated_count||0);
+  if(!updated)updated=arrLen(r.updated);
+  let created=arrLen(r.created);
+  let seoGain=Number(r.score_gain_total||0);
+  let errors=0;
+  errors+=arrLen(r.failed);
+  errors+=arrLen(r.errors);
+  if(r.ok===false)errors=Math.max(1,errors);
+  if(task==='closed')updated=Math.max(updated,arrLen(r.closed));
+  return {
+    checked:Math.max(0,checked||0),
+    updated:Math.max(0,updated||0),
+    created:Math.max(0,created||0),
+    seo_gain:Math.max(0,seoGain||0),
+    errors:Math.max(0,errors||0)
+  };
+}
+
+async function logKbnMaintenanceHistoryV414(env,{q=null,phase=0,task='',result=null,status='success',note=''}={}){
+  try{
+    await ensureKbnMaintenanceHistoryV414(env);
+    const stats=kbnMaintenanceStatsV414(result,task);
+    const runKind=kbnMaintenanceRunKindV414(q,Number(phase||0),String(task||''));
+    const runKey=String(q?.run_date||'').slice(0,120);
+    await env.DB.prepare(`
+      INSERT INTO kbn_maintenance_history(
+        run_key,run_kind,task,status,checked_count,updated_count,created_count,seo_gain,error_count,note,created_at
+      ) VALUES(?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
+    `).bind(
+      runKey,runKind,String(task||'maintenance').slice(0,50),String(status||'success').slice(0,20),
+      stats.checked,stats.updated,stats.created,stats.seo_gain,stats.errors,String(note||'').slice(0,600)
+    ).run();
+  }catch(e){console.error('maintenance history log failed',e)}
+}
+
+async function kbnMaintenanceHistoryV414(env,{days=7,limit=24}={}){
+  await ensureKbnMaintenanceHistoryV414(env);
+  const safeDays=Math.max(1,Math.min(Number(days)||7,31));
+  const safeLimit=Math.max(1,Math.min(Number(limit)||24,100));
+  const since=`-${safeDays} days`;
+
+  const summary=await env.DB.prepare(`
+    SELECT
+      COUNT(*) AS task_runs,
+      SUM(checked_count) AS checked,
+      SUM(updated_count) AS updated,
+      SUM(created_count) AS created,
+      SUM(seo_gain) AS seo_gain,
+      SUM(error_count) AS errors,
+      SUM(CASE WHEN status='success' THEN 1 ELSE 0 END) AS successes,
+      SUM(CASE WHEN status!='success' THEN 1 ELSE 0 END) AS failures
+    FROM kbn_maintenance_history
+    WHERE datetime(created_at)>=datetime('now',?)
+  `).bind(since).first();
+
+  const today=await env.DB.prepare(`
+    SELECT
+      COUNT(*) AS task_runs,
+      SUM(checked_count) AS checked,
+      SUM(updated_count) AS updated,
+      SUM(created_count) AS created,
+      SUM(seo_gain) AS seo_gain,
+      SUM(error_count) AS errors
+    FROM kbn_maintenance_history
+    WHERE date(datetime(created_at,'+9 hours'))=date(datetime('now','+9 hours'))
+  `).first();
+
+  const daily=await env.DB.prepare(`
+    SELECT
+      date(datetime(created_at,'+9 hours')) AS day_jst,
+      COUNT(*) AS task_runs,
+      SUM(checked_count) AS checked,
+      SUM(updated_count) AS updated,
+      SUM(created_count) AS created,
+      SUM(seo_gain) AS seo_gain,
+      SUM(error_count) AS errors
+    FROM kbn_maintenance_history
+    WHERE datetime(created_at)>=datetime('now',?)
+    GROUP BY date(datetime(created_at,'+9 hours'))
+    ORDER BY day_jst DESC
+  `).bind(since).all();
+
+  const recent=await env.DB.prepare(`
+    SELECT id,run_key,run_kind,task,status,checked_count,updated_count,created_count,seo_gain,error_count,note,created_at
+    FROM kbn_maintenance_history
+    ORDER BY id DESC
+    LIMIT ?
+  `).bind(safeLimit).all();
+
+  let queue=null;
+  try{queue=await kbnMaintenanceQueueStatusV257(env)}catch{}
+
+  return {
+    days:safeDays,
+    summary:summary||{},
+    today:today||{},
+    daily:daily.results||[],
+    recent:recent.results||[],
+    queue
+  };
+}
+
 async function kbnQueueAutoInfoRecheckV405(env,runDate=''){
   await ensureKbnMaintenanceQueueV242(env);
   const q=await env.DB.prepare(`SELECT phase FROM kbn_maintenance_queue WHERE id=1`).first();
@@ -7137,6 +7274,12 @@ async function kbnProcessQueuedMaintenanceV242(env){
         try{await notifyCreatedShops(env,created,'通常メンテナンス自動開拓')}catch{}
         try{await kbnSendNewListingDigest(env,created)}catch{}
       }
+      await logKbnMaintenanceHistoryV414(env,{
+        q,phase,task:'discovery',
+        result:{ok:true,checked:searched.length,created},
+        status:'success',
+        note:`${nextMode==='expanded'?'拡張探索':'通常探索'} / 累計 ${nextSearched}/120検索 / 新規 ${nextCreated}/20店舗`
+      });
       return {ok:true,processed:true,phase,task:'discovery',created:created.length,created_total:nextCreated,searched:searched.length,searched_total:nextSearched,discovery_mode:nextMode,done};
     }catch(e){
       const msg=String(e?.message||e||'');
@@ -7147,6 +7290,10 @@ async function kbnProcessQueuedMaintenanceV242(env){
         const delay=delays[nextRetry-1]||180;
         const retryIso=new Date(Date.now()+delay*1000).toISOString();
         await env.DB.prepare(`UPDATE kbn_maintenance_queue SET discovery_retry_count=?,discovery_retry_after=?,updated_at=CURRENT_TIMESTAMP WHERE id=1`).bind(nextRetry,retryIso).run();
+        await logKbnMaintenanceHistoryV414(env,{
+          q,phase,task:'discovery_retry',result:{ok:false,errors:[msg]},status:'retry',
+          note:`一時通信エラー / ${delay}秒待機 / 再試行 ${nextRetry}/4`
+        });
         return {ok:false,processed:true,phase,task:'discovery_retry',temporary:true,error:msg,retry_count:nextRetry,retry_after:retryIso,created_total:createdTotal,searched_total:searchedTotal};
       }
       throw e;
@@ -7185,6 +7332,16 @@ async function kbnProcessQueuedMaintenanceV242(env){
   await env.DB.prepare(`
     UPDATE kbn_maintenance_queue SET phase=?,updated_at=CURRENT_TIMESTAMP WHERE id=1
   `).bind(nextPhase).run();
+
+  await logKbnMaintenanceHistoryV414(env,{
+    q,phase,task,result,
+    status:result?.ok===false?'failed':'success',
+    note:task==='verified_info'||task==='verified_auto'
+      ?`VERIFIED情報補完 / SEO +${Number(result?.score_gain_total||0)}点`
+      :task==='exclusion'
+        ?`対象外候補 ${Number(result?.candidate_count||0)}件`
+        :''
+  });
 
   try{
     if(task==="verified_info" || task==="verified_auto"){
@@ -8699,6 +8856,14 @@ export default {
           ok:true,...result,
           note:"Google Places・公式サイト・高信頼Instagram候補など公開情報で店舗一致を確認できた項目だけ補完します。既存情報は上書きせず、確認できない項目は空欄のまま残します。"
         });
+      }
+
+      // ---------- Maintenance history dashboard v4.14 ----------
+      if(url.pathname==="/api/admin/maintenance-history" && request.method==="GET"){
+        const days=Number(url.searchParams.get('days')||7);
+        const limit=Number(url.searchParams.get('limit')||24);
+        const history=await kbnMaintenanceHistoryV414(env,{days,limit});
+        return json({ok:true,...history},{headers:{"Cache-Control":"no-store"}});
       }
 
       // ---------- Info enrichment daily summary v4.04 ----------
