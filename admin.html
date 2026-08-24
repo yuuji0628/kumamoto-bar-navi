@@ -4385,7 +4385,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
       <div class="kbn-maintenance-select-v217">
         <label for="maintenanceScheduleSelect">
-          <span>メンテ実行タイミング</span>
+          <span>フルメンテ実行タイミング</span>
           <select id="maintenanceScheduleSelect">
             <option value="1">自動掲載 1</option>
             <option value="2">自動掲載 2</option>
@@ -4395,7 +4395,7 @@ html,body{max-width:100%;overflow-x:hidden}
             <option value="6">自動掲載 6</option>
           </select>
         </label>
-        <small>選んだ1回は「新規掲載 最大20店舗」＋通常メンテナンス＋SEO自動改善 最大20店舗を実行します。</small>
+        <small>選んだ1回は「新規掲載 最大20店舗」付きのフルメンテナンスです。通常メンテナンス自体は毎時間（毎時00分）自動実行します。</small>
       </div>
 
       <button type="button" id="autoScheduleSaveBtn" class="kbn-schedule-save-v217">時間を保存</button>
@@ -4406,9 +4406,9 @@ html,body{max-width:100%;overflow-x:hidden}
         最終自動実行：読み込み中...
       </div>
 
-      <div style="margin-top:8px;color:#aeb6c0;font-size:.76rem">メンテナンス回も新規掲載は最大20店舗。未開拓優先で最大7地区まで探索した後、掲載済み店舗の情報不足 → SEO自動改善 最大20店舗 → 閉業 → Instagram補完 → 対象外候補チェックを続きから実行します。</div>
+      <div style="margin-top:8px;color:#aeb6c0;font-size:.76rem">通常メンテナンスは毎時間（毎時00分）実行し、掲載済み店舗の情報不足 → SEO自動改善 → 閉業 → Instagram補完 → 対象外候補 → VERIFIED情報補完を続きから処理します。選択したフルメンテ時間だけ、新規掲載 最大20店舗の自動開拓も追加します。</div>
       <small id="autoListingSixTimesStatus" style="display:block;margin-top:6px;color:#efc45a">
-        自動掲載：1日6回 / 通常メンテナンス：1日1回
+        自動掲載：1日6回 / 通常メンテナンス：毎時間
       </small>
     </div>
     <div id="maintenanceStatus" class="auto-discovery-status"></div>
@@ -10859,7 +10859,7 @@ async function kbnLoadSimpleScheduleV230(){
     const select=document.getElementById("maintenanceScheduleSelect");
     if(select)select.value=String(idx+1);
     kbnRefreshMaintenanceOptionsV217();
-    if(status){status.dataset.state="ok";status.textContent=`現在：自動掲載 ${times.join(" / ")} ｜ 通常メンテナンス ${mt}（新規掲載 最大20店舗）`;}
+    if(status){status.dataset.state="ok";status.textContent=`現在：自動掲載 ${times.join(" / ")} ｜ 通常メンテナンス 毎時間（毎時00分） / フルメンテ ${mt}（新規掲載 最大20店舗）`;}
     const lastRunEl=document.getElementById("lastAutomaticRunStatus");
     if(lastRunEl){
       lastRunEl.textContent=kbnFormatLastAutomaticRunV233(d.last_automatic_run||null);
@@ -10868,7 +10868,7 @@ async function kbnLoadSimpleScheduleV230(){
       lastRunEl.style.color=st==="success"?"#7ee2a8":st==="failed"?"#ff9b9b":"#d9e1e8";
     }
     const six=document.getElementById("autoListingSixTimesStatus");
-    if(six)six.textContent=`自動掲載：1日6回（${times.join(" / ")}） / 通常メンテナンス：${mt}（新規掲載 最大20店舗）`;
+    if(six)six.textContent=`自動掲載：1日6回（${times.join(" / ")}） / 通常メンテナンス：毎時間（毎時00分） / フルメンテ：${mt}（新規掲載 最大20店舗）`;
   }catch(e){if(status){status.dataset.state="error";status.textContent=`予約時間を読み込めませんでした：${e?.message||"UNKNOWN_ERROR"}`;}}
 }
 
@@ -10910,8 +10910,8 @@ document.addEventListener("click",async e=>{
     const idx=Math.max(0,saved.indexOf(mt));
     const select=document.getElementById("maintenanceScheduleSelect");if(select)select.value=String(idx+1);
     kbnRefreshMaintenanceOptionsV217();
-    if(status){status.dataset.state="ok";status.textContent=`✓ 保存しました。自動掲載 ${saved.join(" / ")} ｜ 通常メンテナンス ${mt}（新規掲載 最大20店舗）`;}
-    const six=document.getElementById("autoListingSixTimesStatus");if(six)six.textContent=`自動掲載：1日6回（${saved.join(" / ")}） / 通常メンテナンス：${mt}（新規掲載 最大20店舗）`;
+    if(status){status.dataset.state="ok";status.textContent=`✓ 保存しました。自動掲載 ${saved.join(" / ")} ｜ 通常メンテナンス 毎時間（毎時00分） / フルメンテ ${mt}（新規掲載 最大20店舗）`;}
+    const six=document.getElementById("autoListingSixTimesStatus");if(six)six.textContent=`自動掲載：1日6回（${saved.join(" / ")}） / 通常メンテナンス：毎時間（毎時00分） / フルメンテ：${mt}（新規掲載 最大20店舗）`;
   }catch(err){if(status){status.dataset.state="error";status.textContent=`保存できませんでした：${err?.message||"UNKNOWN_ERROR"}`;}}
   finally{btn.disabled=false;btn.textContent="時間を保存";}
 });
