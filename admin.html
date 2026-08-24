@@ -4414,6 +4414,38 @@ html,body{max-width:100%;overflow-x:hidden}
     <div id="maintenanceStatus" class="auto-discovery-status"></div>
     <div class="kbn-simple-schedule-ok" style="margin-top:8px">自動開拓も2検索ずつ保存。503/通信エラー時は自動待機し、次のCronで続きから再開します。</div>
 
+
+    <div id="kbnMaintenanceHistoryCard" style="margin-top:14px;padding:13px;border:1px solid #394b5b;border-radius:15px;background:#0d171f">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center">
+        <div>
+          <b style="display:block;font-size:.92rem">メンテナンス履歴</b>
+          <small style="color:#8794a1">毎時間の成果を自動記録</small>
+        </div>
+        <button type="button" id="reloadMaintenanceHistoryBtn" class="admin-secondary-btn" style="padding:7px 10px">更新</button>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:11px">
+        <div style="padding:10px;border-radius:11px;background:#111d26"><small style="display:block;color:#7f8c98">今日の確認</small><b id="mhTodayChecked" style="color:#fff;font-size:1rem">—</b></div>
+        <div style="padding:10px;border-radius:11px;background:#111d26"><small style="display:block;color:#7f8c98">今日の更新</small><b id="mhTodayUpdated" style="color:#7ee3b7;font-size:1rem">—</b></div>
+        <div style="padding:10px;border-radius:11px;background:#111d26"><small style="display:block;color:#7f8c98">SEO上昇</small><b id="mhTodaySeo" style="color:#efc45a;font-size:1rem">—</b></div>
+      </div>
+
+      <div id="mhTodayDetail" style="margin-top:9px;color:#8d9aa6;font-size:.69rem;line-height:1.5">履歴を読み込み中...</div>
+      <div id="mhQueueStatus" style="margin-top:8px;padding:9px 10px;border-radius:10px;background:#101a23;color:#aeb8c2;font-size:.68rem;line-height:1.45">現在の処理状況を確認中...</div>
+
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:13px">
+        <b style="font-size:.76rem">直近の処理</b>
+        <small style="color:#768491">最新8件</small>
+      </div>
+      <div id="maintenanceHistoryList" style="margin-top:7px;display:grid;gap:7px"><small style="color:#8794a1">読み込み中...</small></div>
+
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:13px">
+        <b style="font-size:.76rem">7日間</b>
+        <small id="mhSevenSummary" style="color:#7ee3b7">集計中...</small>
+      </div>
+      <div id="maintenanceDailyList" style="margin-top:7px;display:grid;gap:6px"></div>
+    </div>
+
     
     <div class="kbn-alert-head">
       <b>通知</b>
@@ -10799,6 +10831,87 @@ function kbnNormalizeAdminTimeV230(v){
   return `${String(h).padStart(2,"0")}:${String(mi).padStart(2,"0")}`;
 }
 
+
+function kbnMaintenanceTaskLabelV414(task){
+  return {
+    discovery:'新規開拓',
+    discovery_retry:'通信再試行',
+    missing:'情報不足',
+    seo:'SEO改善',
+    closed:'閉業確認',
+    instagram:'Instagram',
+    exclusion:'対象外候補',
+    verified_info:'VERIFIED補完',
+    verified_auto:'自動再確認'
+  }[String(task||'')]||String(task||'メンテナンス');
+}
+function kbnMaintenanceKindLabelV414(kind){
+  return {
+    hourly:'毎時間',
+    full_maintenance:'フルメンテ',
+    auto_recheck:'自動再確認'
+  }[String(kind||'')]||String(kind||'自動');
+}
+function kbnMaintenanceTimeV414(raw){
+  if(!raw)return '—';
+  try{
+    const iso=/Z$|[+-]\d\d:\d\d$/.test(String(raw))?String(raw):String(raw).replace(' ','T')+'Z';
+    const d=new Date(iso);
+    if(Number.isNaN(d.getTime()))return String(raw);
+    return d.toLocaleString('ja-JP',{timeZone:'Asia/Tokyo',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  }catch{return String(raw)}
+}
+async function loadMaintenanceHistoryV414(){
+  const list=document.getElementById('maintenanceHistoryList');
+  try{
+    const d=await api('/api/admin/maintenance-history?days=7&limit=8');
+    const t=d.today||{},s=d.summary||{},q=d.queue||{};
+    const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+    set('mhTodayChecked',`${Number(t.checked||0)}店舗`);
+    set('mhTodayUpdated',`${Number(t.updated||0)}店舗`);
+    set('mhTodaySeo',`+${Number(t.seo_gain||0)}点`);
+    set('mhTodayDetail',`処理 ${Number(t.task_runs||0)}回 / 新規掲載 ${Number(t.created||0)}店舗 / エラー ${Number(t.errors||0)}件`);
+    set('mhSevenSummary',`確認 ${Number(s.checked||0)} / 更新 ${Number(s.updated||0)} / SEO +${Number(s.seo_gain||0)} / エラー ${Number(s.errors||0)}`);
+
+    const qs=document.getElementById('mhQueueStatus');
+    if(qs){
+      if(q.active){
+        const label=q.stage==='discovery'
+          ?`新規開拓 ${Number(q.discovery_searched||0)}/120検索 / 新規${Number(q.created_total||0)}/20`
+          :`実行中：${kbnMaintenanceTaskLabelV414(q.task)}`;
+        qs.textContent=`現在：${label}。小分け保存しながら自動継続中です。`;
+        qs.style.color='#efc45a';
+      }else{
+        qs.textContent='現在：待機中。次の毎時00分に通常メンテナンスを自動開始します。';
+        qs.style.color='#aeb8c2';
+      }
+    }
+
+    const rows=Array.isArray(d.recent)?d.recent:[];
+    if(list){
+      list.innerHTML=rows.length?rows.map(r=>{
+        const bad=String(r.status||'')!=='success';
+        return `<div style="padding:9px 10px;border:1px solid ${bad?'#663737':'#263846'};border-radius:10px;background:#101a23">
+          <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+            <b style="font-size:.7rem;color:${bad?'#ff9b9b':'#eef2f5'}">${esc(kbnMaintenanceKindLabelV414(r.run_kind))}・${esc(kbnMaintenanceTaskLabelV414(r.task))}</b>
+            <small style="color:#74828e">${esc(kbnMaintenanceTimeV414(r.created_at))}</small>
+          </div>
+          <div style="margin-top:4px;color:#8d9aa6;font-size:.64rem;line-height:1.45">確認 ${Number(r.checked_count||0)} / 更新 ${Number(r.updated_count||0)} / 新規 ${Number(r.created_count||0)} / SEO +${Number(r.seo_gain||0)} / エラー ${Number(r.error_count||0)}${r.note?` ｜ ${esc(r.note)}`:''}</div>
+        </div>`;
+      }).join(''):'<small style="color:#8794a1">まだ履歴がありません。次回メンテナンスから自動記録します。</small>';
+    }
+
+    const daily=document.getElementById('maintenanceDailyList');
+    const ds=Array.isArray(d.daily)?d.daily:[];
+    if(daily)daily.innerHTML=ds.slice(0,7).map(x=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 9px;border-radius:9px;background:#101a23;font-size:.64rem">
+      <span style="color:#9aa6b1">${esc(x.day_jst||'—')}</span>
+      <span style="color:#eef2f5">確認 ${Number(x.checked||0)} / 更新 ${Number(x.updated||0)} / SEO +${Number(x.seo_gain||0)} / エラー ${Number(x.errors||0)}</span>
+    </div>`).join('');
+  }catch(e){
+    if(list)list.innerHTML=`<small style="color:#ff9b9b">履歴を取得できませんでした：${esc(e?.message||e)}</small>`;
+  }
+}
+
 function kbnFormatLastAutomaticRunV233(run,queue){
   if(queue?.active){
     const created=Math.max(0,Number(queue.created_total||0));
@@ -10880,9 +10993,12 @@ document.addEventListener("change",e=>{
 let kbnScheduleLiveRefreshV257=null;
 document.addEventListener("DOMContentLoaded",()=>{
   if(kbnScheduleLiveRefreshV257)return;
+  loadMaintenanceHistoryV414().catch(()=>{});
+  document.getElementById('reloadMaintenanceHistoryBtn')?.addEventListener('click',()=>loadMaintenanceHistoryV414());
   kbnScheduleLiveRefreshV257=setInterval(()=>{
     if(document.visibilityState!=="visible")return;
     kbnLoadSimpleScheduleV230().catch(()=>{});
+    loadMaintenanceHistoryV414().catch(()=>{});
   },5000);
 });
 
