@@ -11,7 +11,7 @@
   <meta property="og:url" content="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/">
   <meta name="description" content="熊本のBAR・ダーツバー・カラオケバー・ラウンジをエリアやジャンルから探せるKUMAMOTO BAR NAVI。熊本市・八代市・人吉市など県内の店舗情報、料金、営業時間、求人情報を掲載。">
   <title>KUMAMOTO BAR NAVI｜熊本のBAR・求人情報</title>
-  <link rel="stylesheet" href="style.css?v=210">
+  <link rel="preload" href="style.css?v=210" as="style"><link rel="stylesheet" href="style.css?v=210">
   <script type="application/ld+json">
 {
   "@context":"https://schema.org",
@@ -543,7 +543,7 @@
 <header class="public-header">
   <div class="container public-header-inner">
     <a class="public-brand" href="index.html" aria-label="KUMAMOTO BAR NAVI ホーム">
-      <img src="logo.png" alt="KUMAMOTO BAR NAVI">
+      <img src="logo.png" alt="KUMAMOTO BAR NAVI" width="192" height="192" decoding="async">
       <span><b>KUMAMOTO</b><strong>BAR NAVI</strong><small>BAR & JOB INFORMATION</small></span>
     </a>
     <nav class="public-desktop-nav">
@@ -774,7 +774,7 @@
       <div class="public-instagram-card">
         <div class="public-instagram-profile">
           <div class="public-instagram-avatar">
-            <div class="public-instagram-avatar-inner"><img src="logo.png" alt="KUMAMOTO BAR NAVI"></div>
+            <div class="public-instagram-avatar-inner"><img src="logo.png" alt="KUMAMOTO BAR NAVI" width="192" height="192" decoding="async"></div>
           </div>
           <div class="public-instagram-copy">
             <p class="public-kicker">INSTAGRAM</p>
@@ -845,7 +845,7 @@
   <a href="listing-form.html"><span>＋</span><b>店舗掲載</b></a>
 </nav>
 
-<script src="script.js?v=122"></script>
+<script src="script.js?v=122" defer></script>
 
 
 
@@ -916,16 +916,12 @@
     if(refreshing)return;
     refreshing=true;
     try{
-      const r=await fetch("/api/shops?live="+Date.now(),{
-        cache:"no-store",
-        headers:{"Cache-Control":"no-cache"}
-      });
+      const r=await fetch("/api/shops?homeStats=1",{cache:"default"});
       if(!r.ok)throw new Error("HTTP_"+r.status);
 
       const d=await r.json();
-      const shops=Array.isArray(d?.shops)?d.shops:[];
-      const shopCount=shops.length;
-      const areaCount=new Set(shops.map(x=>String(x?.area||"").trim()).filter(Boolean)).size;
+      const shopCount=Number(d?.shop_count||0);
+      const areaCount=Number(d?.area_count||0);
 
       if(totalEl){
         totalEl.innerHTML=`${shopCount}<span class="public-hero-unit-v211">店舗</span>`;
@@ -1027,7 +1023,7 @@
     const slug=pick(shop.slug);
     const href=slug ? `/shop?slug=${encodeURIComponent(slug)}` : 'bars.html';
     const thumb=img
-      ? `<div class="kbn-featured-thumb-v289"><img src="${esc(img)}" alt="${esc(name)}" loading="lazy"></div>`
+      ? `<div class="kbn-featured-thumb-v289"><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" data-kbn-img-src="${esc(img)}" alt="${esc(name)}" width="640" height="360" loading="lazy" decoding="async" fetchpriority="low"></div>`
       : `<div class="kbn-featured-thumb-v289"><div class="kbn-featured-noimg-v289">KUMAMOTO BAR NAVI</div></div>`;
     return `<article class="kbn-featured-official-card-v289">
       ${thumb}
@@ -1047,6 +1043,15 @@
     </article>`;
   };
 
+  const hydrateDeferredImages=(root)=>{
+    const imgs=[...root.querySelectorAll('img[data-kbn-img-src]')];
+    if(!imgs.length)return;
+    const load=img=>{const src=img.getAttribute('data-kbn-img-src');if(src){img.src=src;img.removeAttribute('data-kbn-img-src');}};
+    if(!('IntersectionObserver' in window)){imgs.forEach(load);return;}
+    const io=new IntersectionObserver(entries=>entries.forEach(e=>{if(e.isIntersecting){load(e.target);io.unobserve(e.target);}}),{rootMargin:'120px 0px'});
+    imgs.forEach(img=>io.observe(img));
+  };
+
   let cached=[];
   let rendering=false;
   const rerender=()=>{
@@ -1058,6 +1063,7 @@
     rendering=true;
     mount.classList.add('kbn-random-featured-grid');
     mount.innerHTML=selected.map(renderCard).join('');
+    hydrateDeferredImages(mount);
     queueMicrotask(()=>{ rendering=false; });
   };
 
@@ -1074,10 +1080,7 @@
     mount.classList.add('kbn-random-featured-grid');
     mount.innerHTML='<div class="kbn-featured-loading-v289">正式掲載店舗をランダムで読み込んでいます...</div>';
     try{
-      const r=await fetch('/api/shops?featuredRandomOfficial=291&ts='+Date.now(),{
-        cache:'no-store',
-        headers:{'Cache-Control':'no-cache'}
-      });
+      const r=await fetch('/api/shops?featuredRandomOfficial=291',{cache:'default'});
       if(!r.ok) throw new Error('HTTP_'+r.status);
       const d=await r.json();
       const shops=Array.isArray(d?.shops) ? d.shops : [];
