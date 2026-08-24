@@ -532,7 +532,12 @@
   #barCards .kbn-featured-name-v289{font-size:1.18rem}
 }
 </style>
-</head>
+<style data-kbn-lcp-phase2="1">
+@media(max-width:700px){
+  .public-hero h1,.public-hero-lead,.public-kicker,.public-hero-total-copy-v211,.public-hero-area-copy-v211{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif}
+  .public-hero-total-v211,.public-hero-area-v211{contain:layout paint style}
+}
+</style></head>
 <body class="public-v109">
 
 <div class="public-notice">
@@ -943,16 +948,21 @@
     }
   }
 
-  refreshStats();
+  const hasServerStats=document.body?.dataset?.kbnSsrStats==="1";
+  if(updatedEl && hasServerStats) updatedEl.textContent=formatTime();
+  // SSR済みなら初回API取得は不要。上部の数字を後から塗り替えずLCPを安定させる。
+  if(!hasServerStats) refreshStats();
 
   // 掲載店舗数を30秒ごとに実データから再取得。対応エリアはLIVE演出なし。
   setInterval(refreshStats,30000);
 
   // Safariで戻ってきた時・タブ復帰時も即時再取得
-  window.addEventListener("pageshow",refreshStats);
-  window.addEventListener("focus",refreshStats);
+  const bootAt=Date.now();
+  const refreshIfSettled=()=>{ if(Date.now()-bootAt>10000) refreshStats(); };
+  window.addEventListener("pageshow",refreshIfSettled);
+  window.addEventListener("focus",refreshIfSettled);
   document.addEventListener("visibilitychange",()=>{
-    if(document.visibilityState==="visible")refreshStats();
+    if(document.visibilityState==="visible")refreshIfSettled();
   });
 })();
 </script>
@@ -1048,7 +1058,7 @@
     if(!imgs.length)return;
     const load=img=>{const src=img.getAttribute('data-kbn-img-src');if(src){img.src=src;img.removeAttribute('data-kbn-img-src');}};
     if(!('IntersectionObserver' in window)){imgs.forEach(load);return;}
-    const io=new IntersectionObserver(entries=>entries.forEach(e=>{if(e.isIntersecting){load(e.target);io.unobserve(e.target);}}),{rootMargin:'120px 0px'});
+    const io=new IntersectionObserver(entries=>entries.forEach(e=>{if(e.isIntersecting){load(e.target);io.unobserve(e.target);}}),{rootMargin:'0px 0px'});
     imgs.forEach(img=>io.observe(img));
   };
 
