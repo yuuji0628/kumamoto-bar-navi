@@ -3862,6 +3862,16 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div id="techSeoResult" style="margin-top:8px;color:#7f8c98;font-size:.63rem;line-height:1.45">技術SEOを確認中...</div>
   </div>
+  <div style="margin-top:12px;padding:11px;border-radius:12px;background:#0d171f;border:1px solid #3b4b5a">
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap">
+      <div style="min-width:0;flex:1">
+        <div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b style="font-size:.78rem">情報補完 優先20店舗</b><small style="color:#65d8a4">VERIFIED DATA</small></div>
+        <p style="margin:7px 0 0;color:#7f8c98;font-size:.63rem;line-height:1.5">90点未満の店舗から、Google Places・公式サイト・高信頼Instagram候補などで店舗一致を確認できた情報だけを補完します。既存データは上書きしません。</p>
+      </div>
+      <button type="button" id="runPriorityInfoEnrichBtn" style="border:1px solid #3f7f68;background:#10271f;color:#7ee3b7;border-radius:11px;padding:9px 12px;font-weight:900">補完 20店舗</button>
+    </div>
+    <div id="priorityInfoEnrichStatus" style="margin-top:9px;color:#8c9aa6;font-size:.65rem;line-height:1.5">未確認。営業時間・住所・電話・Instagram・画像・料金など、確認できた項目のみ安全に追加します。</div>
+  </div>
   <div style="margin-top:7px;color:#6f7d89;font-size:.61rem;line-height:1.5">※ Search Consoleの「検出 - インデックス未登録」URLを直接取得する機能ではありません。店舗情報の充実度と技術SEOを分けて監視し、推測情報で点数を水増ししません。</div>
 </div>
 
@@ -11001,10 +11011,31 @@ document.addEventListener("DOMContentLoaded",()=>{
       if(status)status.textContent='インデックス促進に失敗しました：'+(e?.message||e);
     }finally{if(btn){btn.disabled=false;btn.textContent='促進 20店舗';}}
   }
+
+  async function runPriorityInfoEnrich(){
+    const btn=document.getElementById('runPriorityInfoEnrichBtn');
+    const status=document.getElementById('priorityInfoEnrichStatus');
+    if(btn){btn.disabled=true;btn.textContent='補完中...';}
+    if(status)status.textContent='90点未満の店舗を優先して、公開情報との店舗一致を確認しています...';
+    try{
+      const d=await api('/api/admin/info-enrich-priority',{method:'POST'});
+      const f=d.field_counts||{};
+      const updated=Number(d.updated_count||0),checked=Number(d.checked||0),avg=Number(d.average_score_gain||0),gain=Number(d.score_gain_total||0);
+      const fields=`営業時間 ${Number(f.hours||0)} / 住所 ${Number(f.address||0)} / 電話 ${Number(f.phone||0)} / Instagram ${Number(f.instagram||0)} / 定休日 ${Number(f.holiday||0)} / 画像 ${Number(f.image||0)} / 料金 ${Number(f.budget||0)} / 特徴 ${Number(f.features||0)}`;
+      const cap=d.reached_target?'20店舗の補完目標に到達':`確認 ${checked}/${Number(d.max_checked||80)}店舗で終了`;
+      if(status)status.textContent=`完了：${checked}店舗を確認 / ${updated}店舗を更新 ｜ ${fields} ｜ SEO合計 +${gain}点 / 平均 +${avg.toFixed(1)}点 ｜ ${cap}`;
+      await loadSeoMonitor();
+    }catch(e){
+      if(status)status.textContent='情報補完に失敗しました：'+(e?.message||e);
+    }finally{
+      if(btn){btn.disabled=false;btn.textContent='補完 20店舗';}
+    }
+  }
   document.addEventListener('DOMContentLoaded',()=>{
     document.getElementById('reloadSeoMonitorBtn')?.addEventListener('click',loadSeoMonitor);
     document.getElementById('improveLowSeoBtn')?.addEventListener('click',improveLowSeo);
     document.getElementById('runIndexPromotionBtn')?.addEventListener('click',runIndexPromotion);
+    document.getElementById('runPriorityInfoEnrichBtn')?.addEventListener('click',runPriorityInfoEnrich);
     document.getElementById('checkStructuredDataBtn')?.addEventListener('click',checkStructuredData);
     loadSeoMonitor();
   });
