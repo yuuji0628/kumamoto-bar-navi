@@ -4356,7 +4356,7 @@ html,body{max-width:100%;overflow-x:hidden}
       <div class="lead-smart-icon">✓</div>
       <div>
         <h3>自動メンテナンス</h3>
-        <p>掲載済み店舗を順番に自動確認。次回も続きから進みます。</p>
+        <p>毎時間の自動運転をここで確認。手動メニューと時間設定も残しています。</p>
       </div>
     </div>
     <div class="kbn-maintenance-grid">
@@ -4366,49 +4366,68 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div class="kbn-schedule-note kbn-schedule-editor">
       <div class="kbn-schedule-title">
-        <b>予約時間設定</b>
+        <b>自動運転・時間設定</b>
         <span>日本時間（JST）</span>
       </div>
 
-      <small style="display:block;margin:4px 0 8px;color:#9aa4af">
-        1日6回の自動掲載時間をここでまとめて設定できます。
-      </small>
-
-      <div class="kbn-auto-times-v217">
-        <label><span>自動掲載 1</span><input type="time" id="autoListingTime1" value="00:00"></label>
-        <label><span>自動掲載 2</span><input type="time" id="autoListingTime2" value="03:00"></label>
-        <label><span>自動掲載 3</span><input type="time" id="autoListingTime3" value="06:00"></label>
-        <label><span>自動掲載 4</span><input type="time" id="autoListingTime4" value="09:00"></label>
-        <label><span>自動掲載 5</span><input type="time" id="autoListingTime5" value="12:00"></label>
-        <label><span>自動掲載 6</span><input type="time" id="autoListingTime6" value="18:00"></label>
+      <div style="margin-top:8px;padding:12px;border:1px solid #2f4656;border-radius:13px;background:#0e1922">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:center">
+          <div>
+            <b style="display:block;color:#f3c958;font-size:.86rem">毎時間の自動メンテナンス</b>
+            <small style="color:#91a0ac">毎時00分・設定不要</small>
+          </div>
+          <span style="padding:5px 8px;border-radius:999px;background:#123125;color:#7ee3b7;font-size:.64rem;font-weight:700">常時ON</span>
+        </div>
+        <div style="margin-top:8px;color:#b2bdc7;font-size:.69rem;line-height:1.55">
+          BAR開拓 → 情報不足 → SEO改善 → 閉業確認 → Instagram → 対象外 → VERIFIED補完
+        </div>
+        <div style="margin-top:5px;color:#72818e;font-size:.62rem;line-height:1.45">
+          小分け保存・503自動待機・続きから再開まで自動です。
+        </div>
       </div>
 
-      <div class="kbn-maintenance-select-v217">
+      <div style="margin-top:14px">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:end;margin-bottom:7px">
+          <div>
+            <b style="display:block;font-size:.82rem">追加開拓タイム</b>
+            <small style="color:#8996a1">毎時間の処理とは別に、BAR開拓を追加で走らせる6枠</small>
+          </div>
+          <span style="color:#efc45a;font-size:.64rem;white-space:nowrap">1日6回</span>
+        </div>
+        <div class="kbn-auto-times-v217">
+          <label><span>追加開拓 1</span><input type="time" id="autoListingTime1" value="00:00"></label>
+          <label><span>追加開拓 2</span><input type="time" id="autoListingTime2" value="03:00"></label>
+          <label><span>追加開拓 3</span><input type="time" id="autoListingTime3" value="06:00"></label>
+          <label><span>追加開拓 4</span><input type="time" id="autoListingTime4" value="09:00"></label>
+          <label><span>追加開拓 5</span><input type="time" id="autoListingTime5" value="12:00"></label>
+          <label><span>追加開拓 6</span><input type="time" id="autoListingTime6" value="18:00"></label>
+        </div>
+      </div>
+
+      <div class="kbn-maintenance-select-v217" style="margin-top:13px">
         <label for="maintenanceScheduleSelect">
-          <span>フルメンテ実行タイミング</span>
+          <span>1日1回の重点フルメンテ枠</span>
           <select id="maintenanceScheduleSelect">
-            <option value="1">自動掲載 1</option>
-            <option value="2">自動掲載 2</option>
-            <option value="3">自動掲載 3</option>
-            <option value="4">自動掲載 4</option>
-            <option value="5">自動掲載 5</option>
-            <option value="6">自動掲載 6</option>
+            <option value="1">追加開拓 1</option>
+            <option value="2">追加開拓 2</option>
+            <option value="3">追加開拓 3</option>
+            <option value="4">追加開拓 4</option>
+            <option value="5">追加開拓 5</option>
+            <option value="6">追加開拓 6</option>
           </select>
         </label>
-        <small>選んだ1回は「新規掲載 最大20店舗」付きのフルメンテナンスです。通常メンテナンス自体は毎時間（毎時00分）自動実行します。</small>
+        <small>選んだ追加開拓枠を、その日の重点フルメンテ枠として扱います。</small>
       </div>
 
       <button type="button" id="autoScheduleSaveBtn" class="kbn-schedule-save-v217">時間を保存</button>
-      <small id="autoScheduleStatus">現在の予約時間を読み込み中...</small>
-      
+      <small id="autoScheduleStatus">現在の時間設定を読み込み中...</small>
 
       <div id="lastAutomaticRunStatus" style="margin-top:10px;padding:10px 12px;border:1px solid #394653;border-radius:12px;background:#101820;color:#d9e1e8;font-size:.78rem;line-height:1.55">
         最終自動実行：読み込み中...
       </div>
 
-      <div style="margin-top:8px;color:#aeb6c0;font-size:.76rem">通常メンテナンスは毎時間（毎時00分）実行し、掲載済み店舗の情報不足 → SEO自動改善 → 閉業 → Instagram補完 → 対象外候補 → VERIFIED情報補完を続きから処理します。選択したフルメンテ時間だけ、新規掲載 最大20店舗の自動開拓も追加します。</div>
-      <small id="autoListingSixTimesStatus" style="display:block;margin-top:6px;color:#efc45a">
-        自動掲載：1日6回 / 通常メンテナンス：毎時間
+      <small id="autoListingSixTimesStatus" style="display:block;margin-top:7px;color:#efc45a;line-height:1.5">
+        毎時間自動運転：ON / 追加開拓：1日6回 / 重点フルメンテ：1日1回
       </small>
     </div>
     <div id="maintenanceStatus" class="auto-discovery-status"></div>
@@ -10882,7 +10901,7 @@ async function loadMaintenanceHistoryV414(){
         qs.textContent=`現在：${label}。小分け保存しながら自動継続中です。`;
         qs.style.color='#efc45a';
       }else{
-        qs.textContent='現在：待機中。次の毎時00分に通常メンテナンスを自動開始します。';
+        qs.textContent='現在：待機中。次の毎時00分にBAR自動開拓＋通常メンテナンスを自動開始します。';
         qs.style.color='#aeb8c2';
       }
     }
@@ -10972,7 +10991,7 @@ async function kbnLoadSimpleScheduleV230(){
     const select=document.getElementById("maintenanceScheduleSelect");
     if(select)select.value=String(idx+1);
     kbnRefreshMaintenanceOptionsV217();
-    if(status){status.dataset.state="ok";status.textContent=`現在：自動掲載 ${times.join(" / ")} ｜ 通常メンテナンス 毎時間（毎時00分） / フルメンテ ${mt}（新規掲載 最大20店舗）`;}
+    if(status){status.dataset.state="ok";status.textContent=`現在：追加開拓 ${times.join(" / ")} ｜ 毎時間自動運転 ON / 重点フルメンテ ${mt}（新規掲載 最大20店舗）`;}
     const lastRunEl=document.getElementById("lastAutomaticRunStatus");
     if(lastRunEl){
       lastRunEl.textContent=kbnFormatLastAutomaticRunV233(d.last_automatic_run||null);
@@ -10981,7 +11000,7 @@ async function kbnLoadSimpleScheduleV230(){
       lastRunEl.style.color=st==="success"?"#7ee2a8":st==="failed"?"#ff9b9b":"#d9e1e8";
     }
     const six=document.getElementById("autoListingSixTimesStatus");
-    if(six)six.textContent=`自動掲載：1日6回（${times.join(" / ")}） / 通常メンテナンス：毎時間（毎時00分） / フルメンテ：${mt}（新規掲載 最大20店舗）`;
+    if(six)six.textContent=`追加開拓：1日6回（${times.join(" / ")}） / 毎時間自動運転：ON（毎時00分） / 重点フルメンテ：${mt}（新規掲載 最大20店舗）`;
   }catch(e){if(status){status.dataset.state="error";status.textContent=`予約時間を読み込めませんでした：${e?.message||"UNKNOWN_ERROR"}`;}}
 }
 
@@ -11026,8 +11045,8 @@ document.addEventListener("click",async e=>{
     const idx=Math.max(0,saved.indexOf(mt));
     const select=document.getElementById("maintenanceScheduleSelect");if(select)select.value=String(idx+1);
     kbnRefreshMaintenanceOptionsV217();
-    if(status){status.dataset.state="ok";status.textContent=`✓ 保存しました。自動掲載 ${saved.join(" / ")} ｜ 通常メンテナンス 毎時間（毎時00分） / フルメンテ ${mt}（新規掲載 最大20店舗）`;}
-    const six=document.getElementById("autoListingSixTimesStatus");if(six)six.textContent=`自動掲載：1日6回（${saved.join(" / ")}） / 通常メンテナンス：毎時間（毎時00分） / フルメンテ：${mt}（新規掲載 最大20店舗）`;
+    if(status){status.dataset.state="ok";status.textContent=`✓ 保存しました。追加開拓 ${saved.join(" / ")} ｜ 毎時間自動運転 ON / 重点フルメンテ ${mt}（新規掲載 最大20店舗）`;}
+    const six=document.getElementById("autoListingSixTimesStatus");if(six)six.textContent=`追加開拓：1日6回（${saved.join(" / ")}） / 毎時間自動運転：ON（毎時00分） / 重点フルメンテ：${mt}（新規掲載 最大20店舗）`;
   }catch(err){if(status){status.dataset.state="error";status.textContent=`保存できませんでした：${err?.message||"UNKNOWN_ERROR"}`;}}
   finally{btn.disabled=false;btn.textContent="時間を保存";}
 });
