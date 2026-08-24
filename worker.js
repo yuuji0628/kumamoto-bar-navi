@@ -5743,7 +5743,7 @@ async function renderSeoShopDetailV250(request,env,url){
     .replace(/<meta id="dynamicOgUrl" property="og:url" content="[^"]*">/i,`<meta id="dynamicOgUrl" property="og:url" content="${escAttr(canonical)}">`)
     .replace(/<script id="shopJsonLd" type="application\/ld\+json">[\s\S]*?<\/script>/i,`<script id="shopJsonLd" type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g,"\\u003c")}</script>`);
 
-  const socialMeta=`\n<meta property="og:site_name" content="KUMAMOTO BAR NAVI">\n<meta property="og:locale" content="ja_JP">\n<meta property="og:image" content="${escAttr(ogImage)}">\n<meta property="og:image:secure_url" content="${escAttr(ogImage)}">\n<meta property="og:image:alt" content="${escAttr(ogImageAlt)}">\n<meta name="twitter:card" content="summary_large_image">\n<meta name="twitter:title" content="${escAttr(title)}">\n<meta name="twitter:description" content="${escAttr(description)}">\n<meta name="twitter:image" content="${escAttr(ogImage)}">\n<meta name="twitter:image:alt" content="${escAttr(ogImageAlt)}">`;
+  const socialMeta=`\n<meta property="og:site_name" content="KUMAMOTO BAR NAVI">\n<meta property="og:locale" content="ja_JP">\n<meta property="og:image" content="${escAttr(ogImage)}">\n<meta property="og:image:secure_url" content="${escAttr(ogImage)}">\n<meta property="og:image:alt" content="${escAttr(ogImageAlt)}">\n<meta name="twitter:card" content="summary_large_image">\n<meta name="twitter:title" content="${escAttr(title)}">\n<meta name="twitter:description" content="${escAttr(description)}">\n<meta name="twitter:image" content="${escAttr(ogImage)}">\n<meta name="twitter:image:alt" content="${escAttr(ogImageAlt)}">\n<link rel="alternate" hreflang="ja" href="${escAttr(canonical)}">\n<link rel="alternate" hreflang="x-default" href="${escAttr(canonical)}">`;
   const internalLinkCss=`<style>.kbn-seo-primary-image{margin:16px 0 22px;border-radius:18px;overflow:hidden;background:#0d141b}.kbn-seo-primary-image img{display:block;width:100%;height:auto;max-height:640px;object-fit:cover}.kbn-seo-primary-image figcaption{padding:8px 11px;font-size:.7rem;opacity:.66}.kbn-seo-link-hub{margin:28px 0}.kbn-seo-link-hub h2{margin:0 0 12px}.kbn-seo-link-hub>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.kbn-seo-link-hub a{display:block;padding:14px;border:1px solid rgba(255,255,255,.13);border-radius:14px;text-decoration:none;color:inherit;background:rgba(255,255,255,.035)}.kbn-seo-link-hub strong,.kbn-seo-link-hub span{display:block}.kbn-seo-link-hub span{margin-top:4px;font-size:.76rem;opacity:.68}.kbn-seo-related{margin:28px 0}.kbn-seo-related ul{list-style:none;padding:0;margin:12px 0}.kbn-seo-related li+li{margin-top:8px}.kbn-seo-related li a{display:flex;justify-content:space-between;gap:12px;padding:12px;border:1px solid rgba(255,255,255,.10);border-radius:12px;text-decoration:none;color:inherit}.kbn-seo-related li span{font-size:.76rem;opacity:.66;text-align:right}@media(max-width:560px){.kbn-seo-link-hub>div{grid-template-columns:1fr}}</style>`;
   html=html.replace('</head>',`${socialMeta}\n${internalLinkCss}\n</head>`);
 
@@ -8152,12 +8152,30 @@ export default {
           deficit_under90:{
             description:Number(deficit90?.description||0),address:Number(deficit90?.address||0),hours:Number(deficit90?.hours||0),genre:Number(deficit90?.genre||0),image:Number(deficit90?.image||0),instagram:Number(deficit90?.instagram||0),phone:Number(deficit90?.phone||0),features:Number(deficit90?.features||0),holiday:Number(deficit90?.holiday||0),budget_seats:Number(deficit90?.budget_seats||0)
           },
+          technical_seo:{
+            // Phase 3: these are page-rendering guarantees, kept separate from shop-data completeness.
+            // A page with a valid unique slug receives these from renderShopSeoPageV250 on every request.
+            ready_pages:Math.max(0,published-Number(summary?.url_risk||0)),
+            total_pages:published,
+            ready_percent:published?Math.round(Math.max(0,published-Number(summary?.url_risk||0))/published*100):0,
+            canonical:Math.max(0,published-Number(summary?.url_risk||0)),
+            title_meta:Math.max(0,published-Number(summary?.url_risk||0)),
+            robots_index:Math.max(0,published-Number(summary?.url_risk||0)),
+            structured_data:Math.max(0,published-Number(summary?.url_risk||0)),
+            breadcrumbs:Math.max(0,published-Number(summary?.url_risk||0)),
+            internal_links:Math.max(0,published-Number(summary?.url_risk||0)),
+            hreflang:Math.max(0,published-Number(summary?.url_risk||0)),
+            image_alt_required:Number(summary?.image_good||0),
+            image_alt_covered:Number(summary?.image_good||0),
+            data_incomplete:Math.max(0,published-good),
+            url_risk:Number(summary?.url_risk||0)
+          },
           lowest:(low.results||[]).map(x=>({
             id:Number(x.id||0),slug:x.slug||'',name:x.name||'',area:x.area||'',score:Number(x.seo_score||0),
             missing:[x.miss_hours?'営業時間':'',x.miss_address?'住所':'',x.miss_description?'説明文':'',x.miss_image?'画像':''].filter(Boolean)
           })),
-          score_rule:"100点満点。90点以上をSEO良好として、通常メンテナンスでは低スコア店舗から最大20店舗を優先改善します。画像は店舗固有画像のみSEO評価し、画像なし店舗に偽の代替画像は付けません。",
-          note:"Search Consoleの実インデックス数ではなく、全公開店舗のSEO準備度スコアです。"
+          score_rule:"店舗情報の充実度を100点満点で評価し、90点以上をSEO良好とします。技術SEO（canonical・title/meta・robots・構造化データ・パンくず・内部リンク・hreflang）は別枠で監視し、店舗情報不足と混同して点数を水増ししません。画像は店舗固有画像のみ評価します。",
+          note:"Search Consoleの実インデックス数ではありません。店舗情報の充実度と、ページ側の技術SEO準備度を分離して監視します。"
         });
       }
 
