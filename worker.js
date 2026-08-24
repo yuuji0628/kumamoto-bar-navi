@@ -1,3 +1,4 @@
+// KBN v3.10: 自動開拓 重複判定改善＋拡張探索
 
 function kbnNormInstagram(v){
   let s=String(v||"").trim().toLowerCase();
@@ -4416,24 +4417,51 @@ function autoListingContactScore({phone="",website="",instagram=""}={}){
   return score;
 }
 
+// KBN v3.10: 自動開拓の重複判定を店舗単位に改善。
+// 同じビル・同じ住所に複数BARが入るケース、同名の別店舗を誤って落とさない。
+function kbnDuplicateAddressKey(v){
+  return String(v||"")
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[〒,，、。・\s]/g,"")
+    .replace(/(?:熊本県)/g,"")
+    .replace(/[‐‑–—ー−]/g,"-")
+    .trim();
+}
 function autoListingDuplicateScore(existing,{name,address,phone,instagram}){
   const nkey=normalizePlaceName(name);
-  const addressKey=String(address||"").replace(/\s+/g,"");
+  const addressKey=kbnDuplicateAddressKey(address);
   const phoneKey=normalizePhoneDigits(phone);
   const igKey=kbnHandle(instagram);
 
   for(const x of existing){
-    const sameName=nkey && normalizePlaceName(x.name)===nkey;
-    const sameAddress=addressKey && x.address &&
-      String(x.address).replace(/\s+/g,"")===addressKey;
-    const samePhone=phoneKey && x.phone &&
-      normalizePhoneDigits(x.phone)===phoneKey;
-    const sameIg=igKey && x.instagram &&
-      kbnHandle(x.instagram)===igKey;
+    const xName=normalizePlaceName(x.name);
+    const xAddress=kbnDuplicateAddressKey(x.address);
+    const sameName=!!(nkey && xName && xName===nkey);
+    const sameAddress=!!(addressKey && xAddress && xAddress===addressKey);
+    const samePhone=!!(phoneKey && x.phone && normalizePhoneDigits(x.phone)===phoneKey);
+    const sameIg=!!(igKey && x.instagram && kbnHandle(x.instagram)===igKey);
 
-    if(sameName||sameAddress||samePhone||sameIg)return true;
+    // 電話・Instagramの完全一致は強い同一店舗シグナル。
+    if(samePhone||sameIg)return true;
+    // 店名だけ、住所だけでは重複扱いしない。
+    // 同名＋同住所が揃った時だけ重複とする。
+    if(sameName&&sameAddress)return true;
   }
   return false;
+}
+
+async function kbnUniqueAutoSlug(env,name,area,address){
+  const base=slugify(name);
+  if(!(await shopSlugExists(env,base)))return base;
+  const areaSlug=slugify(`${name}-${area||"kumamoto"}`);
+  if(areaSlug && !(await shopSlugExists(env,areaSlug)))return areaSlug;
+  for(let i=2;i<=99;i++){
+    const s=slugify(`${name}-${area||"kumamoto"}-${i}`);
+    if(!(await shopSlugExists(env,s)))return s;
+  }
+  const tail=(await sha256hex(`${name}|${address}|${Date.now()}`)).slice(0,8);
+  return `${base}-${tail}`.slice(0,120);
 }
 
 
@@ -4489,7 +4517,7 @@ function strictAutoListingGate({
   };
 }
 
-async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit=3,uniqueAreas=false){
+async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit=3,uniqueAreas=false,discoveryMode="normal"){
   await ensureLeadDiscoveryTables(env);
 
   const osmSnap=await fetchKumamotoOsmBars(env);
@@ -4519,7 +4547,10 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
   for(const pair of pairs){
     if(created.length>=maxListings)break;
 
-    const query=[pair.search_area||pair.area,"熊本県",pair.label||"BAR"].filter(Boolean).join(" ");
+    const expanded=String(discoveryMode||"normal")=="expanded";
+    const query=expanded
+      ? [pair.search_area||pair.area,"熊本県",pair.label||"BAR","お酒 夜"].filter(Boolean).join(" ")
+      : [pair.search_area||pair.area,"熊本県",pair.label||"BAR"].filter(Boolean).join(" ");
 
     const googleSearch=googleConfigured
       ? await googlePlacesTextSearch(env,{query,pageSize:20})
@@ -4532,7 +4563,7 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
     // v2.28: 上位4件だけでは既存店に偏るため、最大10件まで候補を見る。
     // 重複はPlace Details取得前に落とすので、subrequestは増えにくい。
     const googleCandidates=googleSearch.ok
-      ? (googleSearch.places||[]).filter(googlePlaceLooksLikeBar).slice(0,15)
+      ? (googleSearch.places||[]).filter(googlePlaceLooksLikeBar).slice(0,expanded?20:15)
       : [];
 
     const fsqCandidates=fsqSearch.ok
@@ -4580,7 +4611,7 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
 
     let made=0;
     let detailChecks=0;
-    const detailCheckLimit=Math.max(2,Math.min(4,Number(perPairLimit||3)+1));
+    const detailCheckLimit=expanded?4:Math.max(2,Math.min(4,Number(perPairLimit||3)+1));
 
     // --------------------------------------------------------
     // 1) Google candidates first
@@ -4722,8 +4753,12 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
         const coreBlocked=gate.reasons.some(r=>
           ["NAME_WEAK","ADDRESS_NOT_CONFIRMED","BAR_CATEGORY_WEAK"].includes(r)
         );
+        // Google Placesで熊本県内・BAR系が確認できる候補は、
+        // 電話/公式サイトが未取得という理由だけでは落とさない。
         if(!coreBlocked && googlePlaceLooksLikeBar(g) && gAddress.includes("熊本")){
           gate.approved=true;
+          gate.reasons=gate.reasons.filter(r=>r!=="NO_RELIABLE_CONTACT"&&r!=="SOURCE_MATCH_WEAK");
+          gate.confidence=Math.max(gate.confidence,12);
         }
       }
 
@@ -4766,16 +4801,8 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
         "※本ページは、公開されている店舗情報をもとにKUMAMOTO BAR NAVIが独自に掲載しています。"+
         "掲載内容の修正・削除をご希望の場合は店舗様専用ページよりご連絡ください。";
 
-      const slug=slugify(gName);
-
-      const slugExisting=await shopSlugExists(env,slug);
-      if(slugExisting){
-        rejected.push({
-          name:gName,area,reason:"DUPLICATE_SLUG",source:sourceKind,
-          existing_shop_id:Number(slugExisting.id||0)
-        });
-        continue;
-      }
+      // 同名の別店舗をslug衝突だけで捨てない。住所等の重複判定を通過していれば一意slugを発行。
+      const slug=await kbnUniqueAutoSlug(env,gName,area,address);
 
       const ins=await env.DB.prepare(`
         INSERT INTO shops(
@@ -4856,11 +4883,7 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
           continue;
         }
 
-        const slug=slugify(name);
-        if(await shopSlugExists(env,slug)){
-          rejected.push({name,reason:"DUPLICATE_SLUG",source:item.kind});
-          continue;
-        }
+        const slug=await kbnUniqueAutoSlug(env,name,pair.area,address);
 
         const categories=isFsq?fsqCategories(place):(isGeo?geoCategories(place):[]);
         const amenity=(isFsq||isGeo)?"":String(osmTags(place).amenity||"");
@@ -4959,7 +4982,8 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
       :(fsqConfigured?"foursquare_geoapify_osm":"geoapify_osm"),
     google_configured:googleConfigured,
     foursquare_configured:fsqConfigured,
-    geoapify_configured:!!geoSnap.configured
+    geoapify_configured:!!geoSnap.configured,
+    discovery_mode:String(discoveryMode||"normal")
   };
 }
 async function ensureListingStatusColumn(env){
@@ -9142,9 +9166,10 @@ export default {
         const max=Math.max(1,Math.min(Number(x.max_listings)||10,50));
         const pairs=Math.max(1,Math.min(Number(x.pair_limit)||15,40));
         const perPair=Math.max(1,Math.min(Number(x.per_pair_limit)||2,4));
+        const discoveryMode=String(x.discovery_mode||"normal")=="expanded"?"expanded":"normal";
 
         try{
-          const result=await autoDiscover(env,request,max,pairs,perPair);
+          const result=await autoDiscover(env,request,max,pairs,perPair,false,discoveryMode);
           if(result?.created?.length){
             ctx.waitUntil(notifyCreatedShops(env,result.created,"自動開拓").catch(e=>console.error("new shop alert failed",e)));
           }
