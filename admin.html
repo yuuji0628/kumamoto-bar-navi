@@ -3831,7 +3831,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <div>
       <span style="display:block;color:#efc45a;font-size:.67rem;font-weight:900;letter-spacing:.12em">INDEX PROMOTION</span>
       <h3 style="margin:4px 0 4px;font-size:1.03rem">インデックス促進モード</h3>
-      <p style="margin:0;color:#9da9b5;font-size:.73rem;line-height:1.55">外部情報に頼らず、店舗名・エリア・ジャンルなど既に保存済みの事実だけを使って、低スコア店舗の説明文品質を最大20件まで安全に底上げします。</p>
+      <p style="margin:0;color:#9da9b5;font-size:.73rem;line-height:1.55">外部情報に頼らず、保存済みの事実だけを使って、SEOスコアが実際に上がる店舗を最大20件まで優先改善します。改善前後の点数と70・80・90点到達件数も確認できます。</p>
     </div>
     <button type="button" id="runIndexPromotionBtn" style="border:1px solid #b88a2b;background:#2a2110;color:#f3ca63;border-radius:11px;padding:10px 13px;font-weight:900">促進 20店舗</button>
   </div>
@@ -3841,6 +3841,16 @@ html,body{max-width:100%;overflow-x:hidden}
     <div style="padding:10px;border-radius:11px;background:#101b24"><small style="display:block;color:#85929e">仕上げ</small><b id="indexPromo80s" style="font-size:1.15rem;color:#b7d983">—</b><small style="display:block;color:#73818d">80〜89点</small></div>
   </div>
   <div id="indexPromotionStatus" style="margin-top:10px;color:#9da9b5;font-size:.69rem;line-height:1.5">70点未満から優先し、外部APIを使わず既存データだけで改善できる店舗を最大20件処理します。</div>
+  <div style="margin-top:12px;padding:11px;border-radius:12px;background:#0d171f;border:1px solid #263745">
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b style="font-size:.76rem">90点未満の不足原因</b><small style="color:#758490">自動分類</small></div>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:8px;font-size:.67rem;color:#9da9b5">
+      <div>営業時間不足 <b id="promoMissHours" style="float:right;color:#fff">—</b></div><div>住所不足 <b id="promoMissAddress" style="float:right;color:#fff">—</b></div>
+      <div>画像不足 <b id="promoMissImage" style="float:right;color:#fff">—</b></div><div>電話不足 <b id="promoMissPhone" style="float:right;color:#fff">—</b></div>
+      <div>Instagram不足 <b id="promoMissInstagram" style="float:right;color:#fff">—</b></div><div>定休日不足 <b id="promoMissHoliday" style="float:right;color:#fff">—</b></div>
+      <div>特徴不足 <b id="promoMissFeatures" style="float:right;color:#fff">—</b></div><div>料金/席数不足 <b id="promoMissBudget" style="float:right;color:#fff">—</b></div>
+    </div>
+    <div id="promoDeficitResult" style="margin-top:8px;color:#7f8c98;font-size:.63rem;line-height:1.45">不足項目を確認中...</div>
+  </div>
   <div style="margin-top:7px;color:#6f7d89;font-size:.61rem;line-height:1.5">※ Search Consoleの「検出 - インデックス未登録」URLを直接取得する機能ではありません。サイト側のSEO準備度を使って、登録されやすいページから優先的に底上げします。</div>
 </div>
 
@@ -10898,6 +10908,7 @@ document.addEventListener("DOMContentLoaded",()=>{
       const s=d.summary||{}; const m=d.missing||{};
       n('seoSitemapCount',s.sitemap_urls); n('seoGoodCount',s.seo_good); n('seoNeedsCount',s.needs_improvement); n('seoUrlRiskCount',s.url_risk);
       n('seoDescriptionCount',m.description); n('seoDescriptionGood',m.description_good); n('seoDescriptionMid',m.description_mid); n('seoAddressCount',m.address); n('seoHoursCount',m.hours); n('seoGenreCount',m.genre); n('seoImageCount',m.image); n('seoImageGood',m.image_good);
+      const d90=d.deficit_under90||{}; n('promoMissHours',d90.hours); n('promoMissAddress',d90.address); n('promoMissImage',d90.image); n('promoMissPhone',d90.phone); n('promoMissInstagram',d90.instagram); n('promoMissHoliday',d90.holiday); n('promoMissFeatures',d90.features); n('promoMissBudget',d90.budget_seats);
       const avg=document.getElementById('seoAverageScore'); if(avg)avg.textContent=Number(s.average_score||0).toFixed(1);
       n('seoScore90',s.score_90_plus); n('seoScore80',s.score_80s); n('seoScore70',s.score_70s); n('seoScoreUnder70',s.score_under70);
       n('indexPromoUnder70',s.score_under70); n('indexPromo70s',s.score_70s); n('indexPromo80s',s.score_80s);
@@ -10954,15 +10965,21 @@ document.addEventListener("DOMContentLoaded",()=>{
     const btn=document.getElementById('runIndexPromotionBtn');
     const status=document.getElementById('indexPromotionStatus');
     if(btn){btn.disabled=true;btn.textContent='促進中...';}
-    if(status)status.textContent='低スコア店舗を確認し、外部情報を使わず既存データだけで説明文を安全に強化しています...';
+    if(status)status.textContent='90点未満の不足原因を分類し、保存済みテキスト内に明示された住所・営業時間・電話・定休日・Instagram・料金・席数・ジャンル・説明文だけを安全に整理しています...';
     try{
       const d=await api('/api/admin/index-promotion',{method:'POST'});
       const updated=Number(d.updated_count||0),checked=Number(d.checked||0);
       const b=d.before||{},a=d.after||{};
       const f=d.field_counts||{};
-      const detail=`内部データのみ / 説明文強化 ${Number(f.description||0)}件`;
-      const capNote=d.reached_target?'20件の改善目標に到達':`確認上限 ${Number(d.max_checked||500)}件以内で終了`;
-      if(status)status.textContent=`完了：${checked}店舗を確認 / ${updated}店舗を更新 ｜ ${detail} ｜ 70点未満 ${Number(b.under70||0).toLocaleString('ja-JP')}→${Number(a.under70||0).toLocaleString('ja-JP')} / 90点以上 ${Number(b.good90||0).toLocaleString('ja-JP')}→${Number(a.good90||0).toLocaleString('ja-JP')} ｜ ${capNote}`;
+      const crossed=d.crossed||{};
+      const avgGain=Number(d.average_score_gain||0);
+      const totalGain=Number(d.score_gain_total||0);
+      const detail=`実スコア上昇 ${updated}件 / 平均 +${avgGain.toFixed(1)}点 / 合計 +${totalGain}点 / 説明文 ${Number(f.description||0)} / 営業時間 ${Number(f.hours||0)} / 住所 ${Number(f.address||0)} / 電話 ${Number(f.phone||0)} / Instagram ${Number(f.instagram||0)} / 定休日 ${Number(f.holiday||0)} / 料金 ${Number(f.budget||0)} / 席数 ${Number(f.seats||0)} / ジャンル ${Number(f.genre||0)}`;
+      const crossing=`70点到達 ${Number(crossed.score70||0)}件 / 80点到達 ${Number(crossed.score80||0)}件 / 90点到達 ${Number(crossed.score90||0)}件`;
+      const capNote=d.reached_target?'20件の実スコア改善目標に到達':`確認上限 ${Number(d.max_checked||500)}件以内で終了`;
+      const dc=d.deficit_counts||{}; const dr=document.getElementById('promoDeficitResult');
+      if(dr)dr.textContent=`今回確認分：自動改善候補 ${Number(dc.auto_fixable||0)}店舗 / 内部情報だけでは補えない候補 ${Number(dc.blocked_only||0)}店舗。画像は実画像がない限り自動生成しません。`;
+      if(status)status.textContent=`完了：${checked}店舗を確認 ｜ ${detail} ｜ ${crossing} ｜ 70点未満 ${Number(b.under70||0).toLocaleString('ja-JP')}→${Number(a.under70||0).toLocaleString('ja-JP')} / 90点以上 ${Number(b.good90||0).toLocaleString('ja-JP')}→${Number(a.good90||0).toLocaleString('ja-JP')} ｜ ${capNote}`;
       await loadSeoMonitor();
     }catch(e){
       if(status)status.textContent='インデックス促進に失敗しました：'+(e?.message||e);
