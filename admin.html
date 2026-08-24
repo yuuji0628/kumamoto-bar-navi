@@ -3880,6 +3880,10 @@ html,body{max-width:100%;overflow-x:hidden}
       </div>
       <div id="todayEnrichFields" style="margin-top:8px;color:#7f8c98;font-size:.61rem;line-height:1.45">今日の補完内容を集計しています...</div>
       <div style="margin-top:5px;color:#6f7d89;font-size:.59rem;line-height:1.4">通常メンテナンス時にも、VERIFIED情報補完を8店舗ずつ3回に分けて自動実行します。</div>
+      <div style="margin-top:8px;padding-top:8px;border-top:1px solid #243846;font-size:.61rem;line-height:1.45">
+        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><b style="color:#7ee3b7">完全自動再確認</b><span id="autoRecheckEligible" style="color:#fff">確認中...</span></div>
+        <div id="autoRecheckNext" style="margin-top:4px;color:#7f8c98">クールダウン切れ候補を自動掲載枠ごとに再確認します。</div>
+      </div>
     </div>
   </div>
   <div style="margin-top:7px;color:#6f7d89;font-size:.61rem;line-height:1.5">※ Search Consoleの「検出 - インデックス未登録」URLを直接取得する機能ではありません。店舗情報の充実度と技術SEOを分けて監視し、推測情報で点数を水増ししません。</div>
@@ -11027,13 +11031,33 @@ document.addEventListener("DOMContentLoaded",()=>{
       const d=await api('/api/admin/info-enrich-daily-summary');
       const x=d.summary||{},f=x.fields||{};
       const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
-      set('todayEnrichRunCount',`${Number(x.runs||0)}回（手動 ${Number(x.manual_runs||0)} / メンテ ${Number(x.maintenance_runs||0)}）`);
+      set('todayEnrichRunCount',`${Number(x.runs||0)}回（手動 ${Number(x.manual_runs||0)} / メンテ ${Number(x.maintenance_runs||0)} / 自動再確認 ${Number(x.auto_recheck_runs||0)}）`);
       set('todayEnrichUpdated',`${Number(x.updated||0)}店舗`);
       set('todayEnrichGain',`+${Number(x.score_gain||0)}点`);
       set('todayEnrichChecked',`${Number(x.checked||0)}店舗`);
       set('todayEnrichFields',`電話 ${Number(f.phone||0)} / 画像 ${Number(f.image||0)} / 定休日 ${Number(f.holiday||0)} / 料金 ${Number(f.budget||0)} / Instagram ${Number(f.instagram||0)} / 営業時間 ${Number(f.hours||0)} / 住所 ${Number(f.address||0)} / 特徴 ${Number(f.features||0)} ｜ 更新店舗の平均 +${Number(x.average_gain||0).toFixed(1)}点`);
     }catch(e){
       const el=document.getElementById('todayEnrichFields');if(el)el.textContent='今日の補完集計を取得できませんでした: '+(e?.message||e);
+    }
+  }
+
+  async function loadAutoInfoRecheckStatus(){
+    try{
+      const d=await api('/api/admin/info-enrich-auto-status');
+      const x=d.status||{};
+      const eligible=document.getElementById('autoRecheckEligible');
+      const next=document.getElementById('autoRecheckNext');
+      if(eligible)eligible.textContent=`今すぐ再確認 ${Number(x.eligible_now||0)}店舗 / 候補 ${Number(x.total_candidates||0)}店舗`;
+      let nextText='次回候補時刻：待機なし';
+      if(x.next_retry_at){
+        const dt=new Date(String(x.next_retry_at).replace(' ','T')+'Z');
+        if(!Number.isNaN(dt.getTime()))nextText='次回再確認可能：'+dt.toLocaleString('ja-JP',{timeZone:'Asia/Tokyo',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+      }
+      const last=x.last_auto_recheck||null;
+      if(last)nextText+=` ｜ 前回自動：確認 ${Number(last.checked||0)} / 更新 ${Number(last.updated||0)} / SEO +${Number(last.score_gain||0)}点`;
+      if(next)next.textContent=nextText+' ｜ 自動掲載の各予約枠後に8店舗ずつ安全に自動再確認します。';
+    }catch(e){
+      const next=document.getElementById('autoRecheckNext');if(next)next.textContent='自動再確認状況を取得できませんでした: '+(e?.message||e);
     }
   }
 
@@ -11079,6 +11103,7 @@ document.addEventListener("DOMContentLoaded",()=>{
       if(status)status.textContent=`完了：${totalChecked}店舗を確認 / ${totalUpdated}店舗を更新 ｜ ${fieldText} ｜ SEO合計 +${totalGain}点 / 平均 +${avg.toFixed(1)}点 ｜ ${reasonText} ｜ ${queueText} ｜ ${stop}`;
       await loadSeoMonitor();
       await loadTodayInfoEnrichSummary();
+      await loadAutoInfoRecheckStatus();
     }catch(e){
       if(status)status.textContent='情報補完に失敗しました：'+(e?.message||e)+'。保存済みの優先キューは維持されるため、次回は未処理・再試行可能な候補から続けます。';
     }finally{
@@ -11094,6 +11119,7 @@ document.addEventListener("DOMContentLoaded",()=>{
     document.getElementById('checkStructuredDataBtn')?.addEventListener('click',checkStructuredData);
     loadSeoMonitor();
     loadTodayInfoEnrichSummary();
+    loadAutoInfoRecheckStatus();
   });
   window.loadSeoMonitor=loadSeoMonitor;
 })();
