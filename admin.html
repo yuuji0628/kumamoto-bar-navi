@@ -3826,6 +3826,24 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
   </div>
 
+<div id="kbnIndexPromotionCard" style="margin:0 0 14px;padding:15px;border:1px solid #3b4b5a;border-radius:16px;background:linear-gradient(180deg,#101923,#0b1219)">
+  <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
+    <div>
+      <span style="display:block;color:#efc45a;font-size:.67rem;font-weight:900;letter-spacing:.12em">INDEX PROMOTION</span>
+      <h3 style="margin:4px 0 4px;font-size:1.03rem">インデックス促進モード</h3>
+      <p style="margin:0;color:#9da9b5;font-size:.73rem;line-height:1.55">Googleに評価されやすい状態へ、SEOスコアの低い公開店舗から最大20店舗を優先改善します。</p>
+    </div>
+    <button type="button" id="runIndexPromotionBtn" style="border:1px solid #b88a2b;background:#2a2110;color:#f3ca63;border-radius:11px;padding:10px 13px;font-weight:900">促進 20店舗</button>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:12px">
+    <div style="padding:10px;border-radius:11px;background:#101b24"><small style="display:block;color:#85929e">最優先</small><b id="indexPromoUnder70" style="font-size:1.15rem;color:#ff9a7d">—</b><small style="display:block;color:#73818d">70点未満</small></div>
+    <div style="padding:10px;border-radius:11px;background:#101b24"><small style="display:block;color:#85929e">次に改善</small><b id="indexPromo70s" style="font-size:1.15rem;color:#efc45a">—</b><small style="display:block;color:#73818d">70〜79点</small></div>
+    <div style="padding:10px;border-radius:11px;background:#101b24"><small style="display:block;color:#85929e">仕上げ</small><b id="indexPromo80s" style="font-size:1.15rem;color:#b7d983">—</b><small style="display:block;color:#73818d">80〜89点</small></div>
+  </div>
+  <div id="indexPromotionStatus" style="margin-top:10px;color:#9da9b5;font-size:.69rem;line-height:1.5">70点未満 → 70点台 → 80点台の順で、90点以上を目標に改善します。</div>
+  <div style="margin-top:7px;color:#6f7d89;font-size:.61rem;line-height:1.5">※ Search Consoleの「検出 - インデックス未登録」URLを直接取得する機能ではありません。サイト側のSEO準備度を使って、登録されやすいページから優先的に底上げします。</div>
+</div>
+
 <div class="kbn-seo-monitor-card" id="kbnSeoMonitorCard">
       <div class="kbn-seo-monitor-head">
         <div>
@@ -10882,6 +10900,7 @@ document.addEventListener("DOMContentLoaded",()=>{
       n('seoDescriptionCount',m.description); n('seoDescriptionGood',m.description_good); n('seoDescriptionMid',m.description_mid); n('seoAddressCount',m.address); n('seoHoursCount',m.hours); n('seoGenreCount',m.genre); n('seoImageCount',m.image); n('seoImageGood',m.image_good);
       const avg=document.getElementById('seoAverageScore'); if(avg)avg.textContent=Number(s.average_score||0).toFixed(1);
       n('seoScore90',s.score_90_plus); n('seoScore80',s.score_80s); n('seoScore70',s.score_70s); n('seoScoreUnder70',s.score_under70);
+      n('indexPromoUnder70',s.score_under70); n('indexPromo70s',s.score_70s); n('indexPromo80s',s.score_80s);
       const low=document.getElementById('seoLowestList');
       if(low){
         const rows=Array.isArray(d.lowest)?d.lowest:[];
@@ -10931,9 +10950,25 @@ document.addEventListener("DOMContentLoaded",()=>{
       if(btn){btn.disabled=false;btn.textContent='改善失敗・再試行';}
     }
   }
+  async function runIndexPromotion(){
+    const btn=document.getElementById('runIndexPromotionBtn');
+    const status=document.getElementById('indexPromotionStatus');
+    if(btn){btn.disabled=true;btn.textContent='促進中...';}
+    if(status)status.textContent='低スコア店舗から最大20店舗を確認・改善しています...';
+    try{
+      const d=await api('/api/admin/index-promotion',{method:'POST'});
+      const updated=Number(d.updated_count||0),checked=Number(d.checked||0);
+      const b=d.before||{},a=d.after||{};
+      if(status)status.textContent=`完了：${checked}店舗を確認 / ${updated}店舗を更新　｜ 70点未満 ${Number(b.under70||0).toLocaleString('ja-JP')}→${Number(a.under70||0).toLocaleString('ja-JP')} / 90点以上 ${Number(b.good90||0).toLocaleString('ja-JP')}→${Number(a.good90||0).toLocaleString('ja-JP')}`;
+      await loadSeoMonitor();
+    }catch(e){
+      if(status)status.textContent='インデックス促進に失敗しました：'+(e?.message||e);
+    }finally{if(btn){btn.disabled=false;btn.textContent='促進 20店舗';}}
+  }
   document.addEventListener('DOMContentLoaded',()=>{
     document.getElementById('reloadSeoMonitorBtn')?.addEventListener('click',loadSeoMonitor);
     document.getElementById('improveLowSeoBtn')?.addEventListener('click',improveLowSeo);
+    document.getElementById('runIndexPromotionBtn')?.addEventListener('click',runIndexPromotion);
     document.getElementById('checkStructuredDataBtn')?.addEventListener('click',checkStructuredData);
     loadSeoMonitor();
   });
