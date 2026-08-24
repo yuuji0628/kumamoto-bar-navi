@@ -1,4 +1,4 @@
-<!-- KBN v3.10: 自動開拓 重複判定改善＋拡張探索 -->
+<!-- KBN v3.11: 自動開拓 小分けバッチ＋503自動復旧＋続きから再開 -->
 <!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>KBN運営管理</title><link rel="stylesheet" href="style.css">
 <style>
 .owner-photo-preview{
@@ -4274,7 +4274,7 @@ html,body{max-width:100%;overflow-x:hidden}
       <p class="lead-smart-helper">県内を順番に検索し、重複を避けながら高精度で自動掲載します。</p>
       <button type="button" id="autoDiscoverBtn" class="btn-gold lead-smart-primary">Google優先で高精度自動掲載</button>
       <div style="margin-top:8px;color:#f1c75b;font-weight:800;font-size:.82rem">1回の実行で最大100店舗まで自動掲載</div>
-      <div style="margin-top:4px;color:#9ca7b3;font-size:.72rem">繁華街・町名単位まで120検索。通常判定で新規が見つからない場合は後半を自動で「拡張探索」に切替。重複は店名だけ・住所だけでは落とさず、電話/Instagram一致または店名＋住所一致で判定します。居酒屋・温泉・通常カラオケ店は引き続き除外します。</div>
+      <div style="margin-top:4px;color:#9ca7b3;font-size:.72rem">繁華街・町名単位まで120検索。2検索ずつ小分け保存し、503/通信エラー時は30秒〜3分の自動クールダウン後に続きから再開します。画面を再読み込みしても未完了なら自動復帰します。通常判定で新規が見つからない場合は後半を自動で「拡張探索」に切替。重複は店名だけ・住所だけでは落とさず、電話/Instagram一致または店名＋住所一致で判定します。</div>
       <div id="autoDiscoverStatus" class="auto-discovery-status"></div>
       <div id="autoDiscoverProgress" class="kbn-work-progress" hidden>
         <div class="kbn-work-progress-head"><b>自動開拓の進捗</b><strong id="autoProgressPct">0%</strong></div>
@@ -8931,30 +8931,48 @@ window.refreshExistingIndependentListings=async function(){
   }
 };
 
-window.runAutoDiscovery=async function(){
+window.runAutoDiscovery=async function(options={}){
   const btn=$("autoDiscoverBtn"), status=$("autoDiscoverStatus");
   const progress=$("autoDiscoverProgress");
-  if(!confirm("Google Placesを優先して、県内のBAR候補を順番に検索・照合して自動掲載します。\n\n一度に負荷をかけすぎない安全なバッチ方式で実行します。開始しますか？"))return;
+  const resume=!!options.resume;
+  const STORAGE_KEY="kbn_auto_discovery_resume_v311";
+
+  if(!resume && !confirm("Google Placesを優先して、県内のBAR候補を順番に検索・照合して自動掲載します。\n\n2検索ずつ小分け保存し、503時は自動で休止→続きから再開します。開始しますか？"))return;
 
   btn.disabled=true;
-  btn.textContent="自動開拓中...";
+  btn.textContent=resume?"自動開拓を再開中...":"自動開拓中...";
   if(progress)progress.hidden=false;
 
   const totalSteps=120;
-  const batchSize=3;
+  const batchSize=2;
   const maxListings=100;
-  const maxRetries=4;
-  let completed=0;
-  let createdTotal=[];
-  let searchedTotal=[];
-  let rejectedTotal=0;
-  let rawTotal=0;
-  let barTotal=0;
-  let errors=0;
-  let rejectSummary={};
-  let discoveryMode="normal";
-
+  const maxRetries=2;
   const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+
+  let saved=null;
+  try{ saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||"null"); }catch{}
+  if(!resume || !saved || !saved.active){ saved=null; }
+
+  let completed=Number(saved?.completed||0);
+  let createdTotal=Array.isArray(saved?.createdTotal)?saved.createdTotal:[];
+  let searchedTotal=Array.isArray(saved?.searchedTotal)?saved.searchedTotal:[];
+  let rejectedTotal=Number(saved?.rejectedTotal||0);
+  let rawTotal=Number(saved?.rawTotal||0);
+  let barTotal=Number(saved?.barTotal||0);
+  let errors=Number(saved?.errors||0);
+  let rejectSummary=(saved?.rejectSummary&&typeof saved.rejectSummary==="object")?saved.rejectSummary:{};
+  let discoveryMode=String(saved?.discoveryMode||"normal")==="expanded"?"expanded":"normal";
+  let recoveryCycles=Number(saved?.recoveryCycles||0);
+
+  const saveState=()=>{
+    try{
+      localStorage.setItem(STORAGE_KEY,JSON.stringify({
+        active:true,completed,createdTotal,searchedTotal,rejectedTotal,rawTotal,barTotal,errors,
+        rejectSummary,discoveryMode,recoveryCycles,updatedAt:Date.now()
+      }));
+    }catch{}
+  };
+  const clearState=()=>{ try{localStorage.removeItem(STORAGE_KEY)}catch{} };
 
   const updateProgress=(current="準備中...")=>{
     const pct=Math.min(100,Math.round((completed/totalSteps)*100));
@@ -8969,27 +8987,19 @@ window.runAutoDiscovery=async function(){
   const runBatch=async(pairLimit,retry=0)=>{
     try{
       return await api("/api/admin/leads/auto-discover",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
+        method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({
-          max_listings:Math.min(6,maxListings-createdTotal.length),
-          pair_limit:pairLimit,
-          per_pair_limit:3,
-          discovery_mode:discoveryMode
+          max_listings:Math.min(5,maxListings-createdTotal.length),
+          pair_limit:pairLimit,per_pair_limit:2,discovery_mode:discoveryMode
         })
       });
     }catch(e){
       const msg=String(e?.message||e||"UNKNOWN_ERROR");
-      const retryable=/HTTP_50[0234]|NON_JSON_RESPONSE|network|fetch/i.test(msg);
+      const retryable=/HTTP_50[0234]|NON_JSON_RESPONSE|network|fetch|timeout/i.test(msg);
       if(retryable && retry<maxRetries){
-        const waits=[2500,5000,8000,12000];
-        const wait=waits[Math.min(retry,waits.length-1)];
-        if(status){
-          status.innerHTML=
-            `<b>一時的な503/通信エラーを検知しました。自動で復旧を試します。</b><br>`+
-            `<small>${Math.round(wait/1000)}秒休止 → 再試行 ${retry+1}/${maxRetries}</small>`;
-        }
-        updateProgress(`サーバー負荷を下げています… 再試行 ${retry+1}/${maxRetries}`);
+        const wait=[4000,8000][Math.min(retry,1)];
+        if(status)status.innerHTML=`<b>一時的な503/通信エラーです。短時間の再試行を行います。</b><br><small>${Math.round(wait/1000)}秒休止 → 再試行 ${retry+1}/${maxRetries}</small>`;
+        updateProgress(`短時間待機… 再試行 ${retry+1}/${maxRetries}`);
         await sleep(wait);
         return runBatch(pairLimit,retry+1);
       }
@@ -8997,31 +9007,36 @@ window.runAutoDiscovery=async function(){
     }
   };
 
-  updateProgress("Google Placesへの検索を開始しています...");
-  if(status)status.textContent="自動開拓を開始しました。120検索を未開拓の地区・町名から3検索ずつ安全に処理します。503時は自動で1検索モードへ切り替えます。";
+  updateProgress(resume?`前回の${completed}/${totalSteps}検索から自動再開します…`:"Google Placesへの検索を開始しています...");
+  if(status)status.textContent=resume
+    ? `前回の${completed}/${totalSteps}検索・${createdTotal.length}店舗掲載から自動再開しました。`
+    : "自動開拓を開始しました。120検索を2検索ずつ小分け保存します。503時は自動クールダウン後に続きから再開します。";
+  saveState();
 
   try{
     while(completed<totalSteps && createdTotal.length<maxListings){
       const remainingSteps=totalSteps-completed;
       const pairLimit=Math.min(batchSize,remainingSteps);
+      let d=null;
 
-      let d;
       try{
         d=await runBatch(pairLimit);
+        recoveryCycles=0;
       }catch(batchError){
         const msg=String(batchError?.message||batchError||"UNKNOWN_ERROR");
-        const retryable=/HTTP_50[0234]|NON_JSON_RESPONSE|network|fetch/i.test(msg);
+        const retryable=/HTTP_50[0234]|NON_JSON_RESPONSE|network|fetch|timeout/i.test(msg);
         if(!retryable)throw batchError;
 
-        // 3検索でも503が続く場合は、1検索だけに落として自動継続。
-        if(status){
-          status.innerHTML=
-            `<b>サーバー負荷を検知したため、1検索モードへ自動切替します。</b><br>`+
-            `<small>${completed}/${totalSteps}検索まで保存済み。停止せず続行します。</small>`;
-        }
-        updateProgress(`負荷回避モード：1検索ずつ続行`);
-        await sleep(5000);
-        d=await runBatch(1);
+        // 長めのクールダウン。ここでは処理を終了せず同じ進捗から自動復旧する。
+        recoveryCycles++;
+        saveState();
+        const wait=Math.min(180000,30000*Math.pow(2,Math.min(recoveryCycles-1,3)));
+        if(status)status.innerHTML=
+          `<b>一時的な503/通信エラーを検知しました。掲載済みデータは保存済みです。</b><br>`+
+          `<small>${completed}/${totalSteps}検索・${createdTotal.length}店舗掲載から、${Math.round(wait/1000)}秒後に自動再開します（復旧待ち ${recoveryCycles}回目）。</small>`;
+        updateProgress(`自動復旧待ち ${Math.round(wait/1000)}秒… ${completed}/${totalSteps}検索まで保存済み`);
+        await sleep(wait);
+        continue;
       }
 
       const c=Array.isArray(d.created)?d.created:[];
@@ -9030,23 +9045,16 @@ window.runAutoDiscovery=async function(){
       searchedTotal.push(...rows);
       rejectedTotal+=Number(d.rejected_count||0);
       if(d.reject_summary&&typeof d.reject_summary==="object"){
-        for(const [k,v] of Object.entries(d.reject_summary)){
-          rejectSummary[k]=(rejectSummary[k]||0)+Number(v||0);
-        }
+        for(const [k,v] of Object.entries(d.reject_summary)) rejectSummary[k]=(rejectSummary[k]||0)+Number(v||0);
       }
-
       for(const r of rows){
-        rawTotal+=Number(r.raw_found||0);
-        barTotal+=Number(r.google_found||0);
+        rawTotal+=Number(r.raw_found||0); barTotal+=Number(r.google_found||0);
         if(!r.ok||r.error)errors++;
       }
 
-      // 実際に処理された検索数を進捗へ反映。
       const doneNow=Math.max(1,rows.length||pairLimit);
       completed=Math.min(totalSteps,completed+doneNow);
 
-      // 前半で新規0件なら、後半は検索語と採用判定を少し広げた第2パスへ自動切替。
-      // BAR根拠・熊本県内確認・非BAR除外は維持する。
       if(discoveryMode==="normal" && createdTotal.length===0 && completed>=45){
         discoveryMode="expanded";
         if(status)status.innerHTML=`<b>新規0件が続いたため拡張探索へ切り替えます。</b><br><small>重複判定を店舗単位にし、Googleで確認できるBAR候補をさらに探索します。</small>`;
@@ -9054,85 +9062,55 @@ window.runAutoDiscovery=async function(){
 
       const last=rows[rows.length-1]||{};
       const label=[last.area,last.type].filter(Boolean).join(" / ");
-      updateProgress(
-        label
-          ? `${label} まで完了｜${completed}/${totalSteps}検索`
-          : `${completed}/${totalSteps}検索完了`
-      );
+      updateProgress(label?`${label} まで完了｜${completed}/${totalSteps}検索`:`${completed}/${totalSteps}検索完了`);
+      if(status)status.innerHTML=
+        `<b>${completed}/${totalSteps}検索完了・${createdTotal.length}店舗掲載</b><br>`+
+        `<small>Google生ヒット:${rawTotal} / BAR候補:${barTotal} / エラー:${errors} / ${discoveryMode==="expanded"?"拡張探索":"通常探索"} / 2検索ずつ保存</small>`;
 
-      if(status){
-        status.innerHTML=
-          `<b>${completed}/${totalSteps}検索完了・${createdTotal.length}店舗掲載</b><br>`+
-          `<small>Google生ヒット:${rawTotal} / BAR候補:${barTotal} / エラー:${errors} / ${discoveryMode==="expanded"?"拡張探索":"通常探索"}</small>`;
-      }
-
-      // Cloudflare / Google Placesへの連続負荷を避ける。
-      if(completed<totalSteps && createdTotal.length<maxListings){
-        await sleep(900);
-      }
+      saveState();
+      if(completed<totalSteps && createdTotal.length<maxListings) await sleep(1800);
     }
 
-    if(createdTotal.length>=maxListings){
-      completed=totalSteps;
-      updateProgress("自動掲載上限100店舗に到達しました。");
-    }else if(completed>=totalSteps){
-      updateProgress("自動開拓が完了しました。");
-    }
+    clearState();
+    if(createdTotal.length>=maxListings){ completed=totalSteps; updateProgress("自動掲載上限100店舗に到達しました。"); }
+    else if(completed>=totalSteps) updateProgress("自動開拓が完了しました。");
 
     const createdNames=createdTotal.slice(0,12).map(x=>esc(x.name||"")).join("<br>");
-    const rejectLabels={
-      DUPLICATE_EARLY:"既存店重複(早期)",DUPLICATE:"既存店重複",
-      DELETED_HISTORY_EARLY:"削除済み履歴",DELETED_HISTORY:"削除済み履歴",
-      OUTSIDE_KUMAMOTO:"県外",HARD_NON_BAR:"非BAR業態",
-      NO_EXPLICIT_BAR_SIGNAL:"BAR根拠不足",LOW_CONFIDENCE:"一致情報不足"
-    };
-    const rejectDetail=Object.entries(rejectSummary)
-      .sort((x,y)=>Number(y[1])-Number(x[1])).slice(0,8)
-      .map(([k,v])=>`${esc(rejectLabels[k]||k)}:${Number(v||0)}件`).join(" / ");
-    if(status){
-      status.innerHTML=
-        `<b>${createdTotal.length}店舗をKBN独自掲載しました。</b><br>`+
-        `Google検索：${searchedTotal.length}組<br>`+
-        `Google生ヒット 合計：${rawTotal}件<br>`+
-        `BAR判定後：${barTotal}件<br>`+
-        `APIエラー：${errors}件<br>`+
-        `重複・除外：${rejectedTotal}件`+
-        (rejectDetail?`<br><small>除外内訳：${rejectDetail}</small>`:"")+
-        (discoveryMode==="expanded"?`<br><small>第2パス：拡張探索を実行済み</small>`:"")+
-        (createdNames?`<br><br><small>${createdNames}</small>`:"");
-    }
+    const rejectLabels={DUPLICATE_EARLY:"既存店重複(早期)",DUPLICATE:"既存店重複",DELETED_HISTORY_EARLY:"削除済み履歴",DELETED_HISTORY:"削除済み履歴",OUTSIDE_KUMAMOTO:"県外",HARD_NON_BAR:"非BAR業態",NO_EXPLICIT_BAR_SIGNAL:"BAR根拠不足",LOW_CONFIDENCE:"一致情報不足"};
+    const rejectDetail=Object.entries(rejectSummary).sort((x,y)=>Number(y[1])-Number(x[1])).slice(0,8).map(([k,v])=>`${esc(rejectLabels[k]||k)}:${Number(v||0)}件`).join(" / ");
+    if(status)status.innerHTML=
+      `<b>${createdTotal.length}店舗をKBN独自掲載しました。</b><br>`+
+      `Google検索：${searchedTotal.length}組<br>Google生ヒット 合計：${rawTotal}件<br>BAR判定後：${barTotal}件<br>APIエラー：${errors}件<br>重複・除外：${rejectedTotal}件`+
+      (rejectDetail?`<br><small>除外内訳：${rejectDetail}</small>`:"")+
+      (discoveryMode==="expanded"?`<br><small>第2パス：拡張探索を実行済み</small>`:"")+
+      `<br><small>503対策：2検索ずつ保存＋自動クールダウン復旧</small>`+
+      (createdNames?`<br><br><small>${createdNames}</small>`:"");
 
-    if(createdTotal.length){
-      alert(`${createdTotal.length}店舗をKBN独自掲載しました。`);
-    }else{
-      alert("今回は新規掲載0件でした。画面に除外理由の内訳を表示しています。次回の探索改善に使えます。");
-    }
-
-    await Promise.allSettled([
-      typeof loadAutoListedShops==="function"?loadAutoListedShops():Promise.resolve(),
-      typeof loadShops==="function"?loadShops():Promise.resolve(),
-      typeof loadAlerts==="function"?loadAlerts():Promise.resolve()
-    ]);
-
+    alert(createdTotal.length?`${createdTotal.length}店舗をKBN独自掲載しました。`:"今回は新規掲載0件でした。画面に除外理由の内訳を表示しています。");
+    await Promise.allSettled([typeof loadAutoListedShops==="function"?loadAutoListedShops():Promise.resolve(),typeof loadShops==="function"?loadShops():Promise.resolve(),typeof loadAlerts==="function"?loadAlerts():Promise.resolve()]);
   }catch(e){
     console.error("auto discovery failed",e);
+    saveState();
     const msg=e?.message||"UNKNOWN_ERROR";
-    if(status){
-      status.innerHTML=
-        `<b>自動開拓を途中で停止しました。</b><br>`+
-        `<small>${completed}/${totalSteps}検索・${createdTotal.length}店舗掲載まで保存済みです。<br>${esc(msg)}</small>`;
-    }
-    updateProgress(`途中停止：${completed}/${totalSteps}検索まで完了`);
-    alert(
-      `自動開拓を途中で停止しました。\n\n`+
-      `${completed}/${totalSteps}検索・${createdTotal.length}店舗掲載までは保存されています。\n`+
-      `通信が安定してから再実行してください。`
-    );
+    if(status)status.innerHTML=`<b>自動開拓を一時停止しました。</b><br><small>${completed}/${totalSteps}検索・${createdTotal.length}店舗掲載まで保存済みです。ページ再読込後も自動で続きから復帰します。<br>${esc(msg)}</small>`;
+    updateProgress(`一時停止：${completed}/${totalSteps}検索まで保存済み`);
+    alert(`自動開拓を一時停止しました。\n\n${completed}/${totalSteps}検索・${createdTotal.length}店舗掲載までは保存されています。\nページを開いたままなら自動復旧、再読み込みしても続きから自動再開します。`);
   }finally{
-    btn.disabled=false;
-    btn.textContent="Google優先で高精度自動掲載";
+    btn.disabled=false; btn.textContent="Google優先で高精度自動掲載";
   }
 };
+
+// v3.11: 通信障害やページ再読込で未完了の自動開拓が残っていたら、自動で続きから復帰。
+setTimeout(()=>{
+  try{
+    const st=JSON.parse(localStorage.getItem("kbn_auto_discovery_resume_v311")||"null");
+    if(st?.active && Number(st.completed||0)<120 && Number(st?.createdTotal?.length||0)<100){
+      const status=$("autoDiscoverStatus");
+      if(status)status.innerHTML=`<b>未完了の自動開拓を検出しました。</b><br><small>${Number(st.completed||0)}/120検索から自動で続行します。</small>`;
+      window.runAutoDiscovery?.({resume:true});
+    }
+  }catch(e){ console.warn("auto discovery resume state read failed",e); }
+},5000);
 
 window.searchLeadsInAdmin=async function({append=false}={}){
   const area=String($("leadSearchArea")?.value||"熊本").trim()||"熊本";
