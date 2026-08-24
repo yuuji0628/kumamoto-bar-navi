@@ -1334,7 +1334,7 @@ async function kbnMaintenanceQueueStatusV257(env){
   try{
     await ensureKbnMaintenanceQueueV242(env);
     const q=await env.DB.prepare(`
-      SELECT phase,run_date,created_total,updated_at
+      SELECT phase,run_date,created_total,discovery_searched,discovery_mode,discovery_retry_count,discovery_retry_after,updated_at
       FROM kbn_maintenance_queue
       WHERE id=1
     `).first();
@@ -1361,8 +1361,12 @@ async function kbnMaintenanceQueueStatusV257(env){
         stage:"discovery",
         created_total:createdTotal,
         // phase 11 is queued batch #2 because batch #1 ran at the scheduled minute.
-        discovery_batch:Math.min(40,Math.max(1,phase-9)),
-        discovery_batches_total:40,
+        discovery_batch:Math.min(39,Math.max(1,phase-10)),
+        discovery_batches_total:60,
+        discovery_searched:Math.max(0,Number(q?.discovery_searched||0)),
+        discovery_mode:String(q?.discovery_mode||'normal'),
+        discovery_retry_count:Math.max(0,Number(q?.discovery_retry_count||0)),
+        discovery_retry_after:String(q?.discovery_retry_after||''),
         run_date:q?.run_date||"",
         updated_at:q?.updated_at||""
       };
@@ -7006,6 +7010,10 @@ async function ensureKbnMaintenanceQueueV242(env){
       phase INTEGER NOT NULL DEFAULT 0,
       run_date TEXT,
       created_total INTEGER NOT NULL DEFAULT 0,
+      discovery_searched INTEGER NOT NULL DEFAULT 0,
+      discovery_mode TEXT NOT NULL DEFAULT 'normal',
+      discovery_retry_count INTEGER NOT NULL DEFAULT 0,
+      discovery_retry_after TEXT,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `).run();
@@ -7017,6 +7025,10 @@ async function ensureKbnMaintenanceQueueV242(env){
     if(!names.has("created_total")){
       await env.DB.prepare("ALTER TABLE kbn_maintenance_queue ADD COLUMN created_total INTEGER NOT NULL DEFAULT 0").run();
     }
+    if(!names.has("discovery_searched")) await env.DB.prepare("ALTER TABLE kbn_maintenance_queue ADD COLUMN discovery_searched INTEGER NOT NULL DEFAULT 0").run();
+    if(!names.has("discovery_mode")) await env.DB.prepare("ALTER TABLE kbn_maintenance_queue ADD COLUMN discovery_mode TEXT NOT NULL DEFAULT 'normal'").run();
+    if(!names.has("discovery_retry_count")) await env.DB.prepare("ALTER TABLE kbn_maintenance_queue ADD COLUMN discovery_retry_count INTEGER NOT NULL DEFAULT 0").run();
+    if(!names.has("discovery_retry_after")) await env.DB.prepare("ALTER TABLE kbn_maintenance_queue ADD COLUMN discovery_retry_after TEXT").run();
   }catch(e){
     const msg=String(e?.message||e||"");
     if(!/duplicate column/i.test(msg))throw e;
@@ -7024,16 +7036,13 @@ async function ensureKbnMaintenanceQueueV242(env){
 }
 async function kbnQueueMaintenanceV242(env,runDate,initialCreated=0){
   await ensureKbnMaintenanceQueueV242(env);
-  // v2.89: 通常メンテナンス枠の新規掲載は、この直前に実行した最大20店舗だけ。
-  // 追加の自動開拓キューは作らず、そのまま既存店メンテナンスへ進む。
+  // v4.12: 通常メンテナンスの新規開拓も、別Worker invocationの小分けキューで開始。
   await env.DB.prepare(`
-    INSERT INTO kbn_maintenance_queue(id,phase,run_date,created_total,updated_at)
-    VALUES(1,1,?,?,CURRENT_TIMESTAMP)
+    INSERT INTO kbn_maintenance_queue(id,phase,run_date,created_total,discovery_searched,discovery_mode,discovery_retry_count,discovery_retry_after,updated_at)
+    VALUES(1,11,?,?,0,'normal',0,NULL,CURRENT_TIMESTAMP)
     ON CONFLICT(id) DO UPDATE SET
-      phase=1,
-      run_date=excluded.run_date,
-      created_total=excluded.created_total,
-      updated_at=CURRENT_TIMESTAMP
+      phase=11,run_date=excluded.run_date,created_total=excluded.created_total,
+      discovery_searched=0,discovery_mode='normal',discovery_retry_count=0,discovery_retry_after=NULL,updated_at=CURRENT_TIMESTAMP
   `).bind(String(runDate||""),Math.max(0,Number(initialCreated)||0)).run();
 }
 async function kbnQueueAutoInfoRecheckV405(env,runDate=''){
@@ -7051,28 +7060,65 @@ async function kbnQueueAutoInfoRecheckV405(env,runDate=''){
 async function kbnProcessQueuedMaintenanceV242(env){
   await ensureKbnMaintenanceQueueV242(env);
   const q=await env.DB.prepare(`
-    SELECT phase,run_date,created_total,updated_at FROM kbn_maintenance_queue WHERE id=1
+    SELECT phase,run_date,created_total,discovery_searched,discovery_mode,discovery_retry_count,discovery_retry_after,updated_at FROM kbn_maintenance_queue WHERE id=1
   `).first();
 
   const phase=Number(q?.phase||0);
   let createdTotal=Math.max(0,Number(q?.created_total||0));
   if(!phase)return {ok:true,processed:false};
 
-  // v2.89: 旧バージョンで残っている追加自動開拓キュー(phase 11〜49)は廃止。
-  // 新規掲載は通常メンテナンス開始時の最大20店舗だけにして、既存店チェックへ移行する。
+  // v4.12: 通常メンテナンスの自動開拓を小分け・保存・自動再開。
+  // 1 invocation = 最大2検索。503/通信エラー時は状態を残して次のCronで再試行する。
   if(phase>=11 && phase<=49){
-    await env.DB.prepare(`
-      UPDATE kbn_maintenance_queue
-      SET phase=1,updated_at=CURRENT_TIMESTAMP
-      WHERE id=1
-    `).run();
-    return {
-      ok:true,processed:true,phase,
-      task:"discovery",
-      discovery_skipped:true,
-      reason:"MAINTENANCE_DISCOVERY_LIMIT_20",
-      created_total:createdTotal
-    };
+    const searchedTotal=Math.max(0,Number(q?.discovery_searched||0));
+    const mode=String(q?.discovery_mode||'normal')==='expanded'?'expanded':'normal';
+    const retryCount=Math.max(0,Number(q?.discovery_retry_count||0));
+    const retryAfter=String(q?.discovery_retry_after||'');
+    if(retryAfter){
+      const t=Date.parse(retryAfter.endsWith('Z')?retryAfter:retryAfter.replace(' ','T')+'Z');
+      if(Number.isFinite(t) && Date.now()<t){
+        return {ok:true,processed:true,phase,task:'discovery_wait',waiting:true,created_total:createdTotal,searched_total:searchedTotal,retry_after:retryAfter};
+      }
+    }
+    const target=20,maxSearches=120;
+    if(createdTotal>=target || searchedTotal>=maxSearches){
+      await env.DB.prepare(`UPDATE kbn_maintenance_queue SET phase=1,discovery_retry_count=0,discovery_retry_after=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=1`).run();
+      return {ok:true,processed:true,phase,task:'discovery_complete',created_total:createdTotal,searched_total:searchedTotal};
+    }
+    const fakeRequest=new Request('https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/api/internal/maintenance-discovery-batch');
+    try{
+      const remaining=Math.max(1,target-createdTotal);
+      const result=await autoDiscover(env,fakeRequest,remaining,2,2,true,mode);
+      const created=Array.isArray(result?.created)?result.created:[];
+      const searched=Array.isArray(result?.searched)?result.searched:[];
+      const nextCreated=Math.min(target,createdTotal+created.length);
+      const nextSearched=Math.min(maxSearches,searchedTotal+Math.max(1,searched.length||2));
+      let nextMode=mode;
+      if(nextMode==='normal' && nextCreated===0 && nextSearched>=45) nextMode='expanded';
+      const done=nextCreated>=target || nextSearched>=maxSearches;
+      await env.DB.prepare(`
+        UPDATE kbn_maintenance_queue
+        SET phase=?,created_total=?,discovery_searched=?,discovery_mode=?,discovery_retry_count=0,discovery_retry_after=NULL,updated_at=CURRENT_TIMESTAMP
+        WHERE id=1
+      `).bind(done?1:Math.min(49,phase+1),nextCreated,nextSearched,nextMode).run();
+      if(created.length){
+        try{await notifyCreatedShops(env,created,'通常メンテナンス自動開拓')}catch{}
+        try{await kbnSendNewListingDigest(env,created)}catch{}
+      }
+      return {ok:true,processed:true,phase,task:'discovery',created:created.length,created_total:nextCreated,searched:searched.length,searched_total:nextSearched,discovery_mode:nextMode,done};
+    }catch(e){
+      const msg=String(e?.message||e||'');
+      const isTransient=/503|temporar|timeout|fetch failed|connection|communication|rate|too many/i.test(msg);
+      if(isTransient){
+        const nextRetry=Math.min(4,retryCount+1);
+        const delays=[30,60,120,180];
+        const delay=delays[nextRetry-1]||180;
+        const retryIso=new Date(Date.now()+delay*1000).toISOString();
+        await env.DB.prepare(`UPDATE kbn_maintenance_queue SET discovery_retry_count=?,discovery_retry_after=?,updated_at=CURRENT_TIMESTAMP WHERE id=1`).bind(nextRetry,retryIso).run();
+        return {ok:false,processed:true,phase,task:'discovery_retry',temporary:true,error:msg,retry_count:nextRetry,retry_after:retryIso,created_total:createdTotal,searched_total:searchedTotal};
+      }
+      throw e;
+    }
   }
 
   // v4.04: 通常メンテナンスの最後に、公開情報で確認できる店舗情報補完も小分けで自動実行。
@@ -7308,28 +7354,17 @@ async function enrichScheduledCreatedShops(env,created=[]){
 // KBN scheduled maintenance v1.81:
  // target 15 listings, multi-pass discovery + image + Instagram enrichment
 async function runScheduledKbnMaintenance(env){
-  // v2.89:
-  // 選択した通常メンテナンス回でも、まず新規掲載を最大20店舗まで実行。
-  // その後は追加の自動開拓を行わず、情報不足20件 → 閉業20件 → Instagram20件 → 対象外候補チェックへ進む。
-  const discoveryResult=await runScheduledKbnAutoDiscoveryOnly(env);
-
+  // v4.12: 通常メンテナンスも最初の自動開拓から完全に別invocationへ分離。
+  // この予約分ではキューを作るだけ。次の毎分Cronから2検索ずつ進み、20店舗または120検索で既存店メンテへ移行する。
   const now=new Date(Date.now()+9*60*60*1000);
   const runDate=`${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,"0")}-${String(now.getUTCDate()).padStart(2,"0")}`;
-  await kbnQueueMaintenanceV242(env,runDate,Number(discoveryResult?.discovery?.created?.length||0));
-
+  await kbnQueueMaintenanceV242(env,runDate,0);
   await createKbnAlert(env,{
-    type:"scheduled_summary",
-    title:"予約メンテナンス開始",
-    message:"新規掲載を最大20店舗まで実行した後、情報不足20店舗 → SEO改善20店舗 → 閉業20店舗 → Instagram20店舗 → 対象外候補チェック → VERIFIED情報補完（8店舗×3回）を順番に実行します。"
+    type:'scheduled_summary',
+    title:'予約メンテナンス開始',
+    message:'自動開拓を2検索ずつ小分け保存し、503時は自動待機・続きから再開します。最大20店舗または120検索で、情報不足 → SEO改善 → 閉業 → Instagram → 対象外候補 → VERIFIED補完へ自動移行します。'
   });
-
-  return {
-    ...discoveryResult,
-    maintenance_queued:true,
-    maintenance_batch_size:20,
-    discovery_batches:1,
-    discovery_target_max:20
-  };
+  return {discovery:{ok:true,created:[],searched:[],queued:true,target:20,max_searches:120},maintenance_queued:true,maintenance_batch_size:20,discovery_batches:'resumable'};
 }
 
 
