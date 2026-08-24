@@ -21,7 +21,13 @@
     .public-hero h1 em{color:#f3d77d;font-style:normal}
     .public-kicker{margin:0 0 7px;color:#e4bb55;font-size:10px;font-weight:900;letter-spacing:.18em}
     @media(max-width:700px){.public-hero-inner{padding:72px 0 58px}.public-hero h1{font-size:clamp(36px,11vw,48px);line-height:1.12}}
-  </style>
+  
+/* Accessibility contrast refinement: keep muted labels readable at WCAG AA small-text contrast */
+.public-hero [class*="meta"],
+.public-hero [class*="note"],
+.public-hero [class*="sub"],
+#barCards .kbn-featured-note-v289{color:rgba(238,243,248,.78)!important;}
+</style>
   <link rel="preload" href="style.css?v=210" as="style"><link rel="stylesheet" href="style.css?v=210">
   <script type="application/ld+json">
 {
@@ -343,7 +349,7 @@
   gap:8px;
   padding-top:4px;
   border-top:1px solid rgba(255,255,255,.055);
-  color:rgba(225,233,242,.45);
+  color:rgba(225,233,242,.72);
   font-size:6px;
   line-height:1;
   letter-spacing:.035em;
@@ -530,7 +536,7 @@
   display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 14px;border-radius:999px;text-decoration:none;
   background:#efc45a;color:#111;font-weight:900;white-space:nowrap;
 }
-#barCards .kbn-featured-note-v289{font-size:.78rem;color:rgba(255,255,255,.52)}
+#barCards .kbn-featured-note-v289{font-size:.78rem;color:rgba(255,255,255,.72)}
 #barCards .kbn-featured-empty-v289,
 #barCards .kbn-featured-loading-v289{
   grid-column:1/-1;padding:26px 18px;border-radius:18px;
