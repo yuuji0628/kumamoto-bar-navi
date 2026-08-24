@@ -5761,6 +5761,8 @@ async function renderSeoShopDetailV250(request,env,url){
   </article>`;
   html=html.replace('<div id="shopDetail"><div class="public-loading">店舗情報を読み込んでいます...</div></div>',`<div id="shopDetail">${fallback}</div>`);
 
+  html=kbnInjectCwvHints(html,primaryImage?.url||"");
+
   const h=new Headers(asset.headers);
   h.delete("content-length");
   h.set("content-type","text/html; charset=utf-8");
@@ -6678,6 +6680,54 @@ async function runScheduledKbnAutoDiscoveryOnly(env){
   };
 }
 
+// v2.95: Core Web Vitals / public delivery hardening.
+// Keep admin uncached, but allow browsers/CDN to reuse public static assets.
+function kbnApplyPublicPerformanceHeaders(response,url){
+  const h=new Headers(response.headers);
+  const path=String(url.pathname||"").toLowerCase();
+  const isHtml=path==="/" || path.endsWith(".html") || path==="/shop" || path==="/all-shops" || path.startsWith("/area/") || path.startsWith("/genre/");
+  const isCss=path.endsWith(".css");
+  const isJs=path.endsWith(".js");
+  const isImage=/\.(?:png|jpe?g|webp|avif|gif|svg|ico)$/.test(path);
+  const isFont=/\.(?:woff2?|ttf|otf)$/.test(path);
+
+  if(isCss || isJs){
+    h.set("Cache-Control","public, max-age=86400, stale-while-revalidate=604800");
+  }else if(isImage || isFont){
+    h.set("Cache-Control","public, max-age=604800, stale-while-revalidate=2592000");
+  }else if(isHtml && response.ok){
+    h.set("Cache-Control","public, max-age=300, stale-while-revalidate=1800");
+  }
+
+  // Small, safe transport hints. Vary only when already required by the origin.
+  h.set("X-Content-Type-Options","nosniff");
+  h.set("Referrer-Policy","strict-origin-when-cross-origin");
+  h.set("X-KBN-Performance","cwv-v295");
+  return new Response(response.body,{status:response.status,statusText:response.statusText,headers:h});
+}
+
+function kbnInjectCwvHints(html,primaryImageUrl=""){
+  let out=String(html||"");
+  if(!out)return out;
+  const hints=[];
+  // style.css is required for first paint. preload starts it early without changing CSS behavior.
+  if(/<link[^>]+rel=["']stylesheet["'][^>]+href=["'][^"']*style\.css/i.test(out)){
+    const m=out.match(/<link[^>]+rel=["']stylesheet["'][^>]+href=["']([^"']*style\.css[^"']*)["'][^>]*>/i);
+    if(m?.[1])hints.push(`<link rel="preload" href="${kbnSeoEsc(m[1])}" as="style">`);
+  }
+  if(primaryImageUrl){
+    hints.push(`<link rel="preload" href="${kbnSeoEsc(primaryImageUrl)}" as="image" fetchpriority="high">`);
+  }
+  if(hints.length && !/data-kbn-cwv-hints=/.test(out)){
+    out=out.replace(/<head([^>]*)>/i,`<head$1><meta data-kbn-cwv-hints="v295">${hints.join("")}`);
+  }
+  // Avoid spending layout/paint work on sections far below the fold until they approach viewport.
+  if(!/data-kbn-cwv-css=/.test(out)){
+    out=out.replace(/<\/head>/i,`<style data-kbn-cwv-css="v295">@supports(content-visibility:auto){.local-seo-list,.local-seo-guide,.local-seo-faq,.kbn-seo-related,.kbn-seo-link-hub{content-visibility:auto;contain-intrinsic-size:1px 700px}}</style></head>`);
+  }
+  return out;
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url=new URL(request.url);
@@ -6726,7 +6776,7 @@ export default {
     if(localSeoAreaMatch && request.method==="GET"){
       const html=await renderLocalSeoAreaPage(env,localSeoAreaMatch[1]);
       if(!html)return new Response("Not Found",{status:404});
-      return new Response(html,{headers:{"content-type":"text/html; charset=utf-8","cache-control":"public, max-age=900"}});
+      return new Response(kbnInjectCwvHints(html),{headers:{"content-type":"text/html; charset=utf-8","cache-control":"public, max-age=300, stale-while-revalidate=1800"}});
     }
 
 
@@ -6735,14 +6785,14 @@ export default {
     if(localSeoAreaGenreMatch && request.method==="GET"){
       const html=await renderLocalSeoAreaGenrePage(env,localSeoAreaGenreMatch[1],localSeoAreaGenreMatch[2]);
       if(!html)return new Response("Not Found",{status:404,headers:{"x-robots-tag":"noindex, follow"}});
-      return new Response(html,{headers:{"content-type":"text/html; charset=utf-8","cache-control":"public, max-age=900"}});
+      return new Response(kbnInjectCwvHints(html),{headers:{"content-type":"text/html; charset=utf-8","cache-control":"public, max-age=300, stale-while-revalidate=1800"}});
     }
 
     const localSeoGenreMatch=url.pathname.match(/^\/genre\/([a-z0-9-]+)\/?$/);
     if(localSeoGenreMatch && request.method==="GET"){
       const html=await renderLocalSeoGenrePage(env,localSeoGenreMatch[1]);
       if(!html)return new Response("Not Found",{status:404});
-      return new Response(html,{headers:{"content-type":"text/html; charset=utf-8","cache-control":"public, max-age=900"}});
+      return new Response(kbnInjectCwvHints(html),{headers:{"content-type":"text/html; charset=utf-8","cache-control":"public, max-age=300, stale-while-revalidate=1800"}});
     }
 
     if((url.pathname==="/shop" || url.pathname==="/shop.html") && request.method==="GET"){
@@ -6776,8 +6826,8 @@ export default {
     }
 
     if((url.pathname==="/all-shops" || url.pathname==="/all-shops/") && request.method==="GET"){
-      return new Response(await renderAllShopsSeoIndexV250(env,url.origin),{
-        headers:{"content-type":"text/html; charset=utf-8","cache-control":"public, max-age=900","x-robots-tag":"index, follow"}
+      return new Response(kbnInjectCwvHints(await renderAllShopsSeoIndexV250(env,url.origin)),{
+        headers:{"content-type":"text/html; charset=utf-8","cache-control":"public, max-age=300, stale-while-revalidate=1800","x-robots-tag":"index, follow"}
       });
     }
 
@@ -9273,19 +9323,9 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
       });
     }
 
-    if(url.pathname==="/style.css"){
-      const h=new Headers(assetResponse.headers);
-      h.set("Cache-Control","no-store, no-cache, must-revalidate, max-age=0");
-      h.set("Pragma","no-cache");
-      h.set("Expires","0");
-      return new Response(assetResponse.body,{
-        status:assetResponse.status,
-        statusText:assetResponse.statusText,
-        headers:h
-      });
-    }
-
-    return assetResponse;
+    // Public assets/pages: browser/CDN reuse is essential for repeat-view LCP and transfer size.
+    // Admin remains explicitly no-store above.
+    return kbnApplyPublicPerformanceHeaders(assetResponse,url);
   },
 
   async scheduled(event, env, ctx){
