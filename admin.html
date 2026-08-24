@@ -1,3 +1,4 @@
+<!-- KBN v3.10: 自動開拓 重複判定改善＋拡張探索 -->
 <!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>KBN運営管理</title><link rel="stylesheet" href="style.css">
 <style>
 .owner-photo-preview{
@@ -4273,7 +4274,7 @@ html,body{max-width:100%;overflow-x:hidden}
       <p class="lead-smart-helper">県内を順番に検索し、重複を避けながら高精度で自動掲載します。</p>
       <button type="button" id="autoDiscoverBtn" class="btn-gold lead-smart-primary">Google優先で高精度自動掲載</button>
       <div style="margin-top:8px;color:#f1c75b;font-weight:800;font-size:.82rem">1回の実行で最大100店舗まで自動掲載</div>
-      <div style="margin-top:4px;color:#9ca7b3;font-size:.72rem">繁華街・町名単位まで細分化して120検索を3件ずつ安全に分割。 居酒屋・温泉・通常カラオケ店は自動除外し、BAR系の明確な根拠がある店舗だけ掲載します。重複を避けながら40〜50店舗前後の新規掲載を狙います（既存掲載状況により変動）。</div>
+      <div style="margin-top:4px;color:#9ca7b3;font-size:.72rem">繁華街・町名単位まで120検索。通常判定で新規が見つからない場合は後半を自動で「拡張探索」に切替。重複は店名だけ・住所だけでは落とさず、電話/Instagram一致または店名＋住所一致で判定します。居酒屋・温泉・通常カラオケ店は引き続き除外します。</div>
       <div id="autoDiscoverStatus" class="auto-discovery-status"></div>
       <div id="autoDiscoverProgress" class="kbn-work-progress" hidden>
         <div class="kbn-work-progress-head"><b>自動開拓の進捗</b><strong id="autoProgressPct">0%</strong></div>
@@ -8950,6 +8951,8 @@ window.runAutoDiscovery=async function(){
   let rawTotal=0;
   let barTotal=0;
   let errors=0;
+  let rejectSummary={};
+  let discoveryMode="normal";
 
   const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 
@@ -8971,7 +8974,8 @@ window.runAutoDiscovery=async function(){
         body:JSON.stringify({
           max_listings:Math.min(6,maxListings-createdTotal.length),
           pair_limit:pairLimit,
-          per_pair_limit:3
+          per_pair_limit:3,
+          discovery_mode:discoveryMode
         })
       });
     }catch(e){
@@ -9025,6 +9029,11 @@ window.runAutoDiscovery=async function(){
       createdTotal.push(...c);
       searchedTotal.push(...rows);
       rejectedTotal+=Number(d.rejected_count||0);
+      if(d.reject_summary&&typeof d.reject_summary==="object"){
+        for(const [k,v] of Object.entries(d.reject_summary)){
+          rejectSummary[k]=(rejectSummary[k]||0)+Number(v||0);
+        }
+      }
 
       for(const r of rows){
         rawTotal+=Number(r.raw_found||0);
@@ -9035,6 +9044,13 @@ window.runAutoDiscovery=async function(){
       // 実際に処理された検索数を進捗へ反映。
       const doneNow=Math.max(1,rows.length||pairLimit);
       completed=Math.min(totalSteps,completed+doneNow);
+
+      // 前半で新規0件なら、後半は検索語と採用判定を少し広げた第2パスへ自動切替。
+      // BAR根拠・熊本県内確認・非BAR除外は維持する。
+      if(discoveryMode==="normal" && createdTotal.length===0 && completed>=45){
+        discoveryMode="expanded";
+        if(status)status.innerHTML=`<b>新規0件が続いたため拡張探索へ切り替えます。</b><br><small>重複判定を店舗単位にし、Googleで確認できるBAR候補をさらに探索します。</small>`;
+      }
 
       const last=rows[rows.length-1]||{};
       const label=[last.area,last.type].filter(Boolean).join(" / ");
@@ -9047,7 +9063,7 @@ window.runAutoDiscovery=async function(){
       if(status){
         status.innerHTML=
           `<b>${completed}/${totalSteps}検索完了・${createdTotal.length}店舗掲載</b><br>`+
-          `<small>Google生ヒット:${rawTotal} / BAR候補:${barTotal} / エラー:${errors}</small>`;
+          `<small>Google生ヒット:${rawTotal} / BAR候補:${barTotal} / エラー:${errors} / ${discoveryMode==="expanded"?"拡張探索":"通常探索"}</small>`;
       }
 
       // Cloudflare / Google Placesへの連続負荷を避ける。
@@ -9064,6 +9080,15 @@ window.runAutoDiscovery=async function(){
     }
 
     const createdNames=createdTotal.slice(0,12).map(x=>esc(x.name||"")).join("<br>");
+    const rejectLabels={
+      DUPLICATE_EARLY:"既存店重複(早期)",DUPLICATE:"既存店重複",
+      DELETED_HISTORY_EARLY:"削除済み履歴",DELETED_HISTORY:"削除済み履歴",
+      OUTSIDE_KUMAMOTO:"県外",HARD_NON_BAR:"非BAR業態",
+      NO_EXPLICIT_BAR_SIGNAL:"BAR根拠不足",LOW_CONFIDENCE:"一致情報不足"
+    };
+    const rejectDetail=Object.entries(rejectSummary)
+      .sort((x,y)=>Number(y[1])-Number(x[1])).slice(0,8)
+      .map(([k,v])=>`${esc(rejectLabels[k]||k)}:${Number(v||0)}件`).join(" / ");
     if(status){
       status.innerHTML=
         `<b>${createdTotal.length}店舗をKBN独自掲載しました。</b><br>`+
@@ -9072,13 +9097,15 @@ window.runAutoDiscovery=async function(){
         `BAR判定後：${barTotal}件<br>`+
         `APIエラー：${errors}件<br>`+
         `重複・除外：${rejectedTotal}件`+
+        (rejectDetail?`<br><small>除外内訳：${rejectDetail}</small>`:"")+
+        (discoveryMode==="expanded"?`<br><small>第2パス：拡張探索を実行済み</small>`:"")+
         (createdNames?`<br><br><small>${createdNames}</small>`:"");
     }
 
     if(createdTotal.length){
       alert(`${createdTotal.length}店舗をKBN独自掲載しました。`);
     }else{
-      alert("今回、新しく掲載できる店舗は見つかりませんでした。");
+      alert("今回は新規掲載0件でした。画面に除外理由の内訳を表示しています。次回の探索改善に使えます。");
     }
 
     await Promise.allSettled([
