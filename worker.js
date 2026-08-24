@@ -1367,7 +1367,7 @@ async function kbnMaintenanceQueueStatusV257(env){
       };
     }
 
-    const task=phase===1?"missing":phase===2?"seo":phase===3?"closed":phase===4?"instagram":phase===5?"exclusion":phase>=6&&phase<=8?"verified_info":"maintenance";
+    const task=phase===1?"missing":phase===2?"seo":phase===3?"closed":phase===4?"instagram":phase===5?"exclusion":phase>=6&&phase<=8?"verified_info":phase===9?"verified_auto":"maintenance";
     return {
       active:true,
       phase,
@@ -6641,10 +6641,13 @@ async function infoEnrichDailySummaryV404(env){
     WHERE date(datetime(created_at,'+9 hours'))=date(datetime('now','+9 hours'))
     ORDER BY id ASC
   `).all();
-  const out={runs:0,manual_runs:0,maintenance_runs:0,checked:0,updated:0,score_gain:0,fields:{hours:0,address:0,phone:0,instagram:0,holiday:0,image:0,budget:0,features:0},reasons:{search_error:0,cache_hit_search:0,cache_hit_details:0},last_run_at:''};
+  const out={runs:0,manual_runs:0,maintenance_runs:0,auto_recheck_runs:0,checked:0,updated:0,score_gain:0,fields:{hours:0,address:0,phone:0,instagram:0,holiday:0,image:0,budget:0,features:0},reasons:{search_error:0,cache_hit_search:0,cache_hit_details:0},last_run_at:''};
   for(const r of (rows.results||[])){
     out.runs++;
-    if(String(r.source||'')==='maintenance')out.maintenance_runs++; else out.manual_runs++;
+    const src=String(r.source||'');
+    if(src==='maintenance')out.maintenance_runs++;
+    else if(src==='auto_recheck')out.auto_recheck_runs++;
+    else out.manual_runs++;
     out.checked+=Number(r.checked||0);out.updated+=Number(r.updated||0);out.score_gain+=Number(r.score_gain||0);
     let f={},rr={};try{f=JSON.parse(r.fields_json||'{}')}catch{}try{rr=JSON.parse(r.reasons_json||'{}')}catch{}
     for(const k of Object.keys(out.fields))out.fields[k]+=Number(f[k]||0);
@@ -6653,6 +6656,36 @@ async function infoEnrichDailySummaryV404(env){
   }
   out.average_gain=out.updated?Math.round((out.score_gain/out.updated)*10)/10:0;
   return out;
+}
+
+async function infoEnrichAutoRecheckStatusV405(env){
+  await ensureInfoEnrichQueueV402(env);
+  const row=await env.DB.prepare(`
+    SELECT
+      COUNT(*) AS total_candidates,
+      SUM(CASE WHEN q.shop_id IS NULL OR q.next_retry_at IS NULL OR q.next_retry_at<=datetime('now') THEN 1 ELSE 0 END) AS eligible_now,
+      MIN(CASE WHEN q.next_retry_at>datetime('now') THEN q.next_retry_at ELSE NULL END) AS next_retry_at
+    FROM shops s
+    LEFT JOIN kbn_info_enrich_queue q ON q.shop_id=s.id
+    WHERE COALESCE(s.is_published,1)=1 AND (${KBN_SEO_SCORE_SQL_V312})<90
+      AND (
+        COALESCE(TRIM(s.address),'')='' OR COALESCE(TRIM(s.hours),'')='' OR COALESCE(TRIM(s.holiday),'')='' OR
+        COALESCE(TRIM(s.instagram),'')='' OR COALESCE(TRIM(s.phone),'')='' OR COALESCE(TRIM(s.features),'')='' OR
+        COALESCE(TRIM(s.image_url),'')='' OR (COALESCE(s.budget_min,0)<=0 AND COALESCE(s.budget_max,0)<=0)
+      )
+  `).first();
+  const last=await env.DB.prepare(`
+    SELECT checked,updated,score_gain,created_at FROM kbn_info_enrich_runs
+    WHERE source='auto_recheck' ORDER BY id DESC LIMIT 1
+  `).first().catch(()=>null);
+  return {
+    total_candidates:Number(row?.total_candidates||0),
+    eligible_now:Number(row?.eligible_now||0),
+    next_retry_at:String(row?.next_retry_at||''),
+    last_auto_recheck:last||null,
+    automatic:true,
+    cadence:'scheduled_auto_slots'
+  };
 }
 
 async function enrichPriorityPublishedInfoV401(env,{targetUpdated=20,maxChecked=80}={}){
@@ -6979,6 +7012,18 @@ async function kbnQueueMaintenanceV242(env,runDate,initialCreated=0){
       updated_at=CURRENT_TIMESTAMP
   `).bind(String(runDate||""),Math.max(0,Number(initialCreated)||0)).run();
 }
+async function kbnQueueAutoInfoRecheckV405(env,runDate=''){
+  await ensureKbnMaintenanceQueueV242(env);
+  const q=await env.DB.prepare(`SELECT phase FROM kbn_maintenance_queue WHERE id=1`).first();
+  if(Number(q?.phase||0)!==0)return {queued:false,reason:'QUEUE_BUSY'};
+  await env.DB.prepare(`
+    INSERT INTO kbn_maintenance_queue(id,phase,run_date,created_total,updated_at)
+    VALUES(1,9,?,0,CURRENT_TIMESTAMP)
+    ON CONFLICT(id) DO UPDATE SET phase=9,run_date=excluded.run_date,updated_at=CURRENT_TIMESTAMP
+  `).bind(String(runDate||'auto-recheck')).run();
+  return {queued:true,phase:9};
+}
+
 async function kbnProcessQueuedMaintenanceV242(env){
   await ensureKbnMaintenanceQueueV242(env);
   const q=await env.DB.prepare(`
@@ -7009,7 +7054,7 @@ async function kbnProcessQueuedMaintenanceV242(env){
   // v4.04: 通常メンテナンスの最後に、公開情報で確認できる店舗情報補完も小分けで自動実行。
   // 情報不足 → SEO改善 → 閉業 → Instagram → 対象外候補 → VERIFIED補完×3 の順。
   // VERIFIED補完は1 invocation 最大8店舗なのでCloudflare subrequest上限を避けながら最大24候補を処理。
-  const task=phase===1?"missing":phase===2?"seo":phase===3?"closed":phase===4?"instagram":phase===5?"exclusion":phase>=6&&phase<=8?"verified_info":"";
+  const task=phase===1?"missing":phase===2?"seo":phase===3?"closed":phase===4?"instagram":phase===5?"exclusion":phase>=6&&phase<=8?"verified_info":phase===9?"verified_auto":"";
   if(!task){
     await env.DB.prepare(`
       UPDATE kbn_maintenance_queue
@@ -7023,9 +7068,9 @@ async function kbnProcessQueuedMaintenanceV242(env){
   try{
     if(task==="exclusion"){
       result=await kbnScanExclusionCandidatesV267(env);
-    }else if(task==="verified_info"){
+    }else if(task==="verified_info" || task==="verified_auto"){
       result=await enrichPriorityPublishedInfoV401(env,{targetUpdated:8,maxChecked:8});
-      await logInfoEnrichRunV404(env,result,'maintenance');
+      await logInfoEnrichRunV404(env,result,task==="verified_auto"?'auto_recheck':'maintenance');
     }else{
       result=await runMaintenanceBatchV242(env,task,{limit:20});
     }
@@ -7040,12 +7085,12 @@ async function kbnProcessQueuedMaintenanceV242(env){
   `).bind(nextPhase).run();
 
   try{
-    if(task==="verified_info"){
+    if(task==="verified_info" || task==="verified_auto"){
       const checked=Number(result?.checked||0),updated=Number(result?.updated_count||0);
       await createKbnAlert(env,{
-        type:"maintenance_verified_info",
-        title:"自動メンテナンス: VERIFIED情報補完",
-        message:`${checked}店舗を確認 / ${updated}店舗を更新 / SEO +${Number(result?.score_gain_total||0)}点 / 公開情報で一致確認できた項目だけ補完`
+        type:task==="verified_auto"?"auto_recheck_verified_info":"maintenance_verified_info",
+        title:task==="verified_auto"?"自動再確認: VERIFIED情報補完":"自動メンテナンス: VERIFIED情報補完",
+        message:`${checked}店舗を確認 / ${updated}店舗を更新 / SEO +${Number(result?.score_gain_total||0)}点 / クールダウン切れ・未確認候補のみ自動処理`
       });
     }else if(task==="exclusion"){
       const checked=Number(result?.checked||0);
@@ -8569,6 +8614,12 @@ export default {
       if(url.pathname==="/api/admin/info-enrich-daily-summary" && request.method==="GET"){
         const summary=await infoEnrichDailySummaryV404(env);
         return json({ok:true,summary});
+      }
+
+      // ---------- Automatic cooldown recheck status v4.05 ----------
+      if(url.pathname==="/api/admin/info-enrich-auto-status" && request.method==="GET"){
+        const status=await infoEnrichAutoRecheckStatusV405(env);
+        return json({ok:true,status});
       }
 
       // ---------- Free members dashboard v2.05 ----------
@@ -10229,6 +10280,11 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
         const result=fullMaintenance
           ?await runScheduledKbnMaintenance(env)
           :await runScheduledKbnAutoDiscoveryOnly(env);
+        // v4.05: 通常の自動掲載枠でも、次の1分Workerでクールダウン切れ・未確認候補を8店舗だけ自動再確認。
+        // 自動掲載本体と外部通信を同一invocationに重ねないため、phase 9へキューして次回scheduledで処理する。
+        if(!fullMaintenance){
+          try{await kbnQueueAutoInfoRecheckV405(env,due.minute_key)}catch(e){console.error('auto info recheck queue failed',e)}
+        }
         const createdCount=Number(result?.discovery?.created?.length||0);
         const diagnostic=kbnDiscoveryDiagnosticV226(result)||{};
         diagnostic.scheduled_slot=due.time;
