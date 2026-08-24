@@ -7791,6 +7791,43 @@ export default {
         return json({ok:true,...result});
       }
 
+      // ---------- Index promotion mode v3.20 ----------
+      if(url.pathname==="/api/admin/index-promotion" && request.method==="POST"){
+        const scoreExpr=KBN_SEO_SCORE_SQL_V312;
+        const snap=async()=>{
+          const r=await env.DB.prepare(`
+            SELECT
+              SUM(CASE WHEN (${scoreExpr})<70 THEN 1 ELSE 0 END) AS under70,
+              SUM(CASE WHEN (${scoreExpr})>=70 AND (${scoreExpr})<80 THEN 1 ELSE 0 END) AS score70,
+              SUM(CASE WHEN (${scoreExpr})>=80 AND (${scoreExpr})<90 THEN 1 ELSE 0 END) AS score80,
+              SUM(CASE WHEN (${scoreExpr})>=90 THEN 1 ELSE 0 END) AS good90,
+              ROUND(AVG(${scoreExpr}),1) AS avg_score
+            FROM shops s WHERE COALESCE(s.is_published,1)=1
+          `).first();
+          return {under70:Number(r?.under70||0),score70:Number(r?.score70||0),score80:Number(r?.score80||0),good90:Number(r?.good90||0),average_score:Number(r?.avg_score||0)};
+        };
+        const before=await snap();
+        const result=await refreshSeoPublishedV311(env,{limit:20,afterId:0});
+        const after=await snap();
+        try{
+          await createKbnAlert(env,{
+            type:"index_promotion",
+            title:"インデックス促進モード",
+            message:`${Number(result?.checked||0)}店舗を確認 / 更新${Array.isArray(result?.updated)?result.updated.length:0}件 / 70点未満 ${before.under70}→${after.under70} / 90点以上 ${before.good90}→${after.good90}`
+          });
+        }catch{}
+        return json({
+          ok:true,
+          checked:Number(result?.checked||0),
+          updated_count:Array.isArray(result?.updated)?result.updated.length:0,
+          updated:result?.updated||[],unchanged:result?.unchanged||[],failed:result?.failed||[],
+          before,after,
+          priority:"under70_then_70s_then_80s",
+          target_score:90,
+          note:"Search Consoleの未登録URLを直接取得せず、公開店舗のSEO準備度が低い順に最大20店舗を改善します。"
+        });
+      }
+
       // ---------- Free members dashboard v2.05 ----------
       if(url.pathname==="/api/admin/members" && request.method==="GET"){
         await ensureKbnMemberSchema(env);
