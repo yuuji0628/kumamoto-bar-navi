@@ -4412,6 +4412,7 @@ html,body{max-width:100%;overflow-x:hidden}
       </small>
     </div>
     <div id="maintenanceStatus" class="auto-discovery-status"></div>
+    <div class="kbn-simple-schedule-ok" style="margin-top:8px">自動開拓も2検索ずつ保存。503/通信エラー時は自動待機し、次のCronで続きから再開します。</div>
 
     
     <div class="kbn-alert-head">
@@ -10804,8 +10805,10 @@ function kbnFormatLastAutomaticRunV233(run,queue){
 
     if(queue.stage==="discovery"){
       const batch=Math.max(1,Number(queue.discovery_batch||1));
-      const total=Math.max(batch,Number(queue.discovery_batches_total||40));
-      return `自動メンテナンス実行中：新規掲載は最大20店舗 / 累計新規${created}件`;
+      const searched=Math.max(0,Number(queue.discovery_searched||0));
+      const retry=Number(queue.discovery_retry_count||0);
+      const mode=String(queue.discovery_mode||'normal')==='expanded'?'拡張探索':'通常探索';
+      return `自動メンテナンス開拓中：${searched}/120検索 / 新規${created}/20店舗 / ${mode}${retry?` / 通信待機・再試行${retry}/4`:''} / 途中保存・続きから自動再開`;
     }
 
     if(queue.stage==="maintenance"){
