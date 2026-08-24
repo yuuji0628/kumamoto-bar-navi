@@ -6506,6 +6506,94 @@ async function refreshSeoDeficitPromotionV323(env,{targetUpdated=20,maxChecked=5
   return {ok:true,mode:'deficit_phase2_internal',checked,updated_count:updated.length,updated,unchanged,failed,field_counts,deficit_counts,target_updated:target,max_checked:cap,reached_target:updated.length>=target,score_gain_total,average_score_gain:updated.length?Math.round(score_gain_total/updated.length*10)/10:0,crossed:{score70:updated.filter(x=>x.crossed70).length,score80:updated.filter(x=>x.crossed80).length,score90:updated.filter(x=>x.crossed90).length}};
 }
 
+
+async function enrichPriorityPublishedInfoV400(env,{targetUpdated=20,maxChecked=80}={}){
+  const target=Math.max(1,Math.min(Number(targetUpdated)||20,20));
+  const cap=Math.max(target,Math.min(Number(maxChecked)||80,120));
+  const r=await env.DB.prepare(`
+    SELECT s.id,s.name,s.slug,s.area,s.address,s.hours,s.holiday,s.instagram,s.genre,s.features,s.description,
+           s.phone,s.image_url,s.image_key,s.budget_min,s.budget_max,s.seats,(${KBN_SEO_SCORE_SQL_V312}) AS seo_score
+    FROM shops s
+    WHERE COALESCE(s.is_published,1)=1 AND (${KBN_SEO_SCORE_SQL_V312})<90
+      AND (
+        COALESCE(TRIM(s.address),'')='' OR COALESCE(TRIM(s.hours),'')='' OR COALESCE(TRIM(s.holiday),'')='' OR
+        COALESCE(TRIM(s.instagram),'')='' OR COALESCE(TRIM(s.phone),'')='' OR COALESCE(TRIM(s.features),'')='' OR
+        COALESCE(TRIM(s.image_url),'')='' OR (COALESCE(s.budget_min,0)<=0 AND COALESCE(s.budget_max,0)<=0)
+      )
+    ORDER BY (${KBN_SEO_SCORE_SQL_V312}) ASC,s.id ASC LIMIT ?
+  `).bind(cap).all();
+  const rows=r.results||[];
+  let checked=0;
+  const updated=[],unchanged=[],failed=[];
+  const field_counts={address:0,hours:0,holiday:0,instagram:0,phone:0,features:0,budget:0,image:0};
+  for(const shop of rows){
+    if(updated.length>=target)break;
+    checked++;
+    const beforeScore=Math.max(0,Math.min(100,Number(shop.seo_score||0)));
+    try{
+      const cleanName=String(shop.name||'').replace(/^【KBN独自掲載】/,'').trim();
+      const found=await findGooglePlaceForShop(env,{name:cleanName,area:shop.area||'熊本'});
+      if(!found?.ok||!found?.matched){
+        unchanged.push({id:shop.id,name:shop.name,reason:found?.error||'GOOGLE_MATCH_NOT_FOUND'});
+        continue;
+      }
+      const details=await googlePlaceDetails(env,found.place?.id);
+      const gp=details?.ok&&details?.place?details.place:found.place;
+      const website=googleWebsite(gp);
+      let webMeta={ok:false,price:{min:null,max:null},hours:'',holiday:'',features:'',instagram:''};
+      if(website){
+        try{webMeta=await fetchOfficialWebsiteMetadata(website);}catch{}
+      }
+      const patch={
+        address:String(shop.address||'').trim(),hours:String(shop.hours||'').trim(),holiday:String(shop.holiday||'').trim(),
+        instagram:String(shop.instagram||'').trim(),phone:String(shop.phone||'').trim(),features:String(shop.features||'').trim(),
+        image_url:String(shop.image_url||'').trim(),image_key:String(shop.image_key||'').trim(),
+        budget_min:shop.budget_min,budget_max:shop.budget_max
+      };
+      const fields=[];
+      if(!patch.address){const v=t(googlePlaceAddress(gp)||'',500);if(v){patch.address=v;fields.push('address');}}
+      if(!patch.hours){const v=t(googleOpeningHours(gp)||webMeta.hours||'',800);if(v){patch.hours=v;fields.push('hours');}}
+      if(!patch.holiday){const v=t(googleHolidayFromHours(gp)||webMeta.holiday||'',180);if(v){patch.holiday=v;fields.push('holiday');}}
+      if(!patch.phone){const v=t(googlePhone(gp)||'',80);if(v){patch.phone=v;fields.push('phone');}}
+      if(!patch.features){const v=t(googleDetailFeatures(gp)||webMeta.features||'',1000);if(v){patch.features=v;fields.push('features');}}
+      const price=googlePriceInfo(gp);
+      if(!(Number(patch.budget_min||0)>0||Number(patch.budget_max||0)>0)){
+        const mn=webMeta?.price?.min??price?.min??null, mx=webMeta?.price?.max??price?.max??null;
+        if(mn!=null||mx!=null){patch.budget_min=mn;patch.budget_max=mx;fields.push('budget');}
+      }
+      if(!patch.instagram){
+        let ig=String(webMeta?.instagram||'').trim();
+        if(!ig){
+          try{
+            const d=await discoverInstagramForShop(env,{name:cleanName,area:shop.area||'熊本',website,existing:''});
+            if(d?.instagram && Number(d?.score||0)>=90)ig=d.instagram;
+          }catch{}
+        }
+        if(ig){patch.instagram=ig;fields.push('instagram');}
+      }
+      if(!patch.image_url){
+        const photoName=googlePhotoName(gp);
+        if(photoName){patch.image_url=googlePhotoProxyUrl(shop.id);patch.image_key=`google:${photoName}`;fields.push('image');}
+      }
+      if(!fields.length){
+        unchanged.push({id:shop.id,name:shop.name,reason:'MATCHED_BUT_NO_NEW_VERIFIED_DATA',match_score:Number(found?.score||0)});
+        continue;
+      }
+      await env.DB.prepare(`UPDATE shops SET address=?,hours=?,holiday=?,instagram=?,phone=?,features=?,image_url=?,image_key=?,budget_min=?,budget_max=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`)
+        .bind(patch.address,patch.hours,patch.holiday,patch.instagram,patch.phone,patch.features,patch.image_url,patch.image_key,patch.budget_min,patch.budget_max,shop.id).run();
+      const scored=await env.DB.prepare(`SELECT (${KBN_SEO_SCORE_SQL_V312}) AS seo_score FROM shops s WHERE s.id=?`).bind(shop.id).first();
+      const afterScore=Math.max(0,Math.min(100,Number(scored?.seo_score||beforeScore)));
+      const item={id:shop.id,name:shop.name,fields:[...new Set(fields)],score_before:beforeScore,score_after:afterScore,score_delta:afterScore-beforeScore,match_score:Number(found?.score||0)};
+      updated.push(item);
+      for(const f of item.fields)if(f in field_counts)field_counts[f]++;
+    }catch(e){
+      failed.push({id:shop.id,name:shop.name,reason:String(e?.message||e).slice(0,250)});
+    }
+  }
+  const gain=updated.reduce((n,x)=>n+Number(x.score_delta||0),0);
+  return {ok:true,mode:'verified_public_info_priority',checked,updated_count:updated.length,updated,unchanged,failed,field_counts,target_updated:target,max_checked:cap,reached_target:updated.length>=target,score_gain_total:gain,average_score_gain:updated.length?Math.round(gain/updated.length*10)/10:0};
+}
+
 async function refreshSeoUntilImprovedV321(env,{targetUpdated=20,maxChecked=200,batchSize=20}={}){
   const target=Math.max(1,Math.min(Number(targetUpdated)||20,20));
   const cap=Math.max(target,Math.min(Number(maxChecked)||200,200));
@@ -8230,6 +8318,23 @@ export default {
           priority:"under70_then_70s_then_80s",
           target_score:90,
           note:"Search Consoleの未登録URLを直接取得せず、外部APIにも依存せず、既存データ内に明示されている事実だけを抽出・整理して改善します。画像など内部情報だけでは補えない項目は自動生成しません。SEOスコアが実際に上昇した店舗だけを『改善』として数えます。"
+        });
+      }
+
+
+      // ---------- Verified public info enrichment v4.00 ----------
+      if(url.pathname==="/api/admin/info-enrich-priority" && request.method==="POST"){
+        const result=await enrichPriorityPublishedInfoV400(env,{targetUpdated:20,maxChecked:80});
+        try{
+          await createKbnAlert(env,{
+            type:"info_enrich_priority",
+            title:"情報補完: 優先20店舗",
+            message:`${Number(result?.checked||0)}店舗を確認 / ${Number(result?.updated_count||0)}店舗を更新 / 営業時間${Number(result?.field_counts?.hours||0)} / 画像${Number(result?.field_counts?.image||0)} / Instagram${Number(result?.field_counts?.instagram||0)} / 電話${Number(result?.field_counts?.phone||0)}`
+          });
+        }catch{}
+        return json({
+          ok:true,...result,
+          note:"Google Places・公式サイト・高信頼Instagram候補など公開情報で店舗一致を確認できた項目だけ補完します。既存情報は上書きせず、確認できない項目は空欄のまま残します。"
         });
       }
 
