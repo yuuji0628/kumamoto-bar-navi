@@ -6204,6 +6204,108 @@ async function refreshSeoPublishedV311(env,{limit=20,afterId=0}={}){
 }
 
 
+
+async function refreshSeoLocalOnlyV322(env,{targetUpdated=20,maxChecked=500}={}){
+  const target=Math.max(1,Math.min(Number(targetUpdated)||20,20));
+  const cap=Math.max(target,Math.min(Number(maxChecked)||500,500));
+  let checked=0;
+  const updated=[];
+  const unchanged=[];
+  const failed=[];
+  const field_counts={description:0,technical:0};
+
+  // 外部APIを使わず、既にDBに保存されている事実だけで説明文を強化する。
+  // 低スコア順で、説明文が120文字未満の店舗を優先する。
+  const r=await env.DB.prepare(`
+    SELECT s.id,s.name,s.slug,s.area,s.address,s.hours,s.genre,s.features,s.description,
+           s.holiday,s.instagram,s.phone,s.image_url,s.image_key,s.budget_min,s.budget_max,s.seats,
+           (${KBN_SEO_SCORE_SQL_V312}) AS seo_score
+    FROM shops s
+    WHERE COALESCE(s.is_published,1)=1
+      AND (${KBN_SEO_SCORE_SQL_V312}) < 90
+      AND LENGTH(TRIM(COALESCE(s.description,''))) < 160
+      AND LENGTH(TRIM(COALESCE(s.name,''))) >= 2
+      AND TRIM(COALESCE(s.area,'')) != ''
+      AND TRIM(COALESCE(s.genre,'')) != ''
+    ORDER BY (${KBN_SEO_SCORE_SQL_V312}) ASC, s.id ASC
+    LIMIT ?
+  `).bind(cap).all();
+
+  const rows=r.results||[];
+  for(const shop of rows){
+    if(updated.length>=target)break;
+    checked++;
+    const beforeScore=Math.max(0,Math.min(100,Number(shop.seo_score||0)));
+    try{
+      const name=String(shop.name||'').replace(/^【KBN独自掲載】/,'').trim();
+      const area=String(shop.area||'').trim();
+      const genre=String(shop.genre||'').trim();
+      const address=String(shop.address||'').trim();
+      const hours=String(shop.hours||'').trim();
+      const holiday=String(shop.holiday||'').trim();
+      const feat=String(shop.features||'').replace(/\s+/g,' ').trim();
+      const phone=String(shop.phone||'').trim();
+      const instagram=String(shop.instagram||'').trim();
+      const budgetMin=Number(shop.budget_min||0), budgetMax=Number(shop.budget_max||0), seats=Number(shop.seats||0);
+      const original=String(shop.description||'').replace(/\s+/g,' ').trim();
+
+      // name / area / genre は既存DBの確定情報。追加情報がなくてもこの3項目だけで安全に固有文を作れる。
+      const seed=Math.abs(Number(shop.id||0))%5;
+      const intros=[
+        `${name}は、${area}エリアで掲載中の${genre}です。`,
+        `${area}で${genre}を探している方に向けて、${name}の店舗情報を掲載しています。`,
+        `${name}は${area}の${genre}としてKUMAMOTO BAR NAVIに掲載されています。`,
+        `${area}エリアの${genre}「${name}」について、確認できている店舗情報をまとめています。`,
+        `${name}は、熊本の${area}エリアにある${genre}として掲載中です。`
+      ];
+      const facts=[];
+      if(address)facts.push(`所在地は${address}`);
+      if(hours)facts.push(`営業時間は${hours}`);
+      if(holiday)facts.push(`定休日は${holiday}`);
+      if(budgetMin>0||budgetMax>0){
+        const b=budgetMin>0&&budgetMax>0?`${budgetMin.toLocaleString('ja-JP')}〜${budgetMax.toLocaleString('ja-JP')}円`:budgetMin>0?`${budgetMin.toLocaleString('ja-JP')}円〜`:`〜${budgetMax.toLocaleString('ja-JP')}円`;
+        facts.push(`料金目安は${b}`);
+      }
+      if(seats>0)facts.push(`席数は${seats}席`);
+      if(feat)facts.push(`掲載されている特徴は「${feat.slice(0,120)}」です`);
+      if(phone)facts.push('電話番号情報を掲載しています');
+      if(instagram)facts.push('Instagram情報を掲載しています');
+
+      const baseOriginal=(original && !/KUMAMOTO BAR NAVIに掲載/.test(original) && !/店舗情報を掲載しています/.test(original))
+        ? `${original.replace(/[。．]+$/,'')}。` : '';
+      const factText=facts.length?`${facts.slice(0,5).join('。')}。`:'';
+      const closes=[
+        '営業時間・料金・営業状況などは変更される場合があるため、来店前に店舗の最新情報をご確認ください。',
+        '掲載内容は更新される場合があります。来店前に営業時間や営業状況などの最新情報をご確認ください。',
+        '店舗情報は変更されることがあります。ご利用前に最新の営業情報をご確認ください。',
+        '来店を予定している場合は、営業時間や営業状況などを事前に確認することをおすすめします。',
+        '最新の営業状況や料金については、来店前に店舗の案内をご確認ください。'
+      ];
+      let next=t(`${intros[seed]}${baseOriginal}${factText}${closes[seed]}`,5000);
+
+      // 120文字未満なら、事実を増やさずサイト内での役割を説明して自然に補強。
+      if(next.length<120){
+        next=t(`${next}${area}・${genre}でお店を比較するときに、店舗選びの参考情報としてご利用いただけます。`,5000);
+      }
+
+      if(next!==original && next.length>original.length){
+        await env.DB.prepare(`UPDATE shops SET description=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(next,shop.id).run();
+        updated.push({id:shop.id,name:shop.name,fields:['description'],score_before:beforeScore});
+        field_counts.description++;
+      }else{
+        unchanged.push({id:shop.id,name:shop.name,reason:'NO_SAFE_LOCAL_CHANGE',score_before:beforeScore});
+      }
+    }catch(e){
+      failed.push({id:shop.id,name:shop.name,reason:String(e?.message||e).slice(0,250),score_before:beforeScore});
+    }
+  }
+
+  return {
+    ok:true,mode:'local_only',checked,updated_count:updated.length,updated,unchanged,failed,
+    field_counts,target_updated:target,max_checked:cap,reached_target:updated.length>=target
+  };
+}
+
 async function refreshSeoUntilImprovedV321(env,{targetUpdated=20,maxChecked=200,batchSize=20}={}){
   const target=Math.max(1,Math.min(Number(targetUpdated)||20,20));
   const cap=Math.max(target,Math.min(Number(maxChecked)||200,200));
@@ -7857,13 +7959,13 @@ export default {
         const before=await snap();
         // v3.21: 20件を「確認」して終わらず、更新できない店舗は次候補へ。
         // 実更新が最大20件に達するまで、最大200店舗を安全に確認する。
-        const result=await refreshSeoUntilImprovedV321(env,{targetUpdated:20,maxChecked:200,batchSize:20});
+        const result=await refreshSeoLocalOnlyV322(env,{targetUpdated:20,maxChecked:500});
         const after=await snap();
         try{
           await createKbnAlert(env,{
             type:"index_promotion",
             title:"インデックス促進モード",
-            message:`${Number(result?.checked||0)}店舗を確認 / 更新${Number(result?.updated_count||0)}件 / 営業時間${Number(result?.field_counts?.hours||0)}・住所${Number(result?.field_counts?.address||0)}・説明文${Number(result?.field_counts?.description||0)}・ジャンル${Number(result?.field_counts?.genre||0)} / 70点未満 ${before.under70}→${after.under70} / 90点以上 ${before.good90}→${after.good90}`
+            message:`${Number(result?.checked||0)}店舗を確認 / 更新${Number(result?.updated_count||0)}件 / 内部データ説明文${Number(result?.field_counts?.description||0)} / 70点未満 ${before.under70}→${after.under70} / 90点以上 ${before.good90}→${after.good90}`
           });
         }catch{}
         return json({
@@ -7871,12 +7973,12 @@ export default {
           checked:Number(result?.checked||0),
           updated_count:Number(result?.updated_count||0),
           updated:result?.updated||[],unchanged:result?.unchanged||[],failed:result?.failed||[],
-          field_counts:result?.field_counts||{},rounds:Number(result?.rounds||0),
+          field_counts:result?.field_counts||{},rounds:Number(result?.rounds||0),mode:result?.mode||"local_only",
           reached_target:!!result?.reached_target,max_checked:Number(result?.max_checked||200),
           before,after,
           priority:"under70_then_70s_then_80s",
           target_score:90,
-          note:"Search Consoleの未登録URLを直接取得せず、公開店舗のSEO準備度が低い順に最大20店舗を改善します。"
+          note:"Search Consoleの未登録URLを直接取得せず、外部APIにも依存せず、既存の店舗名・エリア・ジャンル等の内部データだけで安全に説明文品質を底上げします。"
         });
       }
 
