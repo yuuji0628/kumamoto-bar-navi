@@ -64,9 +64,9 @@ function kbnCard(s){
   const image=s.image_url||"default-bar.svg";
   const features=kbnTokens(s.features).slice(0,2);
   const money=kbnMoney(s);
-  return `<a class="public-featured-card" href="/shop?slug=${encodeURIComponent(s.slug)}">
+  return `<a class="public-featured-card" href="shop.html?slug=${encodeURIComponent(s.slug)}">
     <div class="public-featured-photo${s.image_url?"":" is-placeholder"}">
-      <img src="${escHtml(image)}" alt="${escHtml(name)}" loading="lazy" onerror="this.onerror=null;this.src='default-bar.svg'">
+      <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" data-kbn-img-src="${escHtml(image)}" alt="${escHtml(name)}" width="640" height="360" loading="lazy" decoding="async" fetchpriority="low" onerror="this.onerror=null;this.src='default-bar.svg'">
       ${s.is_new?'<span class="public-photo-badge">NEW</span>':""}
     </div>
     <div class="public-featured-body">
@@ -89,13 +89,22 @@ function kbnCard(s){
   </a>`;
 }
 
+function kbnHydrateDeferredImages(root=document){
+  const imgs=[...root.querySelectorAll('img[data-kbn-img-src]')];
+  if(!imgs.length)return;
+  const load=img=>{const src=img.getAttribute('data-kbn-img-src');if(src){img.src=src;img.removeAttribute('data-kbn-img-src');}};
+  if(!('IntersectionObserver' in window)){imgs.forEach(load);return;}
+  const io=new IntersectionObserver(entries=>{for(const e of entries){if(e.isIntersecting){load(e.target);io.unobserve(e.target);}}},{rootMargin:'120px 0px'});
+  imgs.forEach(img=>io.observe(img));
+}
+
 async function loadHomeShops(){
   const featuredBox=document.getElementById("barCards");
   const latestBox=document.getElementById("homeLatestBars");
   if(!featuredBox&&!latestBox)return;
 
   try{
-    const r=await fetch("/api/shops",{cache:"no-store"});
+    const r=await fetch("/api/shops?homeCards=1",{cache:"default"});
     const d=await r.json();
     if(!r.ok||!d.ok)throw new Error("LOAD_FAILED");
     const shops=d.shops||[];
@@ -104,13 +113,14 @@ async function loadHomeShops(){
       let featured=shops.filter(s=>Number(s.is_featured)===1).slice(0,6);
       if(!featured.length)featured=shops.slice(0,6);
       featuredBox.innerHTML=featured.length?featured.map(kbnCard).join(""):'<div class="public-empty"><b>おすすめ店舗を準備中です。</b></div>';
+      kbnHydrateDeferredImages(featuredBox);
     }
 
     if(latestBox){
       const latest=[...shops].sort((a,b)=>Number(b.id||0)-Number(a.id||0)).slice(0,5);
       latestBox.innerHTML=latest.length?latest.map(s=>{
         const name=kbnCleanName(s.name);
-        return `<a href="/shop?slug=${encodeURIComponent(s.slug)}" class="public-latest-item">
+        return `<a href="shop.html?slug=${encodeURIComponent(s.slug)}" class="public-latest-item">
           <div>
             <small>${escHtml(kbnNormalizeArea(s.area)||"熊本県")} ${s.genre?`/ ${escHtml(s.genre)}`:""}</small>
             <b>${escHtml(name)}</b>
@@ -161,7 +171,7 @@ async function loadHomeNews(){
       return;
     }
 
-    const href=x=>x.slug?`/shop?slug=${encodeURIComponent(x.slug)}`:"bars.html";
+    const href=x=>x.slug?`shop.html?slug=${encodeURIComponent(x.slug)}`:"bars.html";
     const title=x=>`${kbnCleanName(x.name||"店舗")} を正式掲載しました`;
 
     const render=()=>{
@@ -240,5 +250,6 @@ document.getElementById("homeSearchForm")?.addEventListener("submit",e=>{
   location.href="bars.html"+(p.toString()?`?${p}`:"");
 });
 
-loadHomeShops();
-loadHomeNews();
+const kbnRunHomeSecondary=()=>{loadHomeShops();loadHomeNews();};
+if("requestIdleCallback" in window){requestIdleCallback(kbnRunHomeSecondary,{timeout:2200});}
+else{setTimeout(kbnRunHomeSecondary,900);}
