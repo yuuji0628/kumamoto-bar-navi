@@ -4274,7 +4274,7 @@ html,body{max-width:100%;overflow-x:hidden}
       <p class="lead-smart-helper">県内を順番に検索し、重複を避けながら高精度で自動掲載します。</p>
       <button type="button" id="autoDiscoverBtn" class="btn-gold lead-smart-primary">Google優先で高精度自動掲載</button>
       <div style="margin-top:8px;color:#f1c75b;font-weight:800;font-size:.82rem">1回の実行で最大100店舗まで自動掲載</div>
-      <div style="margin-top:4px;color:#9ca7b3;font-size:.72rem">繁華街・町名単位まで120検索。2検索ずつ小分け保存し、503/通信エラー時は30秒〜3分の自動クールダウン後に続きから再開します。画面を再読み込みしても未完了なら自動復帰します。通常判定で新規が見つからない場合は後半を自動で「拡張探索」に切替。重複は店名だけ・住所だけでは落とさず、電話/Instagram一致または店名＋住所一致で判定します。</div>
+      <div style="margin-top:4px;color:#9ca7b3;font-size:.72rem">繁華街・町名単位まで120検索。通常5検索ずつ（503再試行時は2検索）小分け保存し、503/通信エラー時は30秒〜3分の自動クールダウン後に続きから再開します。画面を再読み込みしても未完了なら自動復帰します。通常判定で新規が見つからない場合は後半を自動で「拡張探索」に切替。重複は店名だけ・住所だけでは落とさず、電話/Instagram一致または店名＋住所一致で判定します。</div>
       <div id="autoDiscoverStatus" class="auto-discovery-status"></div>
       <div id="autoDiscoverProgress" class="kbn-work-progress" hidden>
         <div class="kbn-work-progress-head"><b>自動開拓の進捗</b><strong id="autoProgressPct">0%</strong></div>
@@ -4382,7 +4382,7 @@ html,body{max-width:100%;overflow-x:hidden}
           BAR開拓 → 情報不足 → SEO改善 → 閉業確認 → Instagram → 対象外 → VERIFIED補完
         </div>
         <div style="margin-top:5px;color:#72818e;font-size:.62rem;line-height:1.45">
-          小分け保存・503自動待機・続きから再開まで自動です。
+          通常5検索/分で高速処理。503時だけ2検索/分へ自動減速し、続きから再開します。
         </div>
       </div>
 
@@ -4431,7 +4431,7 @@ html,body{max-width:100%;overflow-x:hidden}
       </small>
     </div>
     <div id="maintenanceStatus" class="auto-discovery-status"></div>
-    <div class="kbn-simple-schedule-ok" style="margin-top:8px">自動開拓も2検索ずつ保存。503/通信エラー時は自動待機し、次のCronで続きから再開します。</div>
+    <div class="kbn-simple-schedule-ok" style="margin-top:8px">自動開拓も通常5検索ずつ（503再試行時は2検索）保存。503/通信エラー時は自動待機し、次のCronで続きから再開します。</div>
 
 
     <div id="kbnMaintenanceHistoryCard" style="margin-top:14px;padding:13px;border:1px solid #394b5b;border-radius:15px;background:#0d171f">
@@ -8989,7 +8989,7 @@ window.runAutoDiscovery=async function(options={}){
   const resume=!!options.resume;
   const STORAGE_KEY="kbn_auto_discovery_resume_v311";
 
-  if(!resume && !confirm("Google Placesを優先して、県内のBAR候補を順番に検索・照合して自動掲載します。\n\n2検索ずつ小分け保存し、503時は自動で休止→続きから再開します。開始しますか？"))return;
+  if(!resume && !confirm("Google Placesを優先して、県内のBAR候補を順番に検索・照合して自動掲載します。\n\n通常5検索ずつ（503再試行時は2検索）小分け保存し、503時は自動で休止→続きから再開します。開始しますか？"))return;
 
   btn.disabled=true;
   btn.textContent=resume?"自動開拓を再開中...":"自動開拓中...";
@@ -9062,7 +9062,7 @@ window.runAutoDiscovery=async function(options={}){
   updateProgress(resume?`前回の${completed}/${totalSteps}検索から自動再開します…`:"Google Placesへの検索を開始しています...");
   if(status)status.textContent=resume
     ? `前回の${completed}/${totalSteps}検索・${createdTotal.length}店舗掲載から自動再開しました。`
-    : "自動開拓を開始しました。120検索を2検索ずつ小分け保存します。503時は自動クールダウン後に続きから再開します。";
+    : "自動開拓を開始しました。120検索を通常5検索ずつ（503再試行時は2検索）小分け保存します。503時は自動クールダウン後に続きから再開します。";
   saveState();
 
   try{
@@ -9117,7 +9117,7 @@ window.runAutoDiscovery=async function(options={}){
       updateProgress(label?`${label} まで完了｜${completed}/${totalSteps}検索`:`${completed}/${totalSteps}検索完了`);
       if(status)status.innerHTML=
         `<b>${completed}/${totalSteps}検索完了・${createdTotal.length}店舗掲載</b><br>`+
-        `<small>Google生ヒット:${rawTotal} / BAR候補:${barTotal} / エラー:${errors} / ${discoveryMode==="expanded"?"拡張探索":"通常探索"} / 2検索ずつ保存</small>`;
+        `<small>Google生ヒット:${rawTotal} / BAR候補:${barTotal} / エラー:${errors} / ${discoveryMode==="expanded"?"拡張探索":"通常探索"} / 通常5検索ずつ（503再試行時は2検索）保存</small>`;
 
       saveState();
       if(completed<totalSteps && createdTotal.length<maxListings) await sleep(1800);
@@ -9135,7 +9135,7 @@ window.runAutoDiscovery=async function(options={}){
       `Google検索：${searchedTotal.length}組<br>Google生ヒット 合計：${rawTotal}件<br>BAR判定後：${barTotal}件<br>APIエラー：${errors}件<br>重複・除外：${rejectedTotal}件`+
       (rejectDetail?`<br><small>除外内訳：${rejectDetail}</small>`:"")+
       (discoveryMode==="expanded"?`<br><small>第2パス：拡張探索を実行済み</small>`:"")+
-      `<br><small>503対策：2検索ずつ保存＋自動クールダウン復旧</small>`+
+      `<br><small>503対策：通常5検索ずつ（503再試行時は2検索）保存＋自動クールダウン復旧</small>`+
       (createdNames?`<br><br><small>${createdNames}</small>`:"");
 
     alert(createdTotal.length?`${createdTotal.length}店舗をKBN独自掲載しました。`:"今回は新規掲載0件でした。画面に除外理由の内訳を表示しています。");
