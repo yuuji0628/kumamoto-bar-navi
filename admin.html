@@ -4454,7 +4454,7 @@ html,body{max-width:100%;overflow-x:hidden}
           <div><b style="display:block;color:#f3c958;font-size:.9rem">毎時00分に自動スタート</b><small style="color:#91a0ac">追加の時間設定は不要です</small></div>
           <span style="padding:5px 9px;border-radius:999px;background:#123125;color:#7ee3b7;font-size:.64rem;font-weight:700">常時ON</span>
         </div>
-        <div style="margin-top:9px;color:#b2bdc7;font-size:.69rem;line-height:1.6">BAR開拓（手動と同じ2検索→候補再選択・最低目標10店舗／最大20店舗） → 情報不足 → SEO改善 → 閉業確認 → Instagram → 対象外 → VERIFIED補完</div>
+        <div style="margin-top:9px;color:#b2bdc7;font-size:.69rem;line-height:1.6">BAR開拓（最低10／最大20） → 情報補完 → VERIFIED精査×3 → SEO</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:11px">
           <div style="padding:9px 10px;border-radius:10px;background:#111d26"><small style="display:block;color:#7f8c98">次回実行</small><b id="hourlyNextRunV421" style="display:block;margin-top:3px;color:#fff">計算中...</b></div>
           <div style="padding:9px 10px;border-radius:10px;background:#111d26"><small style="display:block;color:#7f8c98">開拓速度</small><b style="display:block;margin-top:3px;color:#7ee3b7">2検索×最大5サイクル＋0件回避</b></div>
@@ -4464,6 +4464,7 @@ html,body{max-width:100%;overflow-x:hidden}
       <div id="lastAutomaticRunStatus" style="margin-top:10px;padding:10px 12px;border:1px solid #394653;border-radius:12px;background:#101820;color:#d9e1e8;font-size:.78rem;line-height:1.55">最終自動実行：読み込み中...</div>
       <small id="autoListingSixTimesStatus" style="display:block;margin-top:7px;color:#efc45a;line-height:1.5">毎時間自動運転：ON / 追加開拓タイム：廃止 / 重点フルメンテ：廃止</small>
     </div>
+    <div id="dailyPrecisionStatusV433" style="margin-top:10px;padding:10px 12px;border:1px solid #334957;border-radius:12px;background:#0f1922;color:#aeb9c3;font-size:.72rem;line-height:1.55">日次精度メンテ：状態確認中...</div>
     <div id="instagramFullAuditStatusV432" style="margin-top:10px;padding:10px 12px;border:1px solid #334957;border-radius:12px;background:#0f1922;color:#aeb9c3;font-size:.72rem;line-height:1.55">
       Instagram全件再検査：待機中
     </div>
@@ -4475,7 +4476,7 @@ html,body{max-width:100%;overflow-x:hidden}
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:center">
         <div>
           <b style="display:block;font-size:.92rem">メンテナンス履歴</b>
-          <small style="color:#8794a1">毎時間の成果を自動記録</small>
+          <small style="color:#8794a1">全自動処理を時刻・件数つきで記録</small>
         </div>
         <button type="button" id="reloadMaintenanceHistoryBtn" class="admin-secondary-btn" style="padding:7px 10px">更新</button>
       </div>
@@ -4490,8 +4491,14 @@ html,body{max-width:100%;overflow-x:hidden}
       <div id="mhQueueStatus" style="margin-top:8px;padding:9px 10px;border-radius:10px;background:#101a23;color:#aeb8c2;font-size:.68rem;line-height:1.45">現在の処理状況を確認中...</div>
 
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:13px">
-        <b style="font-size:.76rem">直近の処理</b>
-        <small style="color:#768491">最新8件</small>
+        <b style="font-size:.76rem">自動運転まとめ</b>
+        <small style="color:#768491">何時に・何を・どれくらい</small>
+      </div>
+      <div id="maintenanceRunSummaryV434" style="margin-top:7px;display:grid;gap:7px"><small style="color:#8794a1">読み込み中...</small></div>
+
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:13px">
+        <b style="font-size:.76rem">詳細履歴</b>
+        <small style="color:#768491">最新24件</small>
       </div>
       <div id="maintenanceHistoryList" style="margin-top:7px;display:grid;gap:7px"><small style="color:#8794a1">読み込み中...</small></div>
 
@@ -10825,6 +10832,27 @@ window.loadKbnAlerts=async function(){
 };
 
 
+
+async function loadDailyPrecisionStatusV433(){
+  const el=$("dailyPrecisionStatusV433");
+  if(!el)return;
+  try{
+    const d=await api("/api/admin/daily-precision-status");
+    const labels={
+      closed:"閉業確認中",
+      instagram_start:"Instagram全件再検査を開始",
+      instagram_wait:"Instagram全件再検査中",
+      exclusion:"対象外確認中",
+      done:"本日分完了",
+      idle:"待機中"
+    };
+    const stage=String(d.stage||"idle");
+    el.textContent=`日次精度メンテ：${labels[stage]||stage} / 閉業確認 ${Number(d.checked_closed||0)}店舗 / Instagram再検査 ${Number(d.checked_instagram||0)}店舗 / 対象外候補 ${Number(d.exclusion_count||0)}件。毎時間のBAR開拓を優先し、空き時間だけ進みます。`;
+  }catch(e){
+    el.textContent=`日次精度メンテ：状態取得失敗 ${e?.message||e}`;
+  }
+}
+
 async function loadInstagramFullAuditStatusV432(){
   const el=$("instagramFullAuditStatusV432");
   if(!el)return;
@@ -11076,21 +11104,74 @@ function kbnNextHourlyRunV421(){
   }catch{return "次の毎時00分"}
 }
 function kbnMaintenanceTaskLabelV414(task){
-  return {discovery:'新規開拓',discovery_retry:'通信再試行',missing:'情報不足',seo:'SEO改善',closed:'閉業確認',instagram:'Instagram',exclusion:'対象外候補',verified_info:'VERIFIED補完',verified_auto:'自動再確認'}[String(task||'')]||String(task||'メンテナンス');
+  return {discovery:'BAR開拓',discovery_retry:'通信再試行',missing:'情報補完',seo:'SEO改善',closed:'閉業確認',instagram:'Instagram',exclusion:'対象外候補',verified_info:'精密補完',verified_auto:'自動再確認',closed_daily:'閉業確認',instagram_daily:'Instagram再検査',exclusion_daily:'対象外確認'}[String(task||'')]||String(task||'メンテナンス');
 }
-function kbnMaintenanceKindLabelV414(kind){return {hourly:'毎時間',full_maintenance:'自動運転',auto_recheck:'自動再確認'}[String(kind||'')]||String(kind||'自動');}
+function kbnMaintenanceKindLabelV414(kind){return {hourly:'毎時間',full_maintenance:'自動運転',auto_recheck:'自動再確認',daily_precision:'日次精度'}[String(kind||'')]||String(kind||'自動');}
 function kbnMaintenanceTimeV414(raw){
   if(!raw)return '—';
   try{const iso=/Z$|[+-]\d\d:\d\d$/.test(String(raw))?String(raw):String(raw).replace(' ','T')+'Z';const d=new Date(iso);if(Number.isNaN(d.getTime()))return String(raw);return d.toLocaleString('ja-JP',{timeZone:'Asia/Tokyo',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});}catch{return String(raw)}
 }
+
+function kbnMaintenanceClockV434(raw){
+  if(!raw)return '—';
+  try{
+    const iso=/Z$|[+-]\d\d:\d\d$/.test(String(raw))?String(raw):String(raw).replace(' ','T')+'Z';
+    const d=new Date(iso);if(Number.isNaN(d.getTime()))return '—';
+    return d.toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+  }catch{return '—'}
+}
+function kbnMaintenanceDurationV434(start,end){
+  try{
+    const s=new Date(String(start).replace(' ','T')+'Z').getTime(),e=new Date(String(end).replace(' ','T')+'Z').getTime();
+    if(!Number.isFinite(s)||!Number.isFinite(e))return '';
+    const sec=Math.max(0,Math.round((e-s)/1000));
+    if(sec<60)return `${sec}秒`;
+    return `${Math.floor(sec/60)}分${sec%60?`${sec%60}秒`:''}`;
+  }catch{return ''}
+}
+function kbnMaintenanceTaskDetailV434(raw){
+  const map=new Map();
+  for(const part of String(raw||'').split('|').filter(Boolean)){
+    const [task,checked,updated,created,seo,errors]=part.split(':');
+    const cur=map.get(task)||{checked:0,updated:0,created:0,seo:0,errors:0};
+    cur.checked+=Number(checked||0);cur.updated+=Number(updated||0);cur.created+=Number(created||0);cur.seo+=Number(seo||0);cur.errors+=Number(errors||0);
+    map.set(task,cur);
+  }
+  return [...map.entries()].map(([task,x])=>{
+    const label=kbnMaintenanceTaskLabelV414(task);
+    if(task==='discovery')return `${label} ${x.checked}検索・新規${x.created}店`;
+    if(task==='seo')return `${label} ${x.checked}店・+${x.seo}点`;
+    if(task==='instagram_daily')return `${label} ${x.checked}店・更新${x.updated}`;
+    return `${label} ${x.checked}店・更新${x.updated}`;
+  }).join(' → ');
+}
+
 async function loadMaintenanceHistoryV414(){
   const list=document.getElementById('maintenanceHistoryList');
   try{
-    const d=await api('/api/admin/maintenance-history?days=7&limit=8'),t=d.today||{},s=d.summary||{},q=d.queue||{};
+    const d=await api('/api/admin/maintenance-history?days=7&limit=24'),t=d.today||{},s=d.summary||{},q=d.queue||{};
     const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
     set('mhTodayChecked',`${Number(t.checked||0)}店舗`);set('mhTodayUpdated',`${Number(t.updated||0)}店舗`);set('mhTodaySeo',`+${Number(t.seo_gain||0)}点`);
     set('mhTodayDetail',`処理 ${Number(t.task_runs||0)}回 / 新規掲載 ${Number(t.created||0)}店舗 / エラー ${Number(t.errors||0)}件`);
     set('mhSevenSummary',`確認 ${Number(s.checked||0)} / 更新 ${Number(s.updated||0)} / SEO +${Number(s.seo_gain||0)} / エラー ${Number(s.errors||0)}`);
+
+    const runBox=document.getElementById('maintenanceRunSummaryV434');
+    const runs=Array.isArray(d.grouped_runs)?d.grouped_runs:[];
+    if(runBox){
+      runBox.innerHTML=runs.length?runs.slice(0,10).map(r=>{
+        const start=kbnMaintenanceClockV434(r.started_at),end=kbnMaintenanceClockV434(r.finished_at),dur=kbnMaintenanceDurationV434(r.started_at,r.finished_at);
+        const hourly=String(r.run_kind||'')==='hourly';
+        const title=hourly
+          ?`${esc(String(r.group_key||'').replace(/\s*JST\s*$/i,''))} 自動運転`
+          :`${esc(kbnMaintenanceKindLabelV414(r.run_kind))} ${esc(String(r.group_key||'').replace(' daily_precision',''))}`;
+        return `<div style="padding:10px 11px;border:1px solid ${Number(r.errors||0)?'#663737':'#2d414f'};border-radius:11px;background:#101a23">
+          <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><b style="font-size:.72rem;color:#eef2f5">${title}</b><small style="color:#efc45a">${start} → ${end}${dur?`（${dur}）`:''}</small></div>
+          <div style="margin-top:5px;color:#c6d0d8;font-size:.66rem;line-height:1.55">${esc(kbnMaintenanceTaskDetailV434(r.task_detail)||'処理記録あり')}</div>
+          <div style="margin-top:3px;color:#83919c;font-size:.62rem">合計：確認/検索 ${Number(r.checked||0)}・更新 ${Number(r.updated||0)}・新規 ${Number(r.created||0)}・SEO +${Number(r.seo_gain||0)}・エラー ${Number(r.errors||0)}</div>
+        </div>`;
+      }).join(''):'<small style="color:#8794a1">まだまとめ履歴がありません。</small>';
+    }
+
     const qs=document.getElementById('mhQueueStatus');
     if(qs){
       if(q.active){const label=q.stage==='discovery'?`新規開拓 ${Number(q.discovery_searched||0)}検索 / 新規${Number(q.created_total||0)}/20（最低目標10）`:`実行中：${kbnMaintenanceTaskLabelV414(q.task)}`;qs.textContent=`現在：${label}。小分け保存しながら自動継続中です。`;qs.style.color='#efc45a';}
@@ -11115,8 +11196,12 @@ async function kbnLoadHourlyStatusV421(){
 let kbnScheduleLiveRefreshV421=null;
 document.addEventListener("DOMContentLoaded",()=>{
   loadInstagramFullAuditStatusV432().catch(()=>{});
+  loadDailyPrecisionStatusV433().catch(()=>{});
   setInterval(()=>{
-    if(document.visibilityState==="visible")loadInstagramFullAuditStatusV432().catch(()=>{});
+    if(document.visibilityState==="visible"){
+      loadInstagramFullAuditStatusV432().catch(()=>{});
+      loadDailyPrecisionStatusV433().catch(()=>{});
+    }
   },5000);
   loadMaintenanceHistoryV414().catch(()=>{});kbnLoadHourlyStatusV421().catch(()=>{});
   document.getElementById('reloadMaintenanceHistoryBtn')?.addEventListener('click',()=>loadMaintenanceHistoryV414());
