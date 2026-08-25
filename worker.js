@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.34";
+      config.vars.KBN_CONFIG_VERSION="4.35";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -8570,11 +8570,32 @@ export default {
       return raw;
     }
 
+
+    // v4.35: Search Console was seeing a stale/implicit X-Robots-Tag:noindex on
+    // canonical local SEO pages. Always emit an explicit header that matches the
+    // page's own <meta name="robots"> directive.
+    const kbnLocalSeoHeadersV435=(html)=>{
+      const h=new Headers({
+        "content-type":"text/html; charset=utf-8",
+        "cache-control":"public, max-age=300, stale-while-revalidate=1800",
+        "content-language":"ja"
+      });
+      const isNoindex=/<meta\s+name=["']robots["'][^>]*content=["'][^"']*noindex/i.test(String(html||""));
+      h.set(
+        "x-robots-tag",
+        isNoindex
+          ?"noindex, follow"
+          :"index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+      );
+      h.set("x-kbn-seo-robots","explicit-v435");
+      return h;
+    };
+
     const localSeoAreaMatch=url.pathname.match(/^\/area\/([a-z0-9-]+)\/?$/);
     if(localSeoAreaMatch && request.method==="GET"){
       const html=await renderLocalSeoAreaPage(env,localSeoAreaMatch[1]);
       if(!html)return new Response("Not Found",{status:404});
-      return new Response(kbnInjectCwvHints(html),{headers:{"content-type":"text/html; charset=utf-8","cache-control":"public, max-age=300, stale-while-revalidate=1800"}});
+      return new Response(kbnInjectCwvHints(html),{headers:kbnLocalSeoHeadersV435(html)});
     }
 
 
@@ -8583,14 +8604,14 @@ export default {
     if(localSeoAreaGenreMatch && request.method==="GET"){
       const html=await renderLocalSeoAreaGenrePage(env,localSeoAreaGenreMatch[1],localSeoAreaGenreMatch[2]);
       if(!html)return new Response("Not Found",{status:404,headers:{"x-robots-tag":"noindex, follow"}});
-      return new Response(kbnInjectCwvHints(html),{headers:{"content-type":"text/html; charset=utf-8","cache-control":"public, max-age=300, stale-while-revalidate=1800"}});
+      return new Response(kbnInjectCwvHints(html),{headers:kbnLocalSeoHeadersV435(html)});
     }
 
     const localSeoGenreMatch=url.pathname.match(/^\/genre\/([a-z0-9-]+)\/?$/);
     if(localSeoGenreMatch && request.method==="GET"){
       const html=await renderLocalSeoGenrePage(env,localSeoGenreMatch[1]);
       if(!html)return new Response("Not Found",{status:404});
-      return new Response(kbnInjectCwvHints(html),{headers:{"content-type":"text/html; charset=utf-8","cache-control":"public, max-age=300, stale-while-revalidate=1800"}});
+      return new Response(kbnInjectCwvHints(html),{headers:kbnLocalSeoHeadersV435(html)});
     }
 
     if((url.pathname==="/shop" || url.pathname==="/shop.html") && request.method==="GET"){
@@ -10717,6 +10738,32 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
 
       if(url.pathname==="/api/admin/instagram-full-audit/process" && request.method==="POST"){
         return json(await kbnProcessInstagramFullAuditV432(env));
+      }
+
+      if(url.pathname==="/api/admin/seo-robots-check" && request.method==="GET"){
+        const path=String(url.searchParams.get("path")||"/area/hitoyoshi").trim();
+        if(!/^\/(area|genre)\//.test(path)){
+          return json({ok:false,error:"INVALID_PATH"},{status:400});
+        }
+        const checkUrl=new URL(path,url.origin);
+        const internalReq=new Request(checkUrl.toString(),{method:"GET",headers:{"user-agent":"KBN-SEO-Robots-Check/4.35"}});
+        // Render directly instead of recursive fetch.
+        let html=null;
+        const am=path.match(/^\/area\/([a-z0-9-]+)\/?$/);
+        const agm=path.match(/^\/area\/([a-z0-9-]+)\/([a-z0-9-]+)\/?$/);
+        const gm=path.match(/^\/genre\/([a-z0-9-]+)\/?$/);
+        if(agm)html=await renderLocalSeoAreaGenrePage(env,agm[1],agm[2]);
+        else if(am)html=await renderLocalSeoAreaPage(env,am[1]);
+        else if(gm)html=await renderLocalSeoGenrePage(env,gm[1]);
+        if(!html)return json({ok:false,error:"NOT_FOUND",path},{status:404});
+        const isNoindex=/<meta\s+name=["']robots["'][^>]*content=["'][^"']*noindex/i.test(String(html||""));
+        return json({
+          ok:true,path,
+          meta_robots:isNoindex?"noindex, follow":"index, follow, max-image-preview:large",
+          x_robots_tag:isNoindex?"noindex, follow":"index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          canonical:(String(html).match(/<link\s+rel=["']canonical["']\s+href=["']([^"']+)/i)||[])[1]||"",
+          marker:"explicit-v435"
+        });
       }
 
       if(url.pathname==="/api/admin/shops" && request.method==="GET"){
