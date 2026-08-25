@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.35";
+      config.vars.KBN_CONFIG_VERSION="4.36";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -5555,6 +5555,10 @@ async function renderLocalSeoAreaPage(env,slug){
   const area=KBN_LOCAL_SEO_AREAS[slug];
   if(!area)return null;
 
+  // v4.36: tolerate older stored area labels such as "人吉" vs "人吉市".
+  // Canonical area pages should not become noindex just because the DB suffix differs.
+  const areaKey=String(area||"").replace(/[市町村]$/,"");
+
   let shops=[];
   let total=0;
   let updatedAt="";
@@ -5564,15 +5568,25 @@ async function renderLocalSeoAreaPage(env,slug){
         SELECT slug,name,area,address,hours,holiday,genre,features,budget_min,budget_max,image_url,
                listing_status,is_recruiting,description,updated_at
         FROM shops
-        WHERE COALESCE(is_published,1)=1 AND area=? AND COALESCE(slug,'')<>''
+        WHERE COALESCE(is_published,1)=1
+          AND (
+            area=?
+            OR REPLACE(REPLACE(REPLACE(TRIM(COALESCE(area,'')),'市',''),'町',''),'村','')=?
+          )
+          AND COALESCE(slug,'')<>''
         ORDER BY COALESCE(is_featured,0) DESC, COALESCE(sort_order,100) ASC, updated_at DESC
         LIMIT 120
-      `).bind(area).all(),
+      `).bind(area,areaKey).all(),
       env.DB.prepare(`
         SELECT COUNT(*) AS total, MAX(updated_at) AS updated_at
         FROM shops
-        WHERE COALESCE(is_published,1)=1 AND area=? AND COALESCE(slug,'')<>''
-      `).bind(area).first()
+        WHERE COALESCE(is_published,1)=1
+          AND (
+            area=?
+            OR REPLACE(REPLACE(REPLACE(TRIM(COALESCE(area,'')),'市',''),'町',''),'村','')=?
+          )
+          AND COALESCE(slug,'')<>''
+      `).bind(area,areaKey).first()
     ]);
     shops=listRes.results||[];
     total=Number(countRes?.total||shops.length||0);
@@ -5580,7 +5594,9 @@ async function renderLocalSeoAreaPage(env,slug){
   }catch(e){ console.error("local seo area query",e); }
 
   const canonical=`https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/area/${slug}`;
-  const indexable=total>0;
+  // v4.36: every valid canonical area landing page is indexable.
+  // The page remains useful as a permanent local guide even while listings are being added.
+  const indexable=true;
   const shownCount=shops.length;
 
   const genreCounts=new Map();
@@ -8574,20 +8590,20 @@ export default {
     // v4.35: Search Console was seeing a stale/implicit X-Robots-Tag:noindex on
     // canonical local SEO pages. Always emit an explicit header that matches the
     // page's own <meta name="robots"> directive.
-    const kbnLocalSeoHeadersV435=(html)=>{
+    const kbnLocalSeoHeadersV436=(html,{forceIndex=false}={})=>{
       const h=new Headers({
         "content-type":"text/html; charset=utf-8",
-        "cache-control":"public, max-age=300, stale-while-revalidate=1800",
+        "cache-control":"no-cache, max-age=0, must-revalidate",
         "content-language":"ja"
       });
-      const isNoindex=/<meta\s+name=["']robots["'][^>]*content=["'][^"']*noindex/i.test(String(html||""));
+      const isNoindex=!forceIndex && /<meta\s+name=["']robots["'][^>]*content=["'][^"']*noindex/i.test(String(html||""));
       h.set(
         "x-robots-tag",
         isNoindex
           ?"noindex, follow"
           :"index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
       );
-      h.set("x-kbn-seo-robots","explicit-v435");
+      h.set("x-kbn-seo-robots","explicit-v436");
       return h;
     };
 
@@ -8595,7 +8611,7 @@ export default {
     if(localSeoAreaMatch && request.method==="GET"){
       const html=await renderLocalSeoAreaPage(env,localSeoAreaMatch[1]);
       if(!html)return new Response("Not Found",{status:404});
-      return new Response(kbnInjectCwvHints(html),{headers:kbnLocalSeoHeadersV435(html)});
+      return new Response(kbnInjectCwvHints(html),{headers:kbnLocalSeoHeadersV436(html,{forceIndex:true})});
     }
 
 
@@ -8604,14 +8620,14 @@ export default {
     if(localSeoAreaGenreMatch && request.method==="GET"){
       const html=await renderLocalSeoAreaGenrePage(env,localSeoAreaGenreMatch[1],localSeoAreaGenreMatch[2]);
       if(!html)return new Response("Not Found",{status:404,headers:{"x-robots-tag":"noindex, follow"}});
-      return new Response(kbnInjectCwvHints(html),{headers:kbnLocalSeoHeadersV435(html)});
+      return new Response(kbnInjectCwvHints(html),{headers:kbnLocalSeoHeadersV436(html)});
     }
 
     const localSeoGenreMatch=url.pathname.match(/^\/genre\/([a-z0-9-]+)\/?$/);
     if(localSeoGenreMatch && request.method==="GET"){
       const html=await renderLocalSeoGenrePage(env,localSeoGenreMatch[1]);
       if(!html)return new Response("Not Found",{status:404});
-      return new Response(kbnInjectCwvHints(html),{headers:kbnLocalSeoHeadersV435(html)});
+      return new Response(kbnInjectCwvHints(html),{headers:kbnLocalSeoHeadersV436(html)});
     }
 
     if((url.pathname==="/shop" || url.pathname==="/shop.html") && request.method==="GET"){
@@ -10746,7 +10762,7 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
           return json({ok:false,error:"INVALID_PATH"},{status:400});
         }
         const checkUrl=new URL(path,url.origin);
-        const internalReq=new Request(checkUrl.toString(),{method:"GET",headers:{"user-agent":"KBN-SEO-Robots-Check/4.35"}});
+        const internalReq=new Request(checkUrl.toString(),{method:"GET",headers:{"user-agent":"KBN-SEO-Robots-Check/4.36"}});
         // Render directly instead of recursive fetch.
         let html=null;
         const am=path.match(/^\/area\/([a-z0-9-]+)\/?$/);
@@ -10762,7 +10778,7 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
           meta_robots:isNoindex?"noindex, follow":"index, follow, max-image-preview:large",
           x_robots_tag:isNoindex?"noindex, follow":"index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
           canonical:(String(html).match(/<link\s+rel=["']canonical["']\s+href=["']([^"']+)/i)||[])[1]||"",
-          marker:"explicit-v435"
+          marker:"explicit-v436"
         });
       }
 
