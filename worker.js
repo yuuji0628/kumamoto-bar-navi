@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.29";
+      config.vars.KBN_CONFIG_VERSION="4.32";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -3182,6 +3182,70 @@ function instagramSearchScore({shopName="",area="",handle="",title="",snippet=""
   return Math.max(0,Math.min(99,score));
 }
 
+
+function kbnInstagramGenericHandleV430(handle){
+  const h=String(handle||"").toLowerCase().replace(/^@/,"").trim();
+  if(!h)return true;
+  if(/^(bar|bars|snack|lounge|club|night|kumamoto|kuma|official|info|staff|shop|cafe|restaurant)[._0-9-]*$/.test(h))return true;
+  if(h.length<4)return true;
+  return false;
+}
+
+function kbnInstagramStrongNameEvidenceV430(shopName,candidate){
+  const name=normalizePlaceName(shopName);
+  const title=normalizePlaceName(candidate?.title||"");
+  const snippet=normalizePlaceName(candidate?.snippet||"");
+  const handle=normalizePlaceName(String(candidate?.handle||"").replace(/[._-]/g," "));
+  if(!name)return false;
+
+  // exact/contained evidence from title/snippet is strongest.
+  if(title===name || snippet.includes(name) || title.includes(name))return true;
+
+  // Handle match is accepted only for non-generic names and high similarity.
+  const hs=placeNameMatchScore(shopName,handle);
+  return name.length>=4 && hs>=92 && !kbnInstagramGenericHandleV430(candidate?.handle);
+}
+
+function kbnInstagramAreaEvidenceV430(area,candidate){
+  const text=`${candidate?.title||""} ${candidate?.snippet||""}`;
+  const a=String(area||"").trim();
+  if(/熊本/.test(text))return true;
+  if(a && text.includes(a))return true;
+  return false;
+}
+
+function kbnInstagramStrictDecisionV430({shopName="",area="",candidates=[]}={}){
+  const sorted=[...(candidates||[])].sort((a,b)=>Number(b?.score||0)-Number(a?.score||0));
+  const best=sorted[0]||null;
+  const second=sorted[1]||null;
+  if(!best)return {approved:false,reason:"NO_CANDIDATE",score:0,best:null};
+
+  const strongName=kbnInstagramStrongNameEvidenceV430(shopName,best);
+  const areaOk=kbnInstagramAreaEvidenceV430(area,best);
+  const generic=kbnInstagramGenericHandleV430(best.handle);
+  const score=Number(best.score||0);
+  const margin=score-Number(second?.score||0);
+
+  // Auto-link only when the candidate is exceptionally strong.
+  const approved=
+    score>=96 &&
+    strongName &&
+    areaOk &&
+    !generic &&
+    (sorted.length===1 || margin>=8);
+
+  let reason="APPROVED_STRICT";
+  if(!approved){
+    if(score<96)reason="SCORE_BELOW_96";
+    else if(!strongName)reason="NAME_EVIDENCE_WEAK";
+    else if(!areaOk)reason="AREA_EVIDENCE_MISSING";
+    else if(generic)reason="GENERIC_HANDLE";
+    else if(margin<8)reason="AMBIGUOUS_TOP_CANDIDATES";
+    else reason="STRICT_REJECT";
+  }
+  return {approved,reason,score,best,second,margin,strongName,areaOk,generic};
+}
+
 async function discoverInstagramForShop(env,{name,area,website="",existing=""}={}){
   const current=kbnHandle(existing);
   if(current){
@@ -3198,7 +3262,7 @@ async function discoverInstagramForShop(env,{name,area,website="",existing=""}={
     if(h){
       return {
         ok:true,instagram:`https://www.instagram.com/${h}/`,
-        score:100,confidence:"official",source:"official_website"
+        score:100,confidence:"official",source:"official_website_verified"
       };
     }
   }
@@ -3242,12 +3306,18 @@ async function discoverInstagramForShop(env,{name,area,website="",existing=""}={
   }
 
   candidates.sort((a,b)=>b.score-a.score);
-  const best=candidates[0]||null;
+  const strict=kbnInstagramStrictDecisionV430({
+    shopName:name,
+    area,
+    candidates
+  });
+  const best=strict.best||candidates[0]||null;
 
-  if(best && best.score>=90){
+  if(strict.approved && best){
     return {
       ok:true,configured:true,instagram:best.instagram,
-      score:best.score,confidence:"high",source:"google_instagram_search",
+      score:best.score,confidence:"verified_strict",source:"google_instagram_search_strict_v430",
+      reason:strict.reason,margin:strict.margin,
       candidates:candidates.slice(0,5)
     };
   }
@@ -3255,8 +3325,9 @@ async function discoverInstagramForShop(env,{name,area,website="",existing=""}={
   return {
     ok:true,configured:true,instagram:"",
     score:Number(best?.score||0),
-    confidence:best&&best.score>=70?"candidate":"low",
-    source:"google_instagram_search",
+    confidence:best&&Number(best.score||0)>=70?"candidate":"low",
+    source:"google_instagram_search_strict_v430",
+    reason:strict.reason,margin:strict.margin,
     candidates:candidates.slice(0,5)
   };
 }
@@ -3543,7 +3614,7 @@ async function refreshIndependentListings(env,{limit=10,afterId=0,revalidate=fal
         instagramDiscovery=await discoverInstagramForShop(env,{
           name:gName,area,website,existing:shop.instagram||""
         });
-        if(instagramDiscovery?.instagram && Number(instagramDiscovery.score||0)>=90){
+        if(instagramDiscovery?.instagram && ["official","verified_strict"].includes(String(instagramDiscovery.confidence||""))){
           instagram=instagramDiscovery.instagram;
         }else if(instagramDiscovery?.confidence==="candidate" && instagramDiscovery?.candidates?.[0]){
           const top=instagramDiscovery.candidates[0];
@@ -5194,6 +5265,11 @@ async function ensureShopOutreachColumnsV428(env){
     if(!cols.has("outreach_status"))alters.push("ALTER TABLE shops ADD COLUMN outreach_status TEXT NOT NULL DEFAULT 'not_contacted'");
     if(!cols.has("outreach_at"))alters.push("ALTER TABLE shops ADD COLUMN outreach_at TEXT");
     if(!cols.has("outreach_note"))alters.push("ALTER TABLE shops ADD COLUMN outreach_note TEXT DEFAULT ''");
+    if(!cols.has("instagram_match_status"))alters.push("ALTER TABLE shops ADD COLUMN instagram_match_status TEXT NOT NULL DEFAULT 'unknown'");
+    if(!cols.has("instagram_match_score"))alters.push("ALTER TABLE shops ADD COLUMN instagram_match_score INTEGER NOT NULL DEFAULT 0");
+    if(!cols.has("instagram_match_checked_at"))alters.push("ALTER TABLE shops ADD COLUMN instagram_match_checked_at TEXT");
+    if(!cols.has("instagram_review_value"))alters.push("ALTER TABLE shops ADD COLUMN instagram_review_value TEXT DEFAULT ''");
+    if(!cols.has("instagram_audit_version"))alters.push("ALTER TABLE shops ADD COLUMN instagram_audit_version INTEGER NOT NULL DEFAULT 0");
     for(const sql of alters){
       try{await env.DB.prepare(sql).run()}catch(e){console.error("outreach column add failed",sql,e)}
     }
@@ -7036,7 +7112,7 @@ async function enrichPriorityPublishedInfoV401(env,{targetUpdated=20,maxChecked=
         if(!ig){
           try{
             const d=await discoverInstagramForShop(env,{name:cleanName,area:shop.area||'熊本',website,existing:''});
-            if(d?.instagram && Number(d?.score||0)>=90)ig=d.instagram;
+            if(d?.instagram && ["official","verified_strict"].includes(String(d?.confidence||"")))ig=d.instagram;
           }catch{}
         }
         if(ig){patch.instagram=ig;fields.push('instagram');reason_counts.instagram_verified++;igVerified=true;}
@@ -7117,40 +7193,234 @@ async function refreshSeoUntilImprovedV321(env,{targetUpdated=20,maxChecked=200,
   };
 }
 
+
+async function ensureKbnInstagramFullAuditV432(env){
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS kbn_instagram_full_audit(
+      id INTEGER PRIMARY KEY CHECK(id=1),
+      active INTEGER NOT NULL DEFAULT 0,
+      audit_version INTEGER NOT NULL DEFAULT 32,
+      cursor INTEGER NOT NULL DEFAULT 0,
+      total INTEGER NOT NULL DEFAULT 0,
+      checked INTEGER NOT NULL DEFAULT 0,
+      verified INTEGER NOT NULL DEFAULT 0,
+      corrected INTEGER NOT NULL DEFAULT 0,
+      removed INTEGER NOT NULL DEFAULT 0,
+      review INTEGER NOT NULL DEFAULT 0,
+      failed INTEGER NOT NULL DEFAULT 0,
+      started_at TEXT,
+      finished_at TEXT,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run();
+  await env.DB.prepare(`
+    INSERT INTO kbn_instagram_full_audit(id,active,audit_version,cursor,total,checked,verified,corrected,removed,review,failed)
+    VALUES(1,0,32,0,0,0,0,0,0,0,0)
+    ON CONFLICT(id) DO NOTHING
+  `).run();
+}
+
+async function kbnStartInstagramFullAuditV432(env){
+  await ensureKbnInstagramFullAuditV432(env);
+  const totalRow=await env.DB.prepare(`
+    SELECT COUNT(*) AS c FROM shops WHERE COALESCE(is_published,1)=1
+  `).first();
+  const total=Number(totalRow?.c||0);
+
+  await env.DB.prepare(`
+    UPDATE kbn_instagram_full_audit
+    SET active=1,audit_version=32,cursor=0,total=?,checked=0,verified=0,corrected=0,
+        removed=0,review=0,failed=0,started_at=CURRENT_TIMESTAMP,finished_at=NULL,
+        updated_at=CURRENT_TIMESTAMP
+    WHERE id=1
+  `).bind(total).run();
+
+  await env.DB.prepare(`
+    UPDATE shops
+    SET instagram_audit_version=0
+    WHERE COALESCE(is_published,1)=1
+  `).run();
+
+  return {ok:true,total,audit_version:32};
+}
+
+async function kbnInstagramFullAuditStatusV432(env){
+  await ensureKbnInstagramFullAuditV432(env);
+  const row=await env.DB.prepare(`SELECT * FROM kbn_instagram_full_audit WHERE id=1`).first();
+  return {
+    ok:true,
+    active:Number(row?.active||0)===1,
+    audit_version:Number(row?.audit_version||32),
+    cursor:Number(row?.cursor||0),
+    total:Number(row?.total||0),
+    checked:Number(row?.checked||0),
+    verified:Number(row?.verified||0),
+    corrected:Number(row?.corrected||0),
+    removed:Number(row?.removed||0),
+    review:Number(row?.review||0),
+    failed:Number(row?.failed||0),
+    started_at:row?.started_at||null,
+    finished_at:row?.finished_at||null,
+    updated_at:row?.updated_at||null
+  };
+}
+
+async function kbnProcessInstagramFullAuditV432(env){
+  await ensureKbnInstagramFullAuditV432(env);
+  const job=await env.DB.prepare(`SELECT * FROM kbn_instagram_full_audit WHERE id=1`).first();
+  if(Number(job?.active||0)!==1)return {ok:true,processed:false};
+
+  const cursor=Math.max(0,Number(job?.cursor||0));
+  const result=await refreshInstagramPublishedV242(env,{limit:20,afterId:cursor});
+
+  const checked=Number(result?.checked||0);
+  const verified=(result?.verified||[]).length;
+  const corrected=(result?.corrected||[]).length;
+  const removed=(result?.removed||[]).length;
+  const review=(result?.candidates||[]).length;
+  const failed=(result?.failed||[]).length;
+  const nextCursor=Math.max(cursor,Number(result?.next_after_id||cursor));
+  const done=!result?.has_more || checked===0;
+
+  await env.DB.prepare(`
+    UPDATE kbn_instagram_full_audit
+    SET cursor=?,
+        checked=checked+?,
+        verified=verified+?,
+        corrected=corrected+?,
+        removed=removed+?,
+        review=review+?,
+        failed=failed+?,
+        active=?,
+        finished_at=CASE WHEN ?=1 THEN CURRENT_TIMESTAMP ELSE finished_at END,
+        updated_at=CURRENT_TIMESTAMP
+    WHERE id=1
+  `).bind(
+    nextCursor,checked,verified,corrected,removed,review,failed,
+    done?0:1,done?1:0
+  ).run();
+
+  return {
+    ok:true,processed:true,done,
+    batch:{checked,verified,corrected,removed,review,failed},
+    next_cursor:nextCursor
+  };
+}
+
 async function refreshInstagramPublishedV242(env,{limit=20,afterId=0}={}){
+  // v4.31: 全既存店舗のInstagramを再監査し、公開情報を安全に再反映する。
+  // audit_version=31 をまだ通っていない店舗を順番に確認。
+  const AUDIT_VERSION=32;
   const max=Math.max(1,Math.min(Number(limit)||20,20));
   const cursor=Math.max(0,Number(afterId)||0);
 
   const r=await env.DB.prepare(`
-    SELECT id,name,area,instagram
+    SELECT
+      id,name,area,instagram,website,
+      instagram_match_status,instagram_match_score,
+      instagram_review_value,instagram_audit_version
     FROM shops
     WHERE COALESCE(is_published,1)=1
-      AND COALESCE(TRIM(instagram),'')=''
+      AND COALESCE(instagram_audit_version,0)<?
       AND id>?
     ORDER BY id ASC
     LIMIT ?
-  `).bind(cursor,max).all();
+  `).bind(AUDIT_VERSION,cursor,max).all();
 
   const rows=r.results||[];
-  const updated=[],candidates=[],failed=[];
+  const updated=[],verified=[],corrected=[],removed=[],candidates=[],failed=[];
 
   for(const shop of rows){
     try{
-      const ig=await discoverInstagramForShop(env,{
-        name:String(shop.name||"").replace(/^【KBN独自掲載】/,"").trim(),
+      const cleanName=String(shop.name||"").replace(/^【KBN独自掲載】/,"").trim();
+      const currentInstagram=String(shop.instagram||"").trim();
+      const currentHandle=kbnHandle(currentInstagram||"");
+
+      // 厳格ロジックで「現在のInstagramを信用せず」店舗名・地域から再探索。
+      const sr=await discoverInstagramForShop(env,{
+        name:cleanName,
         area:shop.area||"熊本",
-        website:"",
+        website:shop.website||"",
         existing:""
       });
 
-      if(ig?.instagram && Number(ig.score||0)>=90){
+      const strictOk=
+        !!sr?.instagram &&
+        ["official","verified_strict"].includes(String(sr.confidence||""));
+
+      if(strictOk){
+        const newInstagram=String(sr.instagram||"").trim();
+        const newHandle=kbnHandle(newInstagram);
+        const same=!!currentHandle && currentHandle===newHandle;
+
         await env.DB.prepare(`
-          UPDATE shops SET instagram=?,updated_at=CURRENT_TIMESTAMP WHERE id=?
-        `).bind(ig.instagram,shop.id).run();
-        updated.push({id:shop.id,name:shop.name,instagram:ig.instagram,score:ig.score});
-      }else if(ig?.candidates?.[0] && Number(ig.candidates[0].score||0)>=70){
-        const c=ig.candidates[0];
-        candidates.push({id:shop.id,name:shop.name,handle:c.handle,score:c.score});
+          UPDATE shops
+          SET
+            instagram=?,
+            instagram_review_value=CASE
+              WHEN ?<>'' AND ?<>? THEN ?
+              ELSE COALESCE(instagram_review_value,'')
+            END,
+            instagram_match_status='verified',
+            instagram_match_score=?,
+            instagram_match_checked_at=CURRENT_TIMESTAMP,
+            instagram_audit_version=?,
+            updated_at=CURRENT_TIMESTAMP
+          WHERE id=?
+        `).bind(
+          newInstagram,
+          currentInstagram,currentHandle,newHandle,currentInstagram,
+          Number(sr.score||100),
+          AUDIT_VERSION,
+          shop.id
+        ).run();
+
+        const item={
+          id:shop.id,name:shop.name,
+          before:currentInstagram,
+          instagram:newInstagram,
+          score:Number(sr.score||100),
+          source:String(sr.source||""),
+          same
+        };
+        updated.push(item);
+        if(same)verified.push(item);
+        else corrected.push(item);
+      }else{
+        // 本当に正しいと確認できないInstagramは公開から外す。
+        // 元の値は instagram_review_value に保存し、後から手動確認可能。
+        const preserved=currentInstagram || String(shop.instagram_review_value||"").trim();
+
+        await env.DB.prepare(`
+          UPDATE shops
+          SET
+            instagram='',
+            instagram_review_value=?,
+            instagram_match_status='review',
+            instagram_match_score=?,
+            instagram_match_checked_at=CURRENT_TIMESTAMP,
+            instagram_audit_version=?,
+            updated_at=CURRENT_TIMESTAMP
+          WHERE id=?
+        `).bind(
+          preserved,
+          Number(sr?.score||0),
+          AUDIT_VERSION,
+          shop.id
+        ).run();
+
+        const best=sr?.candidates?.[0]||null;
+        const item={
+          id:shop.id,name:shop.name,
+          removed_instagram:currentInstagram,
+          preserved_instagram:preserved,
+          best_candidate:best?.instagram||"",
+          candidate_handle:best?.handle||"",
+          score:Number(best?.score||sr?.score||0),
+          reason:String(sr?.reason||"NOT_VERIFIED")
+        };
+        if(currentInstagram)removed.push(item);
+        candidates.push(item);
       }
     }catch(e){
       failed.push({id:shop.id,name:shop.name,error:String(e?.message||e).slice(0,250)});
@@ -7159,16 +7429,27 @@ async function refreshInstagramPublishedV242(env,{limit=20,afterId=0}={}){
 
   const nextAfterId=rows.length?Number(rows[rows.length-1].id||0):cursor;
   const more=await env.DB.prepare(`
-    SELECT id FROM shops
+    SELECT id
+    FROM shops
     WHERE COALESCE(is_published,1)=1
-      AND COALESCE(TRIM(instagram),'')=''
+      AND COALESCE(instagram_audit_version,0)<?
       AND id>?
-    ORDER BY id ASC LIMIT 1
-  `).bind(nextAfterId).first();
+    ORDER BY id ASC
+    LIMIT 1
+  `).bind(AUDIT_VERSION,nextAfterId).first();
 
   return {
-    ok:true,checked:rows.length,updated,candidates,failed,
-    next_after_id:nextAfterId,has_more:!!more
+    ok:failed.length===0,
+    audit_version:AUDIT_VERSION,
+    checked:rows.length,
+    updated,
+    verified,
+    corrected,
+    removed,
+    candidates,
+    failed,
+    next_after_id:nextAfterId,
+    has_more:!!more
   };
 }
 
@@ -7798,12 +8079,13 @@ async function enrichScheduledCreatedShops(env,created=[]){
           existing:""
         });
 
-        if(ig?.instagram && Number(ig.score||0)>=90){
+        if(ig?.instagram && ["official","verified_strict"].includes(String(ig.confidence||""))){
           await env.DB.prepare(`
             UPDATE shops
-            SET instagram=?,updated_at=CURRENT_TIMESTAMP
+            SET instagram=?,instagram_match_status='verified',instagram_match_score=?,
+                instagram_match_checked_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP
             WHERE id=?
-          `).bind(ig.instagram,id).run();
+          `).bind(ig.instagram,Number(ig.score||0),id).run();
           instagram.updated.push({
             id,name:shop.name,instagram:ig.instagram,
             score:Number(ig.score||0),source:ig.source||""
@@ -10229,6 +10511,22 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
       }
 
 
+      const instagramVerifyMatchV430=url.pathname.match(/^\/api\/admin\/shops\/(\d+)\/instagram-verification$/);
+      if(instagramVerifyMatchV430 && request.method==="POST"){
+        const id=Number(instagramVerifyMatchV430[1]);
+        let body={};
+        try{body=await request.json()}catch{return json({ok:false,error:"INVALID_JSON"},{status:400})}
+        const status=String(body.status||"").trim();
+        if(!["verified","review","unknown"].includes(status)){
+          return json({ok:false,error:"INVALID_STATUS"},{status:400});
+        }
+        await env.DB.prepare(`
+          UPDATE shops SET instagram_match_status=?,instagram_match_checked_at=CURRENT_TIMESTAMP,
+            updated_at=CURRENT_TIMESTAMP WHERE id=?
+        `).bind(status,id).run();
+        return json({ok:true,id,status});
+      }
+
       const outreachMatchV428=url.pathname.match(/^\/api\/admin\/shops\/(\d+)\/outreach$/);
       if(outreachMatchV428 && request.method==="POST"){
         const id=Number(outreachMatchV428[1]);
@@ -10247,6 +10545,18 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
           WHERE id=?
         `).bind(status,status,note,id).run();
         return json({ok:true,id,status,note});
+      }
+
+      if(url.pathname==="/api/admin/instagram-full-audit/start" && request.method==="POST"){
+        return json(await kbnStartInstagramFullAuditV432(env));
+      }
+
+      if(url.pathname==="/api/admin/instagram-full-audit/status" && request.method==="GET"){
+        return json(await kbnInstagramFullAuditStatusV432(env));
+      }
+
+      if(url.pathname==="/api/admin/instagram-full-audit/process" && request.method==="POST"){
+        return json(await kbnProcessInstagramFullAuditV432(env));
       }
 
       if(url.pathname==="/api/admin/shops" && request.method==="GET"){
@@ -10907,6 +11217,13 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
   async scheduled(event, env, ctx){
     const task=(async()=>{
       // v4.21: automatic processing is unified into one hourly pipeline.
+      try{
+        const igAudit=await kbnProcessInstagramFullAuditV432(env);
+        if(igAudit?.processed)return;
+      }catch(e){
+        console.error("instagram full audit process failed",e);
+      }
+
       const queued=await kbnProcessQueuedMaintenanceV242(env);
       if(queued?.processed)return;
 
