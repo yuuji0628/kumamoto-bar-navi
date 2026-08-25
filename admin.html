@@ -10873,7 +10873,8 @@ async function loadDailyPrecisionStatusV433(){
       idle:"待機中"
     };
     const stage=String(d.stage||"idle");
-    el.textContent=`日次精度メンテ：${labels[stage]||stage} / 閉業確認 ${Number(d.checked_closed||0)}店舗 / Instagram再検査 ${Number(d.checked_instagram||0)}店舗 / 対象外候補 ${Number(d.exclusion_count||0)}件。毎時間のBAR開拓を優先し、空き時間だけ進みます。閉業は10店ずつ、Instagram再検査は20店ずつ進めます。`;
+    const skip=String(d.closed_skip_reason||"");
+    el.textContent=`日次精度メンテ：${labels[stage]||stage} / 閉業確認 ${Number(d.checked_closed||0)}店舗${skip?`（本日保留:${skip}）`:""} / 閉業APIエラー ${Number(d.closed_error_count||0)}件 / Instagram再検査 ${Number(d.checked_instagram||0)}店舗 / 対象外候補 ${Number(d.exclusion_count||0)}件。毎時間のBAR開拓を優先し、Google停止時は閉業確認を飛ばしてInstagramへ進みます。`;
   }catch(e){
     el.textContent=`日次精度メンテ：状態取得失敗 ${e?.message||e}`;
   }
