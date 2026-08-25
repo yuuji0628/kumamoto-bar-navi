@@ -178,6 +178,46 @@
 @media(max-width:560px){
   .owner-url-actions-v281{grid-template-columns:1fr}
 }
+
+/* v4.29: 正式掲載お願い管理 - 店舗名を最優先で見やすく */
+.dense-shop-title-row{
+  display:block!important;
+}
+.dense-shop-title-row h3{
+  display:block!important;
+  width:100%!important;
+  max-width:none!important;
+  white-space:normal!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+  font-size:1rem!important;
+  line-height:1.35!important;
+  font-weight:900!important;
+  color:#f5f7f8!important;
+  margin:0!important;
+  word-break:break-word;
+}
+.dense-shop-badges{
+  display:flex!important;
+  flex-wrap:wrap!important;
+  gap:4px!important;
+  margin-top:5px!important;
+}
+.dense-shop-main p{
+  margin-top:5px!important;
+}
+@media(max-width:760px){
+  .dense-shop-card{
+    align-items:start!important;
+  }
+  .dense-shop-title-row h3{
+    font-size:.98rem!important;
+  }
+  .dense-actions{
+    padding-top:2px!important;
+  }
+}
+
 </style>
 
 
@@ -5263,8 +5303,25 @@ async function api(path,opt={}){
     "Authorization":`Bearer ${token}`
   };
 
+  let body=opt.body;
+  const isPlainObject=
+    body &&
+    typeof body==="object" &&
+    !(body instanceof FormData) &&
+    !(body instanceof URLSearchParams) &&
+    !(body instanceof Blob) &&
+    !(body instanceof ArrayBuffer);
+
+  if(isPlainObject){
+    body=JSON.stringify(body);
+    if(!headers["Content-Type"] && !headers["content-type"]){
+      headers["Content-Type"]="application/json";
+    }
+  }
+
   const r=await fetch(path,{
     ...opt,
+    body,
     credentials:"include",
     cache:"no-store",
     headers
@@ -5407,7 +5464,7 @@ function renderShopList(){
             ${provisional && s.outreach_note?`<p class="shop-outreach-note">メモ：${esc(s.outreach_note)}</p>`:''}
           </div>
           <div class="admin-item-actions compact-actions dense-actions">
-            ${provisional && cleanInstagramHandle(s.instagram||"")?`<button type="button" onclick="sendProvisionalInstagramDm(${s.id})" class="shop-provisional-dm dense-icon-btn" title="店舗へInstagram DM">DM</button>`:""}
+            ${provisional && cleanInstagramHandle(s.instagram||"")?`<button type="button" onclick="sendProvisionalInstagramDm(${s.id})" class="shop-provisional-dm dense-icon-btn" title="この店舗へInstagramで正式掲載をお願いする">DM</button>`:""}
             ${!provisional?`<button type="button" onclick="reopenInstaDraft(${s.id})" class="shop-instagram-reopen dense-icon-btn" title="Instagram投稿">IG</button>`:""}
             <button onclick="editShop(${s.id})" class="shop-edit-main">編集</button>
             <details class="shop-more-menu">
@@ -5602,19 +5659,29 @@ window.sendProvisionalInstagramDm=async function(id){
     return;
   }
 
+  // タップ直後にInstagramを開く。await後だとiPhoneでポップアップ扱いになる場合があるため。
+  window.open(`https://www.instagram.com/${encodeURIComponent(handle)}/`,"_blank");
+
   const text=buildExistingProvisionalDm(shop);
   const copied=await copyTextSafe(text);
 
-  try{await updateShopOutreachV428(id,"dm_sent",{silent:true})}
-  catch(e){console.warn("DM status update failed",e)}
+  let statusSaved=true;
+  try{
+    await updateShopOutreachV428(id,"dm_sent",{silent:true});
+  }catch(e){
+    statusSaved=false;
+    console.warn("DM status update failed",e);
+  }
 
   if(copied){
-    alert("店舗確認用DMをコピーしました。Instagramを開きます。DMに貼り付けて送信してください。");
+    alert(
+      statusSaved
+        ?"DM文をコピーしました。連絡状況も「DM済」に更新しました。"
+        :"DM文はコピーできましたが、連絡状況の保存だけ失敗しました。もう一度「DM済」を押してください。"
+    );
   }else{
     prompt("このDM文をコピーしてInstagramで送ってください。",text);
   }
-
-  window.open(`https://www.instagram.com/${encodeURIComponent(handle)}/`,"_blank");
 };
 
 window.openInstagramProfile=function(id){
