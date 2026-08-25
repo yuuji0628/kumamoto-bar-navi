@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.39";
+      config.vars.KBN_CONFIG_VERSION="4.40";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -7845,6 +7845,8 @@ async function ensureKbnDailyPrecisionV433(env){
       stage TEXT NOT NULL DEFAULT 'idle',
       checked_closed INTEGER NOT NULL DEFAULT 0,
       checked_instagram INTEGER NOT NULL DEFAULT 0,
+      instagram_cursor INTEGER NOT NULL DEFAULT 0,
+      instagram_target INTEGER NOT NULL DEFAULT 50,
       exclusion_count INTEGER NOT NULL DEFAULT 0,
       closed_error_count INTEGER NOT NULL DEFAULT 0,
       closed_skip_reason TEXT NOT NULL DEFAULT '',
@@ -7857,6 +7859,8 @@ async function ensureKbnDailyPrecisionV433(env){
     const names=new Set((info.results||[]).map(x=>String(x.name||"")));
     if(!names.has("closed_error_count"))await env.DB.prepare("ALTER TABLE kbn_daily_precision_state ADD COLUMN closed_error_count INTEGER NOT NULL DEFAULT 0").run();
     if(!names.has("closed_skip_reason"))await env.DB.prepare("ALTER TABLE kbn_daily_precision_state ADD COLUMN closed_skip_reason TEXT NOT NULL DEFAULT ''").run();
+    if(!names.has("instagram_cursor"))await env.DB.prepare("ALTER TABLE kbn_daily_precision_state ADD COLUMN instagram_cursor INTEGER NOT NULL DEFAULT 0").run();
+    if(!names.has("instagram_target"))await env.DB.prepare("ALTER TABLE kbn_daily_precision_state ADD COLUMN instagram_target INTEGER NOT NULL DEFAULT 50").run();
   }catch(e){
     if(!/duplicate column/i.test(String(e?.message||e||"")))throw e;
   }
@@ -7878,6 +7882,117 @@ async function kbnDailyPrecisionStatusV433(env){
   return {ok:true,...row};
 }
 
+
+async function kbnAuditInstagramDailySliceV440(env,{afterId=0,limit=20}={}){
+  const max=Math.max(1,Math.min(Number(limit)||20,20));
+  let cursor=Math.max(0,Number(afterId)||0);
+
+  async function loadRows(fromId){
+    const r=await env.DB.prepare(`
+      SELECT id,name,area,instagram,website,instagram_review_value
+      FROM shops
+      WHERE COALESCE(is_published,1)=1
+        AND id>?
+      ORDER BY id ASC
+      LIMIT ?
+    `).bind(fromId,max).all();
+    return r.results||[];
+  }
+
+  let rows=await loadRows(cursor);
+  let wrapped=false;
+
+  // 一巡したら先頭へ戻る。毎日50件ずつ永久にローテーション。
+  if(!rows.length && cursor>0){
+    cursor=0;
+    rows=await loadRows(0);
+    wrapped=true;
+  }
+
+  const verified=[],corrected=[],removed=[],review=[],failed=[];
+
+  for(const shop of rows){
+    try{
+      const cleanName=String(shop.name||"").replace(/^【KBN独自掲載】/,"").trim();
+      const currentInstagram=String(shop.instagram||"").trim();
+      const currentHandle=kbnHandle(currentInstagram||"");
+
+      const sr=await discoverInstagramForShop(env,{
+        name:cleanName,
+        area:shop.area||"熊本",
+        website:shop.website||"",
+        existing:""
+      });
+
+      const strictOk=
+        !!sr?.instagram &&
+        ["official","verified_strict"].includes(String(sr.confidence||""));
+
+      if(strictOk){
+        const newInstagram=String(sr.instagram||"").trim();
+        const newHandle=kbnHandle(newInstagram);
+        const same=!!currentHandle && currentHandle===newHandle;
+
+        await env.DB.prepare(`
+          UPDATE shops
+          SET instagram=?,
+              instagram_review_value=CASE
+                WHEN ?<>'' AND ?<>? THEN ?
+                ELSE COALESCE(instagram_review_value,'')
+              END,
+              instagram_match_status='verified',
+              instagram_match_score=?,
+              instagram_match_checked_at=CURRENT_TIMESTAMP,
+              updated_at=CURRENT_TIMESTAMP
+          WHERE id=?
+        `).bind(
+          newInstagram,
+          currentInstagram,currentHandle,newHandle,currentInstagram,
+          Number(sr.score||100),
+          shop.id
+        ).run();
+
+        const item={id:shop.id,name:shop.name,before:currentInstagram,instagram:newInstagram,score:Number(sr.score||100),same};
+        if(same)verified.push(item); else corrected.push(item);
+      }else{
+        const preserved=currentInstagram || String(shop.instagram_review_value||"").trim();
+
+        await env.DB.prepare(`
+          UPDATE shops
+          SET instagram='',
+              instagram_review_value=?,
+              instagram_match_status='review',
+              instagram_match_score=?,
+              instagram_match_checked_at=CURRENT_TIMESTAMP,
+              updated_at=CURRENT_TIMESTAMP
+          WHERE id=?
+        `).bind(preserved,Number(sr?.score||0),shop.id).run();
+
+        const item={
+          id:shop.id,name:shop.name,
+          removed_instagram:currentInstagram,
+          preserved_instagram:preserved,
+          reason:String(sr?.reason||"NOT_VERIFIED")
+        };
+        if(currentInstagram)removed.push(item);
+        review.push(item);
+      }
+    }catch(e){
+      failed.push({id:shop.id,name:shop.name,error:String(e?.message||e).slice(0,250)});
+    }
+  }
+
+  const nextCursor=rows.length?Number(rows[rows.length-1].id||0):cursor;
+
+  return {
+    ok:failed.length===0,
+    checked:rows.length,
+    verified,corrected,removed,review,failed,
+    next_cursor:nextCursor,
+    wrapped
+  };
+}
+
 async function kbnProcessDailyPrecisionV433(env){
   await ensureKbnDailyPrecisionV433(env);
   const today=kbnJstDateV433();
@@ -7888,10 +8003,11 @@ async function kbnProcessDailyPrecisionV433(env){
     await env.DB.prepare(`
       UPDATE kbn_daily_precision_state
       SET run_date=?,stage='closed',checked_closed=0,checked_instagram=0,
+          instagram_target=50,
           exclusion_count=0,closed_error_count=0,closed_skip_reason='',updated_at=CURRENT_TIMESTAMP
       WHERE id=1
     `).bind(today).run();
-    st={...(st||{}),run_date:today,stage:'closed',checked_closed:0,checked_instagram:0,exclusion_count:0,closed_error_count:0,closed_skip_reason:''};
+    st={...(st||{}),run_date:today,stage:'closed',checked_closed:0,checked_instagram:0,instagram_target:50,exclusion_count:0,closed_error_count:0,closed_skip_reason:''};
   }
 
   const stage=String(st?.stage||'idle');
@@ -7958,55 +8074,83 @@ async function kbnProcessDailyPrecisionV433(env){
   }
 
   if(stage==='instagram_start'){
-    // Start one full strict Instagram re-audit for the day.
-    const current=await kbnInstagramFullAuditStatusV432(env);
-    if(!current.active){
-      await kbnStartInstagramFullAuditV432(env);
-    }
+    // v4.40: 全件監査はやめ、1日50店舗だけ続きから検査する。
+    // 旧full auditが残っていても停止して、日次50件を優先。
+    try{
+      await ensureKbnInstagramFullAuditV432(env);
+      await env.DB.prepare(`
+        UPDATE kbn_instagram_full_audit
+        SET active=0,updated_at=CURRENT_TIMESTAMP
+        WHERE id=1
+      `).run();
+    }catch{}
+
     await env.DB.prepare(`
-      UPDATE kbn_daily_precision_state SET stage='instagram_wait',updated_at=CURRENT_TIMESTAMP WHERE id=1
+      UPDATE kbn_daily_precision_state
+      SET stage='instagram_wait',instagram_target=50,updated_at=CURRENT_TIMESTAMP
+      WHERE id=1
     `).run();
+
     await logKbnMaintenanceHistoryV414(env,{
       q:{run_date:`${today} daily_precision`},phase:0,task:'instagram_daily',
       result:{ok:true,checked:0},status:'success',
-      note:'日次精度 / Instagram全件再検査 開始'
+      note:'日次精度 / Instagram再検査 50店舗/日 開始'
     });
-    return {ok:true,processed:true,stage:'instagram_start'};
+
+    return {ok:true,processed:true,stage:'instagram_start',target:50};
   }
 
   if(stage==='instagram_wait'){
-    const ig=await kbnInstagramFullAuditStatusV432(env);
-    if(ig.active){
-      const r=await kbnProcessInstagramFullAuditV432(env);
-      const igNow=await kbnInstagramFullAuditStatusV432(env);
+    const fresh=await env.DB.prepare(`SELECT * FROM kbn_daily_precision_state WHERE id=1`).first();
+    const checkedToday=Math.max(0,Number(fresh?.checked_instagram||0));
+    const target=Math.max(1,Number(fresh?.instagram_target||50));
+
+    if(checkedToday>=target){
       await env.DB.prepare(`
         UPDATE kbn_daily_precision_state
-        SET checked_instagram=?,updated_at=CURRENT_TIMESTAMP
+        SET stage='exclusion',updated_at=CURRENT_TIMESTAMP
         WHERE id=1
-      `).bind(Number(igNow?.checked||0)).run();
-      const b=r?.batch||{};
-      await logKbnMaintenanceHistoryV414(env,{
-        q:{run_date:`${today} daily_precision`},phase:0,task:'instagram_daily',
-        result:{ok:r?.ok!==false,checked:Number(b.checked||0),updated_count:Number(b.verified||0)+Number(b.corrected||0),errors:Number(b.failed||0)?Array(Number(b.failed||0)).fill(1):[]},
-        status:r?.ok===false?'failed':'success',
-        note:`日次精度 / Instagram再検査 / 正常${Number(b.verified||0)} / 差替${Number(b.corrected||0)} / 除外${Number(b.removed||0)} / 要確認${Number(b.review||0)} / 累計${Number(igNow?.checked||0)}/${Number(igNow?.total||0)}`
-      });
-      return {ok:true,processed:true,stage:'instagram',result:r};
+      `).run();
+      return {ok:true,processed:true,stage:'instagram_daily_complete',checked:checkedToday,target};
     }
-    if(Number(ig.total||0)>0 && Number(ig.checked||0)>=Number(ig.total||0)){
-      await env.DB.prepare(`
-        UPDATE kbn_daily_precision_state SET checked_instagram=?,stage='exclusion',updated_at=CURRENT_TIMESTAMP WHERE id=1
-      `).bind(Number(ig.checked||0)).run();
-      await logKbnMaintenanceHistoryV414(env,{
-        q:{run_date:`${today} daily_precision`},phase:0,task:'instagram_daily',
-        result:{ok:true,checked:0},status:'success',
-        note:`日次精度 / Instagram全件再検査 完了 ${Number(ig.checked||0)}/${Number(ig.total||0)}店舗`
-      });
-      return {ok:true,processed:true,stage:'instagram_complete'};
-    }
-    // If audit state was cleared unexpectedly, start it again.
-    await kbnStartInstagramFullAuditV432(env);
-    return {ok:true,processed:true,stage:'instagram_restart'};
+
+    const remaining=Math.max(0,target-checkedToday);
+    const batchLimit=Math.min(20,remaining);
+    const cursor=Math.max(0,Number(fresh?.instagram_cursor||0));
+
+    const r=await kbnAuditInstagramDailySliceV440(env,{afterId:cursor,limit:batchLimit});
+    const nextChecked=checkedToday+Number(r?.checked||0);
+    const nextStage=(nextChecked>=target || Number(r?.checked||0)===0)?'exclusion':'instagram_wait';
+
+    await env.DB.prepare(`
+      UPDATE kbn_daily_precision_state
+      SET checked_instagram=?,
+          instagram_cursor=?,
+          stage=?,
+          updated_at=CURRENT_TIMESTAMP
+      WHERE id=1
+    `).bind(
+      nextChecked,
+      Number(r?.next_cursor||cursor),
+      nextStage
+    ).run();
+
+    await logKbnMaintenanceHistoryV414(env,{
+      q:{run_date:`${today} daily_precision`},phase:0,task:'instagram_daily',
+      result:{
+        ok:r?.ok!==false,
+        checked:Number(r?.checked||0),
+        updated_count:Number(r?.verified?.length||0)+Number(r?.corrected?.length||0),
+        errors:Number(r?.failed?.length||0)?Array(Number(r.failed.length)).fill(1):[]
+      },
+      status:r?.ok===false?'failed':'success',
+      note:`日次精度 / Instagram再検査 ${nextChecked}/${target}店舗 / 正常${Number(r?.verified?.length||0)} / 差替${Number(r?.corrected?.length||0)} / 公開から除外${Number(r?.removed?.length||0)} / 要確認${Number(r?.review?.length||0)}${r?.wrapped?' / 一巡して先頭へ':''}`
+    });
+
+    return {
+      ok:true,processed:true,stage:nextStage==='exclusion'?'instagram_daily_complete':'instagram',
+      result:r,checked_today:nextChecked,target
+    };
   }
 
   if(stage==='exclusion'){
@@ -11682,14 +11826,6 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
         console.error('daily precision maintenance failed',e);
       }
 
-      // Backward compatibility: if a manually started full audit remains active,
-      // continue it only in spare time so it never delays the next hourly discovery.
-      try{
-        const igAudit=await kbnProcessInstagramFullAuditV432(env);
-        if(igAudit?.processed)return;
-      }catch(e){
-        console.error("instagram full audit process failed",e);
-      }
     })();
     ctx.waitUntil(task);
     await task;
