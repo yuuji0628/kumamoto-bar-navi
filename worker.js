@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.19";
+      config.vars.KBN_CONFIG_VERSION="4.20";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -7236,8 +7236,9 @@ async function kbnProcessQueuedMaintenanceV242(env){
   let createdTotal=Math.max(0,Number(q?.created_total||0));
   if(!phase)return {ok:true,processed:false};
 
-  // v4.12: 通常メンテナンスの自動開拓を小分け・保存・自動再開。
-  // 1 invocation = 最大2検索。503/通信エラー時は状態を残して次のCronで再試行する。
+  // v4.20: 通常メンテナンスの自動開拓を高速化。
+  // 通常時は 1 invocation = 最大5検索。503/通信エラー後の再試行だけ最大2検索へ自動減速する。
+  // 成功したら次のCronから再び5検索へ戻すため、速度と安定性を両立する。
   if(phase>=11 && phase<=49){
     const searchedTotal=Math.max(0,Number(q?.discovery_searched||0));
     const mode=String(q?.discovery_mode||'normal')==='expanded'?'expanded':'normal';
@@ -7257,11 +7258,13 @@ async function kbnProcessQueuedMaintenanceV242(env){
     const fakeRequest=new Request('https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/api/internal/maintenance-discovery-batch');
     try{
       const remaining=Math.max(1,target-createdTotal);
-      const result=await autoDiscover(env,fakeRequest,remaining,2,2,true,mode);
+      // 通常は5検索/分。直前に503等で再試行中なら2検索まで落として安定復旧。
+      const discoveryBatchSize=retryCount>0?2:5;
+      const result=await autoDiscover(env,fakeRequest,remaining,discoveryBatchSize,discoveryBatchSize,true,mode);
       const created=Array.isArray(result?.created)?result.created:[];
       const searched=Array.isArray(result?.searched)?result.searched:[];
       const nextCreated=Math.min(target,createdTotal+created.length);
-      const nextSearched=Math.min(maxSearches,searchedTotal+Math.max(1,searched.length||2));
+      const nextSearched=Math.min(maxSearches,searchedTotal+Math.max(1,searched.length||discoveryBatchSize));
       let nextMode=mode;
       if(nextMode==='normal' && nextCreated===0 && nextSearched>=45) nextMode='expanded';
       const done=nextCreated>=target || nextSearched>=maxSearches;
@@ -7544,14 +7547,14 @@ async function enrichScheduledCreatedShops(env,created=[]){
  // target 15 listings, multi-pass discovery + image + Instagram enrichment
 async function runScheduledKbnMaintenance(env){
   // v4.12: 通常メンテナンスも最初の自動開拓から完全に別invocationへ分離。
-  // この予約分ではキューを作るだけ。次の毎分Cronから2検索ずつ進み、20店舗または120検索で既存店メンテへ移行する。
+  // この予約分ではキューを作るだけ。次の毎分Cronから通常5検索ずつ進み、503等の再試行時だけ2検索へ自動減速。20店舗または120検索で既存店メンテへ移行する。
   const now=new Date(Date.now()+9*60*60*1000);
   const runDate=`${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,"0")}-${String(now.getUTCDate()).padStart(2,"0")}`;
   await kbnQueueMaintenanceV242(env,runDate,0);
   await createKbnAlert(env,{
     type:'scheduled_summary',
     title:'予約メンテナンス開始',
-    message:'自動開拓を2検索ずつ小分け保存し、503時は自動待機・続きから再開します。最大20店舗または120検索で、情報不足 → SEO改善 → 閉業 → Instagram → 対象外候補 → VERIFIED補完へ自動移行します。'
+    message:'自動開拓を通常5検索ずつ小分け保存し、503時は2検索へ自動減速して待機・続きから再開します。最大20店舗または120検索で、情報不足 → SEO改善 → 閉業 → Instagram → 対象外候補 → VERIFIED補完へ自動移行します。'
   });
   return {discovery:{ok:true,created:[],searched:[],queued:true,target:20,max_searches:120},maintenance_queued:true,maintenance_batch_size:20,discovery_batches:'resumable'};
 }
