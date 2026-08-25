@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.20";
+      config.vars.KBN_CONFIG_VERSION="4.21";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -7050,8 +7050,8 @@ async function kbnQueueHourlyMaintenanceV413(env,runKey=''){
   await ensureKbnMaintenanceQueueV242(env);
   const q=await env.DB.prepare(`SELECT phase FROM kbn_maintenance_queue WHERE id=1`).first();
   if(Number(q?.phase||0)!==0)return {queued:false,reason:'QUEUE_BUSY'};
-  // v4.15: 毎時間の通常メンテナンスを「BAR自動開拓込み」に拡張。
-  // phase 11 から開始すると、2検索ずつ別Worker invocationで新規BARを最大20店舗/120検索まで探索し、
+  // v4.21: 毎時間自動運転の唯一の開始キュー。
+  // phase 11から通常5検索ずつ（503再試行時は2検索）新規BARを最大20店舗/120検索まで探索し、
   // その後に 情報不足 → SEO → 閉業 → Instagram → 対象外 → VERIFIED補完へ自動で移行する。
   await env.DB.prepare(`
     INSERT INTO kbn_maintenance_queue(id,phase,run_date,created_total,discovery_searched,discovery_mode,discovery_retry_count,discovery_retry_after,updated_at)
@@ -7063,10 +7063,9 @@ async function kbnQueueHourlyMaintenanceV413(env,runKey=''){
   return {queued:true,phase:11};
 }
 
-function kbnHourlyMaintenanceSlotV413(event){
+function kbnHourlyMaintenanceSlotV421(event){
   const ms=Number(event?.scheduledTime||Date.now());
   const d=new Date(ms+9*60*60*1000);
-  if(d.getUTCMinutes()!==0)return null;
   const y=d.getUTCFullYear();
   const m=String(d.getUTCMonth()+1).padStart(2,'0');
   const day=String(d.getUTCDate()).padStart(2,'0');
@@ -10589,74 +10588,25 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
 
   async scheduled(event, env, ctx){
     const task=(async()=>{
-      // v2.42: 前回の通常メンテナンスで予約された処理を1種類ずつ実行。
-      // 1分ごとに別Worker invocationになるのでFree枠のsubrequestを分散できます。
+      // v4.21: automatic processing is unified into one hourly pipeline.
       const queued=await kbnProcessQueuedMaintenanceV242(env);
       if(queued?.processed)return;
 
-      const schedule=await kbnGetRuntimeScheduleV230(env);
+      const hourly=kbnHourlyMaintenanceSlotV421(event);
+      const claimed=await kbnClaimRuntimeSlotV231(env,hourly.minute_key,'hourly_maintenance');
+      if(!claimed)return;
 
-      // v4.13:
-      // Cronは毎分起動。自動掲載6枠は従来どおり実行しつつ、
-      // 毎時00分にはBAR自動開拓込みの通常メンテナンスを必ずキューする。
-      // 自動掲載と同じ時刻では自動掲載を先に行い、その直後の別invocationから
-      // BAR自動開拓 → 情報不足 → SEO → 閉業 → Instagram → 対象外 → VERIFIED補完を進める。
-      const due=kbnFindDueRuntimeSlotV231(event,schedule,5);
-      const hourly=kbnHourlyMaintenanceSlotV413(event);
-
-      if(due){
-        const fullMaintenance=due.time===schedule.full_maintenance_time_jst;
-        const runType=fullMaintenance?"maintenance":"auto_listing";
-        const claimed=await kbnClaimRuntimeSlotV231(env,due.minute_key,runType);
-        if(!claimed)return;
-
-        let runId=0;
-        try{
-          runId=await kbnCronRunStartV224(env,event,runType);
-          const result=fullMaintenance
-            ?await runScheduledKbnMaintenance(env)
-            :await runScheduledKbnAutoDiscoveryOnly(env);
-
-          if(!fullMaintenance){
-            // 毎時00分に重なる自動掲載枠では、単発のphase9ではなく
-            // 毎時間メンテナンス一式をキュー。00分以外の自動掲載枠は従来どおりphase9。
-            try{
-              if(hourly){
-                const hourlyClaim=await kbnClaimRuntimeSlotV231(env,hourly.minute_key,'hourly_maintenance');
-                if(hourlyClaim)await kbnQueueHourlyMaintenanceV413(env,hourly.run_key);
-              }else{
-                await kbnQueueAutoInfoRecheckV405(env,due.minute_key);
-              }
-            }catch(e){console.error('post auto maintenance queue failed',e)}
-          }
-
-          const createdCount=Number(result?.discovery?.created?.length||0);
-          const diagnostic=kbnDiscoveryDiagnosticV226(result)||{};
-          diagnostic.scheduled_slot=due.time;
-          diagnostic.catch_up_minutes=due.diff;
-          diagnostic.hourly_maintenance=!!hourly;
-          await kbnCronRunFinishV224(env,runId,{status:"success",createdCount,diagnostic});
-        }catch(e){
-          console.error(fullMaintenance?"runtime maintenance failed":"runtime auto discovery failed",e);
-          try{await kbnCronRunFinishV224(env,runId,{status:"failed",error:String(e?.message||e)})}catch{}
-        }
-        return;
-      }
-
-      // 自動掲載枠ではない毎時00分も、既存店舗メンテナンスを開始。
-      if(hourly){
-        const claimed=await kbnClaimRuntimeSlotV231(env,hourly.minute_key,'hourly_maintenance');
-        if(!claimed)return;
-        try{
-          await kbnQueueHourlyMaintenanceV413(env,hourly.run_key);
+      try{
+        const q=await kbnQueueHourlyMaintenanceV413(env,hourly.run_key);
+        if(q?.queued){
           await createKbnAlert(env,{
             type:'hourly_maintenance_started',
-            title:'毎時間メンテナンス開始',
-            message:`${hourly.time} JST：BAR自動開拓（最大20店舗/120検索）→ 情報不足 → SEO → 閉業 → Instagram → 対象外 → VERIFIED補完を小分けで自動実行します。`
+            title:'毎時間自動運転開始',
+            message:`${hourly.time} JST枠：BAR自動開拓（最大20店舗/120検索）→ 情報不足 → SEO → 閉業 → Instagram → 対象外 → VERIFIED補完を自動実行します。`
           });
-        }catch(e){
-          console.error('hourly maintenance queue failed',e);
         }
+      }catch(e){
+        console.error('hourly automatic maintenance queue failed',e);
       }
     })();
     ctx.waitUntil(task);
