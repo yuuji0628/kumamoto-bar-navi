@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.38";
+      config.vars.KBN_CONFIG_VERSION="4.39";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -7846,9 +7846,21 @@ async function ensureKbnDailyPrecisionV433(env){
       checked_closed INTEGER NOT NULL DEFAULT 0,
       checked_instagram INTEGER NOT NULL DEFAULT 0,
       exclusion_count INTEGER NOT NULL DEFAULT 0,
+      closed_error_count INTEGER NOT NULL DEFAULT 0,
+      closed_skip_reason TEXT NOT NULL DEFAULT '',
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `).run();
+
+  try{
+    const info=await env.DB.prepare("PRAGMA table_info(kbn_daily_precision_state)").all();
+    const names=new Set((info.results||[]).map(x=>String(x.name||"")));
+    if(!names.has("closed_error_count"))await env.DB.prepare("ALTER TABLE kbn_daily_precision_state ADD COLUMN closed_error_count INTEGER NOT NULL DEFAULT 0").run();
+    if(!names.has("closed_skip_reason"))await env.DB.prepare("ALTER TABLE kbn_daily_precision_state ADD COLUMN closed_skip_reason TEXT NOT NULL DEFAULT ''").run();
+  }catch(e){
+    if(!/duplicate column/i.test(String(e?.message||e||"")))throw e;
+  }
+
   await env.DB.prepare(`
     INSERT INTO kbn_daily_precision_state(id,run_date,stage)
     VALUES(1,'','idle')
@@ -7876,27 +7888,73 @@ async function kbnProcessDailyPrecisionV433(env){
     await env.DB.prepare(`
       UPDATE kbn_daily_precision_state
       SET run_date=?,stage='closed',checked_closed=0,checked_instagram=0,
-          exclusion_count=0,updated_at=CURRENT_TIMESTAMP
+          exclusion_count=0,closed_error_count=0,closed_skip_reason='',updated_at=CURRENT_TIMESTAMP
       WHERE id=1
     `).bind(today).run();
-    st={...(st||{}),run_date:today,stage:'closed',checked_closed:0,checked_instagram:0,exclusion_count:0};
+    st={...(st||{}),run_date:today,stage:'closed',checked_closed:0,checked_instagram:0,exclusion_count:0,closed_error_count:0,closed_skip_reason:''};
   }
 
   const stage=String(st?.stage||'idle');
 
   if(stage==='closed'){
+    // v4.39: Google Placesがクォータ/権限/課金等で停止中なら、
+    // 閉業確認を何時間も失敗させず、その日の処理は保留してInstagramへ進む。
+    let googleHealth=null;
+    try{googleHealth=await kbnGooglePlacesHealthV438(env)}catch{}
+    if(googleHealth?.disabled){
+      const reason=String(googleHealth.error_code||"GOOGLE_PLACES_UNAVAILABLE");
+      await env.DB.prepare(`
+        UPDATE kbn_daily_precision_state
+        SET stage='instagram_start',closed_skip_reason=?,updated_at=CURRENT_TIMESTAMP
+        WHERE id=1
+      `).bind(reason).run();
+      await logKbnMaintenanceHistoryV414(env,{
+        q:{run_date:`${today} daily_precision`},phase:0,task:'closed_daily',
+        result:{ok:true,checked:0},status:'success',
+        note:`日次精度 / 閉業確認は本日保留 / Google Places ${reason}${googleHealth.http_status?` HTTP${googleHealth.http_status}`:''} / Instagram再検査へ進行`
+      });
+      return {ok:true,processed:true,stage:'closed_skipped',reason};
+    }
+
     const r=await runMaintenanceBatchV242(env,'closed',{limit:10});
+    const checkedCount=Array.isArray(r?.checked)?r.checked.length:Number(r?.checked||0);
+    const unverifiedCount=Array.isArray(r?.unverified)?r.unverified.length:0;
+    const failedCount=Array.isArray(r?.failed)?r.failed.length:0;
+    const priorErrors=Math.max(0,Number(st?.closed_error_count||0));
+    const nextErrors=priorErrors+failedCount;
+
+    // API/通信失敗が10件累積、または1バッチ10件すべて失敗なら本日分を保留。
+    const hardFail=
+      nextErrors>=10 ||
+      (failedCount>=10 && checkedCount===0 && unverifiedCount===0);
+
+    const nextStage=(r?.cycle_completed||hardFail)?'instagram_start':'closed';
+    const skipReason=hardFail?'GOOGLE_CLOSED_CHECK_ERRORS':'';
+
     await env.DB.prepare(`
       UPDATE kbn_daily_precision_state
-      SET checked_closed=checked_closed+?,stage=?,updated_at=CURRENT_TIMESTAMP
+      SET checked_closed=checked_closed+?,
+          closed_error_count=?,
+          closed_skip_reason=?,
+          stage=?,
+          updated_at=CURRENT_TIMESTAMP
       WHERE id=1
-    `).bind(Number(r?.checked||0),r?.cycle_completed?'instagram_start':'closed').run();
+    `).bind(
+      checkedCount+unverifiedCount,
+      nextErrors,
+      skipReason,
+      nextStage
+    ).run();
+
     await logKbnMaintenanceHistoryV414(env,{
       q:{run_date:`${today} daily_precision`},phase:0,task:'closed_daily',result:r,
-      status:r?.ok===false?'failed':'success',
-      note:`日次精度 / 閉業確認 / 判定${Number(r?.checked?.length||0)}店 / 一致候補なし${Number(r?.unverified?.length||0)}店 / エラー${Number(r?.failed?.length||0)}件${r?.cycle_completed?' / 本日分一巡':''}`
+      status:failedCount>0?'failed':'success',
+      note:hardFail
+        ?`日次精度 / 閉業確認をエラー累積${nextErrors}件で本日保留 / Instagram再検査へ進行`
+        :`日次精度 / 閉業確認 / 判定${checkedCount}店 / 一致候補なし${unverifiedCount}店 / エラー${failedCount}件${r?.cycle_completed?' / 本日分一巡':''}`
     });
-    return {ok:true,processed:true,stage:'closed',result:r};
+
+    return {ok:true,processed:true,stage:hardFail?'closed_skipped':'closed',result:r,failed_total:nextErrors};
   }
 
   if(stage==='instagram_start'){
@@ -7997,25 +8055,37 @@ async function kbnProcessQueuedMaintenanceV242(env){
     const minTarget=10,target=20,normalMaxSearches=80,hardMaxSearches=120;
     const runAgeMinutes=kbnHourlyRunAgeMinutesV437(q?.run_date);
     const timeLimitReached=/\bJST\b/i.test(String(q?.run_date||'')) && runAgeMinutes>=30;
+    let googleHealthAtStart=null;
+    try{googleHealthAtStart=await kbnGooglePlacesHealthV438(env)}catch{}
+    const googleUnavailable=!!googleHealthAtStart?.disabled;
+    // Google停止中に代替ソースでも成果0なら20検索で見切る。
+    const fallbackZeroCutoff=googleUnavailable && createdTotal===0 && searchedTotal>=20;
+
     const discoverySatisfied=timeLimitReached ||
+      fallbackZeroCutoff ||
       createdTotal>=target ||
       (createdTotal>=minTarget && searchedTotal>=normalMaxSearches) ||
       searchedTotal>=hardMaxSearches;
     if(discoverySatisfied){
       await env.DB.prepare(`UPDATE kbn_maintenance_queue SET phase=1,discovery_retry_count=0,discovery_retry_after=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=1`).run();
+      let googleStopNote='';
+      try{
+        const gh=await kbnGooglePlacesHealthV438(env);
+        if(gh?.disabled)googleStopNote=` / Google停止:${String(gh.error_code||'API_ERROR')}`;
+      }catch{}
       await logKbnMaintenanceHistoryV414(env,{
         q,phase,task:'discovery_cutoff',
         result:{ok:true,checked:0},
         status:'success',
         note:timeLimitReached
-          ?`BAR開拓30分上限で終了 / ${searchedTotal}検索 / 新規${createdTotal}店 / 次の情報補完へ`
-          :`BAR開拓検索上限で終了 / ${searchedTotal}検索 / 新規${createdTotal}店 / 次の情報補完へ`
+          ?`BAR開拓30分上限で終了 / ${searchedTotal}検索 / 新規${createdTotal}店${googleStopNote} / 次の情報補完へ`
+          :`BAR開拓検索上限で終了 / ${searchedTotal}検索 / 新規${createdTotal}店${googleStopNote} / 次の情報補完へ`
       });
       return {
         ok:true,processed:true,phase,task:'discovery_complete',
         created_total:createdTotal,searched_total:searchedTotal,
         min_target:minTarget,target,minimum_met:createdTotal>=minTarget,
-        cutoff:timeLimitReached?'30min':'search_limit',
+        cutoff:timeLimitReached?'30min':(fallbackZeroCutoff?'google_unavailable_zero':'search_limit'),
         run_age_minutes:Math.round(runAgeMinutes)
       };
     }
