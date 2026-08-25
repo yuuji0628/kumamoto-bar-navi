@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.23";
+      config.vars.KBN_CONFIG_VERSION="4.24";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -7074,7 +7074,7 @@ async function kbnQueueHourlyMaintenanceV413(env,runKey=''){
   const q=await env.DB.prepare(`SELECT phase FROM kbn_maintenance_queue WHERE id=1`).first();
   if(Number(q?.phase||0)!==0)return {queued:false,reason:'QUEUE_BUSY'};
   // v4.21: 毎時間自動運転の唯一の開始キュー。
-  // phase 11から通常10検索ずつ（エラー時5→2へ自動減速）新規BARを最大20店舗まで探索し、
+  // phase 11から手動開拓と同じ検索ロジックで通常10検索ずつ（エラー時5→2へ自動減速）最大20店舗まで探索し、
   // その後に 情報不足 → SEO → 閉業 → Instagram → 対象外 → VERIFIED補完へ自動で移行する。
   await env.DB.prepare(`
     INSERT INTO kbn_maintenance_queue(id,phase,run_date,created_total,discovery_searched,discovery_mode,discovery_retry_count,discovery_retry_after,updated_at)
@@ -7294,7 +7294,21 @@ async function kbnProcessQueuedMaintenanceV242(env){
       // 1回目の通信エラー後は5検索/分、2回目以降は2検索/分まで自動減速。
       // 成功時はretry_countを0へ戻すため、次の分から自動で10検索/分へ復帰する。
       const discoveryBatchSize=retryCount===0?10:(retryCount===1?5:2);
-      const result=await autoDiscover(env,fakeRequest,remaining,discoveryBatchSize,discoveryBatchSize,true,mode);
+
+      // v4.24: 毎時間の自動開拓も「手動開拓」と同じ検索ロジックを使用。
+      // 手動APIと同じく uniqueAreas=false / perPairLimit=2。
+      // 違いは、毎時間処理では1分あたり最大10検索をまとめて進める点だけ。
+      // これにより「地区を1回ずつに縛る」自動専用ロジックをやめ、
+      // 手動開拓で実績のある地区×ジャンル探索・重複判定・候補照合をそのまま使う。
+      const result=await autoDiscover(
+        env,
+        fakeRequest,
+        remaining,
+        discoveryBatchSize, // pair_limit: 通常10、エラー時5→2
+        2,                  // 手動開拓と同じ per_pair_limit
+        false,              // 手動開拓と同じ uniqueAreas=false
+        mode
+      );
       const created=Array.isArray(result?.created)?result.created:[];
       const searched=Array.isArray(result?.searched)?result.searched:[];
       const nextCreated=Math.min(target,createdTotal+created.length);
