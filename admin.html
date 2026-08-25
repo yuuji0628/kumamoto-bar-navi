@@ -4356,7 +4356,7 @@ html,body{max-width:100%;overflow-x:hidden}
       <div class="lead-smart-icon">✓</div>
       <div>
         <h3>自動メンテナンス</h3>
-        <p>毎時間の自動運転をここで確認。手動メニューと時間設定も残しています。</p>
+        <p>毎時間の自動運転をここで確認。手動メニューはそのまま使えます。</p>
       </div>
     </div>
     <div class="kbn-maintenance-grid">
@@ -4366,72 +4366,25 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
     <div class="kbn-schedule-note kbn-schedule-editor">
       <div class="kbn-schedule-title">
-        <b>自動運転・時間設定</b>
-        <span>日本時間（JST）</span>
+        <b>毎時間自動運転</b><span>日本時間（JST）</span>
       </div>
-
-      <div style="margin-top:8px;padding:12px;border:1px solid #2f4656;border-radius:13px;background:#0e1922">
+      <div style="margin-top:8px;padding:13px;border:1px solid #2f4656;border-radius:13px;background:#0e1922">
         <div style="display:flex;justify-content:space-between;gap:10px;align-items:center">
-          <div>
-            <b style="display:block;color:#f3c958;font-size:.86rem">毎時間の自動メンテナンス</b>
-            <small style="color:#91a0ac">毎時00分・設定不要</small>
-          </div>
-          <span style="padding:5px 8px;border-radius:999px;background:#123125;color:#7ee3b7;font-size:.64rem;font-weight:700">常時ON</span>
+          <div><b style="display:block;color:#f3c958;font-size:.9rem">毎時00分に自動スタート</b><small style="color:#91a0ac">追加の時間設定は不要です</small></div>
+          <span style="padding:5px 9px;border-radius:999px;background:#123125;color:#7ee3b7;font-size:.64rem;font-weight:700">常時ON</span>
         </div>
-        <div style="margin-top:8px;color:#b2bdc7;font-size:.69rem;line-height:1.55">
-          BAR開拓 → 情報不足 → SEO改善 → 閉業確認 → Instagram → 対象外 → VERIFIED補完
+        <div style="margin-top:9px;color:#b2bdc7;font-size:.69rem;line-height:1.6">BAR開拓 → 情報不足 → SEO改善 → 閉業確認 → Instagram → 対象外 → VERIFIED補完</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:11px">
+          <div style="padding:9px 10px;border-radius:10px;background:#111d26"><small style="display:block;color:#7f8c98">次回実行</small><b id="hourlyNextRunV421" style="display:block;margin-top:3px;color:#fff">計算中...</b></div>
+          <div style="padding:9px 10px;border-radius:10px;background:#111d26"><small style="display:block;color:#7f8c98">開拓速度</small><b style="display:block;margin-top:3px;color:#7ee3b7">通常5検索/分</b></div>
         </div>
-        <div style="margin-top:5px;color:#72818e;font-size:.62rem;line-height:1.45">
-          通常5検索/分で高速処理。503時だけ2検索/分へ自動減速し、続きから再開します。
-        </div>
+        <div style="margin-top:8px;color:#72818e;font-size:.62rem;line-height:1.5">503・通信エラー時だけ2検索/分へ自動減速。途中保存し、復旧後は続きから自動再開します。</div>
       </div>
-
-      <div style="margin-top:14px">
-        <div style="display:flex;justify-content:space-between;gap:10px;align-items:end;margin-bottom:7px">
-          <div>
-            <b style="display:block;font-size:.82rem">追加開拓タイム</b>
-            <small style="color:#8996a1">毎時間の処理とは別に、BAR開拓を追加で走らせる6枠</small>
-          </div>
-          <span style="color:#efc45a;font-size:.64rem;white-space:nowrap">1日6回</span>
-        </div>
-        <div class="kbn-auto-times-v217">
-          <label><span>追加開拓 1</span><input type="time" id="autoListingTime1" value="00:00"></label>
-          <label><span>追加開拓 2</span><input type="time" id="autoListingTime2" value="03:00"></label>
-          <label><span>追加開拓 3</span><input type="time" id="autoListingTime3" value="06:00"></label>
-          <label><span>追加開拓 4</span><input type="time" id="autoListingTime4" value="09:00"></label>
-          <label><span>追加開拓 5</span><input type="time" id="autoListingTime5" value="12:00"></label>
-          <label><span>追加開拓 6</span><input type="time" id="autoListingTime6" value="18:00"></label>
-        </div>
-      </div>
-
-      <div class="kbn-maintenance-select-v217" style="margin-top:13px">
-        <label for="maintenanceScheduleSelect">
-          <span>1日1回の重点フルメンテ枠</span>
-          <select id="maintenanceScheduleSelect">
-            <option value="1">追加開拓 1</option>
-            <option value="2">追加開拓 2</option>
-            <option value="3">追加開拓 3</option>
-            <option value="4">追加開拓 4</option>
-            <option value="5">追加開拓 5</option>
-            <option value="6">追加開拓 6</option>
-          </select>
-        </label>
-        <small>選んだ追加開拓枠を、その日の重点フルメンテ枠として扱います。</small>
-      </div>
-
-      <button type="button" id="autoScheduleSaveBtn" class="kbn-schedule-save-v217">時間を保存</button>
-      <small id="autoScheduleStatus">現在の時間設定を読み込み中...</small>
-
-      <div id="lastAutomaticRunStatus" style="margin-top:10px;padding:10px 12px;border:1px solid #394653;border-radius:12px;background:#101820;color:#d9e1e8;font-size:.78rem;line-height:1.55">
-        最終自動実行：読み込み中...
-      </div>
-
-      <small id="autoListingSixTimesStatus" style="display:block;margin-top:7px;color:#efc45a;line-height:1.5">
-        毎時間自動運転：ON / 追加開拓：1日6回 / 重点フルメンテ：1日1回
-      </small>
+      <div id="lastAutomaticRunStatus" style="margin-top:10px;padding:10px 12px;border:1px solid #394653;border-radius:12px;background:#101820;color:#d9e1e8;font-size:.78rem;line-height:1.55">最終自動実行：読み込み中...</div>
+      <small id="autoListingSixTimesStatus" style="display:block;margin-top:7px;color:#efc45a;line-height:1.5">毎時間自動運転：ON / 追加開拓タイム：廃止 / 重点フルメンテ：廃止</small>
     </div>
     <div id="maintenanceStatus" class="auto-discovery-status"></div>
-    <div class="kbn-simple-schedule-ok" style="margin-top:8px">自動開拓も通常5検索ずつ（503再試行時は2検索）保存。503/通信エラー時は自動待機し、次のCronで続きから再開します。</div>
+    <div class="kbn-simple-schedule-ok" style="margin-top:8px">毎時間の自動運転は通常5検索ずつ（503再試行時は2検索）保存。通信エラー時も続きから自動再開します。</div>
 
 
     <div id="kbnMaintenanceHistoryCard" style="margin-top:14px;padding:13px;border:1px solid #394b5b;border-radius:15px;background:#0d171f">
@@ -10826,232 +10779,62 @@ document.addEventListener("click",async(e)=>{
 </script>
 
 
-<script id="kbn-schedule-editor-v230-js">
-function kbnMaintenanceSlotV217(){
-  const select=document.getElementById("maintenanceScheduleSelect");
-  return Math.max(1,Math.min(6,Number(select?.value||1)));
+<script id="kbn-schedule-editor-v421-js">
+function kbnNextHourlyRunV421(){
+  try{
+    const now=new Date();
+    const parts=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tokyo",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false})
+      .formatToParts(now).reduce((o,p)=>(o[p.type]=p.value,o),{});
+    const remain=Math.max(1,(60-Number(parts.minute||0))*60-Number(parts.second||0));
+    const next=new Date(now.getTime()+remain*1000);
+    const time=new Intl.DateTimeFormat("ja-JP",{timeZone:"Asia/Tokyo",hour:"2-digit",minute:"2-digit",hour12:false}).format(next);
+    return `${time}（約${Math.max(1,Math.ceil(remain/60))}分後）`;
+  }catch{return "次の毎時00分"}
 }
-function kbnRefreshMaintenanceOptionsV217(){
-  const select=document.getElementById("maintenanceScheduleSelect");
-  if(!select)return;
-  const selected=String(kbnMaintenanceSlotV217());
-  for(let i=1;i<=6;i++){
-    const opt=select.querySelector(`option[value="${i}"]`);
-    const time=String(document.getElementById(`autoListingTime${i}`)?.value||"");
-    if(opt)opt.textContent=`自動掲載 ${i}${time?`（${time}）`:""}`;
-  }
-  select.value=selected;
-}
-function kbnNormalizeAdminTimeV230(v){
-  const m=String(v||"").match(/^(\d{1,2}):(\d{2})$/);
-  if(!m)return "";
-  const h=Number(m[1]),mi=Number(m[2]);
-  if(h<0||h>23||mi<0||mi>59)return "";
-  return `${String(h).padStart(2,"0")}:${String(mi).padStart(2,"0")}`;
-}
-
-
 function kbnMaintenanceTaskLabelV414(task){
-  return {
-    discovery:'新規開拓',
-    discovery_retry:'通信再試行',
-    missing:'情報不足',
-    seo:'SEO改善',
-    closed:'閉業確認',
-    instagram:'Instagram',
-    exclusion:'対象外候補',
-    verified_info:'VERIFIED補完',
-    verified_auto:'自動再確認'
-  }[String(task||'')]||String(task||'メンテナンス');
+  return {discovery:'新規開拓',discovery_retry:'通信再試行',missing:'情報不足',seo:'SEO改善',closed:'閉業確認',instagram:'Instagram',exclusion:'対象外候補',verified_info:'VERIFIED補完',verified_auto:'自動再確認'}[String(task||'')]||String(task||'メンテナンス');
 }
-function kbnMaintenanceKindLabelV414(kind){
-  return {
-    hourly:'毎時間',
-    full_maintenance:'フルメンテ',
-    auto_recheck:'自動再確認'
-  }[String(kind||'')]||String(kind||'自動');
-}
+function kbnMaintenanceKindLabelV414(kind){return {hourly:'毎時間',full_maintenance:'自動運転',auto_recheck:'自動再確認'}[String(kind||'')]||String(kind||'自動');}
 function kbnMaintenanceTimeV414(raw){
   if(!raw)return '—';
-  try{
-    const iso=/Z$|[+-]\d\d:\d\d$/.test(String(raw))?String(raw):String(raw).replace(' ','T')+'Z';
-    const d=new Date(iso);
-    if(Number.isNaN(d.getTime()))return String(raw);
-    return d.toLocaleString('ja-JP',{timeZone:'Asia/Tokyo',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
-  }catch{return String(raw)}
+  try{const iso=/Z$|[+-]\d\d:\d\d$/.test(String(raw))?String(raw):String(raw).replace(' ','T')+'Z';const d=new Date(iso);if(Number.isNaN(d.getTime()))return String(raw);return d.toLocaleString('ja-JP',{timeZone:'Asia/Tokyo',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});}catch{return String(raw)}
 }
 async function loadMaintenanceHistoryV414(){
   const list=document.getElementById('maintenanceHistoryList');
   try{
-    const d=await api('/api/admin/maintenance-history?days=7&limit=8');
-    const t=d.today||{},s=d.summary||{},q=d.queue||{};
+    const d=await api('/api/admin/maintenance-history?days=7&limit=8'),t=d.today||{},s=d.summary||{},q=d.queue||{};
     const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
-    set('mhTodayChecked',`${Number(t.checked||0)}店舗`);
-    set('mhTodayUpdated',`${Number(t.updated||0)}店舗`);
-    set('mhTodaySeo',`+${Number(t.seo_gain||0)}点`);
+    set('mhTodayChecked',`${Number(t.checked||0)}店舗`);set('mhTodayUpdated',`${Number(t.updated||0)}店舗`);set('mhTodaySeo',`+${Number(t.seo_gain||0)}点`);
     set('mhTodayDetail',`処理 ${Number(t.task_runs||0)}回 / 新規掲載 ${Number(t.created||0)}店舗 / エラー ${Number(t.errors||0)}件`);
     set('mhSevenSummary',`確認 ${Number(s.checked||0)} / 更新 ${Number(s.updated||0)} / SEO +${Number(s.seo_gain||0)} / エラー ${Number(s.errors||0)}`);
-
     const qs=document.getElementById('mhQueueStatus');
     if(qs){
-      if(q.active){
-        const label=q.stage==='discovery'
-          ?`新規開拓 ${Number(q.discovery_searched||0)}/120検索 / 新規${Number(q.created_total||0)}/20`
-          :`実行中：${kbnMaintenanceTaskLabelV414(q.task)}`;
-        qs.textContent=`現在：${label}。小分け保存しながら自動継続中です。`;
-        qs.style.color='#efc45a';
-      }else{
-        qs.textContent='現在：待機中。次の毎時00分にBAR自動開拓＋通常メンテナンスを自動開始します。';
-        qs.style.color='#aeb8c2';
-      }
+      if(q.active){const label=q.stage==='discovery'?`新規開拓 ${Number(q.discovery_searched||0)}/120検索 / 新規${Number(q.created_total||0)}/20`:`実行中：${kbnMaintenanceTaskLabelV414(q.task)}`;qs.textContent=`現在：${label}。小分け保存しながら自動継続中です。`;qs.style.color='#efc45a';}
+      else{qs.textContent='現在：待機中。次の毎時00分に自動運転を開始します。';qs.style.color='#aeb8c2';}
     }
-
     const rows=Array.isArray(d.recent)?d.recent:[];
-    if(list){
-      list.innerHTML=rows.length?rows.map(r=>{
-        const bad=String(r.status||'')!=='success';
-        return `<div style="padding:9px 10px;border:1px solid ${bad?'#663737':'#263846'};border-radius:10px;background:#101a23">
-          <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
-            <b style="font-size:.7rem;color:${bad?'#ff9b9b':'#eef2f5'}">${esc(kbnMaintenanceKindLabelV414(r.run_kind))}・${esc(kbnMaintenanceTaskLabelV414(r.task))}</b>
-            <small style="color:#74828e">${esc(kbnMaintenanceTimeV414(r.created_at))}</small>
-          </div>
-          <div style="margin-top:4px;color:#8d9aa6;font-size:.64rem;line-height:1.45">確認 ${Number(r.checked_count||0)} / 更新 ${Number(r.updated_count||0)} / 新規 ${Number(r.created_count||0)} / SEO +${Number(r.seo_gain||0)} / エラー ${Number(r.error_count||0)}${r.note?` ｜ ${esc(r.note)}`:''}</div>
-        </div>`;
-      }).join(''):'<small style="color:#8794a1">まだ履歴がありません。次回メンテナンスから自動記録します。</small>';
-    }
-
-    const daily=document.getElementById('maintenanceDailyList');
-    const ds=Array.isArray(d.daily)?d.daily:[];
-    if(daily)daily.innerHTML=ds.slice(0,7).map(x=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 9px;border-radius:9px;background:#101a23;font-size:.64rem">
-      <span style="color:#9aa6b1">${esc(x.day_jst||'—')}</span>
-      <span style="color:#eef2f5">確認 ${Number(x.checked||0)} / 更新 ${Number(x.updated||0)} / SEO +${Number(x.seo_gain||0)} / エラー ${Number(x.errors||0)}</span>
-    </div>`).join('');
-  }catch(e){
-    if(list)list.innerHTML=`<small style="color:#ff9b9b">履歴を取得できませんでした：${esc(e?.message||e)}</small>`;
-  }
+    if(list)list.innerHTML=rows.length?rows.map(r=>{const bad=String(r.status||'')!=='success';return `<div style="padding:9px 10px;border:1px solid ${bad?'#663737':'#263846'};border-radius:10px;background:#101a23"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b style="font-size:.7rem;color:${bad?'#ff9b9b':'#eef2f5'}">${esc(kbnMaintenanceKindLabelV414(r.run_kind))}・${esc(kbnMaintenanceTaskLabelV414(r.task))}</b><small style="color:#74828e">${esc(kbnMaintenanceTimeV414(r.created_at))}</small></div><div style="margin-top:4px;color:#8d9aa6;font-size:.64rem;line-height:1.45">確認 ${Number(r.checked_count||0)} / 更新 ${Number(r.updated_count||0)} / 新規 ${Number(r.created_count||0)} / SEO +${Number(r.seo_gain||0)} / エラー ${Number(r.error_count||0)}${r.note?` ｜ ${esc(r.note)}`:''}</div></div>`;}).join(''):'<small style="color:#8794a1">まだ履歴がありません。次回自動運転から自動記録します。</small>';
+    const daily=document.getElementById('maintenanceDailyList'),ds=Array.isArray(d.daily)?d.daily:[];
+    if(daily)daily.innerHTML=ds.slice(0,7).map(x=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 9px;border-radius:9px;background:#101a23;font-size:.64rem"><span style="color:#9aa6b1">${esc(x.day_jst||'—')}</span><span style="color:#eef2f5">確認 ${Number(x.checked||0)} / 更新 ${Number(x.updated||0)} / SEO +${Number(x.seo_gain||0)} / エラー ${Number(x.errors||0)}</span></div>`).join('');
+  }catch(e){if(list)list.innerHTML=`<small style="color:#ff9b9b">履歴を取得できませんでした：${esc(e?.message||e)}</small>`;}
 }
-
 function kbnFormatLastAutomaticRunV233(run,queue){
-  if(queue?.active){
-    const created=Math.max(0,Number(queue.created_total||0));
-
-    if(queue.stage==="discovery"){
-      const batch=Math.max(1,Number(queue.discovery_batch||1));
-      const searched=Math.max(0,Number(queue.discovery_searched||0));
-      const retry=Number(queue.discovery_retry_count||0);
-      const mode=String(queue.discovery_mode||'normal')==='expanded'?'拡張探索':'通常探索';
-      return `自動メンテナンス開拓中：${searched}/120検索 / 新規${created}/20店舗 / ${mode}${retry?` / 通信待機・再試行${retry}/4`:''} / 途中保存・続きから自動再開`;
-    }
-
-    if(queue.stage==="maintenance"){
-      const taskLabel={
-        missing:"情報不足チェック",
-        seo:"SEO自動改善（最大20店舗）",
-        closed:"閉業チェック",
-        instagram:"Instagram補完",
-        exclusion:"対象外候補チェック"
-      }[String(queue.task||"")]||"通常メンテナンス";
-      return `自動開拓完了：累計新規${created}件 / ${taskLabel}を実行中`;
-    }
-  }
-
+  if(queue?.active){const created=Math.max(0,Number(queue.created_total||0));if(queue.stage==="discovery")return `自動運転中：${Number(queue.discovery_searched||0)}/120検索 / 新規${created}/20店舗 / ${String(queue.discovery_mode||'normal')==='expanded'?'拡張探索':'通常探索'}`;if(queue.stage==="maintenance")return `自動開拓完了：新規${created}件 / ${kbnMaintenanceTaskLabelV414(queue.task)}を実行中`;}
   if(!run)return "最終自動実行：まだ記録がありません";
-  const raw=String(run.finished_at||run.started_at||"").trim();
-  let when="日時不明";
-  if(raw){
-    try{
-      const iso=/Z$|[+-]\d\d:\d\d$/.test(raw)?raw:raw.replace(" ","T")+"Z";
-      const d=new Date(iso);
-      if(!Number.isNaN(d.getTime())){
-        when=new Intl.DateTimeFormat("ja-JP",{
-          timeZone:"Asia/Tokyo",
-          month:"2-digit",day:"2-digit",
-          hour:"2-digit",minute:"2-digit",second:"2-digit",
-          hour12:false
-        }).format(d);
-      }
-    }catch{}
-  }
-  const status=String(run.status||"").toLowerCase();
-  const label=status==="success"?"成功":status==="failed"?"失敗":status||"不明";
-  const created=Number(run.created_count||0);
-  return `最終自動実行：${when} / ${label} / 新規${created}件`;
+  const raw=String(run.finished_at||run.started_at||"").trim();let when="日時不明";try{const iso=/Z$|[+-]\d\d:\d\d$/.test(raw)?raw:raw.replace(" ","T")+"Z";const d=new Date(iso);if(!Number.isNaN(d.getTime()))when=new Intl.DateTimeFormat("ja-JP",{timeZone:"Asia/Tokyo",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false}).format(d);}catch{}
+  const status=String(run.status||"").toLowerCase(),label=status==="success"?"成功":status==="failed"?"失敗":status||"不明";return `最終自動実行：${when} / ${label} / 新規${Number(run.created_count||0)}件`;
 }
-
-async function kbnLoadSimpleScheduleV230(){
-  const status=document.getElementById("autoScheduleStatus");
-  try{
-    const d=await api("/api/admin/auto-schedule");
-    const times=Array.isArray(d.auto_listing_times_jst)?d.auto_listing_times_jst:[];
-    if(times.length===6){
-      times.forEach((v,i)=>{const el=document.getElementById(`autoListingTime${i+1}`);if(el)el.value=v;});
-    }
-    const mt=String(d.full_maintenance_time_jst||times[0]||"");
-    const idx=Math.max(0,times.indexOf(mt));
-    const select=document.getElementById("maintenanceScheduleSelect");
-    if(select)select.value=String(idx+1);
-    kbnRefreshMaintenanceOptionsV217();
-    if(status){status.dataset.state="ok";status.textContent=`現在：追加開拓 ${times.join(" / ")} ｜ 毎時間自動運転 ON / 重点フルメンテ ${mt}（新規掲載 最大20店舗）`;}
-    const lastRunEl=document.getElementById("lastAutomaticRunStatus");
-    if(lastRunEl){
-      lastRunEl.textContent=kbnFormatLastAutomaticRunV233(d.last_automatic_run||null);
-      const st=String(d.last_automatic_run?.status||"").toLowerCase();
-      lastRunEl.style.borderColor=st==="success"?"#315b45":st==="failed"?"#7d3535":"#394653";
-      lastRunEl.style.color=st==="success"?"#7ee2a8":st==="failed"?"#ff9b9b":"#d9e1e8";
-    }
-    const six=document.getElementById("autoListingSixTimesStatus");
-    if(six)six.textContent=`追加開拓：1日6回（${times.join(" / ")}） / 毎時間自動運転：ON（毎時00分） / 重点フルメンテ：${mt}（新規掲載 最大20店舗）`;
-  }catch(e){if(status){status.dataset.state="error";status.textContent=`予約時間を読み込めませんでした：${e?.message||"UNKNOWN_ERROR"}`;}}
+async function kbnLoadHourlyStatusV421(){
+  const next=document.getElementById("hourlyNextRunV421");if(next)next.textContent=kbnNextHourlyRunV421();
+  try{const d=await api("/api/admin/auto-schedule"),el=document.getElementById("lastAutomaticRunStatus");if(el){el.textContent=kbnFormatLastAutomaticRunV233(d.last_automatic_run||null,d.maintenance_queue||null);const st=String(d.last_automatic_run?.status||"").toLowerCase();el.style.borderColor=st==="failed"?"#7d3535":"#315b45";el.style.color=st==="failed"?"#ff9b9b":"#7ee2a8";}}catch{}
 }
-
-document.addEventListener("change",e=>{
-  if(e.target?.matches?.('[id^="autoListingTime"]')||e.target?.id==="maintenanceScheduleSelect")kbnRefreshMaintenanceOptionsV217();
-});
-
-// v2.57: メンテナンス実行中の累計件数を管理画面へ自動反映。
-let kbnScheduleLiveRefreshV257=null;
+let kbnScheduleLiveRefreshV421=null;
 document.addEventListener("DOMContentLoaded",()=>{
-  if(kbnScheduleLiveRefreshV257)return;
-  loadMaintenanceHistoryV414().catch(()=>{});
+  loadMaintenanceHistoryV414().catch(()=>{});kbnLoadHourlyStatusV421().catch(()=>{});
   document.getElementById('reloadMaintenanceHistoryBtn')?.addEventListener('click',()=>loadMaintenanceHistoryV414());
-  kbnScheduleLiveRefreshV257=setInterval(()=>{
-    if(document.visibilityState!=="visible")return;
-    kbnLoadSimpleScheduleV230().catch(()=>{});
-    loadMaintenanceHistoryV414().catch(()=>{});
-  },5000);
+  if(kbnScheduleLiveRefreshV421)return;
+  kbnScheduleLiveRefreshV421=setInterval(()=>{if(document.visibilityState!=="visible")return;kbnLoadHourlyStatusV421().catch(()=>{});loadMaintenanceHistoryV414().catch(()=>{});},5000);
 });
-
-
-document.addEventListener("click",async e=>{
-  const btn=e.target.closest?.("#autoScheduleSaveBtn");
-  if(!btn)return;
-  const status=document.getElementById("autoScheduleStatus");
-  const listingTimes=[1,2,3,4,5,6].map(i=>kbnNormalizeAdminTimeV230(document.getElementById(`autoListingTime${i}`)?.value));
-  if(listingTimes.some(v=>!v)){
-    if(status){status.dataset.state="error";status.textContent="自動掲載6回の時間をすべて入力してください。";}return;
-  }
-  if(new Set(listingTimes).size!==6){
-    if(status){status.dataset.state="error";status.textContent="6つの時間は重複できません。";}return;
-  }
-  const slot=kbnMaintenanceSlotV217();
-  const maintenanceTime=listingTimes[slot-1];
-  btn.disabled=true;btn.textContent="保存中...";
-  if(status){status.dataset.state="";status.textContent="予約時間を保存しています...";}
-  try{
-    const d=await api("/api/admin/auto-schedule",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({auto_listing_times_jst:listingTimes,full_maintenance_time_jst:maintenanceTime})});
-    const saved=Array.isArray(d.auto_listing_times_jst)?d.auto_listing_times_jst:listingTimes;
-    saved.forEach((v,i)=>{const el=document.getElementById(`autoListingTime${i+1}`);if(el)el.value=v;});
-    const mt=String(d.full_maintenance_time_jst||maintenanceTime);
-    const idx=Math.max(0,saved.indexOf(mt));
-    const select=document.getElementById("maintenanceScheduleSelect");if(select)select.value=String(idx+1);
-    kbnRefreshMaintenanceOptionsV217();
-    if(status){status.dataset.state="ok";status.textContent=`✓ 保存しました。追加開拓 ${saved.join(" / ")} ｜ 毎時間自動運転 ON / 重点フルメンテ ${mt}（新規掲載 最大20店舗）`;}
-    const six=document.getElementById("autoListingSixTimesStatus");if(six)six.textContent=`追加開拓：1日6回（${saved.join(" / ")}） / 毎時間自動運転：ON（毎時00分） / 重点フルメンテ：${mt}（新規掲載 最大20店舗）`;
-  }catch(err){if(status){status.dataset.state="error";status.textContent=`保存できませんでした：${err?.message||"UNKNOWN_ERROR"}`;}}
-  finally{btn.disabled=false;btn.textContent="時間を保存";}
-});
-
-document.addEventListener("DOMContentLoaded",()=>setTimeout(kbnLoadSimpleScheduleV230,450));
 </script>
 
 <script id="kbn-auto-listed-bind-v207">
