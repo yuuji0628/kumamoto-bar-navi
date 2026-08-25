@@ -4444,8 +4444,7 @@ html,body{max-width:100%;overflow-x:hidden}
     <div class="kbn-maintenance-grid">
       <button type="button" id="refreshMissingInfoBtn">情報補完 20件</button>
       <button type="button" id="checkClosedShopsBtn">閉業確認 20件</button>
-      <button type="button" id="startInstagramFullAuditBtn" style="border-color:#7b5f19;color:#f0c85a">既存Instagramを全件再検査</button>
-      <button type="button" id="refreshInstagramBtn">再検査 20件だけ</button>
+      <button type="button" id="refreshInstagramBtn">Instagram再検査 20件</button>
     </div>
     <div class="kbn-schedule-note kbn-schedule-editor">
       <div class="kbn-schedule-title">
@@ -4467,8 +4466,8 @@ html,body{max-width:100%;overflow-x:hidden}
       <small id="autoListingSixTimesStatus" style="display:block;margin-top:7px;color:#efc45a;line-height:1.5">毎時間自動運転：ON / 追加開拓タイム：廃止 / 重点フルメンテ：廃止</small>
     </div>
     <div id="dailyPrecisionStatusV433" style="margin-top:10px;padding:10px 12px;border:1px solid #334957;border-radius:12px;background:#0f1922;color:#aeb9c3;font-size:.72rem;line-height:1.55">日次精度メンテ：状態確認中...</div>
-    <div id="instagramFullAuditStatusV432" style="margin-top:10px;padding:10px 12px;border:1px solid #334957;border-radius:12px;background:#0f1922;color:#aeb9c3;font-size:.72rem;line-height:1.55">
-      Instagram全件再検査：待機中
+    <div id="instagramDailyPolicyV440" style="margin-top:10px;padding:10px 12px;border:1px solid #334957;border-radius:12px;background:#0f1922;color:#aeb9c3;font-size:.72rem;line-height:1.55">
+      Instagram再検査：1日50店舗・前日の続きから自動確認。全件一括処理は行いません。
     </div>
     <div id="maintenanceStatus" class="auto-discovery-status"></div>
     <div class="kbn-simple-schedule-ok" style="margin-top:8px">毎時間の自動運転も手動と同じpair_limit=2。2検索ごとに候補を再選択し、通常5サイクル、通信エラー時は3→1サイクルへ減速します。</div>
@@ -10866,15 +10865,16 @@ async function loadDailyPrecisionStatusV433(){
     const d=await api("/api/admin/daily-precision-status");
     const labels={
       closed:"閉業確認中",
-      instagram_start:"Instagram全件再検査を開始",
-      instagram_wait:"Instagram全件再検査中",
+      instagram_start:"Instagram 50店舗/日の再検査を開始",
+      instagram_wait:"Instagram再検査中（50店舗/日）",
       exclusion:"対象外確認中",
       done:"本日分完了",
       idle:"待機中"
     };
     const stage=String(d.stage||"idle");
     const skip=String(d.closed_skip_reason||"");
-    el.textContent=`日次精度メンテ：${labels[stage]||stage} / 閉業確認 ${Number(d.checked_closed||0)}店舗${skip?`（本日保留:${skip}）`:""} / 閉業APIエラー ${Number(d.closed_error_count||0)}件 / Instagram再検査 ${Number(d.checked_instagram||0)}店舗 / 対象外候補 ${Number(d.exclusion_count||0)}件。毎時間のBAR開拓を優先し、Google停止時は閉業確認を飛ばしてInstagramへ進みます。`;
+    const igTarget=Number(d.instagram_target||50);
+    el.textContent=`日次精度メンテ：${labels[stage]||stage} / 閉業確認 ${Number(d.checked_closed||0)}店舗${skip?`（本日保留:${skip}）`:""} / 閉業APIエラー ${Number(d.closed_error_count||0)}件 / Instagram再検査 ${Number(d.checked_instagram||0)}/${igTarget}店舗 / 対象外候補 ${Number(d.exclusion_count||0)}件。Instagramは1日50店舗だけ、前日の続きから確認します。`;
   }catch(e){
     el.textContent=`日次精度メンテ：状態取得失敗 ${e?.message||e}`;
   }
@@ -10890,18 +10890,18 @@ async function loadInstagramFullAuditStatusV432(){
     if(d.active){
       el.style.color="#efc45a";
       el.style.borderColor="#6b5521";
-      el.textContent=`Instagram全件再検査中：${checked}/${total}店舗（${pct}%） / 正しいまま${Number(d.verified||0)} / 差替${Number(d.corrected||0)} / 公開から除外${Number(d.removed||0)} / 要確認${Number(d.review||0)} / エラー${Number(d.failed||0)}。毎分20店舗ずつ自動継続します。`;
+      el.textContent=`Instagram再検査（1日50店舗）中：${checked}/${total}店舗（${pct}%） / 正しいまま${Number(d.verified||0)} / 差替${Number(d.corrected||0)} / 公開から除外${Number(d.removed||0)} / 要確認${Number(d.review||0)} / エラー${Number(d.failed||0)}。1日50店舗まで、前日の続きから確認します。`;
     }else if(total && checked){
       el.style.color="#7ee2a8";
       el.style.borderColor="#315b45";
-      el.textContent=`Instagram全件再検査 完了：${checked}/${total}店舗 / 正しいまま${Number(d.verified||0)} / 差替${Number(d.corrected||0)} / 公開から除外${Number(d.removed||0)} / 要確認${Number(d.review||0)} / エラー${Number(d.failed||0)}`;
+      el.textContent=`Instagram再検査（1日50店舗） 完了：${checked}/${total}店舗 / 正しいまま${Number(d.verified||0)} / 差替${Number(d.corrected||0)} / 公開から除外${Number(d.removed||0)} / 要確認${Number(d.review||0)} / エラー${Number(d.failed||0)}`;
     }else{
       el.style.color="#aeb9c3";
       el.style.borderColor="#334957";
-      el.textContent="Instagram全件再検査：待機中";
+      el.textContent="Instagram再検査（1日50店舗）：待機中";
     }
   }catch(err){
-    el.textContent=`Instagram全件再検査：状態取得失敗 ${err?.message||err}`;
+    el.textContent=`Instagram再検査（1日50店舗）：状態取得失敗 ${err?.message||err}`;
   }
 }
 
@@ -10977,23 +10977,6 @@ document.addEventListener("click",async(e)=>{
     return;
   }
 
-  if(e.target?.id==="startInstagramFullAuditBtn"){
-    const btn=e.target;
-    if(!confirm("既存掲載店舗を全件、Instagramが本当に正しいか再検査します。確認できないInstagramは公開から外し、正しいものが見つかれば差し替えます。開始しますか？"))return;
-    try{
-      btn.disabled=true;
-      btn.textContent="全件再検査を開始中...";
-      const d=await api("/api/admin/instagram-full-audit/start",{method:"POST",body:{}});
-      alert(`全件再検査を開始しました。対象 ${Number(d.total||0)}店舗。毎分20店舗ずつ自動で最後まで進みます。`);
-      await loadInstagramFullAuditStatusV432();
-    }catch(err){
-      alert("全件再検査を開始できませんでした: "+(err?.message||err));
-    }finally{
-      btn.disabled=false;
-      btn.textContent="既存Instagramを全件再検査";
-    }
-    return;
-  }
 
   if(e.target?.id==="refreshInstagramBtn"){
     const btn=e.target,st=document.getElementById("maintenanceStatus");
@@ -11016,7 +10999,7 @@ document.addEventListener("click",async(e)=>{
     }catch(err){
       if(st)st.textContent="Instagram補完に失敗: "+(err?.message||"");
     }finally{
-      btn.disabled=false;btn.textContent="再検査 20件だけ";
+      btn.disabled=false;btn.textContent="Instagram再検査 20件";
     }
     return;
   }
