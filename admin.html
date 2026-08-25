@@ -4346,15 +4346,17 @@ html,body{max-width:100%;overflow-x:hidden}
       <span class="lead-smart-icon">⚡</span>
       <span>
         <b>自動開拓</b>
-        <small>Google優先で県内のBAR候補を自動検索・掲載</small>
+        <small>Google優先＋障害時は代替ソースへ自動切替</small>
       </span>
       <i>›</i>
     </button>
     <div class="lead-smart-collapse-body" data-lead-panel="auto">
       <p class="lead-smart-helper">県内を順番に検索し、重複を避けながら高精度で自動掲載します。</p>
-      <button type="button" id="autoDiscoverBtn" class="btn-gold lead-smart-primary">Google優先で高精度自動掲載</button>
+      <button type="button" id="autoDiscoverBtn" class="btn-gold lead-smart-primary">高精度自動掲載</button>
       <div style="margin-top:8px;color:#f1c75b;font-weight:800;font-size:.82rem">1回の実行で最大100店舗まで自動掲載</div>
       <div style="margin-top:4px;color:#9ca7b3;font-size:.72rem">繁華街・町名単位まで120検索。通常5検索ずつ（503再試行時は2検索）小分け保存し、503/通信エラー時は30秒〜3分の自動クールダウン後に続きから再開します。画面を再読み込みしても未完了なら自動復帰します。通常判定で新規が見つからない場合は後半を自動で「拡張探索」に切替。重複は店名だけ・住所だけでは落とさず、電話/Instagram一致または店名＋住所一致で判定します。</div>
+      <div id="discoverySourceHealthV438" style="margin:10px 0;padding:10px 12px;border:1px solid #334957;border-radius:12px;background:#0f1922;font-size:.72rem;line-height:1.55;color:#aeb9c3">検索API状態：確認中...</div>
+      <button type="button" id="testGooglePlacesV438" style="margin-bottom:10px">Google Places接続テスト</button>
       <div id="autoDiscoverStatus" class="auto-discovery-status"></div>
       <div id="autoDiscoverProgress" class="kbn-work-progress" hidden>
         <div class="kbn-work-progress-head"><b>自動開拓の進捗</b><strong id="autoProgressPct">0%</strong></div>
@@ -4454,7 +4456,7 @@ html,body{max-width:100%;overflow-x:hidden}
           <div><b style="display:block;color:#f3c958;font-size:.9rem">毎時00分に自動スタート</b><small style="color:#91a0ac">追加の時間設定は不要です</small></div>
           <span style="padding:5px 9px;border-radius:999px;background:#123125;color:#7ee3b7;font-size:.64rem;font-weight:700">常時ON</span>
         </div>
-        <div style="margin-top:9px;color:#b2bdc7;font-size:.69rem;line-height:1.6">BAR開拓（最低10／最大20） → 情報補完 → VERIFIED精査×3 → SEO</div>
+        <div style="margin-top:9px;color:#b2bdc7;font-size:.69rem;line-height:1.6">BAR開拓（最大30分・最低10／最大20） → 情報補完 → VERIFIED精査×3 → SEO</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:11px">
           <div style="padding:9px 10px;border-radius:10px;background:#111d26"><small style="display:block;color:#7f8c98">次回実行</small><b id="hourlyNextRunV421" style="display:block;margin-top:3px;color:#fff">計算中...</b></div>
           <div style="padding:9px 10px;border-radius:10px;background:#111d26"><small style="display:block;color:#7f8c98">開拓速度</small><b style="display:block;margin-top:3px;color:#7ee3b7">2検索×最大5サイクル＋0件回避</b></div>
@@ -9158,6 +9160,27 @@ window.refreshExistingIndependentListings=async function(){
   }
 };
 
+
+async function loadDiscoverySourceHealthV438(){
+  const el=$("discoverySourceHealthV438");if(!el)return;
+  try{
+    const d=await api("/api/admin/discovery-source-health"),g=d.google||{};
+    if(!g.configured){el.style.borderColor="#7a3d3d";el.style.color="#ff9a9a";el.textContent="Google Places：APIキー未設定。代替ソースへ自動切替します。";return}
+    if(g.disabled){el.style.borderColor="#7a5b24";el.style.color="#efc45a";el.textContent=`Google Places：一時停止中（${g.error_code||"API_ERROR"} / HTTP ${Number(g.http_status||0)||"—"}）。同じエラーを無駄打ちせず代替ソースへ自動切替します。`;return}
+    el.style.borderColor="#315b45";el.style.color="#7ee2a8";el.textContent="Google Places：利用可能。障害時は代替ソースへ自動切替します。";
+  }catch(e){el.textContent=`検索API状態：取得失敗 ${e?.message||e}`}
+}
+window.testGooglePlacesV438=async function(){
+  const btn=$("testGooglePlacesV438");
+  try{
+    btn.disabled=true;btn.textContent="Google Places確認中...";
+    const d=await api("/api/admin/discovery-source-health/test-google",{method:"POST",body:{}});
+    alert(d.ok?`Google Places 接続OK\nHTTP ${d.status}\nテスト候補 ${d.found}件`:`Google Places 接続エラー\n種類: ${d.error_code||"不明"}\nHTTP: ${d.status||"—"}\n${d.error||""}\n\n自動開拓は代替ソースへ切り替わります。`);
+    await loadDiscoverySourceHealthV438();
+  }catch(e){alert("Google Places接続テストに失敗しました: "+(e?.message||e))}
+  finally{btn.disabled=false;btn.textContent="Google Places接続テスト"}
+};
+
 window.runAutoDiscovery=async function(options={}){
   const btn=$("autoDiscoverBtn"), status=$("autoDiscoverStatus");
   const progress=$("autoDiscoverProgress");
@@ -9275,8 +9298,9 @@ window.runAutoDiscovery=async function(options={}){
         for(const [k,v] of Object.entries(d.reject_summary)) rejectSummary[k]=(rejectSummary[k]||0)+Number(v||0);
       }
       for(const r of rows){
-        rawTotal+=Number(r.raw_found||0); barTotal+=Number(r.google_found||0);
-        if(!r.ok||r.error)errors++;
+        rawTotal+=Number(r.raw_found||0);barTotal+=Number(r.google_found||0);
+        if(!r.ok||r.error){errors++;const code=String(r.error_code||"GOOGLE_ERROR");window.__kbnDiscoveryErrorBreakdownV438=window.__kbnDiscoveryErrorBreakdownV438||{};window.__kbnDiscoveryErrorBreakdownV438[code]=(window.__kbnDiscoveryErrorBreakdownV438[code]||0)+1}
+        if(r.fallback_used)window.__kbnDiscoveryFallbackCountV438=Number(window.__kbnDiscoveryFallbackCountV438||0)+1;
       }
 
       const doneNow=Math.max(1,rows.length||pairLimit);
@@ -9305,9 +9329,11 @@ window.runAutoDiscovery=async function(options={}){
     const createdNames=createdTotal.slice(0,12).map(x=>esc(x.name||"")).join("<br>");
     const rejectLabels={DUPLICATE_EARLY:"既存店重複(早期)",DUPLICATE:"既存店重複",DELETED_HISTORY_EARLY:"削除済み履歴",DELETED_HISTORY:"削除済み履歴",OUTSIDE_KUMAMOTO:"県外",HARD_NON_BAR:"非BAR業態",NO_EXPLICIT_BAR_SIGNAL:"BAR根拠不足",LOW_CONFIDENCE:"一致情報不足"};
     const rejectDetail=Object.entries(rejectSummary).sort((x,y)=>Number(y[1])-Number(x[1])).slice(0,8).map(([k,v])=>`${esc(rejectLabels[k]||k)}:${Number(v||0)}件`).join(" / ");
+    const apiErrorDetail=Object.entries(window.__kbnDiscoveryErrorBreakdownV438||{}).sort((x,y)=>Number(y[1])-Number(x[1])).map(([k,v])=>`${esc(k)}:${Number(v||0)}件`).join(" / ");
+    const fallbackUsed=Number(window.__kbnDiscoveryFallbackCountV438||0);
     if(status)status.innerHTML=
       `<b>${createdTotal.length}店舗をKBN独自掲載しました。</b><br>`+
-      `Google検索：${searchedTotal.length}組<br>Google生ヒット 合計：${rawTotal}件<br>BAR判定後：${barTotal}件<br>APIエラー：${errors}件<br>重複・除外：${rejectedTotal}件`+
+      `Google検索：${searchedTotal.length}組<br>Google生ヒット 合計：${rawTotal}件<br>BAR判定後：${barTotal}件<br>APIエラー：${errors}件${apiErrorDetail?`（${apiErrorDetail}）`:""}<br>代替ソース使用：${fallbackUsed}検索<br>重複・除外：${rejectedTotal}件`+
       (rejectDetail?`<br><small>除外内訳：${rejectDetail}</small>`:"")+
       (discoveryMode==="expanded"?`<br><small>第2パス：拡張探索を実行済み</small>`:"")+
       `<br><small>503対策：通常5検索ずつ（503再試行時は2検索）保存＋自動クールダウン復旧</small>`+
@@ -9323,7 +9349,7 @@ window.runAutoDiscovery=async function(options={}){
     updateProgress(`一時停止：${completed}/${totalSteps}検索まで保存済み`);
     alert(`自動開拓を一時停止しました。\n\n${completed}/${totalSteps}検索・${createdTotal.length}店舗掲載までは保存されています。\nページを開いたままなら自動復旧、再読み込みしても続きから自動再開します。`);
   }finally{
-    btn.disabled=false; btn.textContent="Google優先で高精度自動掲載";
+    btn.disabled=false; btn.textContent="高精度自動掲載";
   }
 };
 
@@ -10847,7 +10873,7 @@ async function loadDailyPrecisionStatusV433(){
       idle:"待機中"
     };
     const stage=String(d.stage||"idle");
-    el.textContent=`日次精度メンテ：${labels[stage]||stage} / 閉業確認 ${Number(d.checked_closed||0)}店舗 / Instagram再検査 ${Number(d.checked_instagram||0)}店舗 / 対象外候補 ${Number(d.exclusion_count||0)}件。毎時間のBAR開拓を優先し、空き時間だけ進みます。`;
+    el.textContent=`日次精度メンテ：${labels[stage]||stage} / 閉業確認 ${Number(d.checked_closed||0)}店舗 / Instagram再検査 ${Number(d.checked_instagram||0)}店舗 / 対象外候補 ${Number(d.exclusion_count||0)}件。毎時間のBAR開拓を優先し、空き時間だけ進みます。閉業は10店ずつ、Instagram再検査は20店ずつ進めます。`;
   }catch(e){
     el.textContent=`日次精度メンテ：状態取得失敗 ${e?.message||e}`;
   }
@@ -10879,6 +10905,8 @@ async function loadInstagramFullAuditStatusV432(){
 }
 
 document.addEventListener("click",async(e)=>{
+  if(e.target?.id==="testGooglePlacesV438"){e.preventDefault();await window.testGooglePlacesV438();return;}
+
   if(e.target?.id==="topMaintenanceOpenBtn"){
     document.querySelector('[data-tab="leads"]')?.click();
     setTimeout(()=>{
@@ -11104,7 +11132,7 @@ function kbnNextHourlyRunV421(){
   }catch{return "次の毎時00分"}
 }
 function kbnMaintenanceTaskLabelV414(task){
-  return {discovery:'BAR開拓',discovery_retry:'通信再試行',missing:'情報補完',seo:'SEO改善',closed:'閉業確認',instagram:'Instagram',exclusion:'対象外候補',verified_info:'精密補完',verified_auto:'自動再確認',closed_daily:'閉業確認',instagram_daily:'Instagram再検査',exclusion_daily:'対象外確認'}[String(task||'')]||String(task||'メンテナンス');
+  return {discovery:'BAR開拓',discovery_retry:'通信再試行',missing:'情報補完',seo:'SEO改善',closed:'閉業確認',instagram:'Instagram',exclusion:'対象外候補',verified_info:'精密補完',verified_auto:'自動再確認',hourly_preempt:'前時間枠打切り',discovery_cutoff:'BAR開拓終了',closed_daily:'閉業確認',instagram_daily:'Instagram再検査',exclusion_daily:'対象外確認'}[String(task||'')]||String(task||'メンテナンス');
 }
 function kbnMaintenanceKindLabelV414(kind){return {hourly:'毎時間',full_maintenance:'自動運転',auto_recheck:'自動再確認',daily_precision:'日次精度'}[String(kind||'')]||String(kind||'自動');}
 function kbnMaintenanceTimeV414(raw){
@@ -11195,6 +11223,7 @@ async function kbnLoadHourlyStatusV421(){
 }
 let kbnScheduleLiveRefreshV421=null;
 document.addEventListener("DOMContentLoaded",()=>{
+  loadDiscoverySourceHealthV438().catch(()=>{});
   loadInstagramFullAuditStatusV432().catch(()=>{});
   loadDailyPrecisionStatusV433().catch(()=>{});
   setInterval(()=>{
