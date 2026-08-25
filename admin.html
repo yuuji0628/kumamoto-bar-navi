@@ -4373,12 +4373,12 @@ html,body{max-width:100%;overflow-x:hidden}
           <div><b style="display:block;color:#f3c958;font-size:.9rem">毎時00分に自動スタート</b><small style="color:#91a0ac">追加の時間設定は不要です</small></div>
           <span style="padding:5px 9px;border-radius:999px;background:#123125;color:#7ee3b7;font-size:.64rem;font-weight:700">常時ON</span>
         </div>
-        <div style="margin-top:9px;color:#b2bdc7;font-size:.69rem;line-height:1.6">BAR開拓（ランダム・最低目標10店舗／最大20店舗） → 情報不足 → SEO改善 → 閉業確認 → Instagram → 対象外 → VERIFIED補完</div>
+        <div style="margin-top:9px;color:#b2bdc7;font-size:.69rem;line-height:1.6">BAR開拓（手動開拓と同じ検索ロジック・最低目標10店舗／最大20店舗） → 情報不足 → SEO改善 → 閉業確認 → Instagram → 対象外 → VERIFIED補完</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:11px">
           <div style="padding:9px 10px;border-radius:10px;background:#111d26"><small style="display:block;color:#7f8c98">次回実行</small><b id="hourlyNextRunV421" style="display:block;margin-top:3px;color:#fff">計算中...</b></div>
           <div style="padding:9px 10px;border-radius:10px;background:#111d26"><small style="display:block;color:#7f8c98">開拓速度</small><b style="display:block;margin-top:3px;color:#7ee3b7">通常10検索/分</b></div>
         </div>
-        <div style="margin-top:8px;color:#72818e;font-size:.62rem;line-height:1.5">通信エラー時は 10→5→2検索/分へ段階的に自動減速。成功後は10検索/分へ自動復帰し、続きから処理します。</div>
+        <div style="margin-top:8px;color:#72818e;font-size:.62rem;line-height:1.5">手動開拓と同じ地区×ジャンル探索・候補照合を使用。通常10検索/分、通信エラー時は10→5→2へ自動減速します。</div>
       </div>
       <div id="lastAutomaticRunStatus" style="margin-top:10px;padding:10px 12px;border:1px solid #394653;border-radius:12px;background:#101820;color:#d9e1e8;font-size:.78rem;line-height:1.55">最終自動実行：読み込み中...</div>
       <small id="autoListingSixTimesStatus" style="display:block;margin-top:7px;color:#efc45a;line-height:1.5">毎時間自動運転：ON / 追加開拓タイム：廃止 / 重点フルメンテ：廃止</small>
@@ -8942,7 +8942,7 @@ window.runAutoDiscovery=async function(options={}){
   const resume=!!options.resume;
   const STORAGE_KEY="kbn_auto_discovery_resume_v311";
 
-  if(!resume && !confirm("Google Placesを優先して、県内のBAR候補を順番に検索・照合して自動掲載します。\n\n通常5検索ずつ（503再試行時は2検索）小分け保存し、503時は自動で休止→続きから再開します。開始しますか？"))return;
+  if(!resume && !confirm("Google Placesを優先して、県内のBAR候補を順番に検索・照合して自動掲載します。\n\n手動開拓専用の小分け検索で進め、503時は自動で休止→続きから再開します。開始しますか？"))return;
 
   btn.disabled=true;
   btn.textContent=resume?"自動開拓を再開中...":"自動開拓中...";
@@ -9015,7 +9015,7 @@ window.runAutoDiscovery=async function(options={}){
   updateProgress(resume?`前回の${completed}/${totalSteps}検索から自動再開します…`:"Google Placesへの検索を開始しています...");
   if(status)status.textContent=resume
     ? `前回の${completed}/${totalSteps}検索・${createdTotal.length}店舗掲載から自動再開しました。`
-    : "自動開拓を開始しました。120検索を通常5検索ずつ（503再試行時は2検索）小分け保存します。503時は自動クールダウン後に続きから再開します。";
+    : "手動開拓を開始しました。地区×ジャンルを順番に検索・照合し、503時は自動クールダウン後に続きから再開します。";
   saveState();
 
   try{
