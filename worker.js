@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.32";
+      config.vars.KBN_CONFIG_VERSION="4.34";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -1372,7 +1372,7 @@ async function kbnMaintenanceQueueStatusV257(env){
       };
     }
 
-    const task=phase===1?"missing":phase===2?"seo":phase===3?"closed":phase===4?"instagram":phase===5?"exclusion":phase>=6&&phase<=8?"verified_info":phase===9?"verified_auto":"maintenance";
+    const task=phase===1?"missing":phase>=2&&phase<=4?"verified_info":phase===5?"seo":phase===9?"verified_auto":"maintenance";
     return {
       active:true,
       phase,
@@ -7533,9 +7533,10 @@ async function kbnQueueHourlyMaintenanceV413(env,runKey=''){
   await ensureKbnMaintenanceQueueV242(env);
   const q=await env.DB.prepare(`SELECT phase FROM kbn_maintenance_queue WHERE id=1`).first();
   if(Number(q?.phase||0)!==0)return {queued:false,reason:'QUEUE_BUSY'};
-  // v4.21: 毎時間自動運転の唯一の開始キュー。
-  // phase 11から手動開拓と同じ検索ロジックで通常10検索ずつ（エラー時5→2へ自動減速）最大20店舗まで探索し、
-  // その後に 情報不足 → SEO → 閉業 → Instagram → 対象外 → VERIFIED補完へ自動で移行する。
+  // v4.33: 毎時間は掲載数を最優先。
+  // phase 11から手動開拓と同じ検索ロジックで最低10・最大20店舗を狙い、
+  // その後は 情報不足 → VERIFIED補完×3 → SEO だけを実行する。
+  // 閉業・Instagram全件再検査・対象外は低優先の日次処理へ分離。
   await env.DB.prepare(`
     INSERT INTO kbn_maintenance_queue(id,phase,run_date,created_total,discovery_searched,discovery_mode,discovery_retry_count,discovery_retry_after,updated_at)
     VALUES(1,11,?,0,0,'normal',0,NULL,CURRENT_TIMESTAMP)
@@ -7584,6 +7585,7 @@ async function ensureKbnMaintenanceHistoryV414(env){
 function kbnMaintenanceRunKindV414(q,phase,task){
   if(task==='verified_auto' || phase===9)return 'auto_recheck';
   const key=String(q?.run_date||'');
+  if(/daily_precision/i.test(key) || ['closed_daily','instagram_daily','exclusion_daily'].includes(String(task||'')))return 'daily_precision';
   if(/\bJST\b/i.test(key) || /hourly/i.test(key))return 'hourly';
   if(phase>=11 && phase<=49)return 'full_maintenance';
   return 'full_maintenance';
@@ -7683,6 +7685,26 @@ async function kbnMaintenanceHistoryV414(env,{days=7,limit=24}={}){
     LIMIT ?
   `).bind(safeLimit).all();
 
+  const groupedRuns=await env.DB.prepare(`
+    SELECT
+      CASE WHEN COALESCE(run_key,'')<>'' THEN run_key ELSE 'single:'||id END AS group_key,
+      run_kind,
+      MIN(created_at) AS started_at,
+      MAX(created_at) AS finished_at,
+      COUNT(*) AS task_runs,
+      SUM(checked_count) AS checked,
+      SUM(updated_count) AS updated,
+      SUM(created_count) AS created,
+      SUM(seo_gain) AS seo_gain,
+      SUM(error_count) AS errors,
+      GROUP_CONCAT(task||':'||checked_count||':'||updated_count||':'||created_count||':'||seo_gain||':'||error_count,'|') AS task_detail
+    FROM kbn_maintenance_history
+    WHERE datetime(created_at)>=datetime('now',?)
+    GROUP BY CASE WHEN COALESCE(run_key,'')<>'' THEN run_key ELSE 'single:'||id END, run_kind
+    ORDER BY MAX(created_at) DESC
+    LIMIT 30
+  `).bind(since).all();
+
   let queue=null;
   try{queue=await kbnMaintenanceQueueStatusV257(env)}catch{}
 
@@ -7692,6 +7714,7 @@ async function kbnMaintenanceHistoryV414(env,{days=7,limit=24}={}){
     today:today||{},
     daily:daily.results||[],
     recent:recent.results||[],
+    grouped_runs:groupedRuns.results||[],
     queue
   };
 }
@@ -7706,6 +7729,138 @@ async function kbnQueueAutoInfoRecheckV405(env,runDate=''){
     ON CONFLICT(id) DO UPDATE SET phase=9,run_date=excluded.run_date,updated_at=CURRENT_TIMESTAMP
   `).bind(String(runDate||'auto-recheck')).run();
   return {queued:true,phase:9};
+}
+
+
+async function ensureKbnDailyPrecisionV433(env){
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS kbn_daily_precision_state(
+      id INTEGER PRIMARY KEY CHECK(id=1),
+      run_date TEXT NOT NULL DEFAULT '',
+      stage TEXT NOT NULL DEFAULT 'idle',
+      checked_closed INTEGER NOT NULL DEFAULT 0,
+      checked_instagram INTEGER NOT NULL DEFAULT 0,
+      exclusion_count INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run();
+  await env.DB.prepare(`
+    INSERT INTO kbn_daily_precision_state(id,run_date,stage)
+    VALUES(1,'','idle')
+    ON CONFLICT(id) DO NOTHING
+  `).run();
+}
+
+function kbnJstDateV433(ms=Date.now()){
+  return new Date(ms+9*60*60*1000).toISOString().slice(0,10);
+}
+
+async function kbnDailyPrecisionStatusV433(env){
+  await ensureKbnDailyPrecisionV433(env);
+  const row=await env.DB.prepare(`SELECT * FROM kbn_daily_precision_state WHERE id=1`).first();
+  return {ok:true,...row};
+}
+
+async function kbnProcessDailyPrecisionV433(env){
+  await ensureKbnDailyPrecisionV433(env);
+  const today=kbnJstDateV433();
+  let st=await env.DB.prepare(`SELECT * FROM kbn_daily_precision_state WHERE id=1`).first();
+
+  // New JST day: start a new low-priority precision pass.
+  if(String(st?.run_date||'')!==today){
+    await env.DB.prepare(`
+      UPDATE kbn_daily_precision_state
+      SET run_date=?,stage='closed',checked_closed=0,checked_instagram=0,
+          exclusion_count=0,updated_at=CURRENT_TIMESTAMP
+      WHERE id=1
+    `).bind(today).run();
+    st={...(st||{}),run_date:today,stage:'closed',checked_closed:0,checked_instagram:0,exclusion_count:0};
+  }
+
+  const stage=String(st?.stage||'idle');
+
+  if(stage==='closed'){
+    const r=await runMaintenanceBatchV242(env,'closed',{limit:20});
+    await env.DB.prepare(`
+      UPDATE kbn_daily_precision_state
+      SET checked_closed=checked_closed+?,stage=?,updated_at=CURRENT_TIMESTAMP
+      WHERE id=1
+    `).bind(Number(r?.checked||0),r?.cycle_completed?'instagram_start':'closed').run();
+    await logKbnMaintenanceHistoryV414(env,{
+      q:{run_date:`${today} daily_precision`},phase:0,task:'closed_daily',result:r,
+      status:r?.ok===false?'failed':'success',
+      note:`日次精度 / 閉業確認${r?.cycle_completed?' / 本日分一巡':''}`
+    });
+    return {ok:true,processed:true,stage:'closed',result:r};
+  }
+
+  if(stage==='instagram_start'){
+    // Start one full strict Instagram re-audit for the day.
+    const current=await kbnInstagramFullAuditStatusV432(env);
+    if(!current.active){
+      await kbnStartInstagramFullAuditV432(env);
+    }
+    await env.DB.prepare(`
+      UPDATE kbn_daily_precision_state SET stage='instagram_wait',updated_at=CURRENT_TIMESTAMP WHERE id=1
+    `).run();
+    await logKbnMaintenanceHistoryV414(env,{
+      q:{run_date:`${today} daily_precision`},phase:0,task:'instagram_daily',
+      result:{ok:true,checked:0},status:'success',
+      note:'日次精度 / Instagram全件再検査 開始'
+    });
+    return {ok:true,processed:true,stage:'instagram_start'};
+  }
+
+  if(stage==='instagram_wait'){
+    const ig=await kbnInstagramFullAuditStatusV432(env);
+    if(ig.active){
+      const r=await kbnProcessInstagramFullAuditV432(env);
+      const igNow=await kbnInstagramFullAuditStatusV432(env);
+      await env.DB.prepare(`
+        UPDATE kbn_daily_precision_state
+        SET checked_instagram=?,updated_at=CURRENT_TIMESTAMP
+        WHERE id=1
+      `).bind(Number(igNow?.checked||0)).run();
+      const b=r?.batch||{};
+      await logKbnMaintenanceHistoryV414(env,{
+        q:{run_date:`${today} daily_precision`},phase:0,task:'instagram_daily',
+        result:{ok:r?.ok!==false,checked:Number(b.checked||0),updated_count:Number(b.verified||0)+Number(b.corrected||0),errors:Number(b.failed||0)?Array(Number(b.failed||0)).fill(1):[]},
+        status:r?.ok===false?'failed':'success',
+        note:`日次精度 / Instagram再検査 / 正常${Number(b.verified||0)} / 差替${Number(b.corrected||0)} / 除外${Number(b.removed||0)} / 要確認${Number(b.review||0)} / 累計${Number(igNow?.checked||0)}/${Number(igNow?.total||0)}`
+      });
+      return {ok:true,processed:true,stage:'instagram',result:r};
+    }
+    if(Number(ig.total||0)>0 && Number(ig.checked||0)>=Number(ig.total||0)){
+      await env.DB.prepare(`
+        UPDATE kbn_daily_precision_state SET checked_instagram=?,stage='exclusion',updated_at=CURRENT_TIMESTAMP WHERE id=1
+      `).bind(Number(ig.checked||0)).run();
+      await logKbnMaintenanceHistoryV414(env,{
+        q:{run_date:`${today} daily_precision`},phase:0,task:'instagram_daily',
+        result:{ok:true,checked:0},status:'success',
+        note:`日次精度 / Instagram全件再検査 完了 ${Number(ig.checked||0)}/${Number(ig.total||0)}店舗`
+      });
+      return {ok:true,processed:true,stage:'instagram_complete'};
+    }
+    // If audit state was cleared unexpectedly, start it again.
+    await kbnStartInstagramFullAuditV432(env);
+    return {ok:true,processed:true,stage:'instagram_restart'};
+  }
+
+  if(stage==='exclusion'){
+    const r=await kbnScanExclusionCandidatesV267(env);
+    await env.DB.prepare(`
+      UPDATE kbn_daily_precision_state
+      SET exclusion_count=?,stage='done',updated_at=CURRENT_TIMESTAMP WHERE id=1
+    `).bind(Number(r?.candidate_count||0)).run();
+    await logKbnMaintenanceHistoryV414(env,{
+      q:{run_date:`${today} daily_precision`},phase:0,task:'exclusion_daily',result:r,
+      status:r?.ok===false?'failed':'success',
+      note:`日次精度 / 対象外確認 / 候補${Number(r?.candidate_count||0)}件 / 本日分完了`
+    });
+    return {ok:true,processed:true,stage:'exclusion',result:r};
+  }
+
+  return {ok:true,processed:false,stage};
 }
 
 async function kbnProcessQueuedMaintenanceV242(env){
@@ -7880,10 +8035,11 @@ async function kbnProcessQueuedMaintenanceV242(env){
     }
   }
 
-  // v4.04: 通常メンテナンスの最後に、公開情報で確認できる店舗情報補完も小分けで自動実行。
-  // 情報不足 → SEO改善 → 閉業 → Instagram → 対象外候補 → VERIFIED補完×3 の順。
-  // VERIFIED補完は1 invocation 最大8店舗なのでCloudflare subrequest上限を避けながら最大24候補を処理。
-  const task=phase===1?"missing":phase===2?"seo":phase===3?"closed":phase===4?"instagram":phase===5?"exclusion":phase>=6&&phase<=8?"verified_info":phase===9?"verified_auto":"";
+  // v4.33: 毎時間は「掲載数 → 店舗情報精度 → SEO」に集中。
+  // BAR開拓の直後に、軽量な情報不足補完 → VERIFIED公開情報補完×3 → SEO の順で処理。
+  // 閉業・Instagram全件再検査・対象外チェックは低優先の1日1回処理へ分離し、
+  // 次の毎時間BAR開拓をブロックしない。
+  const task=phase===1?"missing":phase>=2&&phase<=4?"verified_info":phase===5?"seo":phase===9?"verified_auto":"";
   if(!task){
     await env.DB.prepare(`
       UPDATE kbn_maintenance_queue
@@ -7908,7 +8064,7 @@ async function kbnProcessQueuedMaintenanceV242(env){
     result={ok:false,error:String(e?.message||e),task};
   }
 
-  const nextPhase=phase>=8?0:phase+1;
+  const nextPhase=phase>=5?0:phase+1;
   await env.DB.prepare(`
     UPDATE kbn_maintenance_queue SET phase=?,updated_at=CURRENT_TIMESTAMP WHERE id=1
   `).bind(nextPhase).run();
@@ -10551,6 +10707,10 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
         return json(await kbnStartInstagramFullAuditV432(env));
       }
 
+      if(url.pathname==="/api/admin/daily-precision-status" && request.method==="GET"){
+        return json(await kbnDailyPrecisionStatusV433(env));
+      }
+
       if(url.pathname==="/api/admin/instagram-full-audit/status" && request.method==="GET"){
         return json(await kbnInstagramFullAuditStatusV432(env));
       }
@@ -11216,32 +11376,47 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
 
   async scheduled(event, env, ctx){
     const task=(async()=>{
-      // v4.21: automatic processing is unified into one hourly pipeline.
-      try{
-        const igAudit=await kbnProcessInstagramFullAuditV432(env);
-        if(igAudit?.processed)return;
-      }catch(e){
-        console.error("instagram full audit process failed",e);
-      }
-
+      // v4.33 priority:
+      // 1) 進行中の毎時間パイプライン
+      // 2) その時間のBAR開拓を必ず先に開始
+      // 3) 空き時間だけ日次精度チェック（閉業→Instagram全件→対象外）
       const queued=await kbnProcessQueuedMaintenanceV242(env);
       if(queued?.processed)return;
 
       const hourly=kbnHourlyMaintenanceSlotV421(event);
       const claimed=await kbnClaimRuntimeSlotV231(env,hourly.minute_key,'hourly_maintenance');
-      if(!claimed)return;
-
-      try{
-        const q=await kbnQueueHourlyMaintenanceV413(env,hourly.run_key);
-        if(q?.queued){
-          await createKbnAlert(env,{
-            type:'hourly_maintenance_started',
-            title:'毎時間自動運転開始',
-            message:`${hourly.time} JST枠：BAR自動開拓（最低目標10店舗・最大20店舗）→ 情報不足 → SEO → 閉業 → Instagram → 対象外 → VERIFIED補完を自動実行します。`
-          });
+      if(claimed){
+        try{
+          const q=await kbnQueueHourlyMaintenanceV413(env,hourly.run_key);
+          if(q?.queued){
+            await createKbnAlert(env,{
+              type:'hourly_maintenance_started',
+              title:'毎時間自動運転開始',
+              message:`${hourly.time} JST枠：BAR開拓（最低10・最大20）→ 情報補完 → VERIFIED精査×3 → SEO。掲載数を最優先します。`
+            });
+          }
+        }catch(e){
+          console.error('hourly automatic maintenance queue failed',e);
         }
+        return;
+      }
+
+      // The hourly slot for this hour is already secured/completed.
+      // Use only spare cron invocations for daily precision work.
+      try{
+        const daily=await kbnProcessDailyPrecisionV433(env);
+        if(daily?.processed)return;
       }catch(e){
-        console.error('hourly automatic maintenance queue failed',e);
+        console.error('daily precision maintenance failed',e);
+      }
+
+      // Backward compatibility: if a manually started full audit remains active,
+      // continue it only in spare time so it never delays the next hourly discovery.
+      try{
+        const igAudit=await kbnProcessInstagramFullAuditV432(env);
+        if(igAudit?.processed)return;
+      }catch(e){
+        console.error("instagram full audit process failed",e);
       }
     })();
     ctx.waitUntil(task);
