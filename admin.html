@@ -1943,6 +1943,22 @@ html,body{max-width:100%;overflow-x:hidden}
   font-size:.7rem;
   font-weight:800;
 }
+.shop-outreach-tools{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.shop-outreach-tools label{display:grid;gap:6px}
+.shop-outreach-tools label>span{color:#c6ced7;font-size:.76rem;font-weight:800}
+.shop-outreach-tools select{width:100%;min-height:42px;border:1px solid #354654;border-radius:12px;background:#101a23;color:#f3f5f7;padding:0 11px}
+.shop-outreach-summary{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+.shop-outreach-summary button{border:1px solid #344755;border-radius:999px;background:#101a23;color:#aeb9c3;padding:6px 9px;font-size:.66rem}
+.shop-outreach-summary button b{color:#efc45a}
+.outreach-mini-badge{display:inline-flex;align-items:center;border:1px solid #40515f;border-radius:999px;padding:2px 6px;font-size:.56rem;font-weight:800;color:#b8c4ce}
+.outreach-mini-badge.instagram-ready{border-color:#28694d;color:#77e0af}
+.outreach-mini-badge.dm-sent{border-color:#6a5929;color:#f1ca62}
+.outreach-mini-badge.replied{border-color:#365f84;color:#8ec5ff}
+.outreach-mini-badge.approved{border-color:#2f7655;color:#7ee2a8;background:#10271d}
+.outreach-mini-badge.declined{border-color:#6b3e3e;color:#ff9b9b}
+.shop-outreach-note{margin-top:4px!important;color:#d5bd78!important;font-size:.61rem!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:360px}
+.shop-more-panel .outreach-action-btn{font-size:.68rem!important}
+@media(max-width:640px){.shop-outreach-tools{grid-template-columns:1fr}}
 .shop-status-toggle-wrap{display:grid;gap:7px}
 .shop-status-toggle-wrap>span{color:#c6ced7;font-size:.78rem;font-weight:800}
 .shop-status-toggle{
@@ -4049,6 +4065,30 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
   </div>
 
+  <div class="shop-outreach-tools">
+    <label>
+      <span>Instagram連絡可否</span>
+      <select id="shopInstagramFilter">
+        <option value="">すべて</option>
+        <option value="ready">Instagram送信できる店舗だけ</option>
+        <option value="missing">Instagram未登録</option>
+      </select>
+    </label>
+    <label>
+      <span>正式掲載お願い・連絡状況</span>
+      <select id="shopOutreachFilter">
+        <option value="">すべて</option>
+        <option value="not_contacted">未連絡</option>
+        <option value="dm_sent">DM送信済み</option>
+        <option value="replied">返信あり・要対応</option>
+        <option value="approved">正式掲載OK</option>
+        <option value="declined">見送り</option>
+      </select>
+    </label>
+  </div>
+
+  <div id="shopOutreachSummary" class="shop-outreach-summary"></div>
+
   <div class="shop-filter-summary">
     <span>表示中 <strong id="shopFilteredCount">0</strong> 店舗 <small style="color:#8f99a4">（初期表示はKBN独自掲載のみ）</small></span>
     <button type="button" id="shopFilterResetBtn" class="admin-secondary-btn">絞り込み解除</button>
@@ -5276,14 +5316,70 @@ function renderShopAreaSummary(){
     : '<small>店舗がありません。</small>';
 }
 
+
+function shopOutreachStatusV428(shop){
+  const s=String(shop?.outreach_status||"not_contacted");
+  return ["not_contacted","dm_sent","replied","approved","declined"].includes(s)?s:"not_contacted";
+}
+function shopOutreachLabelV428(status){
+  return {not_contacted:"未連絡",dm_sent:"DM済",replied:"返信あり",approved:"正式OK",declined:"見送り"}[status]||"未連絡";
+}
+function shopOutreachBadgeClassV428(status){
+  return {dm_sent:"dm-sent",replied:"replied",approved:"approved",declined:"declined"}[status]||"";
+}
+function renderShopOutreachSummaryV428(){
+  const box=$("shopOutreachSummary");
+  if(!box)return;
+  const provisional=shops.filter(s=>String(s.listing_status||"published")==="provisional");
+  const ready=provisional.filter(s=>!!cleanInstagramHandle(s.instagram||"")).length;
+  const counts={not_contacted:0,dm_sent:0,replied:0,approved:0,declined:0};
+  provisional.forEach(s=>{const st=shopOutreachStatusV428(s);counts[st]=(counts[st]||0)+1});
+  box.innerHTML=`
+    <button type="button" data-outreach-quick="instagram">Instagram送信可 <b>${ready}</b></button>
+    <button type="button" data-outreach-quick="not_contacted">未連絡 <b>${counts.not_contacted}</b></button>
+    <button type="button" data-outreach-quick="dm_sent">DM済 <b>${counts.dm_sent}</b></button>
+    <button type="button" data-outreach-quick="replied">返信あり <b>${counts.replied}</b></button>
+    <button type="button" data-outreach-quick="approved">正式OK <b>${counts.approved}</b></button>`;
+}
+async function updateShopOutreachV428(id,status,{note=null,silent=false}={}){
+  const shop=shops.find(x=>Number(x.id)===Number(id));
+  if(!shop)return;
+  const body={status,note:note===null?String(shop.outreach_note||""):note};
+  await api(`/api/admin/shops/${id}/outreach`,{method:"POST",body});
+  shop.outreach_status=status;
+  shop.outreach_note=body.note;
+  shop.outreach_at=status==="not_contacted"?"":new Date().toISOString();
+  renderShopOutreachSummaryV428();
+  renderShopList();
+  if(!silent)alert(`「${shop.name}」を「${shopOutreachLabelV428(status)}」に更新しました。`);
+}
+window.setShopOutreachStatusV428=async function(id,status){
+  try{await updateShopOutreachV428(id,status)}
+  catch(e){alert("連絡状況を更新できませんでした: "+(e?.message||e))}
+};
+window.editShopOutreachNoteV428=async function(id){
+  const shop=shops.find(x=>Number(x.id)===Number(id));
+  if(!shop)return;
+  const note=prompt("正式掲載のお願い・連絡メモ",String(shop.outreach_note||""));
+  if(note===null)return;
+  try{await updateShopOutreachV428(id,shopOutreachStatusV428(shop),{note,silent:true})}
+  catch(e){alert("メモを保存できませんでした: "+(e?.message||e))}
+};
+
 function renderShopList(){
   const areaFilter=String($("shopAreaFilter")?.value||"");
   const statusFilter=String($("shopStatusFilter")?.value||"");
+  const instagramFilter=String($("shopInstagramFilter")?.value||"");
+  const outreachFilter=String($("shopOutreachFilter")?.value||"");
 
   const filtered=shops.filter(s=>{
     if(areaFilter && String(s.area||"")!==areaFilter)return false;
     const status=String(s.listing_status||"published");
     if(statusFilter && status!==statusFilter)return false;
+    const hasInstagram=!!cleanInstagramHandle(s.instagram||"");
+    if(instagramFilter==="ready" && !hasInstagram)return false;
+    if(instagramFilter==="missing" && hasInstagram)return false;
+    if(outreachFilter && shopOutreachStatusV428(s)!==outreachFilter)return false;
     return true;
   });
 
@@ -5303,9 +5399,12 @@ function renderShopList(){
                 ${provisional?'<span class="provisional-badge">独自</span>':'<span class="official-mini-badge">正式</span>'}
                 ${s.is_new?'<span class="new-mini-badge">NEW</span>':''}
                 ${s.is_featured?'<span class="featured-mini-badge">★</span>':''}
+                ${provisional && cleanInstagramHandle(s.instagram||"")?'<span class="outreach-mini-badge instagram-ready">Instagram可</span>':''}
+                ${provisional?`<span class="outreach-mini-badge ${shopOutreachBadgeClassV428(shopOutreachStatusV428(s))}">${shopOutreachLabelV428(shopOutreachStatusV428(s))}</span>`:''}
               </div>
             </div>
             <p>${esc(s.area)}${s.genre?` / ${esc(s.genre)}`:''}</p>
+            ${provisional && s.outreach_note?`<p class="shop-outreach-note">メモ：${esc(s.outreach_note)}</p>`:''}
           </div>
           <div class="admin-item-actions compact-actions dense-actions">
             ${provisional && cleanInstagramHandle(s.instagram||"")?`<button type="button" onclick="sendProvisionalInstagramDm(${s.id})" class="shop-provisional-dm dense-icon-btn" title="店舗へInstagram DM">DM</button>`:""}
@@ -5314,7 +5413,13 @@ function renderShopList(){
             <details class="shop-more-menu">
               <summary>•••</summary>
               <div class="shop-more-panel">
-                ${provisional?`<button onclick="publishShop(${s.id})" class="publish-shop-btn">正式掲載にする</button>`:""}
+                ${provisional?`<button onclick="publishShop(${s.id})" class="publish-shop-btn">正式掲載にする</button>
+                <button type="button" class="outreach-action-btn" onclick="setShopOutreachStatusV428(${s.id},'not_contacted')">未連絡に戻す</button>
+                <button type="button" class="outreach-action-btn" onclick="setShopOutreachStatusV428(${s.id},'dm_sent')">DM送信済み</button>
+                <button type="button" class="outreach-action-btn" onclick="setShopOutreachStatusV428(${s.id},'replied')">返信あり</button>
+                <button type="button" class="outreach-action-btn" onclick="setShopOutreachStatusV428(${s.id},'approved')">正式掲載OK</button>
+                <button type="button" class="outreach-action-btn" onclick="setShopOutreachStatusV428(${s.id},'declined')">見送り</button>
+                <button type="button" class="outreach-action-btn" onclick="editShopOutreachNoteV428(${s.id})">連絡メモ</button>`:""}
                 <button type="button" class="owner-link-issue-v281" data-shop-id="${s.id}">専用URL発行</button>
                 ${s.owner_token_hash?`<button type="button" class="owner-link-revoke-v281" data-shop-id="${s.id}">URL無効化</button>`:""}
                 <button onclick="deleteShop(${s.id})" class="danger-action">完全削除</button>
@@ -5355,6 +5460,7 @@ window.loadShops=async function(){
     shops.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("");
 
   renderShopAreaSummary();
+  renderShopOutreachSummaryV428();
   renderShopList();
 }
 
@@ -5498,6 +5604,9 @@ window.sendProvisionalInstagramDm=async function(id){
 
   const text=buildExistingProvisionalDm(shop);
   const copied=await copyTextSafe(text);
+
+  try{await updateShopOutreachV428(id,"dm_sent",{silent:true})}
+  catch(e){console.warn("DM status update failed",e)}
 
   if(copied){
     alert("店舗確認用DMをコピーしました。Instagramを開きます。DMに貼り付けて送信してください。");
@@ -9380,8 +9489,9 @@ window.publishShop=async function(id){
 
   try{
     await api(`/api/admin/shops/${id}/publish`,{method:"POST"});
+    try{await api(`/api/admin/shops/${id}/outreach`,{method:"POST",body:{status:"approved",note:String(s.outreach_note||"")}})}catch{}
     await loadShops();
-    alert("正式掲載へ切り替えました。");
+    alert("正式掲載へ切り替えました。連絡状況も「正式掲載OK」に更新しました。");
   }catch(e){
     alert("本掲載へ切り替えできませんでした: "+(e?.message||"UNKNOWN_ERROR"));
   }
@@ -10031,7 +10141,7 @@ document.addEventListener("click",e=>{
 
 
 document.addEventListener("change",e=>{
-  if(e.target?.id==="shopAreaFilter" || e.target?.id==="shopStatusFilter"){
+  if(["shopAreaFilter","shopStatusFilter","shopInstagramFilter","shopOutreachFilter"].includes(e.target?.id)){
     shopListExpanded=false;
     renderShopList?.();
   }
@@ -10045,6 +10155,28 @@ document.addEventListener("click",e=>{
     if($("shopStatusFilter"))$("shopStatusFilter").value=value;
     document.querySelectorAll("[data-shop-status-toggle]").forEach(btn=>{
       btn.classList.toggle("active",btn===statusToggle);
+    });
+    shopListExpanded=false;
+    renderShopList?.();
+    return;
+  }
+
+  const outreachQuick=e.target.closest?.("[data-outreach-quick]");
+  if(outreachQuick){
+    e.preventDefault();
+    const v=outreachQuick.dataset.outreachQuick||"";
+    if(v==="instagram"){
+      if($("shopInstagramFilter"))$("shopInstagramFilter").value="ready";
+      if($("shopOutreachFilter"))$("shopOutreachFilter").value="";
+    }else{
+      if($("shopInstagramFilter"))$("shopInstagramFilter").value="";
+      if($("shopOutreachFilter"))$("shopOutreachFilter").value=v;
+    }
+    if($("shopStatusFilter"))$("shopStatusFilter").value="provisional";
+    if($("shopInstagramFilter"))$("shopInstagramFilter").value="";
+    if($("shopOutreachFilter"))$("shopOutreachFilter").value="";
+    document.querySelectorAll("[data-shop-status-toggle]").forEach(btn=>{
+      btn.classList.toggle("active",(btn.dataset.shopStatusToggle||"")==="provisional");
     });
     shopListExpanded=false;
     renderShopList?.();
