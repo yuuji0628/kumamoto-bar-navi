@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.27";
+      config.vars.KBN_CONFIG_VERSION="4.28";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -5185,6 +5185,28 @@ async function ensureListingStatusColumn(env){
   }
 }
 
+async function ensureShopOutreachColumnsV428(env){
+  if(!env.DB)return;
+  try{
+    const info=await env.DB.prepare("PRAGMA table_info(shops)").all();
+    const cols=new Set((info.results||[]).map(x=>String(x.name||"")));
+    const alters=[];
+    if(!cols.has("outreach_status"))alters.push("ALTER TABLE shops ADD COLUMN outreach_status TEXT NOT NULL DEFAULT 'not_contacted'");
+    if(!cols.has("outreach_at"))alters.push("ALTER TABLE shops ADD COLUMN outreach_at TEXT");
+    if(!cols.has("outreach_note"))alters.push("ALTER TABLE shops ADD COLUMN outreach_note TEXT DEFAULT ''");
+    for(const sql of alters){
+      try{await env.DB.prepare(sql).run()}catch(e){console.error("outreach column add failed",sql,e)}
+    }
+  }catch(e){
+    console.error("ensureShopOutreachColumnsV428 failed",e);
+  }
+}
+
+function normalizeOutreachStatusV428(v){
+  const s=String(v||"not_contacted").trim();
+  return ["not_contacted","dm_sent","replied","approved","declined"].includes(s)?s:"not_contacted";
+}
+
 function normalizeListingStatus(v){
   return String(v||"published")==="provisional"?"provisional":"published";
 }
@@ -8416,6 +8438,7 @@ export default {
 
     if(env.DB && url.pathname.startsWith("/api/")){
       await ensureListingStatusColumn(env);
+      await ensureShopOutreachColumnsV428(env);
     }
 
     if(url.pathname==="/api/shop-photo" && request.method==="GET"){
@@ -10205,6 +10228,26 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
         },{status:failed.length?207:200});
       }
 
+
+      const outreachMatchV428=url.pathname.match(/^\/api\/admin\/shops\/(\d+)\/outreach$/);
+      if(outreachMatchV428 && request.method==="POST"){
+        const id=Number(outreachMatchV428[1]);
+        let body={};
+        try{body=await request.json()}catch{return json({ok:false,error:"INVALID_JSON"},{status:400})}
+        const shop=await env.DB.prepare("SELECT id,name,listing_status FROM shops WHERE id=? LIMIT 1").bind(id).first();
+        if(!shop)return json({ok:false,error:"NOT_FOUND"},{status:404});
+        const status=normalizeOutreachStatusV428(body.status);
+        const note=t(body.note,1000);
+        await env.DB.prepare(`
+          UPDATE shops
+          SET outreach_status=?,
+              outreach_at=CASE WHEN ?='not_contacted' THEN NULL ELSE CURRENT_TIMESTAMP END,
+              outreach_note=?,
+              updated_at=CURRENT_TIMESTAMP
+          WHERE id=?
+        `).bind(status,status,note,id).run();
+        return json({ok:true,id,status,note});
+      }
 
       if(url.pathname==="/api/admin/shops" && request.method==="GET"){
         const r=await env.DB.prepare("SELECT * FROM shops ORDER BY sort_order ASC,id DESC").all();
