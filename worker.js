@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.21";
+      config.vars.KBN_CONFIG_VERSION="4.23";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -2249,7 +2249,18 @@ function kbnHandle(v){
     .replace(/^@/,"").split(/[\/?#]/)[0].trim().toLowerCase();
 }
 
-async function autoDiscoveryPairs(env,limit=4,uniqueAreas=false){
+
+function kbnShuffleV422(items){
+  const a=Array.isArray(items)?[...items]:[];
+  // Fisher-Yates. Search/candidate order only; quality checks remain unchanged.
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
+
+async function autoDiscoveryPairs(env,limit=4,uniqueAreas=false,randomize=false){
   await ensureLeadDiscoveryTables(env);
   const r=await env.DB.prepare(`
     SELECT area,lead_type,MAX(searched_at) last_searched
@@ -2304,7 +2315,15 @@ async function autoDiscoveryPairs(env,limit=4,uniqueAreas=false){
   if(uniqueAreas){
     const selected=[];
     const seenAreas=new Set();
-    for(const pair of p){
+
+    // v4.22: 毎回同じ順番に偏らないよう、優先順位上位の候補プールをランダム化。
+    // 未検索・掲載数が少ない地区という優先ロジック自体は維持する。
+    const poolSize=Math.min(p.length,Math.max(safeLimit*4,20));
+    const pool=randomize?kbnShuffleV422(p.slice(0,poolSize)):p.slice(0,poolSize);
+    const tail=p.slice(poolSize);
+    const ordered=randomize?[...pool,...tail]:p;
+
+    for(const pair of ordered){
       const key=String(pair?.search_area||pair?.area||"").trim();
       if(!key||seenAreas.has(key))continue;
       seenAreas.add(key);
@@ -2314,6 +2333,10 @@ async function autoDiscoveryPairs(env,limit=4,uniqueAreas=false){
     return selected;
   }
 
+  if(randomize){
+    const poolSize=Math.min(p.length,Math.max(safeLimit*4,20));
+    return kbnShuffleV422(p.slice(0,poolSize)).slice(0,safeLimit);
+  }
   return p.slice(0,safeLimit);
 }
 
@@ -4539,7 +4562,7 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
   const requestedPairLimit=Math.max(1,Math.min(Number(pairLimit)||15,20));
   // v2.91: uniqueAreas=true のときは autoDiscoveryPairs 側で全候補から
   // 重複のない地区を選ぶため、7地区指定なら本当に最大7地区を返す。
-  let pairs=await autoDiscoveryPairs(env,requestedPairLimit,uniqueAreas);
+  let pairs=await autoDiscoveryPairs(env,requestedPairLimit,uniqueAreas,true);
 
   const created=[],searched=[],rejected=[];
   const existingR=await env.DB.prepare(
@@ -4567,27 +4590,27 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
     // v2.28: 上位4件だけでは既存店に偏るため、最大10件まで候補を見る。
     // 重複はPlace Details取得前に落とすので、subrequestは増えにくい。
     const googleCandidates=googleSearch.ok
-      ? (googleSearch.places||[]).filter(googlePlaceLooksLikeBar).slice(0,expanded?20:15)
+      ? kbnShuffleV422((googleSearch.places||[]).filter(googlePlaceLooksLikeBar).slice(0,expanded?20:15))
       : [];
 
     const fsqCandidates=fsqSearch.ok
-      ? (fsqSearch.results||[]).filter(fsqLooksLikeBar)
+      ? kbnShuffleV422((fsqSearch.results||[]).filter(fsqLooksLikeBar))
       : [];
 
     const geoCandidates=geoSnap.ok
-      ? geoSnap.features.filter(feature=>{
+      ? kbnShuffleV422(geoSnap.features.filter(feature=>{
           const addr=geoAddress(feature);
           const hint=geoAreaHint(feature);
           return (!pair.area||addr.includes(pair.area)||hint.includes(pair.area))&&geoLooksLikeBar(feature);
-        })
+        }))
       : [];
 
     const osmCandidates=osmSnap.ok
-      ? osmSnap.places.filter(place=>{
+      ? kbnShuffleV422(osmSnap.places.filter(place=>{
           const addr=osmAddress(place);
           const hint=osmAreaHint(place);
           return (!pair.area||addr.includes(pair.area)||hint.includes(pair.area))&&osmPlaceLooksLikeBar(place);
-        })
+        }))
       : [];
 
     searched.push({
@@ -7051,7 +7074,7 @@ async function kbnQueueHourlyMaintenanceV413(env,runKey=''){
   const q=await env.DB.prepare(`SELECT phase FROM kbn_maintenance_queue WHERE id=1`).first();
   if(Number(q?.phase||0)!==0)return {queued:false,reason:'QUEUE_BUSY'};
   // v4.21: 毎時間自動運転の唯一の開始キュー。
-  // phase 11から通常5検索ずつ（503再試行時は2検索）新規BARを最大20店舗/120検索まで探索し、
+  // phase 11から通常10検索ずつ（エラー時5→2へ自動減速）新規BARを最大20店舗まで探索し、
   // その後に 情報不足 → SEO → 閉業 → Instagram → 対象外 → VERIFIED補完へ自動で移行する。
   await env.DB.prepare(`
     INSERT INTO kbn_maintenance_queue(id,phase,run_date,created_total,discovery_searched,discovery_mode,discovery_retry_count,discovery_retry_after,updated_at)
@@ -7236,8 +7259,8 @@ async function kbnProcessQueuedMaintenanceV242(env){
   if(!phase)return {ok:true,processed:false};
 
   // v4.20: 通常メンテナンスの自動開拓を高速化。
-  // 通常時は 1 invocation = 最大5検索。503/通信エラー後の再試行だけ最大2検索へ自動減速する。
-  // 成功したら次のCronから再び5検索へ戻すため、速度と安定性を両立する。
+  // 通常時は 1 invocation = 最大10検索。エラー時は 10→5→2 と自動減速する。
+  // 成功したら次のCronから再び10検索へ戻すため、速度と安定性を両立する。
   if(phase>=11 && phase<=49){
     const searchedTotal=Math.max(0,Number(q?.discovery_searched||0));
     const mode=String(q?.discovery_mode||'normal')==='expanded'?'expanded':'normal';
@@ -7249,24 +7272,38 @@ async function kbnProcessQueuedMaintenanceV242(env){
         return {ok:true,processed:true,phase,task:'discovery_wait',waiting:true,created_total:createdTotal,searched_total:searchedTotal,retry_after:retryAfter};
       }
     }
-    const target=20,maxSearches=120;
-    if(createdTotal>=target || searchedTotal>=maxSearches){
+    // v4.22: 1時間の目標は最低10店舗、最大20店舗。
+    // 120検索時点で10店舗未満なら拡張探索を続け、最大240検索まで粘る。
+    // ただしBAR根拠・住所・連絡先等の品質基準は緩めない。
+    const minTarget=10,target=20,normalMaxSearches=120,hardMaxSearches=240;
+    const discoverySatisfied=createdTotal>=target ||
+      (createdTotal>=minTarget && searchedTotal>=normalMaxSearches) ||
+      searchedTotal>=hardMaxSearches;
+    if(discoverySatisfied){
       await env.DB.prepare(`UPDATE kbn_maintenance_queue SET phase=1,discovery_retry_count=0,discovery_retry_after=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=1`).run();
-      return {ok:true,processed:true,phase,task:'discovery_complete',created_total:createdTotal,searched_total:searchedTotal};
+      return {
+        ok:true,processed:true,phase,task:'discovery_complete',
+        created_total:createdTotal,searched_total:searchedTotal,
+        min_target:minTarget,target,minimum_met:createdTotal>=minTarget
+      };
     }
     const fakeRequest=new Request('https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/api/internal/maintenance-discovery-batch');
     try{
       const remaining=Math.max(1,target-createdTotal);
-      // 通常は5検索/分。直前に503等で再試行中なら2検索まで落として安定復旧。
-      const discoveryBatchSize=retryCount>0?2:5;
+      // v4.23: 通常10検索/分で高速化。
+      // 1回目の通信エラー後は5検索/分、2回目以降は2検索/分まで自動減速。
+      // 成功時はretry_countを0へ戻すため、次の分から自動で10検索/分へ復帰する。
+      const discoveryBatchSize=retryCount===0?10:(retryCount===1?5:2);
       const result=await autoDiscover(env,fakeRequest,remaining,discoveryBatchSize,discoveryBatchSize,true,mode);
       const created=Array.isArray(result?.created)?result.created:[];
       const searched=Array.isArray(result?.searched)?result.searched:[];
       const nextCreated=Math.min(target,createdTotal+created.length);
-      const nextSearched=Math.min(maxSearches,searchedTotal+Math.max(1,searched.length||discoveryBatchSize));
+      const nextSearched=Math.min(hardMaxSearches,searchedTotal+Math.max(1,searched.length||discoveryBatchSize));
       let nextMode=mode;
-      if(nextMode==='normal' && nextCreated===0 && nextSearched>=45) nextMode='expanded';
-      const done=nextCreated>=target || nextSearched>=maxSearches;
+      if(nextMode==='normal' && ((nextCreated===0 && nextSearched>=35) || (nextCreated<minTarget && nextSearched>=60))) nextMode='expanded';
+      const done=nextCreated>=target ||
+        (nextCreated>=minTarget && nextSearched>=normalMaxSearches) ||
+        nextSearched>=hardMaxSearches;
       await env.DB.prepare(`
         UPDATE kbn_maintenance_queue
         SET phase=?,created_total=?,discovery_searched=?,discovery_mode=?,discovery_retry_count=0,discovery_retry_after=NULL,updated_at=CURRENT_TIMESTAMP
@@ -7280,9 +7317,9 @@ async function kbnProcessQueuedMaintenanceV242(env){
         q,phase,task:'discovery',
         result:{ok:true,checked:searched.length,created},
         status:'success',
-        note:`${nextMode==='expanded'?'拡張探索':'通常探索'} / 累計 ${nextSearched}/120検索 / 新規 ${nextCreated}/20店舗`
+        note:`${nextMode==='expanded'?'拡張探索':'通常探索'} / 累計 ${nextSearched}/${nextCreated<minTarget?240:120}検索 / 新規 ${nextCreated}/20店舗 / 最低目標10店舗`
       });
-      return {ok:true,processed:true,phase,task:'discovery',created:created.length,created_total:nextCreated,searched:searched.length,searched_total:nextSearched,discovery_mode:nextMode,done};
+      return {ok:true,processed:true,phase,task:'discovery',created:created.length,created_total:nextCreated,searched:searched.length,searched_total:nextSearched,discovery_mode:nextMode,done,min_target:10,minimum_met:nextCreated>=10};
     }catch(e){
       const msg=String(e?.message||e||'');
       const isTransient=/503|temporar|timeout|fetch failed|connection|communication|rate|too many/i.test(msg);
@@ -10602,7 +10639,7 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
           await createKbnAlert(env,{
             type:'hourly_maintenance_started',
             title:'毎時間自動運転開始',
-            message:`${hourly.time} JST枠：BAR自動開拓（最大20店舗/120検索）→ 情報不足 → SEO → 閉業 → Instagram → 対象外 → VERIFIED補完を自動実行します。`
+            message:`${hourly.time} JST枠：BAR自動開拓（最低目標10店舗・最大20店舗）→ 情報不足 → SEO → 閉業 → Instagram → 対象外 → VERIFIED補完を自動実行します。`
           });
         }
       }catch(e){
