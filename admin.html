@@ -4107,10 +4107,10 @@ html,body{max-width:100%;overflow-x:hidden}
 
   <div class="shop-outreach-tools">
     <label>
-      <span>Instagram連絡可否</span>
+      <span>Instagram連絡可否（店舗一致確認済みのみ送信可）</span>
       <select id="shopInstagramFilter">
         <option value="">すべて</option>
-        <option value="ready">Instagram送信できる店舗だけ</option>
+        <option value="ready">Instagram確認済み・送信できる店舗だけ</option>
         <option value="missing">Instagram未登録</option>
       </select>
     </label>
@@ -4442,7 +4442,8 @@ html,body{max-width:100%;overflow-x:hidden}
     <div class="kbn-maintenance-grid">
       <button type="button" id="refreshMissingInfoBtn">情報補完 20件</button>
       <button type="button" id="checkClosedShopsBtn">閉業確認 20件</button>
-      <button type="button" id="refreshInstagramBtn">Instagram 20件</button>
+      <button type="button" id="startInstagramFullAuditBtn" style="border-color:#7b5f19;color:#f0c85a">既存Instagramを全件再検査</button>
+      <button type="button" id="refreshInstagramBtn">再検査 20件だけ</button>
     </div>
     <div class="kbn-schedule-note kbn-schedule-editor">
       <div class="kbn-schedule-title">
@@ -4462,6 +4463,9 @@ html,body{max-width:100%;overflow-x:hidden}
       </div>
       <div id="lastAutomaticRunStatus" style="margin-top:10px;padding:10px 12px;border:1px solid #394653;border-radius:12px;background:#101820;color:#d9e1e8;font-size:.78rem;line-height:1.55">最終自動実行：読み込み中...</div>
       <small id="autoListingSixTimesStatus" style="display:block;margin-top:7px;color:#efc45a;line-height:1.5">毎時間自動運転：ON / 追加開拓タイム：廃止 / 重点フルメンテ：廃止</small>
+    </div>
+    <div id="instagramFullAuditStatusV432" style="margin-top:10px;padding:10px 12px;border:1px solid #334957;border-radius:12px;background:#0f1922;color:#aeb9c3;font-size:.72rem;line-height:1.55">
+      Instagram全件再検査：待機中
     </div>
     <div id="maintenanceStatus" class="auto-discovery-status"></div>
     <div class="kbn-simple-schedule-ok" style="margin-top:8px">毎時間の自動運転も手動と同じpair_limit=2。2検索ごとに候補を再選択し、通常5サイクル、通信エラー時は3→1サイクルへ減速します。</div>
@@ -5388,7 +5392,10 @@ function renderShopOutreachSummaryV428(){
   const box=$("shopOutreachSummary");
   if(!box)return;
   const provisional=shops.filter(s=>String(s.listing_status||"published")==="provisional");
-  const ready=provisional.filter(s=>!!cleanInstagramHandle(s.instagram||"")).length;
+  const ready=provisional.filter(s=>
+    !!cleanInstagramHandle(s.instagram||"") &&
+    String(s.instagram_match_status||"unknown")==="verified"
+  ).length;
   const counts={not_contacted:0,dm_sent:0,replied:0,approved:0,declined:0};
   provisional.forEach(s=>{const st=shopOutreachStatusV428(s);counts[st]=(counts[st]||0)+1});
   box.innerHTML=`
@@ -5423,6 +5430,26 @@ window.editShopOutreachNoteV428=async function(id){
   catch(e){alert("メモを保存できませんでした: "+(e?.message||e))}
 };
 
+
+window.setShopInstagramVerificationV430=async function(id,status){
+  const shop=shops.find(x=>Number(x.id)===Number(id));
+  if(!shop)return;
+  try{
+    await api(`/api/admin/shops/${id}/instagram-verification`,{
+      method:"POST",
+      body:{status}
+    });
+    shop.instagram_match_status=status;
+    renderShopOutreachSummaryV428();
+    renderShopList();
+    alert(status==="verified"
+      ?`「${shop.name}」のInstagramを確認済みにしました。`
+      :`「${shop.name}」のInstagramを要確認にしました。`);
+  }catch(e){
+    alert("Instagram確認状態を更新できませんでした: "+(e?.message||e));
+  }
+};
+
 function renderShopList(){
   const areaFilter=String($("shopAreaFilter")?.value||"");
   const statusFilter=String($("shopStatusFilter")?.value||"");
@@ -5434,7 +5461,8 @@ function renderShopList(){
     const status=String(s.listing_status||"published");
     if(statusFilter && status!==statusFilter)return false;
     const hasInstagram=!!cleanInstagramHandle(s.instagram||"");
-    if(instagramFilter==="ready" && !hasInstagram)return false;
+    const instagramVerified=hasInstagram && String(s.instagram_match_status||"unknown")==="verified";
+    if(instagramFilter==="ready" && !instagramVerified)return false;
     if(instagramFilter==="missing" && hasInstagram)return false;
     if(outreachFilter && shopOutreachStatusV428(s)!==outreachFilter)return false;
     return true;
@@ -5456,12 +5484,17 @@ function renderShopList(){
                 ${provisional?'<span class="provisional-badge">独自</span>':'<span class="official-mini-badge">正式</span>'}
                 ${s.is_new?'<span class="new-mini-badge">NEW</span>':''}
                 ${s.is_featured?'<span class="featured-mini-badge">★</span>':''}
-                ${provisional && cleanInstagramHandle(s.instagram||"")?'<span class="outreach-mini-badge instagram-ready">Instagram可</span>':''}
+                ${provisional && cleanInstagramHandle(s.instagram||"") && String(s.instagram_match_status||"unknown")==="verified"
+  ?'<span class="outreach-mini-badge instagram-ready">Instagram確認済</span>'
+  :provisional && String(s.instagram_match_status||"unknown")==="review"
+    ?'<span class="outreach-mini-badge declined">Instagram再確認中</span>'
+    :''}
                 ${provisional?`<span class="outreach-mini-badge ${shopOutreachBadgeClassV428(shopOutreachStatusV428(s))}">${shopOutreachLabelV428(shopOutreachStatusV428(s))}</span>`:''}
               </div>
             </div>
             <p>${esc(s.area)}${s.genre?` / ${esc(s.genre)}`:''}</p>
             ${provisional && s.outreach_note?`<p class="shop-outreach-note">メモ：${esc(s.outreach_note)}</p>`:''}
+            ${provisional && s.instagram_review_value && !cleanInstagramHandle(s.instagram||"")?`<p class="shop-outreach-note">旧Instagram保留：${esc(s.instagram_review_value)}</p>`:''}
           </div>
           <div class="admin-item-actions compact-actions dense-actions">
             ${provisional && cleanInstagramHandle(s.instagram||"")?`<button type="button" onclick="sendProvisionalInstagramDm(${s.id})" class="shop-provisional-dm dense-icon-btn" title="この店舗へInstagramで正式掲載をお願いする">DM</button>`:""}
@@ -5471,6 +5504,8 @@ function renderShopList(){
               <summary>•••</summary>
               <div class="shop-more-panel">
                 ${provisional?`<button onclick="publishShop(${s.id})" class="publish-shop-btn">正式掲載にする</button>
+                ${cleanInstagramHandle(s.instagram||"")?`<button type="button" class="outreach-action-btn" onclick="setShopInstagramVerificationV430(${s.id},'verified')">Instagram確認済みにする</button>
+                <button type="button" class="outreach-action-btn" onclick="setShopInstagramVerificationV430(${s.id},'review')">Instagram要確認にする</button>`:""}
                 <button type="button" class="outreach-action-btn" onclick="setShopOutreachStatusV428(${s.id},'not_contacted')">未連絡に戻す</button>
                 <button type="button" class="outreach-action-btn" onclick="setShopOutreachStatusV428(${s.id},'dm_sent')">DM送信済み</button>
                 <button type="button" class="outreach-action-btn" onclick="setShopOutreachStatusV428(${s.id},'replied')">返信あり</button>
@@ -5656,6 +5691,10 @@ window.sendProvisionalInstagramDm=async function(id){
   const handle=cleanInstagramHandle(shop.instagram||"");
   if(!handle){
     alert("この店舗にはInstagramアカウントが登録されていません。");
+    return;
+  }
+  if(String(shop.instagram_match_status||"unknown")!=="verified"){
+    alert("このInstagramは店舗一致の確認がまだ取れていません。誤送信防止のためDMを停止しています。店舗を確認後「Instagram確認済みにする」を押してください。");
     return;
   }
 
@@ -10785,6 +10824,32 @@ window.loadKbnAlerts=async function(){
   }
 };
 
+
+async function loadInstagramFullAuditStatusV432(){
+  const el=$("instagramFullAuditStatusV432");
+  if(!el)return;
+  try{
+    const d=await api("/api/admin/instagram-full-audit/status");
+    const total=Number(d.total||0),checked=Number(d.checked||0);
+    const pct=total?Math.min(100,Math.round(checked/total*100)):0;
+    if(d.active){
+      el.style.color="#efc45a";
+      el.style.borderColor="#6b5521";
+      el.textContent=`Instagram全件再検査中：${checked}/${total}店舗（${pct}%） / 正しいまま${Number(d.verified||0)} / 差替${Number(d.corrected||0)} / 公開から除外${Number(d.removed||0)} / 要確認${Number(d.review||0)} / エラー${Number(d.failed||0)}。毎分20店舗ずつ自動継続します。`;
+    }else if(total && checked){
+      el.style.color="#7ee2a8";
+      el.style.borderColor="#315b45";
+      el.textContent=`Instagram全件再検査 完了：${checked}/${total}店舗 / 正しいまま${Number(d.verified||0)} / 差替${Number(d.corrected||0)} / 公開から除外${Number(d.removed||0)} / 要確認${Number(d.review||0)} / エラー${Number(d.failed||0)}`;
+    }else{
+      el.style.color="#aeb9c3";
+      el.style.borderColor="#334957";
+      el.textContent="Instagram全件再検査：待機中";
+    }
+  }catch(err){
+    el.textContent=`Instagram全件再検査：状態取得失敗 ${err?.message||err}`;
+  }
+}
+
 document.addEventListener("click",async(e)=>{
   if(e.target?.id==="topMaintenanceOpenBtn"){
     document.querySelector('[data-tab="leads"]')?.click();
@@ -10855,26 +10920,46 @@ document.addEventListener("click",async(e)=>{
     return;
   }
 
+  if(e.target?.id==="startInstagramFullAuditBtn"){
+    const btn=e.target;
+    if(!confirm("既存掲載店舗を全件、Instagramが本当に正しいか再検査します。確認できないInstagramは公開から外し、正しいものが見つかれば差し替えます。開始しますか？"))return;
+    try{
+      btn.disabled=true;
+      btn.textContent="全件再検査を開始中...";
+      const d=await api("/api/admin/instagram-full-audit/start",{method:"POST",body:{}});
+      alert(`全件再検査を開始しました。対象 ${Number(d.total||0)}店舗。毎分20店舗ずつ自動で最後まで進みます。`);
+      await loadInstagramFullAuditStatusV432();
+    }catch(err){
+      alert("全件再検査を開始できませんでした: "+(err?.message||err));
+    }finally{
+      btn.disabled=false;
+      btn.textContent="既存Instagramを全件再検査";
+    }
+    return;
+  }
+
   if(e.target?.id==="refreshInstagramBtn"){
     const btn=e.target,st=document.getElementById("maintenanceStatus");
-    btn.disabled=true;btn.textContent="20店舗確認中...";
+    btn.disabled=true;btn.textContent="Instagram再検査中...";
     try{
       const d=await api("/api/admin/leads/refresh-instagram",{
         method:"POST",headers:{"Content-Type":"application/json"},body:"{}"
       });
       const checked=Number(d.checked||0);
-      const updated=(d.updated||[]).length;
+      const verified=(d.verified||[]).length;
+      const corrected=(d.corrected||[]).length;
+      const removed=(d.removed||[]).length;
       const candidates=(d.candidates||[]).length;
       const tail=d.cycle_completed
-        ? ` / 全対象を一巡しました。次回は先頭から`
+        ? ` / 既存店舗の再検査を一巡しました`
         : ` / 次回は続きから`;
-      if(st)st.textContent=`Instagram補完：${checked}店舗確認 / ${updated}店舗を自動保存 / ${candidates}件は要確認${tail}`;
+      if(st)st.textContent=`Instagram再検査：${checked}店舗 / 正しいまま${verified} / 正しいInstagramへ差替${corrected} / 未確認の公開Instagramを除外${removed} / 要確認${candidates}${tail}`;
       await window.loadShops?.();
       await window.loadAutoListedShops?.();
     }catch(err){
       if(st)st.textContent="Instagram補完に失敗: "+(err?.message||"");
     }finally{
-      btn.disabled=false;btn.textContent="Instagram補完";
+      btn.disabled=false;btn.textContent="再検査 20件だけ";
     }
     return;
   }
@@ -11029,6 +11114,10 @@ async function kbnLoadHourlyStatusV421(){
 }
 let kbnScheduleLiveRefreshV421=null;
 document.addEventListener("DOMContentLoaded",()=>{
+  loadInstagramFullAuditStatusV432().catch(()=>{});
+  setInterval(()=>{
+    if(document.visibilityState==="visible")loadInstagramFullAuditStatusV432().catch(()=>{});
+  },5000);
   loadMaintenanceHistoryV414().catch(()=>{});kbnLoadHourlyStatusV421().catch(()=>{});
   document.getElementById('reloadMaintenanceHistoryBtn')?.addEventListener('click',()=>loadMaintenanceHistoryV414());
   if(kbnScheduleLiveRefreshV421)return;
