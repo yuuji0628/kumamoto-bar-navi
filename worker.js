@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.24";
+      config.vars.KBN_CONFIG_VERSION="4.25";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -4544,6 +4544,23 @@ function strictAutoListingGate({
   };
 }
 
+
+async function kbnMapConcurrentV425(items,limit,fn){
+  const list=Array.isArray(items)?items:[];
+  const out=new Array(list.length);
+  let cursor=0;
+  const workers=Array.from({length:Math.max(1,Math.min(Number(limit)||1,list.length||1))},async()=>{
+    while(true){
+      const i=cursor++;
+      if(i>=list.length)break;
+      try{ out[i]=await fn(list[i],i); }
+      catch(e){ out[i]={ok:false,error:String(e?.message||e)}; }
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
+
 async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit=3,uniqueAreas=false,discoveryMode="normal"){
   await ensureLeadDiscoveryTables(env);
 
@@ -4571,17 +4588,32 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
   const existing=existingR.results||[];
   const deletedHistory=await loadDeletedAutoListings(env);
 
-  for(const pair of pairs){
+  // v4.25: これまで地区×ジャンルごとのGoogle検索を1件ずつ待っていたため、
+  // 「10検索バッチ」でも実測が約4検索/分まで落ちていた。
+  // Google Text Searchだけ先に最大5並列で取得し、候補判定・DB登録は従来どおり順番に行う。
+  // これにより判定ロジックを変えず、外部検索待ち時間だけ短縮する。
+  const expanded=String(discoveryMode||"normal")==="expanded";
+  const pairQueries=pairs.map(pair=>expanded
+    ? [pair.search_area||pair.area,"熊本県",pair.label||"BAR","お酒 夜"].filter(Boolean).join(" ")
+    : [pair.search_area||pair.area,"熊本県",pair.label||"BAR"].filter(Boolean).join(" ")
+  );
+  const googlePrefetch=googleConfigured
+    ? await kbnMapConcurrentV425(pairs,5,async(pair,i)=>
+        googlePlacesTextSearch(env,{query:pairQueries[i],pageSize:20})
+      )
+    : pairs.map(()=>({ok:false,configured:false,places:[],error:"GOOGLE_PLACES_NOT_CONFIGURED"}));
+
+  // Place Detailsは全体で最大20回に抑え、Google検索10件＋Geoapify/OSM等を含めても
+  // Workersのsubrequest上限に余裕を残す。
+  let globalDetailChecks=0;
+  const globalDetailLimit=20;
+
+  for(let pairIndex=0;pairIndex<pairs.length;pairIndex++){
+    const pair=pairs[pairIndex];
     if(created.length>=maxListings)break;
 
-    const expanded=String(discoveryMode||"normal")=="expanded";
-    const query=expanded
-      ? [pair.search_area||pair.area,"熊本県",pair.label||"BAR","お酒 夜"].filter(Boolean).join(" ")
-      : [pair.search_area||pair.area,"熊本県",pair.label||"BAR"].filter(Boolean).join(" ");
-
-    const googleSearch=googleConfigured
-      ? await googlePlacesTextSearch(env,{query,pageSize:20})
-      : {ok:false,configured:false,places:[],error:"GOOGLE_PLACES_NOT_CONFIGURED"};
+    const query=pairQueries[pairIndex];
+    const googleSearch=googlePrefetch[pairIndex]||{ok:false,places:[],error:"GOOGLE_PREFETCH_EMPTY"};
 
     // v2.27 Free枠対策: ペアごとのFoursquare外部fetchは停止。
     // Google + 事前取得したGeoapify/OSMを使い、1 invocation 50 subrequests以内に収める。
@@ -4629,7 +4661,9 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
         geoSnap.ok?"geoapify":"",
         osmSnap.ok?"osm":""
       ].filter(Boolean).join("+"),
-      query
+      query,
+      search_mode:"parallel_text_search_v425",
+      google_prefetch_concurrency:5
     });
 
     await env.DB.prepare(
@@ -4667,8 +4701,9 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
 
       // 新規候補だけPlace Detailsを少量取得。上限到達後はText Search情報で判定を続行する。
       let gDetails={ok:false,place:null,error:"DETAIL_BUDGET_SKIPPED"};
-      if(detailChecks<detailCheckLimit){
+      if(detailChecks<detailCheckLimit && globalDetailChecks<globalDetailLimit){
         detailChecks++;
+        globalDetailChecks++;
         gDetails=await googlePlaceDetails(env,g.id);
       }
       const gp=gDetails.ok&&gDetails.place?gDetails.place:g;
@@ -7295,7 +7330,7 @@ async function kbnProcessQueuedMaintenanceV242(env){
       // 成功時はretry_countを0へ戻すため、次の分から自動で10検索/分へ復帰する。
       const discoveryBatchSize=retryCount===0?10:(retryCount===1?5:2);
 
-      // v4.24: 毎時間の自動開拓も「手動開拓」と同じ検索ロジックを使用。
+      // v4.25: 手動開拓と同じ検索・判定ロジックを維持し、Google検索待ちだけ並列化。
       // 手動APIと同じく uniqueAreas=false / perPairLimit=2。
       // 違いは、毎時間処理では1分あたり最大10検索をまとめて進める点だけ。
       // これにより「地区を1回ずつに縛る」自動専用ロジックをやめ、
