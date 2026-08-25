@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.26";
+      config.vars.KBN_CONFIG_VERSION="4.27";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -2260,6 +2260,66 @@ function kbnShuffleV422(items){
   return a;
 }
 
+
+async function ensureKbnDiscoveryPairStatsV427(env){
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS kbn_discovery_pair_stats(
+      pair_key TEXT PRIMARY KEY,
+      area TEXT NOT NULL,
+      lead_type TEXT NOT NULL,
+      zero_streak INTEGER DEFAULT 0,
+      last_created INTEGER DEFAULT 0,
+      last_rejected INTEGER DEFAULT 0,
+      last_reasons TEXT DEFAULT '',
+      last_searched_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      cooldown_until TEXT
+    )
+  `).run();
+  try{await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_kbn_pair_stats_cooldown ON kbn_discovery_pair_stats(cooldown_until)`).run()}catch{}
+}
+
+async function kbnRecordDiscoveryPairV427(env,pair,{created=0,rejected=0,reasons={}}={}){
+  await ensureKbnDiscoveryPairStatsV427(env);
+  const area=String(pair?.search_area||pair?.area||'').trim();
+  const leadType=String(pair?.type||pair?.label||'').trim();
+  const key=`${area}||${leadType}`;
+  const prev=await env.DB.prepare(`SELECT zero_streak FROM kbn_discovery_pair_stats WHERE pair_key=?`).bind(key).first();
+  const prevZero=Math.max(0,Number(prev?.zero_streak||0));
+  const zeroStreak=Number(created||0)>0?0:prevZero+1;
+
+  // 2回連続0件なら6時間、4回以上なら24時間避ける。
+  let cooldownHours=0;
+  if(zeroStreak>=4)cooldownHours=24;
+  else if(zeroStreak>=2)cooldownHours=6;
+
+  const reasonText=Object.entries(reasons||{})
+    .sort((a,b)=>Number(b[1]||0)-Number(a[1]||0))
+    .slice(0,8)
+    .map(([k,v])=>`${k}:${v}`)
+    .join(',');
+
+  const sql=`
+    INSERT INTO kbn_discovery_pair_stats(
+      pair_key,area,lead_type,zero_streak,last_created,last_rejected,last_reasons,last_searched_at,cooldown_until
+    ) VALUES(?,?,?,?,?,?,?,CURRENT_TIMESTAMP,
+      ${cooldownHours?`datetime('now','+${cooldownHours} hours')`:'NULL'})
+    ON CONFLICT(pair_key) DO UPDATE SET
+      area=excluded.area,
+      lead_type=excluded.lead_type,
+      zero_streak=excluded.zero_streak,
+      last_created=excluded.last_created,
+      last_rejected=excluded.last_rejected,
+      last_reasons=excluded.last_reasons,
+      last_searched_at=CURRENT_TIMESTAMP,
+      cooldown_until=excluded.cooldown_until
+  `;
+  await env.DB.prepare(sql).bind(
+    key,area,leadType,zeroStreak,Number(created||0),Number(rejected||0),reasonText
+  ).run();
+
+  return {pair_key:key,zero_streak:zeroStreak,cooldown_hours:cooldownHours};
+}
+
 async function autoDiscoveryPairs(env,limit=4,uniqueAreas=false,randomize=false){
   await ensureLeadDiscoveryTables(env);
   const r=await env.DB.prepare(`
@@ -2267,6 +2327,17 @@ async function autoDiscoveryPairs(env,limit=4,uniqueAreas=false,randomize=false)
     FROM lead_discovery_runs GROUP BY area,lead_type
   `).all();
   const m=new Map((r.results||[]).map(x=>[`${x.area}||${x.lead_type}`,x.last_searched||""]));
+
+  await ensureKbnDiscoveryPairStatsV427(env);
+  let pairStatsRows=[];
+  try{
+    const ps=await env.DB.prepare(`
+      SELECT pair_key,zero_streak,cooldown_until,last_reasons
+      FROM kbn_discovery_pair_stats
+    `).all();
+    pairStatsRows=ps.results||[];
+  }catch{}
+  const pairStats=new Map(pairStatsRows.map(x=>[String(x.pair_key||''),x]));
 
   let areaCountRows=[];
   try{
@@ -2285,18 +2356,27 @@ async function autoDiscoveryPairs(env,limit=4,uniqueAreas=false,randomize=false)
       const area=String(spot.area||"").trim();
       const searchArea=String(spot.search_area||area).trim();
       const runKey=`${searchArea}||${type}`;
+      const st=pairStats.get(runKey)||{};
+      const cooldownUntil=String(st.cooldown_until||'');
+      const cooling=!!cooldownUntil && new Date(cooldownUntil.replace(' ','T')+'Z').getTime()>Date.now();
       p.push({
         area,
         search_area:searchArea,
         type,
         label,
         last:m.get(runKey)||"",
-        shop_count:areaCounts.get(area)||0
+        shop_count:areaCounts.get(area)||0,
+        zero_streak:Number(st.zero_streak||0),
+        cooling,
+        cooldown_until:cooldownUntil,
+        last_reasons:String(st.last_reasons||'')
       });
     }
   }
 
   p.sort((a,b)=>{
+    // v4.27: 連続0件でクールダウン中の組み合わせは後回し。
+    if(a.cooling!==b.cooling)return a.cooling?1:-1;
     // 未検索の「地区×ジャンル」を最優先。
     if(!a.last&&b.last)return -1;
     if(a.last&&!b.last)return 1;
@@ -4612,6 +4692,8 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
     const pair=pairs[pairIndex];
     if(created.length>=maxListings)break;
 
+    const pairCreatedBefore=created.length;
+    const pairRejectedBefore=rejected.length;
     const query=pairQueries[pairIndex];
     const googleSearch=googlePrefetch[pairIndex]||{ok:false,places:[],error:"GOOGLE_PREFETCH_EMPTY"};
 
@@ -4939,7 +5021,10 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
 
         // v2.27 Free枠対策: Instagram探索は後続メンテナンスへ回す。
 
-        if(autoListingDuplicateScore(existing,{name,address,phone,instagram}))continue;
+        if(autoListingDuplicateScore(existing,{name,address,phone,instagram})){
+          rejected.push({name,reason:"DUPLICATE_FALLBACK",source:item.kind});
+          continue;
+        }
         if(autoListingDuplicateScore(deletedHistory,{name,address,phone,instagram})){
           rejected.push({name,reason:"DELETED_HISTORY",source:item.kind});
           continue;
@@ -4960,7 +5045,14 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
           name,area:pair.area,address,genre,categories,amenity,
           phone,website,instagram,sourceMatchScore:90,sourceCount:1
         });
-        if(!gate.approved)continue;
+        if(!gate.approved){
+          rejected.push({
+            name,
+            reason:(gate.reasons||[]).join(",")||"LOW_CONFIDENCE_FALLBACK",
+            source:item.kind
+          });
+          continue;
+        }
 
         const sourceHours=isFsq?fsqHours(place):(isGeo?geoHours(place):osmHours(place));
         const sourceHoliday=(isFsq||isGeo)?"":osmHoliday(place);
@@ -5023,6 +5115,36 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
         });
         made++;
       }
+    }
+
+    // v4.27: この地区×ジャンルの成果/除外理由を記録。
+    const pairCreated=created.length-pairCreatedBefore;
+    const pairRejectedItems=rejected.slice(pairRejectedBefore);
+    const pairReasonSummary=pairRejectedItems.reduce((acc,x)=>{
+      for(const r of String(x?.reason||'UNKNOWN').split(',').filter(Boolean)){
+        acc[r]=(acc[r]||0)+1;
+      }
+      return acc;
+    },{});
+    const lastSearch=searched[searched.length-1];
+    if(lastSearch){
+      lastSearch.created_count=pairCreated;
+      lastSearch.rejected_count=pairRejectedItems.length;
+      lastSearch.reject_summary=pairReasonSummary;
+      lastSearch.pair_zero=pairCreated===0;
+    }
+    try{
+      const ps=await kbnRecordDiscoveryPairV427(env,pair,{
+        created:pairCreated,
+        rejected:pairRejectedItems.length,
+        reasons:pairReasonSummary
+      });
+      if(lastSearch){
+        lastSearch.zero_streak=ps.zero_streak;
+        lastSearch.cooldown_hours=ps.cooldown_hours;
+      }
+    }catch(e){
+      console.error('pair stats record failed',e);
     }
   }
 
@@ -7331,6 +7453,8 @@ async function kbnProcessQueuedMaintenanceV242(env){
       const miniCycles=retryCount===0?5:(retryCount===1?3:1);
       const allCreated=[];
       const allSearched=[];
+      const allRejected=[];
+      const allRejectSummary={};
       let runningCreated=createdTotal;
       let runningSearched=searchedTotal;
       let runningMode=mode;
@@ -7354,6 +7478,11 @@ async function kbnProcessQueuedMaintenanceV242(env){
 
         allCreated.push(...miniCreated);
         allSearched.push(...miniSearched);
+        const miniRejected=Array.isArray(miniResult?.rejected)?miniResult.rejected:[];
+        allRejected.push(...miniRejected);
+        for(const [reason,count] of Object.entries(miniResult?.reject_summary||{})){
+          allRejectSummary[reason]=(allRejectSummary[reason]||0)+Number(count||0);
+        }
 
         runningCreated=Math.min(target,runningCreated+miniCreated.length);
         runningSearched=Math.min(
@@ -7404,11 +7533,17 @@ async function kbnProcessQueuedMaintenanceV242(env){
         WHERE id=1
       `).bind(done?1:Math.min(49,phase+1),nextCreated,nextSearched,nextMode).run();
 
+      const topRejectReasons=Object.entries(allRejectSummary)
+        .sort((a,b)=>Number(b[1]||0)-Number(a[1]||0))
+        .slice(0,6)
+        .map(([k,v])=>`${k}:${v}`)
+        .join(' / ');
+
       await logKbnMaintenanceHistoryV414(env,{
         q,phase,task:'discovery',
-        result:{ok:true,checked:allSearched.length,created:allCreated},
+        result:{ok:true,checked:allSearched.length,created:allCreated,rejected:allRejected},
         status:'success',
-        note:`手動同一2検索サイクル×${miniCycles} / ${nextMode==='expanded'?'拡張探索':'通常探索'} / 累計 ${nextSearched}/${nextCreated<minTarget?240:120}検索 / 新規 ${nextCreated}/20店舗 / 最低目標10店舗`
+        note:`手動同一2検索サイクル×${miniCycles} / ${nextMode==='expanded'?'拡張探索':'通常探索'} / 累計 ${nextSearched}/${nextCreated<minTarget?240:120}検索 / 新規 ${nextCreated}/20店舗 / 最低目標10店舗${topRejectReasons?` / 除外:${topRejectReasons}`:''}`
       });
 
       return {
@@ -7419,7 +7554,9 @@ async function kbnProcessQueuedMaintenanceV242(env){
         minimum_met:nextCreated>=10,
         manual_cycle:true,
         mini_cycles:miniCycles,
-        pair_limit:2
+        pair_limit:2,
+        rejected_count:allRejected.length,
+        reject_summary:allRejectSummary
       };
     }catch(e){
       const msg=String(e?.message||e||'');
