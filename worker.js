@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.25";
+      config.vars.KBN_CONFIG_VERSION="4.26";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -7293,9 +7293,8 @@ async function kbnProcessQueuedMaintenanceV242(env){
   let createdTotal=Math.max(0,Number(q?.created_total||0));
   if(!phase)return {ok:true,processed:false};
 
-  // v4.20: 通常メンテナンスの自動開拓を高速化。
-  // 通常時は 1 invocation = 最大10検索。エラー時は 10→5→2 と自動減速する。
-  // 成功したら次のCronから再び10検索へ戻すため、速度と安定性を両立する。
+  // v4.26: 毎時間自動開拓を手動開拓と同じ「2検索ごとに候補再選択」方式へ統一。
+  // 通常は2検索×5サイクル。エラー時は3サイクル→1サイクルへ減速する。
   if(phase>=11 && phase<=49){
     const searchedTotal=Math.max(0,Number(q?.discovery_searched||0));
     const mode=String(q?.discovery_mode||'normal')==='expanded'?'expanded':'normal';
@@ -7325,50 +7324,103 @@ async function kbnProcessQueuedMaintenanceV242(env){
     const fakeRequest=new Request('https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/api/internal/maintenance-discovery-batch');
     try{
       const remaining=Math.max(1,target-createdTotal);
-      // v4.23: 通常10検索/分で高速化。
-      // 1回目の通信エラー後は5検索/分、2回目以降は2検索/分まで自動減速。
-      // 成功時はretry_countを0へ戻すため、次の分から自動で10検索/分へ復帰する。
-      const discoveryBatchSize=retryCount===0?10:(retryCount===1?5:2);
+      // v4.26: 毎時間側も「手動開拓そのもの」と同じ2検索サイクルで回す。
+      // 手動UIは pair_limit=2 で呼び出すたびに地区×ジャンル候補を選び直す。
+      // 毎時間も 2検索 → 候補を選び直す → 2検索... を繰り返し、
+      // 通常時は最大5サイクル（=最大10検索）。エラー時は3→1サイクルへ自動減速。
+      const miniCycles=retryCount===0?5:(retryCount===1?3:1);
+      const allCreated=[];
+      const allSearched=[];
+      let runningCreated=createdTotal;
+      let runningSearched=searchedTotal;
+      let runningMode=mode;
 
-      // v4.25: 手動開拓と同じ検索・判定ロジックを維持し、Google検索待ちだけ並列化。
-      // 手動APIと同じく uniqueAreas=false / perPairLimit=2。
-      // 違いは、毎時間処理では1分あたり最大10検索をまとめて進める点だけ。
-      // これにより「地区を1回ずつに縛る」自動専用ロジックをやめ、
-      // 手動開拓で実績のある地区×ジャンル探索・重複判定・候補照合をそのまま使う。
-      const result=await autoDiscover(
-        env,
-        fakeRequest,
-        remaining,
-        discoveryBatchSize, // pair_limit: 通常10、エラー時5→2
-        2,                  // 手動開拓と同じ per_pair_limit
-        false,              // 手動開拓と同じ uniqueAreas=false
-        mode
-      );
-      const created=Array.isArray(result?.created)?result.created:[];
-      const searched=Array.isArray(result?.searched)?result.searched:[];
-      const nextCreated=Math.min(target,createdTotal+created.length);
-      const nextSearched=Math.min(hardMaxSearches,searchedTotal+Math.max(1,searched.length||discoveryBatchSize));
-      let nextMode=mode;
-      if(nextMode==='normal' && ((nextCreated===0 && nextSearched>=35) || (nextCreated<minTarget && nextSearched>=60))) nextMode='expanded';
+      for(let mini=0;mini<miniCycles;mini++){
+        if(runningCreated>=target || runningSearched>=hardMaxSearches)break;
+
+        const miniRemaining=Math.max(1,target-runningCreated);
+        const miniResult=await autoDiscover(
+          env,
+          fakeRequest,
+          miniRemaining,
+          2,       // 手動開拓と同じ pair_limit=2
+          2,       // 手動開拓と同じ per_pair_limit=2
+          false,   // 手動開拓と同じ uniqueAreas=false
+          runningMode
+        );
+
+        const miniCreated=Array.isArray(miniResult?.created)?miniResult.created:[];
+        const miniSearched=Array.isArray(miniResult?.searched)?miniResult.searched:[];
+
+        allCreated.push(...miniCreated);
+        allSearched.push(...miniSearched);
+
+        runningCreated=Math.min(target,runningCreated+miniCreated.length);
+        runningSearched=Math.min(
+          hardMaxSearches,
+          runningSearched+Math.max(1,miniSearched.length||2)
+        );
+
+        if(
+          runningMode==='normal' &&
+          (
+            (runningCreated===0 && runningSearched>=35) ||
+            (runningCreated<minTarget && runningSearched>=60)
+          )
+        ){
+          runningMode='expanded';
+        }
+
+        // 2検索ごとに即保存。途中で503等が出ても、ここまでの進捗は失わない。
+        await env.DB.prepare(`
+          UPDATE kbn_maintenance_queue
+          SET created_total=?,discovery_searched=?,discovery_mode=?,
+              discovery_retry_count=0,discovery_retry_after=NULL,updated_at=CURRENT_TIMESTAMP
+          WHERE id=1
+        `).bind(runningCreated,runningSearched,runningMode).run();
+
+        if(miniCreated.length){
+          try{await notifyCreatedShops(env,miniCreated,'通常メンテナンス自動開拓')}catch{}
+          try{await kbnSendNewListingDigest(env,miniCreated)}catch{}
+        }
+
+        const miniDone=runningCreated>=target ||
+          (runningCreated>=minTarget && runningSearched>=normalMaxSearches) ||
+          runningSearched>=hardMaxSearches;
+        if(miniDone)break;
+      }
+
+      const nextCreated=runningCreated;
+      const nextSearched=runningSearched;
+      const nextMode=runningMode;
       const done=nextCreated>=target ||
         (nextCreated>=minTarget && nextSearched>=normalMaxSearches) ||
         nextSearched>=hardMaxSearches;
+
       await env.DB.prepare(`
         UPDATE kbn_maintenance_queue
-        SET phase=?,created_total=?,discovery_searched=?,discovery_mode=?,discovery_retry_count=0,discovery_retry_after=NULL,updated_at=CURRENT_TIMESTAMP
+        SET phase=?,created_total=?,discovery_searched=?,discovery_mode=?,
+            discovery_retry_count=0,discovery_retry_after=NULL,updated_at=CURRENT_TIMESTAMP
         WHERE id=1
       `).bind(done?1:Math.min(49,phase+1),nextCreated,nextSearched,nextMode).run();
-      if(created.length){
-        try{await notifyCreatedShops(env,created,'通常メンテナンス自動開拓')}catch{}
-        try{await kbnSendNewListingDigest(env,created)}catch{}
-      }
+
       await logKbnMaintenanceHistoryV414(env,{
         q,phase,task:'discovery',
-        result:{ok:true,checked:searched.length,created},
+        result:{ok:true,checked:allSearched.length,created:allCreated},
         status:'success',
-        note:`${nextMode==='expanded'?'拡張探索':'通常探索'} / 累計 ${nextSearched}/${nextCreated<minTarget?240:120}検索 / 新規 ${nextCreated}/20店舗 / 最低目標10店舗`
+        note:`手動同一2検索サイクル×${miniCycles} / ${nextMode==='expanded'?'拡張探索':'通常探索'} / 累計 ${nextSearched}/${nextCreated<minTarget?240:120}検索 / 新規 ${nextCreated}/20店舗 / 最低目標10店舗`
       });
-      return {ok:true,processed:true,phase,task:'discovery',created:created.length,created_total:nextCreated,searched:searched.length,searched_total:nextSearched,discovery_mode:nextMode,done,min_target:10,minimum_met:nextCreated>=10};
+
+      return {
+        ok:true,processed:true,phase,task:'discovery',
+        created:allCreated.length,created_total:nextCreated,
+        searched:allSearched.length,searched_total:nextSearched,
+        discovery_mode:nextMode,done,min_target:10,
+        minimum_met:nextCreated>=10,
+        manual_cycle:true,
+        mini_cycles:miniCycles,
+        pair_limit:2
+      };
     }catch(e){
       const msg=String(e?.message||e||'');
       const isTransient=/503|temporar|timeout|fetch failed|connection|communication|rate|too many/i.test(msg);
