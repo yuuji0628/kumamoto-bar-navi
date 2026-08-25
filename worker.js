@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.36";
+      config.vars.KBN_CONFIG_VERSION="4.38";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -4032,54 +4032,91 @@ function googlePlaceScore(place,{name="",area=""}={}){
   return score;
 }
 
-async function googlePlacesTextSearch(env,{query,pageSize=20}){
-  const cfg=googlePlacesConfig(env);
-  if(!cfg.apiKey){
-    return {ok:false,configured:false,error:"GOOGLE_PLACES_NOT_CONFIGURED",places:[]};
-  }
 
+async function ensureKbnGooglePlacesHealthV438(env){
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS kbn_google_places_health(
+      id INTEGER PRIMARY KEY CHECK(id=1),
+      state TEXT NOT NULL DEFAULT 'ok',
+      error_code TEXT NOT NULL DEFAULT '',
+      error_message TEXT NOT NULL DEFAULT '',
+      http_status INTEGER NOT NULL DEFAULT 0,
+      disabled_until TEXT,
+      consecutive_failures INTEGER NOT NULL DEFAULT 0,
+      last_success_at TEXT,
+      last_failure_at TEXT,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run();
+  await env.DB.prepare(`INSERT INTO kbn_google_places_health(id,state) VALUES(1,'ok') ON CONFLICT(id) DO NOTHING`).run();
+}
+function kbnGooglePlacesErrorClassV438({status=0,data=null,error=""}={}){
+  const apiStatus=String(data?.error?.status||"").toUpperCase();
+  const msg=String(data?.error?.message||error||"").trim();
+  const http=Number(status||0);
+  let code=apiStatus||(http?`HTTP_${http}`:"NETWORK_ERROR"),cooldownMinutes=5;
+  if(apiStatus==="PERMISSION_DENIED"||http===401||http===403){code="PERMISSION_DENIED";cooldownMinutes=360}
+  else if(apiStatus==="RESOURCE_EXHAUSTED"||http===429){code="QUOTA_OR_RATE_LIMIT";cooldownMinutes=60}
+  else if(apiStatus==="INVALID_ARGUMENT"||http===400){code="INVALID_REQUEST";cooldownMinutes=60}
+  else if(http>=500){code=`GOOGLE_${http}`;cooldownMinutes=5}
+  else if(/billing|API key|not authorized|not enabled|permission/i.test(msg)){code="CONFIG_OR_BILLING";cooldownMinutes=360}
+  else if(/quota|rate limit/i.test(msg)){code="QUOTA_OR_RATE_LIMIT";cooldownMinutes=60}
+  return {code,message:msg||code,http_status:http,cooldown_minutes:cooldownMinutes};
+}
+async function kbnGooglePlacesHealthV438(env){
+  await ensureKbnGooglePlacesHealthV438(env);
+  const row=await env.DB.prepare(`SELECT * FROM kbn_google_places_health WHERE id=1`).first();
+  const until=String(row?.disabled_until||"");
+  const disabled=!!until&&new Date(until.replace(" ","T")+"Z").getTime()>Date.now();
+  return {state:String(row?.state||"ok"),error_code:String(row?.error_code||""),error_message:String(row?.error_message||""),http_status:Number(row?.http_status||0),disabled_until:until,consecutive_failures:Number(row?.consecutive_failures||0),disabled};
+}
+async function kbnRecordGooglePlacesFailureV438(env,info){
+  await ensureKbnGooglePlacesHealthV438(env);
+  const mins=Math.max(1,Number(info?.cooldown_minutes||5));
+  await env.DB.prepare(`
+    UPDATE kbn_google_places_health
+    SET state='down',error_code=?,error_message=?,http_status=?,disabled_until=datetime('now',?),
+        consecutive_failures=consecutive_failures+1,last_failure_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP
+    WHERE id=1
+  `).bind(String(info?.code||"GOOGLE_ERROR"),String(info?.message||"").slice(0,500),Number(info?.http_status||0),`+${mins} minutes`).run();
+}
+async function kbnRecordGooglePlacesSuccessV438(env){
+  await ensureKbnGooglePlacesHealthV438(env);
+  await env.DB.prepare(`
+    UPDATE kbn_google_places_health
+    SET state='ok',error_code='',error_message='',http_status=0,disabled_until=NULL,
+        consecutive_failures=0,last_success_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP
+    WHERE id=1
+  `).run();
+}
+
+async function googlePlacesTextSearch(env,{query,pageSize=20,ignoreCircuit=false}={}){
+  const cfg=googlePlacesConfig(env);
+  if(!cfg.apiKey)return {ok:false,configured:false,error:"GOOGLE_PLACES_NOT_CONFIGURED",error_code:"NOT_CONFIGURED",places:[]};
+  if(!ignoreCircuit){
+    try{
+      const health=await kbnGooglePlacesHealthV438(env);
+      if(health.disabled)return {ok:false,configured:true,skipped:true,status:health.http_status,error:health.error_message||health.error_code||"GOOGLE_PLACES_CIRCUIT_OPEN",error_code:health.error_code||"CIRCUIT_OPEN",disabled_until:health.disabled_until,places:[]};
+    }catch(e){console.error("google health read failed",e)}
+  }
   try{
     const r=await fetch("https://places.googleapis.com/v1/places:searchText",{
       method:"POST",
-      headers:{
-        "Content-Type":"application/json",
-        "X-Goog-Api-Key":cfg.apiKey,
-        "X-Goog-FieldMask":"places.id,places.displayName,places.formattedAddress,places.primaryType,places.types"
-      },
-      body:JSON.stringify({
-        textQuery:String(query||""),
-        languageCode:"ja",
-        regionCode:"JP",
-        pageSize:Math.max(1,Math.min(Number(pageSize)||20,20))
-      })
+      headers:{"Content-Type":"application/json","X-Goog-Api-Key":cfg.apiKey,"X-Goog-FieldMask":"places.id,places.displayName,places.formattedAddress,places.primaryType,places.types"},
+      body:JSON.stringify({textQuery:String(query||""),languageCode:"ja",regionCode:"JP",pageSize:Math.max(1,Math.min(Number(pageSize)||20,20))})
     });
-
-    const text=await r.text();
-    let d={};
-    try{d=text?JSON.parse(text):{}}catch{d={raw:text}}
-
+    const text=await r.text();let d={};try{d=text?JSON.parse(text):{}}catch{d={raw:text}}
     if(!r.ok){
-      return {
-        ok:false,
-        configured:true,
-        status:r.status,
-        error:d?.error?.message||`GOOGLE_PLACES_HTTP_${r.status}`,
-        places:[]
-      };
+      const info=kbnGooglePlacesErrorClassV438({status:r.status,data:d,error:d?.error?.message||`GOOGLE_PLACES_HTTP_${r.status}`});
+      try{await kbnRecordGooglePlacesFailureV438(env,info)}catch{}
+      return {ok:false,configured:true,status:r.status,error:info.message,error_code:info.code,cooldown_minutes:info.cooldown_minutes,places:[]};
     }
-
-    return {
-      ok:true,
-      configured:true,
-      places:Array.isArray(d?.places)?d.places:[]
-    };
+    try{await kbnRecordGooglePlacesSuccessV438(env)}catch{}
+    return {ok:true,configured:true,status:r.status,error_code:"",places:Array.isArray(d?.places)?d.places:[]};
   }catch(e){
-    return {
-      ok:false,
-      configured:true,
-      error:String(e?.message||e||"GOOGLE_PLACES_ERROR"),
-      places:[]
-    };
+    const info=kbnGooglePlacesErrorClassV438({error:String(e?.message||e||"GOOGLE_PLACES_ERROR")});
+    try{await kbnRecordGooglePlacesFailureV438(env,info)}catch{}
+    return {ok:false,configured:true,error:info.message,error_code:info.code,cooldown_minutes:info.cooldown_minutes,places:[]};
   }
 }
 
@@ -4749,10 +4786,10 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
     : [pair.search_area||pair.area,"熊本県",pair.label||"BAR"].filter(Boolean).join(" ")
   );
   const googlePrefetch=googleConfigured
-    ? await kbnMapConcurrentV425(pairs,5,async(pair,i)=>
-        googlePlacesTextSearch(env,{query:pairQueries[i],pageSize:20})
-      )
-    : pairs.map(()=>({ok:false,configured:false,places:[],error:"GOOGLE_PLACES_NOT_CONFIGURED"}));
+    ? await kbnMapConcurrentV425(pairs,5,async(pair,i)=>googlePlacesTextSearch(env,{query:pairQueries[i],pageSize:20}))
+    : pairs.map(()=>({ok:false,configured:false,places:[],error:"GOOGLE_PLACES_NOT_CONFIGURED",error_code:"NOT_CONFIGURED"}));
+  const googleFailedAll=googlePrefetch.length>0&&googlePrefetch.every(x=>!x?.ok);
+  const googleErrorSummary=googlePrefetch.reduce((acc,x)=>{if(!x?.ok){const k=String(x?.error_code||"GOOGLE_ERROR");acc[k]=(acc[k]||0)+1}return acc},{});
 
   // Place Detailsは全体で最大20回に抑え、Google検索10件＋Geoapify/OSM等を含めても
   // Workersのsubrequest上限に余裕を残す。
@@ -4768,9 +4805,12 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
     const query=pairQueries[pairIndex];
     const googleSearch=googlePrefetch[pairIndex]||{ok:false,places:[],error:"GOOGLE_PREFETCH_EMPTY"};
 
-    // v2.27 Free枠対策: ペアごとのFoursquare外部fetchは停止。
-    // Google + 事前取得したGeoapify/OSMを使い、1 invocation 50 subrequests以内に収める。
-    const fsqSearch={ok:false,configured:fsqConfigured,results:[],error:"FOURSQUARE_SKIPPED_FREE_SAFE"};
+    // v4.38: Google障害時だけFoursquareを代替検索として使用。
+    let fsqSearch={ok:false,configured:fsqConfigured,results:[],error:"FOURSQUARE_SKIPPED_GOOGLE_OK"};
+    if(!googleSearch.ok&&fsqConfigured){
+      try{fsqSearch=await foursquareSearch(env,{query:[pair.search_area||pair.area,pair.label||"BAR"].filter(Boolean).join(" "),near:"熊本県, 日本",limit:20})}
+      catch(e){fsqSearch={ok:false,configured:true,results:[],error:String(e?.message||e||"FOURSQUARE_ERROR")}}
+    }
 
     // v2.28: 上位4件だけでは既存店に偏るため、最大10件まで候補を見る。
     // 重複はPlace Details取得前に落とすので、subrequestは増えにくい。
@@ -4808,6 +4848,11 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
       geo_found:geoCandidates.length,
       osm_found:osmCandidates.length,
       error:googleSearch.ok?"":(googleSearch.error||""),
+      error_code:googleSearch.ok?"":String(googleSearch.error_code||"GOOGLE_ERROR"),
+      http_status:Number(googleSearch.status||0),
+      google_skipped:!!googleSearch.skipped,
+      google_disabled_until:String(googleSearch.disabled_until||""),
+      fallback_used:!googleSearch.ok&&(fsqSearch.ok||geoSnap.ok||osmSnap.ok),
       source:[
         googleSearch.ok?"google_places":"",
         fsqSearch.ok?"foursquare":"",
@@ -5238,7 +5283,8 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
     google_configured:googleConfigured,
     foursquare_configured:fsqConfigured,
     geoapify_configured:!!geoSnap.configured,
-    discovery_mode:String(discoveryMode||"normal")
+    discovery_mode:String(discoveryMode||"normal"),
+    source_health:{google_failed_all:googleFailedAll,google_error_summary:googleErrorSummary,fallback_available:fsqConfigured||geoSnap.ok||osmSnap.ok,geoapify_ok:!!geoSnap.ok,osm_ok:!!osmSnap.ok,foursquare_configured:fsqConfigured}
   };
 }
 async function ensureListingStatusColumn(env){
@@ -7577,6 +7623,49 @@ function kbnHourlyMaintenanceSlotV421(event){
   };
 }
 
+function kbnHourlyRunStartedAtV437(runKey){
+  const m=String(runKey||'').match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):00\s+JST$/i);
+  if(!m)return 0;
+  return Date.parse(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:00:00+09:00`)||0;
+}
+
+function kbnHourlyRunAgeMinutesV437(runKey,nowMs=Date.now()){
+  const started=kbnHourlyRunStartedAtV437(runKey);
+  return started?Math.max(0,(Number(nowMs||Date.now())-started)/60000):0;
+}
+
+async function kbnPreemptOldHourlyForCurrentSlotV437(env,hourly){
+  await ensureKbnMaintenanceQueueV242(env);
+  const q=await env.DB.prepare(`
+    SELECT phase,run_date,created_total,discovery_searched,updated_at
+    FROM kbn_maintenance_queue WHERE id=1
+  `).first();
+  const phase=Number(q?.phase||0);
+  const oldKey=String(q?.run_date||'');
+  const currentKey=String(hourly?.run_key||'');
+
+  if(!phase || !/\bJST\b/i.test(oldKey) || oldKey===currentKey){
+    return {preempted:false};
+  }
+
+  // A new hour always wins. Do not let an old 1:00 run block 2:00/3:00 discovery.
+  await logKbnMaintenanceHistoryV414(env,{
+    q,phase,task:'hourly_preempt',
+    result:{ok:true,checked:0},
+    status:'success',
+    note:`次の毎時枠を優先するため未完了処理を打切り / ${oldKey} → ${currentKey} / 新規${Number(q?.created_total||0)}店・${Number(q?.discovery_searched||0)}検索`
+  });
+
+  await env.DB.prepare(`
+    UPDATE kbn_maintenance_queue
+    SET phase=0,run_date=NULL,created_total=0,discovery_searched=0,discovery_mode='normal',
+        discovery_retry_count=0,discovery_retry_after=NULL,updated_at=CURRENT_TIMESTAMP
+    WHERE id=1
+  `).run();
+
+  return {preempted:true,old_run_key:oldKey,current_run_key:currentKey};
+}
+
 async function ensureKbnMaintenanceHistoryV414(env){
   await env.DB.prepare(`
     CREATE TABLE IF NOT EXISTS kbn_maintenance_history(
@@ -7796,7 +7885,7 @@ async function kbnProcessDailyPrecisionV433(env){
   const stage=String(st?.stage||'idle');
 
   if(stage==='closed'){
-    const r=await runMaintenanceBatchV242(env,'closed',{limit:20});
+    const r=await runMaintenanceBatchV242(env,'closed',{limit:10});
     await env.DB.prepare(`
       UPDATE kbn_daily_precision_state
       SET checked_closed=checked_closed+?,stage=?,updated_at=CURRENT_TIMESTAMP
@@ -7805,7 +7894,7 @@ async function kbnProcessDailyPrecisionV433(env){
     await logKbnMaintenanceHistoryV414(env,{
       q:{run_date:`${today} daily_precision`},phase:0,task:'closed_daily',result:r,
       status:r?.ok===false?'failed':'success',
-      note:`日次精度 / 閉業確認${r?.cycle_completed?' / 本日分一巡':''}`
+      note:`日次精度 / 閉業確認 / 判定${Number(r?.checked?.length||0)}店 / 一致候補なし${Number(r?.unverified?.length||0)}店 / エラー${Number(r?.failed?.length||0)}件${r?.cycle_completed?' / 本日分一巡':''}`
     });
     return {ok:true,processed:true,stage:'closed',result:r};
   }
@@ -7902,19 +7991,32 @@ async function kbnProcessQueuedMaintenanceV242(env){
         return {ok:true,processed:true,phase,task:'discovery_wait',waiting:true,created_total:createdTotal,searched_total:searchedTotal,retry_after:retryAfter};
       }
     }
-    // v4.22: 1時間の目標は最低10店舗、最大20店舗。
-    // 120検索時点で10店舗未満なら拡張探索を続け、最大240検索まで粘る。
-    // ただしBAR根拠・住所・連絡先等の品質基準は緩めない。
-    const minTarget=10,target=20,normalMaxSearches=120,hardMaxSearches=240;
-    const discoverySatisfied=createdTotal>=target ||
+    // v4.37: 掲載数優先だが、0件探索に1〜2時間使わない。
+    // 1時間枠のBAR開拓は開始から最大30分。検索数も最大120で打切り、
+    // その後は情報補完→精密補完→SEOへ進む。
+    const minTarget=10,target=20,normalMaxSearches=80,hardMaxSearches=120;
+    const runAgeMinutes=kbnHourlyRunAgeMinutesV437(q?.run_date);
+    const timeLimitReached=/\bJST\b/i.test(String(q?.run_date||'')) && runAgeMinutes>=30;
+    const discoverySatisfied=timeLimitReached ||
+      createdTotal>=target ||
       (createdTotal>=minTarget && searchedTotal>=normalMaxSearches) ||
       searchedTotal>=hardMaxSearches;
     if(discoverySatisfied){
       await env.DB.prepare(`UPDATE kbn_maintenance_queue SET phase=1,discovery_retry_count=0,discovery_retry_after=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=1`).run();
+      await logKbnMaintenanceHistoryV414(env,{
+        q,phase,task:'discovery_cutoff',
+        result:{ok:true,checked:0},
+        status:'success',
+        note:timeLimitReached
+          ?`BAR開拓30分上限で終了 / ${searchedTotal}検索 / 新規${createdTotal}店 / 次の情報補完へ`
+          :`BAR開拓検索上限で終了 / ${searchedTotal}検索 / 新規${createdTotal}店 / 次の情報補完へ`
+      });
       return {
         ok:true,processed:true,phase,task:'discovery_complete',
         created_total:createdTotal,searched_total:searchedTotal,
-        min_target:minTarget,target,minimum_met:createdTotal>=minTarget
+        min_target:minTarget,target,minimum_met:createdTotal>=minTarget,
+        cutoff:timeLimitReached?'30min':'search_limit',
+        run_age_minutes:Math.round(runAgeMinutes)
       };
     }
     const fakeRequest=new Request('https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/api/internal/maintenance-discovery-batch');
@@ -7934,7 +8036,7 @@ async function kbnProcessQueuedMaintenanceV242(env){
       let runningMode=mode;
 
       for(let mini=0;mini<miniCycles;mini++){
-        if(runningCreated>=target || runningSearched>=hardMaxSearches)break;
+        if(runningCreated>=target || runningSearched>=hardMaxSearches || kbnHourlyRunAgeMinutesV437(q?.run_date)>=30)break;
 
         const miniRemaining=Math.max(1,target-runningCreated);
         const miniResult=await autoDiscover(
@@ -7987,7 +8089,8 @@ async function kbnProcessQueuedMaintenanceV242(env){
           try{await kbnSendNewListingDigest(env,miniCreated)}catch{}
         }
 
-        const miniDone=runningCreated>=target ||
+        const miniDone=kbnHourlyRunAgeMinutesV437(q?.run_date)>=30 ||
+          runningCreated>=target ||
           (runningCreated>=minTarget && runningSearched>=normalMaxSearches) ||
           runningSearched>=hardMaxSearches;
         if(miniDone)break;
@@ -7996,7 +8099,9 @@ async function kbnProcessQueuedMaintenanceV242(env){
       const nextCreated=runningCreated;
       const nextSearched=runningSearched;
       const nextMode=runningMode;
-      const done=nextCreated>=target ||
+      const timeCutoff=kbnHourlyRunAgeMinutesV437(q?.run_date)>=30;
+      const done=timeCutoff ||
+        nextCreated>=target ||
         (nextCreated>=minTarget && nextSearched>=normalMaxSearches) ||
         nextSearched>=hardMaxSearches;
 
@@ -8017,7 +8122,7 @@ async function kbnProcessQueuedMaintenanceV242(env){
         q,phase,task:'discovery',
         result:{ok:true,checked:allSearched.length,created:allCreated,rejected:allRejected},
         status:'success',
-        note:`手動同一2検索サイクル×${miniCycles} / ${nextMode==='expanded'?'拡張探索':'通常探索'} / 累計 ${nextSearched}/${nextCreated<minTarget?240:120}検索 / 新規 ${nextCreated}/20店舗 / 最低目標10店舗${topRejectReasons?` / 除外:${topRejectReasons}`:''}`
+        note:`手動同一2検索サイクル×${miniCycles} / ${nextMode==='expanded'?'拡張探索':'通常探索'} / 累計 ${nextSearched}/${hardMaxSearches}検索 / 新規 ${nextCreated}/20店舗 / 最低目標10店舗${topRejectReasons?` / 除外:${topRejectReasons}`:''}`
       });
 
       return {
@@ -8030,7 +8135,9 @@ async function kbnProcessQueuedMaintenanceV242(env){
         mini_cycles:miniCycles,
         pair_limit:2,
         rejected_count:allRejected.length,
-        reject_summary:allRejectSummary
+        reject_summary:allRejectSummary,
+        cutoff:timeCutoff?'30min':(nextSearched>=hardMaxSearches?'search_limit':''),
+        run_age_minutes:Math.round(kbnHourlyRunAgeMinutesV437(q?.run_date))
       };
     }catch(e){
       const msg=String(e?.message||e||'');
@@ -8138,15 +8245,31 @@ async function checkClosedShops(env,{limit=20,afterId=0}={}){
     LIMIT ?
   `).bind(cursor,max).all();
 
-  const checked=[],closed=[],failed=[];
+  const checked=[],closed=[],unverified=[],failed=[];
   for(const shop of (r.results||[])){
     try{
-      const found=await findGooglePlaceForShop(env,{
+      let found=await findGooglePlaceForShop(env,{
         name:String(shop.name||"").replace(/^【KBN独自掲載】/,"").trim(),
         area:shop.area||"熊本"
       });
-      if(!found.ok||!found.matched){
-        failed.push({id:shop.id,name:shop.name,reason:found.error||"GOOGLE_MATCH_NOT_FOUND"});
+
+      // v4.37: 通信/API失敗だけ1回自動再試行。
+      if(!found?.ok){
+        try{
+          found=await findGooglePlaceForShop(env,{
+            name:String(shop.name||"").replace(/^【KBN独自掲載】/,"").trim(),
+            area:shop.area||"熊本"
+          });
+        }catch{}
+      }
+
+      if(!found?.ok){
+        failed.push({id:shop.id,name:shop.name,reason:found?.error||"GOOGLE_LOOKUP_ERROR"});
+        continue;
+      }
+      if(!found.matched){
+        // 店舗一致候補が見つからないだけならシステムエラーではない。
+        unverified.push({id:shop.id,name:shop.name,reason:"GOOGLE_MATCH_NOT_FOUND"});
         continue;
       }
       const details=await googlePlaceDetails(env,found.place?.id);
@@ -8179,7 +8302,7 @@ async function checkClosedShops(env,{limit=20,afterId=0}={}){
     SELECT id FROM shops WHERE is_published=1 AND id>? ORDER BY id ASC LIMIT 1
   `).bind(nextAfterId).first();
 
-  return {ok:true,checked,closed,failed,next_after_id:nextAfterId,has_more:!!more};
+  return {ok:true,checked,closed,unverified,failed,next_after_id:nextAfterId,has_more:!!more};
 }
 
 
@@ -10744,6 +10867,15 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
         return json(await kbnStartInstagramFullAuditV432(env));
       }
 
+      if(url.pathname==="/api/admin/discovery-source-health" && request.method==="GET"){
+        const g=await kbnGooglePlacesHealthV438(env);
+        return json({ok:true,google:{configured:!!googlePlacesConfig(env).apiKey,...g},foursquare:{configured:!!foursquareConfig(env).apiKey}});
+      }
+      if(url.pathname==="/api/admin/discovery-source-health/test-google" && request.method==="POST"){
+        const r=await googlePlacesTextSearch(env,{query:"BAR 熊本県 熊本市",pageSize:3,ignoreCircuit:true});
+        return json({ok:!!r.ok,status:Number(r.status||0),error_code:String(r.error_code||""),error:String(r.error||""),found:Array.isArray(r.places)?r.places.length:0,health:await kbnGooglePlacesHealthV438(env)});
+      }
+
       if(url.pathname==="/api/admin/daily-precision-status" && request.method==="GET"){
         return json(await kbnDailyPrecisionStatusV433(env));
       }
@@ -11439,14 +11571,21 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
 
   async scheduled(event, env, ctx){
     const task=(async()=>{
-      // v4.33 priority:
-      // 1) 進行中の毎時間パイプライン
-      // 2) その時間のBAR開拓を必ず先に開始
-      // 3) 空き時間だけ日次精度チェック（閉業→Instagram全件→対象外）
+      // v4.37 priority:
+      // 1) 時間が変わったら古い毎時間枠を打切り、新しいBAR開拓枠を最優先
+      // 2) 同じ時間内では進行中パイプラインを処理
+      // 3) 空き時間だけ日次精度（閉業→Instagram全件→対象外）
+      const hourly=kbnHourlyMaintenanceSlotV421(event);
+
+      try{
+        await kbnPreemptOldHourlyForCurrentSlotV437(env,hourly);
+      }catch(e){
+        console.error('hourly preemption failed',e);
+      }
+
       const queued=await kbnProcessQueuedMaintenanceV242(env);
       if(queued?.processed)return;
 
-      const hourly=kbnHourlyMaintenanceSlotV421(event);
       const claimed=await kbnClaimRuntimeSlotV231(env,hourly.minute_key,'hourly_maintenance');
       if(claimed){
         try{
