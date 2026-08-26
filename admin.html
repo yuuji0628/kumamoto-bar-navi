@@ -4353,8 +4353,8 @@ html,body{max-width:100%;overflow-x:hidden}
     <div class="lead-smart-collapse-body" data-lead-panel="auto">
       <p class="lead-smart-helper">県内を順番に検索し、重複を避けながら高精度で自動掲載します。</p>
       <button type="button" id="autoDiscoverBtn" class="btn-gold lead-smart-primary">低コスト・高精度自動掲載</button>
-      <div style="margin-top:8px;color:#f1c75b;font-weight:800;font-size:.82rem">1回の実行で最大100店舗まで自動掲載</div>
-      <div style="margin-top:4px;color:#9ca7b3;font-size:.72rem">繁華街・町名単位まで120検索。通常5検索ずつ（503再試行時は2検索）小分け保存し、503/通信エラー時は30秒〜3分の自動クールダウン後に続きから再開します。画面を再読み込みしても未完了なら自動復帰します。通常判定で新規が見つからない場合は後半を自動で「拡張探索」に切替。重複は店名だけ・住所だけでは落とさず、電話/Instagram一致または店名＋住所一致で判定します。</div>
+      <div style="margin-top:8px;color:#f1c75b;font-weight:800;font-size:.82rem">1回の実行で最大10店舗まで自動掲載</div>
+      <div style="margin-top:4px;color:#9ca7b3;font-size:.72rem">最低目標3店舗・最大10店舗。2検索ずつ小分け保存し、Google Placesの全利用（開拓・情報補完・閉業確認・レビュー・写真・接続テスト）を1日150回／月4,500回の共通枠に収めます。503/通信エラー時は自動クールダウン後に続きから再開します。画面を再読み込みしても未完了なら自動復帰します。通常判定で新規が見つからない場合は後半を自動で「拡張探索」に切替。重複は店名だけ・住所だけでは落とさず、電話/Instagram一致または店名＋住所一致で判定します。</div>
       <style id="kbn-google-usage-card-v443">
         .kbn-google-usage-v443{margin:11px 0;padding:13px;border:1px solid #3b4c59;border-radius:14px;background:linear-gradient(180deg,#101b24,#0b141c)}
         .kbn-google-usage-head-v443{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
@@ -4375,7 +4375,7 @@ html,body{max-width:100%;overflow-x:hidden}
         <div class="kbn-google-usage-head-v443">
           <div>
             <b>Google Places 使用量</b>
-            <div style="margin-top:3px;color:#82919c;font-size:.61rem">KBN側の節約カウンター</div>
+            <div style="margin-top:3px;color:#82919c;font-size:.61rem">開拓・全メンテ・写真・接続テスト込み</div>
           </div>
           <span class="kbn-google-usage-state-v443" id="googleUsageStateV443">確認中</span>
         </div>
@@ -4394,7 +4394,7 @@ html,body{max-width:100%;overflow-x:hidden}
           </div>
         </div>
         <div class="kbn-google-reset-v443" id="googleUsageResetV443">次回リセット：確認中...</div>
-        <div class="kbn-google-usage-note-v443">上限到達後はGoogle Placesを停止し、代替ソースへ自動切替します。Google Cloud Console側の請求額ではなく、KBNが実際に送ったText Search回数を管理しています。</div>
+        <div class="kbn-google-usage-note-v443">上限到達後はGoogle Placesを停止し、代替ソースへ自動切替します。Google Cloud Console側の請求額ではなく、KBNが実際にGoogle Placesへ送ったAPIリクエスト総数を管理しています。</div>
       </div>
       <div id="discoverySourceHealthV438" style="margin:10px 0;padding:10px 12px;border:1px solid #334957;border-radius:12px;background:#0f1922;font-size:.72rem;line-height:1.55;color:#aeb9c3">検索API状態：確認中... / Free Workers省CPUモード ON</div>
       <button type="button" id="testGooglePlacesV438" style="margin-bottom:10px">Google Places接続テスト</button>
@@ -9249,7 +9249,7 @@ async function loadDiscoverySourceHealthV438(){
     const usage=`本日 ${dayUsed}/${dayLimit}回・今月 ${monthUsed}/${monthLimit}回`;
     if(!g.configured){el.style.borderColor="#7a3d3d";el.style.color="#ff9a9a";el.textContent=`Google Places：APIキー未設定。${usage}。代替ソースへ自動切替します。`;return}
     if(g.disabled){el.style.borderColor="#7a5b24";el.style.color="#efc45a";el.textContent=`Google Places：一時停止中（${g.error_code||"API_ERROR"}${g.http_status?` / HTTP ${g.http_status}`:""}）。${usage}。上限到達後は代替ソースへ自動切替します。`;return}
-    el.style.borderColor="#315b45";el.style.color="#7ee2a8";el.textContent=`Google Places：利用可能。${usage}。節約上限は1日150回・月4,500回、超えたら代替ソースへ自動切替します。`;
+    el.style.borderColor="#315b45";el.style.color="#7ee2a8";el.textContent=`Google Places：利用可能。${usage}。開拓・全メンテ込みの共通節約上限は1日150回・月4,500回です。超えたらGoogleを停止して代替ソースへ自動切替します。`;
   }catch(e){el.textContent=`検索API状態：取得失敗 ${e?.message||e}`}
 }
 window.testGooglePlacesV438=async function(){
@@ -9277,9 +9277,9 @@ window.runAutoDiscovery=async function(options={}){
   btn.textContent=resume?"自動開拓を再開中...":"自動開拓中...";
   if(progress)progress.hidden=false;
 
-  const totalSteps=120;
+  const totalSteps=60;
   const batchSize=2;
-  const maxListings=100;
+  const maxListings=10;
   const maxRetries=2;
   const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 
@@ -9443,7 +9443,7 @@ setTimeout(()=>{
     const st=JSON.parse(localStorage.getItem("kbn_auto_discovery_resume_v311")||"null");
     if(st?.active && Number(st.completed||0)<120 && Number(st?.createdTotal?.length||0)<100){
       const status=$("autoDiscoverStatus");
-      if(status)status.innerHTML=`<b>未完了の自動開拓を検出しました。</b><br><small>${Number(st.completed||0)}/120検索から自動で続行します。</small>`;
+      if(status)status.innerHTML=`<b>未完了の自動開拓を検出しました。</b><br><small>${Number(st.completed||0)}/60検索から自動で続行します。</small>`;
       window.runAutoDiscovery?.({resume:true});
     }
   }catch(e){ console.warn("auto discovery resume state read failed",e); }
@@ -11271,7 +11271,7 @@ async function loadMaintenanceHistoryV414(){
 
     const qs=document.getElementById('mhQueueStatus');
     if(qs){
-      if(q.active){const label=q.stage==='discovery'?`新規開拓 ${Number(q.discovery_searched||0)}検索 / 新規${Number(q.created_total||0)}/20（最低目標10）`:`実行中：${kbnMaintenanceTaskLabelV414(q.task)}`;qs.textContent=`現在：${label}。小分け保存しながら自動継続中です。`;qs.style.color='#efc45a';}
+      if(q.active){const label=q.stage==='discovery'?`新規開拓 ${Number(q.discovery_searched||0)}検索 / 新規${Number(q.created_total||0)}/10（最低目標3）`:`実行中：${kbnMaintenanceTaskLabelV414(q.task)}`;qs.textContent=`現在：${label}。小分け保存しながら自動継続中です。`;qs.style.color='#efc45a';}
       else{qs.textContent='現在：待機中。次の毎時00分に自動運転を開始します。';qs.style.color='#aeb8c2';}
     }
     const rows=Array.isArray(d.recent)?d.recent:[];
@@ -11281,7 +11281,7 @@ async function loadMaintenanceHistoryV414(){
   }catch(e){if(list)list.innerHTML=`<small style="color:#ff9b9b">履歴を取得できませんでした：${esc(e?.message||e)}</small>`;}
 }
 function kbnFormatLastAutomaticRunV233(run,queue){
-  if(queue?.active){const created=Math.max(0,Number(queue.created_total||0));if(queue.stage==="discovery")return `自動運転中：${Number(queue.discovery_searched||0)}検索 / 新規${created}/20店舗（最低目標10） / ${String(queue.discovery_mode||'normal')==='expanded'?'拡張探索':'通常探索'}`;if(queue.stage==="maintenance")return `自動開拓完了：新規${created}件 / ${kbnMaintenanceTaskLabelV414(queue.task)}を実行中`;}
+  if(queue?.active){const created=Math.max(0,Number(queue.created_total||0));if(queue.stage==="discovery")return `自動運転中：${Number(queue.discovery_searched||0)}検索 / 新規${created}/10店舗（最低目標3） / ${String(queue.discovery_mode||'normal')==='expanded'?'拡張探索':'通常探索'}`;if(queue.stage==="maintenance")return `自動開拓完了：新規${created}件 / ${kbnMaintenanceTaskLabelV414(queue.task)}を実行中`;}
   if(!run)return "最終自動実行：まだ記録がありません";
   const raw=String(run.finished_at||run.started_at||"").trim();let when="日時不明";try{const iso=/Z$|[+-]\d\d:\d\d$/.test(raw)?raw:raw.replace(" ","T")+"Z";const d=new Date(iso);if(!Number.isNaN(d.getTime()))when=new Intl.DateTimeFormat("ja-JP",{timeZone:"Asia/Tokyo",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false}).format(d);}catch{}
   const status=String(run.status||"").toLowerCase(),label=status==="success"?"成功":status==="failed"?"失敗":status||"不明";return `最終自動実行：${when} / ${label} / 新規${Number(run.created_count||0)}件`;
