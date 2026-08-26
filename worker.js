@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.40";
+      config.vars.KBN_CONFIG_VERSION="4.41";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -4033,6 +4033,88 @@ function googlePlaceScore(place,{name="",area=""}={}){
 }
 
 
+
+const KBN_GOOGLE_PLACES_DAILY_LIMIT_V441=150;
+const KBN_GOOGLE_PLACES_MONTHLY_LIMIT_V441=4500;
+
+function kbnGoogleBudgetPeriodV441(){
+  const d=new Date(Date.now()+9*60*60*1000);
+  const y=d.getUTCFullYear(),m=String(d.getUTCMonth()+1).padStart(2,'0'),day=String(d.getUTCDate()).padStart(2,'0');
+  return {day:`${y}-${m}-${day}`,month:`${y}-${m}`};
+}
+
+async function ensureKbnGooglePlacesBudgetV441(env){
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS kbn_google_places_budget(
+      period_type TEXT NOT NULL,
+      period_key TEXT NOT NULL,
+      used_count INTEGER NOT NULL DEFAULT 0,
+      limit_count INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY(period_type,period_key)
+    )
+  `).run();
+}
+
+async function kbnGooglePlacesBudgetStatusV441(env){
+  await ensureKbnGooglePlacesBudgetV441(env);
+  const p=kbnGoogleBudgetPeriodV441();
+  await env.DB.prepare(`
+    INSERT INTO kbn_google_places_budget(period_type,period_key,used_count,limit_count)
+    VALUES('day',?,0,?)
+    ON CONFLICT(period_type,period_key) DO UPDATE SET limit_count=excluded.limit_count
+  `).bind(p.day,KBN_GOOGLE_PLACES_DAILY_LIMIT_V441).run();
+  await env.DB.prepare(`
+    INSERT INTO kbn_google_places_budget(period_type,period_key,used_count,limit_count)
+    VALUES('month',?,0,?)
+    ON CONFLICT(period_type,period_key) DO UPDATE SET limit_count=excluded.limit_count
+  `).bind(p.month,KBN_GOOGLE_PLACES_MONTHLY_LIMIT_V441).run();
+
+  const day=await env.DB.prepare(`SELECT used_count,limit_count FROM kbn_google_places_budget WHERE period_type='day' AND period_key=?`).bind(p.day).first();
+  const month=await env.DB.prepare(`SELECT used_count,limit_count FROM kbn_google_places_budget WHERE period_type='month' AND period_key=?`).bind(p.month).first();
+
+  const dayUsed=Number(day?.used_count||0),dayLimit=Number(day?.limit_count||KBN_GOOGLE_PLACES_DAILY_LIMIT_V441);
+  const monthUsed=Number(month?.used_count||0),monthLimit=Number(month?.limit_count||KBN_GOOGLE_PLACES_MONTHLY_LIMIT_V441);
+
+  return {
+    day_key:p.day,month_key:p.month,
+    day_used:dayUsed,day_limit:dayLimit,day_remaining:Math.max(0,dayLimit-dayUsed),
+    month_used:monthUsed,month_limit:monthLimit,month_remaining:Math.max(0,monthLimit-monthUsed),
+    blocked:dayUsed>=dayLimit||monthUsed>=monthLimit,
+    blocked_reason:monthUsed>=monthLimit?'KBN_MONTHLY_BUDGET':(dayUsed>=dayLimit?'KBN_DAILY_BUDGET':'')
+  };
+}
+
+async function kbnReserveGooglePlacesBudgetV441(env){
+  const s=await kbnGooglePlacesBudgetStatusV441(env);
+  if(s.blocked)return {ok:false,...s};
+
+  const d=await env.DB.prepare(`
+    UPDATE kbn_google_places_budget
+    SET used_count=used_count+1,updated_at=CURRENT_TIMESTAMP
+    WHERE period_type='day' AND period_key=? AND used_count<limit_count
+  `).bind(s.day_key).run();
+  if(Number(d?.meta?.changes||0)<1){
+    return {ok:false,...(await kbnGooglePlacesBudgetStatusV441(env)),blocked:true,blocked_reason:'KBN_DAILY_BUDGET'};
+  }
+
+  const m=await env.DB.prepare(`
+    UPDATE kbn_google_places_budget
+    SET used_count=used_count+1,updated_at=CURRENT_TIMESTAMP
+    WHERE period_type='month' AND period_key=? AND used_count<limit_count
+  `).bind(s.month_key).run();
+  if(Number(m?.meta?.changes||0)<1){
+    await env.DB.prepare(`
+      UPDATE kbn_google_places_budget
+      SET used_count=CASE WHEN used_count>0 THEN used_count-1 ELSE 0 END,updated_at=CURRENT_TIMESTAMP
+      WHERE period_type='day' AND period_key=?
+    `).bind(s.day_key).run();
+    return {ok:false,...(await kbnGooglePlacesBudgetStatusV441(env)),blocked:true,blocked_reason:'KBN_MONTHLY_BUDGET'};
+  }
+
+  return {ok:true,...(await kbnGooglePlacesBudgetStatusV441(env))};
+}
+
 async function ensureKbnGooglePlacesHealthV438(env){
   await env.DB.prepare(`
     CREATE TABLE IF NOT EXISTS kbn_google_places_health(
@@ -4067,8 +4149,20 @@ async function kbnGooglePlacesHealthV438(env){
   await ensureKbnGooglePlacesHealthV438(env);
   const row=await env.DB.prepare(`SELECT * FROM kbn_google_places_health WHERE id=1`).first();
   const until=String(row?.disabled_until||"");
-  const disabled=!!until&&new Date(until.replace(" ","T")+"Z").getTime()>Date.now();
-  return {state:String(row?.state||"ok"),error_code:String(row?.error_code||""),error_message:String(row?.error_message||""),http_status:Number(row?.http_status||0),disabled_until:until,consecutive_failures:Number(row?.consecutive_failures||0),disabled};
+  const circuitDisabled=!!until&&new Date(until.replace(" ","T")+"Z").getTime()>Date.now();
+  let budget=null;
+  try{budget=await kbnGooglePlacesBudgetStatusV441(env)}catch{}
+  const budgetBlocked=!!budget?.blocked;
+  const disabled=circuitDisabled||budgetBlocked;
+  return {
+    state:budgetBlocked?'budget_limit':String(row?.state||"ok"),
+    error_code:budgetBlocked?String(budget?.blocked_reason||"KBN_BUDGET_LIMIT"):String(row?.error_code||""),
+    error_message:budgetBlocked?(budget?.blocked_reason==='KBN_MONTHLY_BUDGET'?'Google Places 月間節約上限に到達':'Google Places 1日節約上限に到達'):String(row?.error_message||""),
+    http_status:Number(row?.http_status||0),
+    disabled_until:until,
+    consecutive_failures:Number(row?.consecutive_failures||0),
+    disabled,circuit_disabled:circuitDisabled,budget
+  };
 }
 async function kbnRecordGooglePlacesFailureV438(env,info){
   await ensureKbnGooglePlacesHealthV438(env);
@@ -4099,6 +4193,25 @@ async function googlePlacesTextSearch(env,{query,pageSize=20,ignoreCircuit=false
       if(health.disabled)return {ok:false,configured:true,skipped:true,status:health.http_status,error:health.error_message||health.error_code||"GOOGLE_PLACES_CIRCUIT_OPEN",error_code:health.error_code||"CIRCUIT_OPEN",disabled_until:health.disabled_until,places:[]};
     }catch(e){console.error("google health read failed",e)}
   }
+
+  let budgetReservation=null;
+  try{
+    budgetReservation=await kbnReserveGooglePlacesBudgetV441(env);
+    if(!budgetReservation.ok){
+      return {
+        ok:false,configured:true,skipped:true,status:0,
+        error:budgetReservation.blocked_reason==='KBN_MONTHLY_BUDGET'
+          ?"Google Places 月間節約上限 4,500回に到達しました"
+          :"Google Places 1日節約上限 150回に到達しました",
+        error_code:String(budgetReservation.blocked_reason||"KBN_BUDGET_LIMIT"),
+        budget:budgetReservation,places:[]
+      };
+    }
+  }catch(e){
+    console.error("google budget reserve failed",e);
+    return {ok:false,configured:true,skipped:true,error:"Google Places節約カウンターを確認できませんでした",error_code:"KBN_BUDGET_GUARD_ERROR",places:[]};
+  }
+
   try{
     const r=await fetch("https://places.googleapis.com/v1/places:searchText",{
       method:"POST",
@@ -4109,10 +4222,10 @@ async function googlePlacesTextSearch(env,{query,pageSize=20,ignoreCircuit=false
     if(!r.ok){
       const info=kbnGooglePlacesErrorClassV438({status:r.status,data:d,error:d?.error?.message||`GOOGLE_PLACES_HTTP_${r.status}`});
       try{await kbnRecordGooglePlacesFailureV438(env,info)}catch{}
-      return {ok:false,configured:true,status:r.status,error:info.message,error_code:info.code,cooldown_minutes:info.cooldown_minutes,places:[]};
+      return {ok:false,configured:true,status:r.status,error:info.message,error_code:info.code,cooldown_minutes:info.cooldown_minutes,budget:budgetReservation,places:[]};
     }
     try{await kbnRecordGooglePlacesSuccessV438(env)}catch{}
-    return {ok:true,configured:true,status:r.status,error_code:"",places:Array.isArray(d?.places)?d.places:[]};
+    return {ok:true,configured:true,status:r.status,error_code:"",budget:budgetReservation,places:Array.isArray(d?.places)?d.places:[]};
   }catch(e){
     const info=kbnGooglePlacesErrorClassV438({error:String(e?.message||e||"GOOGLE_PLACES_ERROR")});
     try{await kbnRecordGooglePlacesFailureV438(env,info)}catch{}
@@ -11083,11 +11196,17 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
 
       if(url.pathname==="/api/admin/discovery-source-health" && request.method==="GET"){
         const g=await kbnGooglePlacesHealthV438(env);
-        return json({ok:true,google:{configured:!!googlePlacesConfig(env).apiKey,...g},foursquare:{configured:!!foursquareConfig(env).apiKey}});
+        const budget=await kbnGooglePlacesBudgetStatusV441(env);
+        return json({
+          ok:true,
+          google:{configured:!!googlePlacesConfig(env).apiKey,...g,budget},
+          foursquare:{configured:!!foursquareConfig(env).apiKey},
+          cost_guard:{daily_limit:KBN_GOOGLE_PLACES_DAILY_LIMIT_V441,monthly_limit:KBN_GOOGLE_PLACES_MONTHLY_LIMIT_V441,policy:"Google Places Text Searchを1日150回・月4,500回まで"}
+        });
       }
       if(url.pathname==="/api/admin/discovery-source-health/test-google" && request.method==="POST"){
         const r=await googlePlacesTextSearch(env,{query:"BAR 熊本県 熊本市",pageSize:3,ignoreCircuit:true});
-        return json({ok:!!r.ok,status:Number(r.status||0),error_code:String(r.error_code||""),error:String(r.error||""),found:Array.isArray(r.places)?r.places.length:0,health:await kbnGooglePlacesHealthV438(env)});
+        return json({ok:!!r.ok,status:Number(r.status||0),error_code:String(r.error_code||""),error:String(r.error||""),found:Array.isArray(r.places)?r.places.length:0,health:await kbnGooglePlacesHealthV438(env),budget:await kbnGooglePlacesBudgetStatusV441(env)});
       }
 
       if(url.pathname==="/api/admin/daily-precision-status" && request.method==="GET"){
