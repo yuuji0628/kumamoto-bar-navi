@@ -4346,13 +4346,13 @@ html,body{max-width:100%;overflow-x:hidden}
       <span class="lead-smart-icon">⚡</span>
       <span>
         <b>自動開拓</b>
-        <small>Google優先＋障害時は代替ソースへ自動切替</small>
+        <small>Googleは節約上限内だけ使用＋超えたら代替ソースへ自動切替</small>
       </span>
       <i>›</i>
     </button>
     <div class="lead-smart-collapse-body" data-lead-panel="auto">
       <p class="lead-smart-helper">県内を順番に検索し、重複を避けながら高精度で自動掲載します。</p>
-      <button type="button" id="autoDiscoverBtn" class="btn-gold lead-smart-primary">高精度自動掲載</button>
+      <button type="button" id="autoDiscoverBtn" class="btn-gold lead-smart-primary">低コスト・高精度自動掲載</button>
       <div style="margin-top:8px;color:#f1c75b;font-weight:800;font-size:.82rem">1回の実行で最大100店舗まで自動掲載</div>
       <div style="margin-top:4px;color:#9ca7b3;font-size:.72rem">繁華街・町名単位まで120検索。通常5検索ずつ（503再試行時は2検索）小分け保存し、503/通信エラー時は30秒〜3分の自動クールダウン後に続きから再開します。画面を再読み込みしても未完了なら自動復帰します。通常判定で新規が見つからない場合は後半を自動で「拡張探索」に切替。重複は店名だけ・住所だけでは落とさず、電話/Instagram一致または店名＋住所一致で判定します。</div>
       <div id="discoverySourceHealthV438" style="margin:10px 0;padding:10px 12px;border:1px solid #334957;border-radius:12px;background:#0f1922;font-size:.72rem;line-height:1.55;color:#aeb9c3">検索API状態：確認中...</div>
@@ -9163,10 +9163,13 @@ window.refreshExistingIndependentListings=async function(){
 async function loadDiscoverySourceHealthV438(){
   const el=$("discoverySourceHealthV438");if(!el)return;
   try{
-    const d=await api("/api/admin/discovery-source-health"),g=d.google||{};
-    if(!g.configured){el.style.borderColor="#7a3d3d";el.style.color="#ff9a9a";el.textContent="Google Places：APIキー未設定。代替ソースへ自動切替します。";return}
-    if(g.disabled){el.style.borderColor="#7a5b24";el.style.color="#efc45a";el.textContent=`Google Places：一時停止中（${g.error_code||"API_ERROR"} / HTTP ${Number(g.http_status||0)||"—"}）。同じエラーを無駄打ちせず代替ソースへ自動切替します。`;return}
-    el.style.borderColor="#315b45";el.style.color="#7ee2a8";el.textContent="Google Places：利用可能。障害時は代替ソースへ自動切替します。";
+    const d=await api("/api/admin/discovery-source-health"),g=d.google||{},b=g.budget||{};
+    const dayUsed=Number(b.day_used||0),dayLimit=Number(b.day_limit||d.cost_guard?.daily_limit||150);
+    const monthUsed=Number(b.month_used||0),monthLimit=Number(b.month_limit||d.cost_guard?.monthly_limit||4500);
+    const usage=`本日 ${dayUsed}/${dayLimit}回・今月 ${monthUsed}/${monthLimit}回`;
+    if(!g.configured){el.style.borderColor="#7a3d3d";el.style.color="#ff9a9a";el.textContent=`Google Places：APIキー未設定。${usage}。代替ソースへ自動切替します。`;return}
+    if(g.disabled){el.style.borderColor="#7a5b24";el.style.color="#efc45a";el.textContent=`Google Places：一時停止中（${g.error_code||"API_ERROR"}${g.http_status?` / HTTP ${g.http_status}`:""}）。${usage}。上限到達後は代替ソースへ自動切替します。`;return}
+    el.style.borderColor="#315b45";el.style.color="#7ee2a8";el.textContent=`Google Places：利用可能。${usage}。節約上限は1日150回・月4,500回、超えたら代替ソースへ自動切替します。`;
   }catch(e){el.textContent=`検索API状態：取得失敗 ${e?.message||e}`}
 }
 window.testGooglePlacesV438=async function(){
@@ -9174,7 +9177,9 @@ window.testGooglePlacesV438=async function(){
   try{
     btn.disabled=true;btn.textContent="Google Places確認中...";
     const d=await api("/api/admin/discovery-source-health/test-google",{method:"POST",body:{}});
-    alert(d.ok?`Google Places 接続OK\nHTTP ${d.status}\nテスト候補 ${d.found}件`:`Google Places 接続エラー\n種類: ${d.error_code||"不明"}\nHTTP: ${d.status||"—"}\n${d.error||""}\n\n自動開拓は代替ソースへ切り替わります。`);
+    const b=d.budget||{};
+    const usage=`本日 ${Number(b.day_used||0)}/${Number(b.day_limit||150)}回・今月 ${Number(b.month_used||0)}/${Number(b.month_limit||4500)}回`;
+    alert(d.ok?`Google Places 接続OK\nHTTP ${d.status}\nテスト候補 ${d.found}件\n${usage}`:`Google Places 接続エラー\n種類: ${d.error_code||"不明"}\nHTTP: ${d.status||"—"}\n${d.error||""}\n${usage}\n\n自動開拓は代替ソースへ切り替わります。`);
     await loadDiscoverySourceHealthV438();
   }catch(e){alert("Google Places接続テストに失敗しました: "+(e?.message||e))}
   finally{btn.disabled=false;btn.textContent="Google Places接続テスト"}
