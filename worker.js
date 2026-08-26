@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.43";
+      config.vars.KBN_CONFIG_VERSION="4.44";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -4270,6 +4270,16 @@ async function googlePlaceDetails(env,placeId){
   if(!cfg.apiKey)return {ok:false,configured:false,error:"GOOGLE_PLACES_NOT_CONFIGURED",place:null};
   if(!id)return {ok:false,configured:true,error:"GOOGLE_PLACE_ID_MISSING",place:null};
 
+  let budgetReservation=null;
+  try{
+    budgetReservation=await kbnReserveGooglePlacesBudgetV441(env);
+    if(!budgetReservation.ok){
+      return {ok:false,configured:true,skipped:true,error:budgetReservation.blocked_reason||"KBN_BUDGET_LIMIT",error_code:budgetReservation.blocked_reason||"KBN_BUDGET_LIMIT",budget:budgetReservation,place:null};
+    }
+  }catch(e){
+    return {ok:false,configured:true,skipped:true,error:"KBN_BUDGET_GUARD_ERROR",error_code:"KBN_BUDGET_GUARD_ERROR",place:null};
+  }
+
   try{
     const fieldMask=[
       "id","displayName","formattedAddress","primaryType","types","businessStatus",
@@ -4297,9 +4307,9 @@ async function googlePlaceDetails(env,placeId){
         place:null
       };
     }
-    return {ok:true,configured:true,place:d};
+    return {ok:true,configured:true,budget:budgetReservation,place:d};
   }catch(e){
-    return {ok:false,configured:true,error:String(e?.message||e||"GOOGLE_PLACE_DETAILS_ERROR"),place:null};
+    return {ok:false,configured:true,budget:budgetReservation,error:String(e?.message||e||"GOOGLE_PLACE_DETAILS_ERROR"),place:null};
   }
 }
 
@@ -4313,6 +4323,16 @@ async function googlePlaceReviewDetails(env,placeId){
   }
   if(!id){
     return {ok:false,configured:true,error:"GOOGLE_PLACE_ID_MISSING",place:null};
+  }
+
+  let budgetReservation=null;
+  try{
+    budgetReservation=await kbnReserveGooglePlacesBudgetV441(env);
+    if(!budgetReservation.ok){
+      return {ok:false,configured:true,skipped:true,error:budgetReservation.blocked_reason||"KBN_BUDGET_LIMIT",error_code:budgetReservation.blocked_reason||"KBN_BUDGET_LIMIT",budget:budgetReservation,place:null};
+    }
+  }catch(e){
+    return {ok:false,configured:true,skipped:true,error:"KBN_BUDGET_GUARD_ERROR",error_code:"KBN_BUDGET_GUARD_ERROR",place:null};
   }
 
   try{
@@ -4351,11 +4371,12 @@ async function googlePlaceReviewDetails(env,placeId){
       };
     }
 
-    return {ok:true,configured:true,place:d};
+    return {ok:true,configured:true,budget:budgetReservation,place:d};
   }catch(e){
     return {
       ok:false,
       configured:true,
+      budget:budgetReservation,
       error:String(e?.message||e||"GOOGLE_REVIEW_ERROR"),
       place:null
     };
@@ -8309,7 +8330,9 @@ async function kbnProcessQueuedMaintenanceV242(env){
     // v4.37: 掲載数優先だが、0件探索に1〜2時間使わない。
     // 1時間枠のBAR開拓は開始から最大30分。検索数も最大120で打切り、
     // その後は情報補完→精密補完→SEOへ進む。
-    const minTarget=10,target=20,normalMaxSearches=80,hardMaxSearches=120;
+    // v4.44: Google総枠150回/日を開拓＋全メンテで共有するため、
+    // 1時間の掲載目標を最低3 / 最大10へ抑える。
+    const minTarget=3,target=10,normalMaxSearches=40,hardMaxSearches=60;
     const runAgeMinutes=kbnHourlyRunAgeMinutesV437(q?.run_date);
     const timeLimitReached=/\bJST\b/i.test(String(q?.run_date||'')) && runAgeMinutes>=30;
     let googleHealthAtStart=null;
@@ -8452,15 +8475,15 @@ async function kbnProcessQueuedMaintenanceV242(env){
         q,phase,task:'discovery',
         result:{ok:true,checked:allSearched.length,created:allCreated,rejected:allRejected},
         status:'success',
-        note:`省CPU 2検索×1サイクル / ${nextMode==='expanded'?'拡張探索':'通常探索'} / 累計 ${nextSearched}/${hardMaxSearches}検索 / 新規 ${nextCreated}/20店舗 / 最低目標10店舗${topRejectReasons?` / 除外:${topRejectReasons}`:''}`
+        note:`省CPU 2検索×1サイクル / ${nextMode==='expanded'?'拡張探索':'通常探索'} / 累計 ${nextSearched}/${hardMaxSearches}検索 / 新規 ${nextCreated}/10店舗 / 最低目標3店舗${topRejectReasons?` / 除外:${topRejectReasons}`:''}`
       });
 
       return {
         ok:true,processed:true,phase,task:'discovery',
         created:allCreated.length,created_total:nextCreated,
         searched:allSearched.length,searched_total:nextSearched,
-        discovery_mode:nextMode,done,min_target:10,
-        minimum_met:nextCreated>=10,
+        discovery_mode:nextMode,done,min_target:3,
+        minimum_met:nextCreated>=3,
         manual_cycle:true,
         mini_cycles:miniCycles,
         pair_limit:2,
@@ -9383,6 +9406,19 @@ export default {
       const cfg=googlePlacesConfig(env);
       if(!cfg.apiKey)return new Response("Photo service unavailable",{status:503});
       const requestedWidth=Math.max(240,Math.min(1200,Number(url.searchParams.get("w")||640)));
+
+      // v4.44: Google Placesの全API利用を共通の節約枠へ。
+      // 写真APIも枠外では呼ばない。
+      let photoBudget=null;
+      try{
+        photoBudget=await kbnReserveGooglePlacesBudgetV441(env);
+        if(!photoBudget.ok){
+          return new Response("Photo budget limit reached",{status:429,headers:{"Cache-Control":"public, max-age=300"}});
+        }
+      }catch{
+        return new Response("Photo budget guard unavailable",{status:503,headers:{"Cache-Control":"public, max-age=60"}});
+      }
+
       const endpoint=`https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=${requestedWidth}&skipHttpRedirect=true&key=${encodeURIComponent(cfg.apiKey)}`;
       try{
         const metaRes=await fetch(endpoint,{headers:{"Accept":"application/json"}});
@@ -10699,7 +10735,8 @@ export default {
 
       if(url.pathname==="/api/admin/leads/auto-discover" && request.method==="POST"){
         let x={}; try{x=await request.json()}catch{}
-        const max=Math.max(1,Math.min(Number(x.max_listings)||10,50));
+        // v4.44: 手動開拓も含めGoogle総利用を節約するため、1実行最大10店舗。
+        const max=Math.max(1,Math.min(Number(x.max_listings)||10,10));
         const pairs=Math.max(1,Math.min(Number(x.pair_limit)||15,40));
         const perPair=Math.max(1,Math.min(Number(x.per_pair_limit)||2,4));
         const discoveryMode=String(x.discovery_mode||"normal")=="expanded"?"expanded":"normal";
