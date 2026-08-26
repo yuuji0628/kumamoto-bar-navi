@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.47";
+      config.vars.KBN_CONFIG_VERSION="4.49";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -11266,6 +11266,101 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
         },{status:failed.length?207:200});
       }
 
+
+
+      const instagramMatchReviewV449=url.pathname.match(/^\/api\/admin\/shops\/(\d+)\/instagram-match-review$/);
+      if(instagramMatchReviewV449 && request.method==="POST"){
+        const id=Number(instagramMatchReviewV449[1]);
+        const shop=await env.DB.prepare(`
+          SELECT id,name,area,address,phone,instagram,instagram_match_status,
+                 instagram_match_score,instagram_match_checked_at
+          FROM shops WHERE id=? LIMIT 1
+        `).bind(id).first();
+
+        if(!shop)return json({ok:false,error:"NOT_FOUND"},{status:404});
+
+        const currentHandle=kbnHandle(shop.instagram||"");
+        if(!currentHandle){
+          return json({ok:false,error:"INSTAGRAM_NOT_SET"},{status:400});
+        }
+
+        // existing="" is intentional: do not automatically trust the currently stored handle.
+        // Search again by shop name + area and compare the independent best candidate.
+        let sr=null;
+        try{
+          sr=await discoverInstagramForShop(env,{
+            name:shop.name,
+            area:shop.area||"熊本",
+            website:"",
+            existing:""
+          });
+        }catch(e){
+          sr={ok:false,error:String(e?.message||e),instagram:"",score:0,candidates:[]};
+        }
+
+        const best=Array.isArray(sr?.candidates)?(sr.candidates[0]||null):null;
+        const foundHandle=kbnHandle(sr?.instagram||best?.instagram||"");
+        const same=!!foundHandle && foundHandle===currentHandle;
+        const confidence=String(sr?.confidence||"");
+        const score=Number(sr?.score||best?.score||0);
+        const autoVerified=
+          same &&
+          ["official","verified_strict"].includes(confidence) &&
+          score>=96;
+
+        let status="review";
+        if(autoVerified)status="verified";
+
+        await env.DB.prepare(`
+          UPDATE shops
+          SET instagram_match_status=?,
+              instagram_match_score=?,
+              instagram_match_checked_at=CURRENT_TIMESTAMP,
+              updated_at=CURRENT_TIMESTAMP
+          WHERE id=?
+        `).bind(status,score,id).run();
+
+        const evidence=[];
+        if(same)evidence.push("検索で見つかった最有力Instagramと現在登録中のInstagramが一致");
+        else if(foundHandle)evidence.push(`別候補 @${foundHandle} が最有力`);
+        else evidence.push("独立検索では一致候補を確定できませんでした");
+
+        if(score>=96)evidence.push(`一致スコア ${score}点（高確度）`);
+        else if(score>0)evidence.push(`一致スコア ${score}点`);
+        if(String(sr?.reason||""))evidence.push(`判定: ${String(sr.reason)}`);
+
+        if(best?.title)evidence.push(`検索結果: ${String(best.title).slice(0,180)}`);
+        if(best?.snippet)evidence.push(`説明: ${String(best.snippet).slice(0,260)}`);
+
+        return json({
+          ok:true,
+          id,
+          shop:{
+            name:shop.name||"",
+            area:shop.area||"",
+            address:shop.address||"",
+            phone:shop.phone||"",
+            instagram:shop.instagram||""
+          },
+          current_handle:currentHandle,
+          found_handle:foundHandle,
+          same,
+          score,
+          confidence,
+          reason:String(sr?.reason||""),
+          source:String(sr?.source||""),
+          auto_verified:autoVerified,
+          status,
+          evidence,
+          candidate:best?{
+            handle:String(best.handle||""),
+            instagram:String(best.instagram||""),
+            title:String(best.title||""),
+            snippet:String(best.snippet||""),
+            score:Number(best.score||0)
+          }:null
+        });
+      }
 
       const instagramVerifyMatchV430=url.pathname.match(/^\/api\/admin\/shops\/(\d+)\/instagram-verification$/);
       if(instagramVerifyMatchV430 && request.method==="POST"){
