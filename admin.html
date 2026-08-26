@@ -4355,7 +4355,7 @@ html,body{max-width:100%;overflow-x:hidden}
       <button type="button" id="autoDiscoverBtn" class="btn-gold lead-smart-primary">低コスト・高精度自動掲載</button>
       <div style="margin-top:8px;color:#f1c75b;font-weight:800;font-size:.82rem">1回の実行で最大100店舗まで自動掲載</div>
       <div style="margin-top:4px;color:#9ca7b3;font-size:.72rem">繁華街・町名単位まで120検索。通常5検索ずつ（503再試行時は2検索）小分け保存し、503/通信エラー時は30秒〜3分の自動クールダウン後に続きから再開します。画面を再読み込みしても未完了なら自動復帰します。通常判定で新規が見つからない場合は後半を自動で「拡張探索」に切替。重複は店名だけ・住所だけでは落とさず、電話/Instagram一致または店名＋住所一致で判定します。</div>
-      <div id="discoverySourceHealthV438" style="margin:10px 0;padding:10px 12px;border:1px solid #334957;border-radius:12px;background:#0f1922;font-size:.72rem;line-height:1.55;color:#aeb9c3">検索API状態：確認中...</div>
+      <div id="discoverySourceHealthV438" style="margin:10px 0;padding:10px 12px;border:1px solid #334957;border-radius:12px;background:#0f1922;font-size:.72rem;line-height:1.55;color:#aeb9c3">検索API状態：確認中... / Free Workers省CPUモード ON</div>
       <button type="button" id="testGooglePlacesV438" style="margin-bottom:10px">Google Places接続テスト</button>
       <div id="autoDiscoverStatus" class="auto-discovery-status"></div>
       <div id="autoDiscoverProgress" class="kbn-work-progress" hidden>
@@ -4455,10 +4455,10 @@ html,body{max-width:100%;overflow-x:hidden}
           <div><b style="display:block;color:#f3c958;font-size:.9rem">毎時00分に自動スタート</b><small style="color:#91a0ac">追加の時間設定は不要です</small></div>
           <span style="padding:5px 9px;border-radius:999px;background:#123125;color:#7ee3b7;font-size:.64rem;font-weight:700">常時ON</span>
         </div>
-        <div style="margin-top:9px;color:#b2bdc7;font-size:.69rem;line-height:1.6">BAR開拓（最大30分・最低10／最大20） → 情報補完 → VERIFIED精査×3 → SEO</div>
+        <div style="margin-top:9px;color:#b2bdc7;font-size:.69rem;line-height:1.6">BAR開拓（省CPU・2検索ずつ） → 情報補完5店ずつ → 精密補完5店ずつ → SEO10店ずつ</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:11px">
           <div style="padding:9px 10px;border-radius:10px;background:#111d26"><small style="display:block;color:#7f8c98">次回実行</small><b id="hourlyNextRunV421" style="display:block;margin-top:3px;color:#fff">計算中...</b></div>
-          <div style="padding:9px 10px;border-radius:10px;background:#111d26"><small style="display:block;color:#7f8c98">開拓速度</small><b style="display:block;margin-top:3px;color:#7ee3b7">2検索×最大5サイクル＋0件回避</b></div>
+          <div style="padding:9px 10px;border-radius:10px;background:#111d26"><small style="display:block;color:#7f8c98">開拓速度</small><b style="display:block;margin-top:3px;color:#7ee3b7">省CPU：1回2検索だけ＋続きから自動再開</b></div>
         </div>
         <div style="margin-top:8px;color:#72818e;font-size:.62rem;line-height:1.5">手動開拓と同じ地区×ジャンル探索・候補照合を使用。2検索×最大5サイクル＋0件回避、通信エラー時は10→5→2へ自動減速します。</div>
       </div>
@@ -10879,7 +10879,7 @@ async function loadDailyPrecisionStatusV433(){
     const stage=String(d.stage||"idle");
     const skip=String(d.closed_skip_reason||"");
     const igTarget=Number(d.instagram_target||50);
-    el.textContent=`日次精度メンテ：${labels[stage]||stage} / 閉業確認 ${Number(d.checked_closed||0)}店舗${skip?`（本日保留:${skip}）`:""} / 閉業APIエラー ${Number(d.closed_error_count||0)}件 / Instagram再検査 ${Number(d.checked_instagram||0)}/${igTarget}店舗 / 対象外候補 ${Number(d.exclusion_count||0)}件。Instagramは1日50店舗だけ、前日の続きから確認します。`;
+    el.textContent=`日次精度メンテ：${labels[stage]||stage} / 閉業確認 ${Number(d.checked_closed||0)}店舗${skip?`（本日保留:${skip}）`:""} / 閉業APIエラー ${Number(d.closed_error_count||0)}件 / Instagram再検査 ${Number(d.checked_instagram||0)}/${igTarget}店舗 / 対象外候補 ${Number(d.exclusion_count||0)}件。Instagramは1日50店舗だけ、10店舗ずつ小分けして前日の続きから確認します。`;
   }catch(e){
     el.textContent=`日次精度メンテ：状態取得失敗 ${e?.message||e}`;
   }
