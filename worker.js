@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.45";
+      config.vars.KBN_CONFIG_VERSION="4.46";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -7729,9 +7729,9 @@ async function kbnQueueHourlyMaintenanceV413(env,runKey=''){
   await ensureKbnMaintenanceQueueV242(env);
   const q=await env.DB.prepare(`SELECT phase FROM kbn_maintenance_queue WHERE id=1`).first();
   if(Number(q?.phase||0)!==0)return {queued:false,reason:'QUEUE_BUSY'};
-  // v4.33: 毎時間は掲載数を最優先。
-  // phase 11から手動開拓と同じ検索ロジックで最低10・最大20店舗を狙い、
-  // その後は 情報不足 → VERIFIED補完×3 → SEO だけを実行する。
+  // v4.33: 3時間ごとの自動運転は掲載数と店舗精度をバランス良く処理。
+  // phase 11から省CPU開拓で最低3・最大10店舗を狙い、
+  // その後は 情報不足 → VERIFIED補完×3 → SEO を実行する。
   // 閉業・Instagram全件再検査・対象外は低優先の日次処理へ分離。
   await env.DB.prepare(`
     INSERT INTO kbn_maintenance_queue(id,phase,run_date,created_total,discovery_searched,discovery_mode,discovery_retry_count,discovery_retry_after,updated_at)
@@ -7739,19 +7739,26 @@ async function kbnQueueHourlyMaintenanceV413(env,runKey=''){
     ON CONFLICT(id) DO UPDATE SET
       phase=11,run_date=excluded.run_date,created_total=0,
       discovery_searched=0,discovery_mode='normal',discovery_retry_count=0,discovery_retry_after=NULL,updated_at=CURRENT_TIMESTAMP
-  `).bind(String(runKey||'hourly-bar-discovery-maintenance')).run();
+  `).bind(String(runKey||'3hour-bar-discovery-maintenance')).run();
   return {queued:true,phase:11};
 }
 
 function kbnHourlyMaintenanceSlotV421(event){
+  // v4.46: 自動運転は毎時間ではなく3時間ごと、1日8枠。
+  // Cron自体が細かく呼ばれても、同じ3時間枠では同一run_keyを使うため
+  // 新しい自動運転は重複起動しない。進行中キューの続きだけ処理する。
   const ms=Number(event?.scheduledTime||Date.now());
   const d=new Date(ms+9*60*60*1000);
   const y=d.getUTCFullYear();
   const m=String(d.getUTCMonth()+1).padStart(2,'0');
   const day=String(d.getUTCDate()).padStart(2,'0');
-  const h=String(d.getUTCHours()).padStart(2,'0');
+  const rawHour=d.getUTCHours();
+  const slotHour=Math.floor(rawHour/3)*3;
+  const h=String(slotHour).padStart(2,'0');
   return {
     time:`${h}:00`,
+    hour:slotHour,
+    is_slot_start:rawHour===slotHour,
     minute_key:`${y}-${m}-${day}T${h}:00`,
     run_key:`${y}-${m}-${day} ${h}:00 JST`
   };
@@ -7782,12 +7789,12 @@ async function kbnPreemptOldHourlyForCurrentSlotV437(env,hourly){
     return {preempted:false};
   }
 
-  // A new hour always wins. Do not let an old 1:00 run block 2:00/3:00 discovery.
+  // A new 3-hour slot always wins. Do not let an unfinished old slot block the next scheduled cycle.
   await logKbnMaintenanceHistoryV414(env,{
     q,phase,task:'hourly_preempt',
     result:{ok:true,checked:0},
     status:'success',
-    note:`次の毎時枠を優先するため未完了処理を打切り / ${oldKey} → ${currentKey} / 新規${Number(q?.created_total||0)}店・${Number(q?.discovery_searched||0)}検索`
+    note:`次の3時間枠を優先するため未完了処理を打切り / ${oldKey} → ${currentKey} / 新規${Number(q?.created_total||0)}店・${Number(q?.discovery_searched||0)}検索`
   });
 
   await env.DB.prepare(`
@@ -8935,6 +8942,69 @@ function kbnInjectCwvHints(html,primaryImageUrl=""){
   // v2.97: home/public pages should prefer the tiny modern-format logo.
   out=out.replace(/(?:\/)?logo\.png/g,"/logo-192.webp");
   return out;
+}
+
+
+async function kbnGooglePlacesSingleProbeV446(env){
+  const cfg=googlePlacesConfig(env);
+  if(!cfg.apiKey){
+    return {ok:false,status:0,error_code:"NOT_CONFIGURED",error:"GOOGLE_PLACES_NOT_CONFIGURED",found:0,requests_used:0};
+  }
+
+  // 先に共通節約枠を1回だけ予約する。
+  const before=await kbnGooglePlacesBudgetStatusV441(env);
+  const reserved=await kbnReserveGooglePlacesBudgetV441(env);
+  if(!reserved.ok){
+    return {
+      ok:false,status:0,error_code:String(reserved.blocked_reason||"KBN_BUDGET_LIMIT"),
+      error:"Google Places節約上限に到達しています",found:0,requests_used:0,
+      before,budget:reserved
+    };
+  }
+
+  try{
+    const r=await fetch("https://places.googleapis.com/v1/places:searchText",{
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "X-Goog-Api-Key":cfg.apiKey,
+        // 接続確認に必要な最小フィールドだけ。Place Details等は絶対に呼ばない。
+        "X-Goog-FieldMask":"places.id"
+      },
+      body:JSON.stringify({
+        textQuery:"BAR 熊本県 熊本市",
+        languageCode:"ja",
+        regionCode:"JP",
+        pageSize:1
+      })
+    });
+    const text=await r.text();
+    let d={};
+    try{d=text?JSON.parse(text):{}}catch{d={raw:text}}
+
+    if(!r.ok){
+      const info=kbnGooglePlacesErrorClassV438({
+        status:r.status,data:d,error:d?.error?.message||`GOOGLE_PLACES_HTTP_${r.status}`
+      });
+      try{await kbnRecordGooglePlacesFailureV438(env,info)}catch{}
+      return {
+        ok:false,status:r.status,error_code:info.code,error:info.message,
+        found:0,requests_used:1,before,budget:await kbnGooglePlacesBudgetStatusV441(env)
+      };
+    }
+
+    try{await kbnRecordGooglePlacesSuccessV438(env)}catch{}
+    return {
+      ok:true,status:r.status,error_code:"",error:"",
+      found:Array.isArray(d?.places)?d.places.length:0,
+      requests_used:1,before,budget:await kbnGooglePlacesBudgetStatusV441(env)
+    };
+  }catch(e){
+    return {
+      ok:false,status:0,error_code:"NETWORK_ERROR",error:String(e?.message||e),
+      found:0,requests_used:1,before,budget:await kbnGooglePlacesBudgetStatusV441(env)
+    };
+  }
 }
 
 export default {
@@ -11248,8 +11318,17 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
         });
       }
       if(url.pathname==="/api/admin/discovery-source-health/test-google" && request.method==="POST"){
-        const r=await googlePlacesTextSearch(env,{query:"BAR 熊本県 熊本市",pageSize:3,ignoreCircuit:true});
-        return json({ok:!!r.ok,status:Number(r.status||0),error_code:String(r.error_code||""),error:String(r.error||""),found:Array.isArray(r.places)?r.places.length:0,health:await kbnGooglePlacesHealthV438(env),budget:await kbnGooglePlacesBudgetStatusV441(env)});
+        const r=await kbnGooglePlacesSingleProbeV446(env);
+        return json({
+          ok:!!r.ok,
+          status:Number(r.status||0),
+          error_code:String(r.error_code||""),
+          error:String(r.error||""),
+          found:Number(r.found||0),
+          requests_used:Number(r.requests_used||0),
+          health:await kbnGooglePlacesHealthV438(env),
+          budget:r.budget||await kbnGooglePlacesBudgetStatusV441(env)
+        });
       }
 
       if(url.pathname==="/api/admin/daily-precision-status" && request.method==="GET"){
@@ -11953,34 +12032,38 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
       // 3) 空き時間だけ日次精度（閉業→Instagram全件→対象外）
       const hourly=kbnHourlyMaintenanceSlotV421(event);
 
-      try{
-        await kbnPreemptOldHourlyForCurrentSlotV437(env,hourly);
-      }catch(e){
-        console.error('hourly preemption failed',e);
-      }
-
+      // まず進行中の3時間サイクルを小分けで続行。
       const queued=await kbnProcessQueuedMaintenanceV242(env);
       if(queued?.processed)return;
 
-      const claimed=await kbnClaimRuntimeSlotV231(env,hourly.minute_key,'hourly_maintenance');
-      if(claimed){
+      // 新しい自動運転は 00/03/06/09/12/15/18/21 JST の枠だけ。
+      // 枠開始後にCronが多少遅れても、同じslot keyで1回だけ起動する。
+      if(hourly.is_slot_start){
         try{
-          const q=await kbnQueueHourlyMaintenanceV413(env,hourly.run_key);
-          if(q?.queued){
-            await createKbnAlert(env,{
-              type:'hourly_maintenance_started',
-              title:'毎時間自動運転開始',
-              message:`${hourly.time} JST枠：BAR開拓（最低10・最大20）→ 情報補完 → VERIFIED精査×3 → SEO。掲載数を最優先します。`
-            });
-          }
+          await kbnPreemptOldHourlyForCurrentSlotV437(env,hourly);
         }catch(e){
-          console.error('hourly automatic maintenance queue failed',e);
+          console.error('3-hour slot preemption failed',e);
         }
-        return;
+
+        const claimed=await kbnClaimRuntimeSlotV231(env,hourly.minute_key,'3hour_maintenance');
+        if(claimed){
+          try{
+            const q=await kbnQueueHourlyMaintenanceV413(env,hourly.run_key);
+            if(q?.queued){
+              await createKbnAlert(env,{
+                type:'3hour_maintenance_started',
+                title:'3時間ごとの自動メンテナンス開始',
+                message:`${hourly.time} JST枠：BAR開拓（最低3・最大10）→ 情報補完 → 精密補完 → SEO。Google共通節約枠内で実行します。`
+              });
+            }
+          }catch(e){
+            console.error('3-hour automatic maintenance queue failed',e);
+          }
+          return;
+        }
       }
 
-      // The hourly slot for this hour is already secured/completed.
-      // Use only spare cron invocations for daily precision work.
+      // 自動運転が空いている時間だけ、日次精度処理を小分けで進める。
       try{
         const daily=await kbnProcessDailyPrecisionV433(env);
         if(daily?.processed)return;
