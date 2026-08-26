@@ -4487,6 +4487,26 @@ html,body{max-width:100%;overflow-x:hidden}
       <button type="button" id="checkClosedShopsBtn">閉業確認 20件</button>
       <button type="button" id="refreshInstagramBtn">Instagram再検査 20件</button>
     </div>
+
+    <div id="maintenanceGoogleBudgetV445" style="margin-top:10px;padding:11px 12px;border:1px solid #3d4b57;border-radius:12px;background:#0d171f">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap">
+        <b style="font-size:.76rem;color:#eef2f5">Google Places 残り回数</b>
+        <span id="maintenanceGoogleStateV445" style="padding:4px 7px;border:1px solid #315b45;border-radius:999px;background:#102219;color:#7ee2a8;font-size:.59rem;font-weight:800">確認中</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px">
+        <div style="padding:9px 10px;border-radius:10px;background:#111d26">
+          <small style="display:block;color:#7f8c98">今日の残り</small>
+          <b id="maintenanceGoogleDayRemainV445" style="display:block;margin-top:3px;color:#efc45a;font-size:1rem">— / 150回</b>
+          <small id="maintenanceGoogleDayUsedV445" style="display:block;margin-top:2px;color:#82919c">使用 —回</small>
+        </div>
+        <div style="padding:9px 10px;border-radius:10px;background:#111d26">
+          <small style="display:block;color:#7f8c98">今月の残り</small>
+          <b id="maintenanceGoogleMonthRemainV445" style="display:block;margin-top:3px;color:#efc45a;font-size:1rem">— / 4,500回</b>
+          <small id="maintenanceGoogleMonthUsedV445" style="display:block;margin-top:2px;color:#82919c">使用 —回</small>
+        </div>
+      </div>
+      <div id="maintenanceGoogleBudgetNoteV445" style="margin-top:7px;color:#7e8c97;font-size:.61rem;line-height:1.45">開拓・情報補完・閉業確認・精密補完・レビュー・写真・接続テストをすべて共通枠で管理します。</div>
+    </div>
     <div class="kbn-schedule-note kbn-schedule-editor">
       <div class="kbn-schedule-title">
         <b>毎時間自動運転</b><span>日本時間（JST）</span>
@@ -4501,7 +4521,7 @@ html,body{max-width:100%;overflow-x:hidden}
           <div style="padding:9px 10px;border-radius:10px;background:#111d26"><small style="display:block;color:#7f8c98">次回実行</small><b id="hourlyNextRunV421" style="display:block;margin-top:3px;color:#fff">計算中...</b></div>
           <div style="padding:9px 10px;border-radius:10px;background:#111d26"><small style="display:block;color:#7f8c98">開拓速度</small><b style="display:block;margin-top:3px;color:#7ee3b7">省CPU：1回2検索だけ＋続きから自動再開</b></div>
         </div>
-        <div style="margin-top:8px;color:#72818e;font-size:.62rem;line-height:1.5">手動開拓と同じ地区×ジャンル探索・候補照合を使用。2検索×最大5サイクル＋0件回避、通信エラー時は10→5→2へ自動減速します。</div>
+        <div style="margin-top:8px;color:#72818e;font-size:.62rem;line-height:1.5">手動開拓と同じ地区×ジャンル探索・候補照合を使用。Free Workers省CPUモードで1回2検索だけ実行し、DB保存後に次回Cronから続行します。</div>
       </div>
       <div id="lastAutomaticRunStatus" style="margin-top:10px;padding:10px 12px;border:1px solid #394653;border-radius:12px;background:#101820;color:#d9e1e8;font-size:.78rem;line-height:1.55">最終自動実行：読み込み中...</div>
       <small id="autoListingSixTimesStatus" style="display:block;margin-top:7px;color:#efc45a;line-height:1.5">毎時間自動運転：ON / 追加開拓タイム：廃止 / 重点フルメンテ：廃止</small>
@@ -4511,7 +4531,7 @@ html,body{max-width:100%;overflow-x:hidden}
       Instagram再検査：1日50店舗・前日の続きから自動確認。全件一括処理は行いません。
     </div>
     <div id="maintenanceStatus" class="auto-discovery-status"></div>
-    <div class="kbn-simple-schedule-ok" style="margin-top:8px">毎時間の自動運転も手動と同じpair_limit=2。2検索ごとに候補を再選択し、通常5サイクル、通信エラー時は3→1サイクルへ減速します。</div>
+    <div class="kbn-simple-schedule-ok" style="margin-top:8px">毎時間の自動運転はpair_limit=2。1回2検索で止めて進捗保存し、次回Cronから続行します。</div>
 
 
     <div id="kbnMaintenanceHistoryCard" style="margin-top:14px;padding:13px;border:1px solid #394b5b;border-radius:15px;background:#0d171f">
@@ -9232,10 +9252,23 @@ function renderGoogleUsageCardV443(g,d){
   const reset=kbnNextJstResetV443();
   set("googleUsageResetV443",`次回リセット：日次 ${reset.day} / 月次 ${reset.month}（JST）`);
   const st=$("googleUsageStateV443");
-  if(st){
-    if(!g?.configured){st.textContent="API未設定";st.style.color="#ff9a9a";st.style.borderColor="#7a3d3d";st.style.background="#241313"}
-    else if(g?.disabled){st.textContent=String(g?.error_code||"停止中");st.style.color="#efc45a";st.style.borderColor="#7a5b24";st.style.background="#241d0e"}
-    else{st.textContent="利用可能";st.style.color="#7ee2a8";st.style.borderColor="#315b45";st.style.background="#102219"}
+  let stateText="利用可能",stateColor="#7ee2a8",stateBorder="#315b45",stateBg="#102219";
+  if(!g?.configured){stateText="API未設定";stateColor="#ff9a9a";stateBorder="#7a3d3d";stateBg="#241313"}
+  else if(g?.disabled){stateText=String(g?.error_code||"停止中");stateColor="#efc45a";stateBorder="#7a5b24";stateBg="#241d0e"}
+  if(st){st.textContent=stateText;st.style.color=stateColor;st.style.borderColor=stateBorder;st.style.background=stateBg}
+
+  // v4.45: メンテナンス欄にも同じ残量を表示
+  set("maintenanceGoogleDayRemainV445",`${dayRemain.toLocaleString()} / ${dayLimit.toLocaleString()}回`);
+  set("maintenanceGoogleDayUsedV445",`使用 ${dayUsed.toLocaleString()}回`);
+  set("maintenanceGoogleMonthRemainV445",`${monthRemain.toLocaleString()} / ${monthLimit.toLocaleString()}回`);
+  set("maintenanceGoogleMonthUsedV445",`使用 ${monthUsed.toLocaleString()}回`);
+  const mst=$("maintenanceGoogleStateV445");
+  if(mst){mst.textContent=stateText;mst.style.color=stateColor;mst.style.borderColor=stateBorder;mst.style.background=stateBg}
+  const note=$("maintenanceGoogleBudgetNoteV445");
+  if(note){
+    note.textContent=(g?.disabled
+      ?`Googleは現在 ${stateText}。可能な処理は代替ソースへ切替します。今日残り${dayRemain.toLocaleString()}回・今月残り${monthRemain.toLocaleString()}回。`
+      :`開拓・全メンテ・レビュー・写真・接続テスト込み。今日残り${dayRemain.toLocaleString()}回・今月残り${monthRemain.toLocaleString()}回。`);
   }
 }
 
@@ -11301,6 +11334,12 @@ document.addEventListener("DOMContentLoaded",()=>{
       loadDailyPrecisionStatusV433().catch(()=>{});
     }
   },5000);
+  // v4.45: Google残量は60秒ごと。5秒更新に混ぜずFree Workersの負荷を抑える。
+  setInterval(()=>{
+    if(document.visibilityState==="visible"){
+      loadDiscoverySourceHealthV438().catch(()=>{});
+    }
+  },60000);
   loadMaintenanceHistoryV414().catch(()=>{});kbnLoadHourlyStatusV421().catch(()=>{});
   document.getElementById('reloadMaintenanceHistoryBtn')?.addEventListener('click',()=>loadMaintenanceHistoryV414());
   if(kbnScheduleLiveRefreshV421)return;
