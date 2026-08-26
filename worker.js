@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.41";
+      config.vars.KBN_CONFIG_VERSION="4.42";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -4899,7 +4899,7 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
     : [pair.search_area||pair.area,"熊本県",pair.label||"BAR"].filter(Boolean).join(" ")
   );
   const googlePrefetch=googleConfigured
-    ? await kbnMapConcurrentV425(pairs,5,async(pair,i)=>googlePlacesTextSearch(env,{query:pairQueries[i],pageSize:20}))
+    ? await kbnMapConcurrentV425(pairs,2,async(pair,i)=>googlePlacesTextSearch(env,{query:pairQueries[i],pageSize:20}))
     : pairs.map(()=>({ok:false,configured:false,places:[],error:"GOOGLE_PLACES_NOT_CONFIGURED",error_code:"NOT_CONFIGURED"}));
   const googleFailedAll=googlePrefetch.length>0&&googlePrefetch.every(x=>!x?.ok);
   const googleErrorSummary=googlePrefetch.reduce((acc,x)=>{if(!x?.ok){const k=String(x?.error_code||"GOOGLE_ERROR");acc[k]=(acc[k]||0)+1}return acc},{});
@@ -8145,7 +8145,7 @@ async function kbnProcessDailyPrecisionV433(env){
       return {ok:true,processed:true,stage:'closed_skipped',reason};
     }
 
-    const r=await runMaintenanceBatchV242(env,'closed',{limit:10});
+    const r=await runMaintenanceBatchV242(env,'closed',{limit:5});
     const checkedCount=Array.isArray(r?.checked)?r.checked.length:Number(r?.checked||0);
     const unverifiedCount=Array.isArray(r?.unverified)?r.unverified.length:0;
     const failedCount=Array.isArray(r?.failed)?r.failed.length:0;
@@ -8155,7 +8155,7 @@ async function kbnProcessDailyPrecisionV433(env){
     // API/通信失敗が10件累積、または1バッチ10件すべて失敗なら本日分を保留。
     const hardFail=
       nextErrors>=10 ||
-      (failedCount>=10 && checkedCount===0 && unverifiedCount===0);
+      (failedCount>=5 && checkedCount===0 && unverifiedCount===0);
 
     const nextStage=(r?.cycle_completed||hardFail)?'instagram_start':'closed';
     const skipReason=hardFail?'GOOGLE_CLOSED_CHECK_ERRORS':'';
@@ -8228,7 +8228,7 @@ async function kbnProcessDailyPrecisionV433(env){
     }
 
     const remaining=Math.max(0,target-checkedToday);
-    const batchLimit=Math.min(20,remaining);
+    const batchLimit=Math.min(10,remaining);
     const cursor=Math.max(0,Number(fresh?.instagram_cursor||0));
 
     const r=await kbnAuditInstagramDailySliceV440(env,{afterId:cursor,limit:batchLimit});
@@ -8353,7 +8353,10 @@ async function kbnProcessQueuedMaintenanceV242(env){
       // 手動UIは pair_limit=2 で呼び出すたびに地区×ジャンル候補を選び直す。
       // 毎時間も 2検索 → 候補を選び直す → 2検索... を繰り返し、
       // 通常時は最大5サイクル（=最大10検索）。エラー時は3→1サイクルへ自動減速。
-      const miniCycles=retryCount===0?5:(retryCount===1?3:1);
+      // v4.42 Free Workers CPU mode:
+      // 1 invocation = exactly 1 manual-equivalent mini cycle (2 searches).
+      // Continue from DB on the next cron instead of doing 5 cycles in one Worker execution.
+      const miniCycles=1;
       const allCreated=[];
       const allSearched=[];
       const allRejected=[];
@@ -8449,7 +8452,7 @@ async function kbnProcessQueuedMaintenanceV242(env){
         q,phase,task:'discovery',
         result:{ok:true,checked:allSearched.length,created:allCreated,rejected:allRejected},
         status:'success',
-        note:`手動同一2検索サイクル×${miniCycles} / ${nextMode==='expanded'?'拡張探索':'通常探索'} / 累計 ${nextSearched}/${hardMaxSearches}検索 / 新規 ${nextCreated}/20店舗 / 最低目標10店舗${topRejectReasons?` / 除外:${topRejectReasons}`:''}`
+        note:`省CPU 2検索×1サイクル / ${nextMode==='expanded'?'拡張探索':'通常探索'} / 累計 ${nextSearched}/${hardMaxSearches}検索 / 新規 ${nextCreated}/20店舗 / 最低目標10店舗${topRejectReasons?` / 除外:${topRejectReasons}`:''}`
       });
 
       return {
@@ -8504,10 +8507,13 @@ async function kbnProcessQueuedMaintenanceV242(env){
     if(task==="exclusion"){
       result=await kbnScanExclusionCandidatesV267(env);
     }else if(task==="verified_info" || task==="verified_auto"){
-      result=await enrichPriorityPublishedInfoV401(env,{targetUpdated:8,maxChecked:8});
+      // v4.42: heavy enrichment is limited to 5 shops per Worker invocation.
+      result=await enrichPriorityPublishedInfoV401(env,{targetUpdated:5,maxChecked:5});
       await logInfoEnrichRunV404(env,result,task==="verified_auto"?'auto_recheck':'maintenance');
     }else{
-      result=await runMaintenanceBatchV242(env,task,{limit:20});
+      // missing=5, seo=10. Never process 20 automatically in one free-plan invocation.
+      const cpuSafeLimit=task==="seo"?10:5;
+      result=await runMaintenanceBatchV242(env,task,{limit:cpuSafeLimit});
     }
   }catch(e){
     console.error("queued maintenance failed",task,e);
