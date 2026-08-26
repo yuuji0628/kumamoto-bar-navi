@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.50";
+      config.vars.KBN_CONFIG_VERSION="4.51";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -4037,6 +4037,11 @@ function googlePlaceScore(place,{name="",area=""}={}){
 const KBN_GOOGLE_PLACES_DAILY_LIMIT_V441=150;
 const KBN_GOOGLE_PLACES_MONTHLY_LIMIT_V441=4500;
 
+// v4.51: 公開ページのGoogle写真が日付変更直後に共通150回を食い切らないための内訳上限。
+// 写真も総150回には含めるが、写真だけでは1日30回まで。
+const KBN_GOOGLE_PHOTO_DAILY_LIMIT_V451=30;
+const KBN_GOOGLE_PHOTO_MONTHLY_LIMIT_V451=900;
+
 function kbnGoogleBudgetPeriodV441(){
   const d=new Date(Date.now()+9*60*60*1000);
   const y=d.getUTCFullYear(),m=String(d.getUTCMonth()+1).padStart(2,'0'),day=String(d.getUTCDate()).padStart(2,'0');
@@ -4080,9 +4085,97 @@ async function kbnGooglePlacesBudgetStatusV441(env){
     day_key:p.day,month_key:p.month,
     day_used:dayUsed,day_limit:dayLimit,day_remaining:Math.max(0,dayLimit-dayUsed),
     month_used:monthUsed,month_limit:monthLimit,month_remaining:Math.max(0,monthLimit-monthUsed),
+    reset_timezone:"Asia/Tokyo",
+    daily_reset:`${p.day} 00:00 JST`,
     blocked:dayUsed>=dayLimit||monthUsed>=monthLimit,
     blocked_reason:monthUsed>=monthLimit?'KBN_MONTHLY_BUDGET':(dayUsed>=dayLimit?'KBN_DAILY_BUDGET':'')
   };
+}
+
+
+async function ensureKbnGoogleCategoryBudgetV451(env){
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS kbn_google_category_budget(
+      category TEXT NOT NULL,
+      period_type TEXT NOT NULL,
+      period_key TEXT NOT NULL,
+      used_count INTEGER NOT NULL DEFAULT 0,
+      limit_count INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY(category,period_type,period_key)
+    )
+  `).run();
+}
+
+async function kbnGooglePhotoBudgetStatusV451(env){
+  await ensureKbnGoogleCategoryBudgetV451(env);
+  const p=kbnGoogleBudgetPeriodV441();
+
+  await env.DB.prepare(`
+    INSERT INTO kbn_google_category_budget(category,period_type,period_key,used_count,limit_count)
+    VALUES('photo','day',?,0,?)
+    ON CONFLICT(category,period_type,period_key) DO UPDATE SET limit_count=excluded.limit_count
+  `).bind(p.day,KBN_GOOGLE_PHOTO_DAILY_LIMIT_V451).run();
+
+  await env.DB.prepare(`
+    INSERT INTO kbn_google_category_budget(category,period_type,period_key,used_count,limit_count)
+    VALUES('photo','month',?,0,?)
+    ON CONFLICT(category,period_type,period_key) DO UPDATE SET limit_count=excluded.limit_count
+  `).bind(p.month,KBN_GOOGLE_PHOTO_MONTHLY_LIMIT_V451).run();
+
+  const day=await env.DB.prepare(`
+    SELECT used_count,limit_count FROM kbn_google_category_budget
+    WHERE category='photo' AND period_type='day' AND period_key=?
+  `).bind(p.day).first();
+
+  const month=await env.DB.prepare(`
+    SELECT used_count,limit_count FROM kbn_google_category_budget
+    WHERE category='photo' AND period_type='month' AND period_key=?
+  `).bind(p.month).first();
+
+  const du=Number(day?.used_count||0),dl=Number(day?.limit_count||KBN_GOOGLE_PHOTO_DAILY_LIMIT_V451);
+  const mu=Number(month?.used_count||0),ml=Number(month?.limit_count||KBN_GOOGLE_PHOTO_MONTHLY_LIMIT_V451);
+  return {
+    day_used:du,day_limit:dl,day_remaining:Math.max(0,dl-du),
+    month_used:mu,month_limit:ml,month_remaining:Math.max(0,ml-mu),
+    blocked:du>=dl||mu>=ml
+  };
+}
+
+async function kbnReserveGooglePhotoBudgetV451(env){
+  const s=await kbnGooglePhotoBudgetStatusV451(env);
+  if(s.blocked)return {ok:false,...s,error_code:"KBN_PHOTO_BUDGET"};
+
+  const global=await kbnReserveGooglePlacesBudgetV441(env);
+  if(!global.ok)return {ok:false,...s,global,error_code:global.blocked_reason||"KBN_BUDGET_LIMIT"};
+
+  const p=kbnGoogleBudgetPeriodV441();
+  const d=await env.DB.prepare(`
+    UPDATE kbn_google_category_budget
+    SET used_count=used_count+1,updated_at=CURRENT_TIMESTAMP
+    WHERE category='photo' AND period_type='day' AND period_key=? AND used_count<limit_count
+  `).bind(p.day).run();
+
+  if(Number(d?.meta?.changes||0)<1){
+    await env.DB.prepare(`UPDATE kbn_google_places_budget SET used_count=CASE WHEN used_count>0 THEN used_count-1 ELSE 0 END WHERE period_type='day' AND period_key=?`).bind(p.day).run();
+    await env.DB.prepare(`UPDATE kbn_google_places_budget SET used_count=CASE WHEN used_count>0 THEN used_count-1 ELSE 0 END WHERE period_type='month' AND period_key=?`).bind(p.month).run();
+    return {ok:false,...s,error_code:"KBN_PHOTO_BUDGET"};
+  }
+
+  const m=await env.DB.prepare(`
+    UPDATE kbn_google_category_budget
+    SET used_count=used_count+1,updated_at=CURRENT_TIMESTAMP
+    WHERE category='photo' AND period_type='month' AND period_key=? AND used_count<limit_count
+  `).bind(p.month).run();
+
+  if(Number(m?.meta?.changes||0)<1){
+    await env.DB.prepare(`UPDATE kbn_google_category_budget SET used_count=CASE WHEN used_count>0 THEN used_count-1 ELSE 0 END WHERE category='photo' AND period_type='day' AND period_key=?`).bind(p.day).run();
+    await env.DB.prepare(`UPDATE kbn_google_places_budget SET used_count=CASE WHEN used_count>0 THEN used_count-1 ELSE 0 END WHERE period_type='day' AND period_key=?`).bind(p.day).run();
+    await env.DB.prepare(`UPDATE kbn_google_places_budget SET used_count=CASE WHEN used_count>0 THEN used_count-1 ELSE 0 END WHERE period_type='month' AND period_key=?`).bind(p.month).run();
+    return {ok:false,...s,error_code:"KBN_PHOTO_BUDGET"};
+  }
+
+  return {ok:true,global,photo:await kbnGooglePhotoBudgetStatusV451(env)};
 }
 
 async function kbnReserveGooglePlacesBudgetV441(env){
@@ -9497,12 +9590,12 @@ export default {
       // 写真APIも枠外では呼ばない。
       let photoBudget=null;
       try{
-        photoBudget=await kbnReserveGooglePlacesBudgetV441(env);
+        photoBudget=await kbnReserveGooglePhotoBudgetV451(env);
         if(!photoBudget.ok){
-          return new Response("Photo budget limit reached",{status:429,headers:{"Cache-Control":"public, max-age=300"}});
+          return new Response("Photo budget limit reached",{status:429,headers:{"Cache-Control":"public, max-age=1800"}});
         }
       }catch{
-        return new Response("Photo budget guard unavailable",{status:503,headers:{"Cache-Control":"public, max-age=60"}});
+        return new Response("Photo budget guard unavailable",{status:503,headers:{"Cache-Control":"public, max-age=300"}});
       }
 
       const endpoint=`https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=${requestedWidth}&skipHttpRedirect=true&key=${encodeURIComponent(cfg.apiKey)}`;
@@ -11421,11 +11514,17 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
       if(url.pathname==="/api/admin/discovery-source-health" && request.method==="GET"){
         const g=await kbnGooglePlacesHealthV438(env);
         const budget=await kbnGooglePlacesBudgetStatusV441(env);
+        const photo_budget=await kbnGooglePhotoBudgetStatusV451(env);
         return json({
           ok:true,
-          google:{configured:!!googlePlacesConfig(env).apiKey,...g,budget},
+          google:{configured:!!googlePlacesConfig(env).apiKey,...g,budget,photo_budget},
           foursquare:{configured:!!foursquareConfig(env).apiKey},
-          cost_guard:{daily_limit:KBN_GOOGLE_PLACES_DAILY_LIMIT_V441,monthly_limit:KBN_GOOGLE_PLACES_MONTHLY_LIMIT_V441,policy:"Google Places Text Searchを1日150回・月4,500回まで"}
+          cost_guard:{
+            daily_limit:KBN_GOOGLE_PLACES_DAILY_LIMIT_V441,
+            monthly_limit:KBN_GOOGLE_PLACES_MONTHLY_LIMIT_V441,
+            photo_daily_limit:KBN_GOOGLE_PHOTO_DAILY_LIMIT_V451,
+            policy:"Google Places総利用を1日150回・月4,500回まで。公開写真はその内1日30回まで"
+          }
         });
       }
       if(url.pathname==="/api/admin/discovery-source-health/test-google" && request.method==="POST"){
