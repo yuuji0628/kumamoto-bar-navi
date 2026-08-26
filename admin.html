@@ -11473,6 +11473,18 @@ function kbnMaintenanceDurationV434(start,end){
     return `${Math.floor(sec/60)}分${sec%60?`${sec%60}秒`:''}`;
   }catch{return ''}
 }
+function kbnMaintenanceErrorCauseV450(run){
+  const notes=String(run?.notes||"");
+  const errors=Number(run?.errors||0);
+  if(/KBN_DAILY_BUDGET/i.test(notes))return "Google 1日上限到達（追加送信0回・代替/後続処理へ）";
+  if(/KBN_MONTHLY_BUDGET/i.test(notes))return "Google 月間上限到達（追加送信0回・代替/後続処理へ）";
+  if(/QUOTA_OR_RATE_LIMIT|quota|rate.?limit/i.test(notes))return "外部APIのクォータ / レート制限";
+  if(/PERMISSION_DENIED|HTTP403/i.test(notes))return "Google Places 権限・課金設定";
+  if(/503|一時通信|timeout|network|fetch/i.test(notes))return "一時的な通信エラー";
+  if(/Instagram/i.test(notes) && errors>0)return "Instagram再検査で一部エラー";
+  if(/閉業確認/i.test(notes) && errors>0)return "閉業確認で一部エラー";
+  return errors>0?"詳細ログを確認":"";
+}
 function kbnMaintenanceTaskDetailV434(raw){
   const map=new Map();
   for(const part of String(raw||'').split('|').filter(Boolean)){
@@ -11520,7 +11532,8 @@ async function loadMaintenanceHistoryV414(){
       set('lastRunCreatedV447',`${Number(latest.created||0)}店`);
       set('lastRunUpdatedV447',`${Number(latest.updated||0)}店`);
       set('lastRunErrorsV447',`${Number(latest.errors||0)}件`);
-      set('lastRunTasksV447',kbnMaintenanceTaskDetailV434(latest.task_detail)||'処理記録あり');
+      const cause=kbnMaintenanceErrorCauseV450(latest);
+      set('lastRunTasksV447',`${kbnMaintenanceTaskDetailV434(latest.task_detail)||'処理記録あり'}${cause?`｜原因：${cause}`:''}`);
       const badge=document.getElementById('lastRunStatusV447');
       const card=document.getElementById('lastAutomaticRunCardV447');
       if(badge){
@@ -11554,6 +11567,7 @@ async function loadMaintenanceHistoryV414(){
             <div style="padding:6px;border-radius:7px;background:#0d151c"><small style="display:block;color:#71808b">エラー</small><b style="color:${bad?'#ff9b9b':'#fff'};font-size:.7rem">${Number(r.errors||0)}</b></div>
           </div>
           <div style="margin-top:6px;color:#9eabb5;font-size:.61rem;line-height:1.5">${esc(kbnMaintenanceTaskDetailV434(r.task_detail)||'処理記録あり')}</div>
+          ${kbnMaintenanceErrorCauseV450(r)?`<div style="margin-top:6px;padding:6px 8px;border-radius:8px;background:${Number(r.errors||0)>0?'#211417':'#111d1a'};color:${Number(r.errors||0)>0?'#ffaaaa':'#8ee1b3'};font-size:.59rem;line-height:1.4">原因：${esc(kbnMaintenanceErrorCauseV450(r))}</div>`:''}
         </div>`;
       }).join(''):'<small style="color:#8794a1">まだ自動運転の履歴がありません。</small>';
     }
