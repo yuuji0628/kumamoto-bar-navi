@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.49";
+      config.vars.KBN_CONFIG_VERSION="4.50";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -7943,7 +7943,8 @@ async function kbnMaintenanceHistoryV414(env,{days=7,limit=24}={}){
       SUM(created_count) AS created,
       SUM(seo_gain) AS seo_gain,
       SUM(error_count) AS errors,
-      GROUP_CONCAT(task||':'||checked_count||':'||updated_count||':'||created_count||':'||seo_gain||':'||error_count,'|') AS task_detail
+      GROUP_CONCAT(task||':'||checked_count||':'||updated_count||':'||created_count||':'||seo_gain||':'||error_count,'|') AS task_detail,
+      GROUP_CONCAT(COALESCE(note,''),' || ') AS notes
     FROM kbn_maintenance_history
     WHERE datetime(created_at)>=datetime('now',?)
     GROUP BY CASE WHEN COALESCE(run_key,'')<>'' THEN run_key ELSE 'single:'||id END, run_kind
@@ -8160,6 +8161,7 @@ async function kbnProcessDailyPrecisionV433(env){
     try{googleHealth=await kbnGooglePlacesHealthV438(env)}catch{}
     if(googleHealth?.disabled){
       const reason=String(googleHealth.error_code||"GOOGLE_PLACES_UNAVAILABLE");
+      const budgetStop=/KBN_(DAILY|MONTHLY)_BUDGET/.test(reason);
       await env.DB.prepare(`
         UPDATE kbn_daily_precision_state
         SET stage='instagram_start',closed_skip_reason=?,updated_at=CURRENT_TIMESTAMP
@@ -8168,9 +8170,11 @@ async function kbnProcessDailyPrecisionV433(env){
       await logKbnMaintenanceHistoryV414(env,{
         q:{run_date:`${today} daily_precision`},phase:0,task:'closed_daily',
         result:{ok:true,checked:0},status:'success',
-        note:`日次精度 / 閉業確認は本日保留 / Google Places ${reason}${googleHealth.http_status?` HTTP${googleHealth.http_status}`:''} / Instagram再検査へ進行`
+        note:budgetStop
+          ?`日次精度 / 閉業確認はGoogle節約上限のためスキップ / ${reason} / Google追加送信0回 / Instagram再検査へ進行`
+          :`日次精度 / 閉業確認は本日保留 / Google Places ${reason}${googleHealth.http_status?` HTTP${googleHealth.http_status}`:''} / Instagram再検査へ進行`
       });
-      return {ok:true,processed:true,stage:'closed_skipped',reason};
+      return {ok:true,processed:true,stage:'closed_skipped',reason,budget_skip:budgetStop};
     }
 
     const r=await runMaintenanceBatchV242(env,'closed',{limit:5});
@@ -8533,6 +8537,16 @@ async function kbnProcessQueuedMaintenanceV242(env){
   }
 
   let result;
+  let googleBudgetSkip=false;
+  let googleBudgetReason="";
+  try{
+    const gh=await kbnGooglePlacesHealthV438(env);
+    if(gh?.disabled && /KBN_(DAILY|MONTHLY)_BUDGET/.test(String(gh.error_code||""))){
+      googleBudgetSkip=true;
+      googleBudgetReason=String(gh.error_code||"KBN_DAILY_BUDGET");
+    }
+  }catch{}
+
   try{
     if(task==="exclusion"){
       result=await kbnScanExclusionCandidatesV267(env);
@@ -8559,10 +8573,12 @@ async function kbnProcessQueuedMaintenanceV242(env){
     q,phase,task,result,
     status:result?.ok===false?'failed':'success',
     note:task==='verified_info'||task==='verified_auto'
-      ?`VERIFIED情報補完 / SEO +${Number(result?.score_gain_total||0)}点`
+      ?`VERIFIED情報補完 / SEO +${Number(result?.score_gain_total||0)}点${googleBudgetSkip?` / Google節約上限:${googleBudgetReason} / Google追加送信0回・代替/既存情報で処理`:''}`
       :task==='exclusion'
         ?`対象外候補 ${Number(result?.candidate_count||0)}件`
-        :''
+        :googleBudgetSkip
+          ?`Google節約上限:${googleBudgetReason} / Google追加送信0回・代替/既存情報で処理`
+          :''
   });
 
   try{
