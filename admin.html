@@ -4355,6 +4355,47 @@ html,body{max-width:100%;overflow-x:hidden}
       <button type="button" id="autoDiscoverBtn" class="btn-gold lead-smart-primary">低コスト・高精度自動掲載</button>
       <div style="margin-top:8px;color:#f1c75b;font-weight:800;font-size:.82rem">1回の実行で最大100店舗まで自動掲載</div>
       <div style="margin-top:4px;color:#9ca7b3;font-size:.72rem">繁華街・町名単位まで120検索。通常5検索ずつ（503再試行時は2検索）小分け保存し、503/通信エラー時は30秒〜3分の自動クールダウン後に続きから再開します。画面を再読み込みしても未完了なら自動復帰します。通常判定で新規が見つからない場合は後半を自動で「拡張探索」に切替。重複は店名だけ・住所だけでは落とさず、電話/Instagram一致または店名＋住所一致で判定します。</div>
+      <style id="kbn-google-usage-card-v443">
+        .kbn-google-usage-v443{margin:11px 0;padding:13px;border:1px solid #3b4c59;border-radius:14px;background:linear-gradient(180deg,#101b24,#0b141c)}
+        .kbn-google-usage-head-v443{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+        .kbn-google-usage-head-v443 b{font-size:.82rem;color:#f2f5f7}
+        .kbn-google-usage-state-v443{font-size:.62rem;font-weight:900;border:1px solid #315b45;border-radius:999px;padding:4px 8px;color:#7ee2a8;background:#102219;white-space:nowrap}
+        .kbn-google-usage-grid-v443{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+        .kbn-google-usage-box-v443{padding:10px;border:1px solid #263946;border-radius:11px;background:#0c151d}
+        .kbn-google-usage-box-v443 small{display:block;color:#82919c;font-size:.61rem;font-weight:800}
+        .kbn-google-usage-num-v443{margin-top:3px;font-size:1.02rem;font-weight:900;color:#edf2f5}
+        .kbn-google-usage-remain-v443{margin-top:2px;color:#efc45a;font-size:.64rem;font-weight:800}
+        .kbn-google-progress-v443{height:7px;margin-top:7px;border-radius:999px;background:#202d36;overflow:hidden}
+        .kbn-google-progress-v443>i{display:block;height:100%;width:0%;background:currentColor;border-radius:inherit;transition:width .25s ease}
+        .kbn-google-reset-v443{margin-top:9px;color:#8d9aa4;font-size:.61rem;line-height:1.55}
+        .kbn-google-usage-note-v443{margin-top:7px;color:#73818b;font-size:.58rem;line-height:1.45}
+        @media(max-width:620px){.kbn-google-usage-grid-v443{grid-template-columns:1fr}}
+      </style>
+      <div class="kbn-google-usage-v443" id="googleUsageCardV443">
+        <div class="kbn-google-usage-head-v443">
+          <div>
+            <b>Google Places 使用量</b>
+            <div style="margin-top:3px;color:#82919c;font-size:.61rem">KBN側の節約カウンター</div>
+          </div>
+          <span class="kbn-google-usage-state-v443" id="googleUsageStateV443">確認中</span>
+        </div>
+        <div class="kbn-google-usage-grid-v443">
+          <div class="kbn-google-usage-box-v443">
+            <small>今日</small>
+            <div class="kbn-google-usage-num-v443" id="googleDailyUsageV443">— / 150回</div>
+            <div class="kbn-google-usage-remain-v443" id="googleDailyRemainV443">残り —回</div>
+            <div class="kbn-google-progress-v443"><i id="googleDailyBarV443"></i></div>
+          </div>
+          <div class="kbn-google-usage-box-v443">
+            <small>今月</small>
+            <div class="kbn-google-usage-num-v443" id="googleMonthlyUsageV443">— / 4,500回</div>
+            <div class="kbn-google-usage-remain-v443" id="googleMonthlyRemainV443">残り —回</div>
+            <div class="kbn-google-progress-v443"><i id="googleMonthlyBarV443"></i></div>
+          </div>
+        </div>
+        <div class="kbn-google-reset-v443" id="googleUsageResetV443">次回リセット：確認中...</div>
+        <div class="kbn-google-usage-note-v443">上限到達後はGoogle Placesを停止し、代替ソースへ自動切替します。Google Cloud Console側の請求額ではなく、KBNが実際に送ったText Search回数を管理しています。</div>
+      </div>
       <div id="discoverySourceHealthV438" style="margin:10px 0;padding:10px 12px;border:1px solid #334957;border-radius:12px;background:#0f1922;font-size:.72rem;line-height:1.55;color:#aeb9c3">検索API状態：確認中... / Free Workers省CPUモード ON</div>
       <button type="button" id="testGooglePlacesV438" style="margin-bottom:10px">Google Places接続テスト</button>
       <div id="autoDiscoverStatus" class="auto-discovery-status"></div>
@@ -9160,10 +9201,49 @@ window.refreshExistingIndependentListings=async function(){
 };
 
 
+
+function kbnNextJstResetV443(){
+  const now=new Date();
+  const parts=new Intl.DateTimeFormat('en-CA',{
+    timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'
+  }).formatToParts(now).reduce((o,x)=>(o[x.type]=x.value,o),{});
+  const y=Number(parts.year),m=Number(parts.month),d=Number(parts.day);
+  const nextDayUtc=new Date(Date.UTC(y,m-1,d,15,0,0)); // next JST midnight = 15:00 UTC same displayed JST date
+  if(nextDayUtc<=now)nextDayUtc.setUTCDate(nextDayUtc.getUTCDate()+1);
+  const nextMonthUtc=new Date(Date.UTC(m===12?y+1:y,m===12?0:m,0,15,0,0));
+  const fmt=x=>x.toLocaleString('ja-JP',{timeZone:'Asia/Tokyo',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
+  return {day:fmt(nextDayUtc),month:fmt(nextMonthUtc)};
+}
+function renderGoogleUsageCardV443(g,d){
+  const b=g?.budget||{};
+  const dayUsed=Number(b.day_used||0),dayLimit=Number(b.day_limit||d?.cost_guard?.daily_limit||150);
+  const monthUsed=Number(b.month_used||0),monthLimit=Number(b.month_limit||d?.cost_guard?.monthly_limit||4500);
+  const dayRemain=Math.max(0,dayLimit-dayUsed),monthRemain=Math.max(0,monthLimit-monthUsed);
+  const dayPct=dayLimit?Math.min(100,dayUsed/dayLimit*100):0;
+  const monthPct=monthLimit?Math.min(100,monthUsed/monthLimit*100):0;
+  const set=(id,text)=>{const el=$(id);if(el)el.textContent=text};
+  set("googleDailyUsageV443",`${dayUsed.toLocaleString()} / ${dayLimit.toLocaleString()}回`);
+  set("googleDailyRemainV443",`残り ${dayRemain.toLocaleString()}回（${Math.max(0,100-dayPct).toFixed(1)}%）`);
+  set("googleMonthlyUsageV443",`${monthUsed.toLocaleString()} / ${monthLimit.toLocaleString()}回`);
+  set("googleMonthlyRemainV443",`残り ${monthRemain.toLocaleString()}回（${Math.max(0,100-monthPct).toFixed(1)}%）`);
+  const db=$("googleDailyBarV443"),mb=$("googleMonthlyBarV443");
+  if(db)db.style.width=`${dayPct}%`;
+  if(mb)mb.style.width=`${monthPct}%`;
+  const reset=kbnNextJstResetV443();
+  set("googleUsageResetV443",`次回リセット：日次 ${reset.day} / 月次 ${reset.month}（JST）`);
+  const st=$("googleUsageStateV443");
+  if(st){
+    if(!g?.configured){st.textContent="API未設定";st.style.color="#ff9a9a";st.style.borderColor="#7a3d3d";st.style.background="#241313"}
+    else if(g?.disabled){st.textContent=String(g?.error_code||"停止中");st.style.color="#efc45a";st.style.borderColor="#7a5b24";st.style.background="#241d0e"}
+    else{st.textContent="利用可能";st.style.color="#7ee2a8";st.style.borderColor="#315b45";st.style.background="#102219"}
+  }
+}
+
 async function loadDiscoverySourceHealthV438(){
   const el=$("discoverySourceHealthV438");if(!el)return;
   try{
     const d=await api("/api/admin/discovery-source-health"),g=d.google||{},b=g.budget||{};
+    renderGoogleUsageCardV443(g,d);
     const dayUsed=Number(b.day_used||0),dayLimit=Number(b.day_limit||d.cost_guard?.daily_limit||150);
     const monthUsed=Number(b.month_used||0),monthLimit=Number(b.month_limit||d.cost_guard?.monthly_limit||4500);
     const usage=`本日 ${dayUsed}/${dayLimit}回・今月 ${monthUsed}/${monthLimit}回`;
