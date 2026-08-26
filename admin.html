@@ -4375,7 +4375,7 @@ html,body{max-width:100%;overflow-x:hidden}
         <div class="kbn-google-usage-head-v443">
           <div>
             <b>Google Places 使用量</b>
-            <div style="margin-top:3px;color:#82919c;font-size:.61rem">開拓・全メンテ・写真・接続テスト込み</div>
+            <div style="margin-top:3px;color:#82919c;font-size:.61rem">開拓・全メンテ・接続テスト＋写真（写真は1日30回まで）</div>
           </div>
           <span class="kbn-google-usage-state-v443" id="googleUsageStateV443">確認中</span>
         </div>
@@ -4394,7 +4394,7 @@ html,body{max-width:100%;overflow-x:hidden}
           </div>
         </div>
         <div class="kbn-google-reset-v443" id="googleUsageResetV443">次回リセット：確認中...</div>
-        <div class="kbn-google-usage-note-v443">上限到達後はGoogle Placesを停止し、代替ソースへ自動切替します。Google Cloud Console側の請求額ではなく、KBNが実際にGoogle Placesへ送ったAPIリクエスト総数を管理しています。</div>
+        <div class="kbn-google-usage-note-v443">総上限は1日150回。公開ページのGoogle写真はその内1日30回までに制限し、写真だけで新しい日の150回を使い切らないようにします。日次判定は日本時間（JST）です。</div>
       </div>
       <div id="discoverySourceHealthV438" style="margin:10px 0;padding:10px 12px;border:1px solid #334957;border-radius:12px;background:#0f1922;font-size:.72rem;line-height:1.55;color:#aeb9c3">検索API状態：確認中... / Free Workers省CPUモード ON</div>
       <button type="button" id="testGooglePlacesV438" style="margin-bottom:10px">Google Places接続テスト（1回だけ）</button>
@@ -9463,7 +9463,7 @@ function renderGoogleUsageCardV443(g,d){
   if(db)db.style.width=`${dayPct}%`;
   if(mb)mb.style.width=`${monthPct}%`;
   const reset=kbnNextJstResetV443();
-  set("googleUsageResetV443",`次回リセット：日次 ${reset.day} / 月次 ${reset.month}（JST）`);
+  set("googleUsageResetV443",`対象日 ${String(b.day_key||"—")}（JST） / 次回リセット：日次 ${reset.day} / 月次 ${reset.month}`);
   const st=$("googleUsageStateV443");
   let stateText="利用可能",stateColor="#7ee2a8",stateBorder="#315b45",stateBg="#102219";
   if(!g?.configured){stateText="API未設定";stateColor="#ff9a9a";stateBorder="#7a3d3d";stateBg="#241313"}
@@ -9479,9 +9479,11 @@ function renderGoogleUsageCardV443(g,d){
   if(mst){mst.textContent=stateText;mst.style.color=stateColor;mst.style.borderColor=stateBorder;mst.style.background=stateBg}
   const note=$("maintenanceGoogleBudgetNoteV445");
   if(note){
+    const pb=g?.photo_budget||{};
+    const photoUsed=Number(pb.day_used||0),photoLimit=Number(pb.day_limit||30);
     note.textContent=(g?.disabled
-      ?`Googleは現在 ${stateText}。可能な処理は代替ソースへ切替します。今日残り${dayRemain.toLocaleString()}回・今月残り${monthRemain.toLocaleString()}回。`
-      :`3時間ごとの自動運転＋全メンテ・レビュー・写真・接続テスト込み。今日残り${dayRemain.toLocaleString()}回・今月残り${monthRemain.toLocaleString()}回。`);
+      ?`Googleは現在 ${stateText}。追加送信0回。今日残り${dayRemain.toLocaleString()}回・今月残り${monthRemain.toLocaleString()}回。`
+      :`3時間ごとの自動運転＋全メンテ込み。今日残り${dayRemain.toLocaleString()}回・今月残り${monthRemain.toLocaleString()}回。公開写真は本日${photoUsed}/${photoLimit}回までに制限し、メンテナンス枠を温存します。`);
   }
 }
 
