@@ -4107,7 +4107,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
   <div class="shop-outreach-tools">
     <label>
-      <span>Instagram連絡可否（店舗一致確認済みのみ送信可）</span>
+      <span>Instagram連絡可否（IG＝プロフィール / 照合＝店舗一致チェック / DM＝確認済みのみ）</span>
       <select id="shopInstagramFilter">
         <option value="">すべて</option>
         <option value="ready">Instagram確認済み・送信できる店舗だけ</option>
@@ -4968,6 +4968,49 @@ html,body{max-width:100%;overflow-x:hidden}
 </div>
 
 </main>
+
+<div id="instagramMatchModalV449" style="display:none;position:fixed;inset:0;z-index:10050;background:rgba(0,0,0,.72);padding:18px;overflow:auto">
+  <div style="width:min(560px,100%);margin:5vh auto;background:#0d151d;border:1px solid #344653;border-radius:18px;padding:16px;box-shadow:0 24px 80px rgba(0,0,0,.5)">
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
+      <div>
+        <small style="color:#e9be54;font-weight:900;letter-spacing:.08em">INSTAGRAM MATCH</small>
+        <h3 id="instagramMatchTitleV449" style="margin:5px 0 0;font-size:1.05rem">Instagram店舗一致確認</h3>
+      </div>
+      <button type="button" onclick="closeInstagramMatchModalV449()" style="border:1px solid #3b4955;background:#111b24;color:#e7edf1;border-radius:10px;padding:7px 10px">閉じる</button>
+    </div>
+
+    <div id="instagramMatchStatusV449" style="margin-top:12px;padding:11px;border:1px solid #334957;border-radius:12px;background:#101a22;color:#abb7c0;font-size:.72rem;line-height:1.55">確認中...</div>
+
+    <div id="instagramMatchScoreWrapV449" style="display:none;margin-top:10px">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+        <b style="font-size:.72rem">自動照合スコア</b>
+        <b id="instagramMatchScoreV449" style="font-size:1rem;color:#efc45a">—</b>
+      </div>
+      <div style="height:8px;border-radius:999px;background:#202d36;overflow:hidden;margin-top:6px">
+        <i id="instagramMatchScoreBarV449" style="display:block;height:100%;width:0%;background:#e9be54;border-radius:inherit"></i>
+      </div>
+    </div>
+
+    <div id="instagramMatchShopInfoV449" style="margin-top:11px;padding:10px;border-radius:11px;background:#101820;color:#aeb9c3;font-size:.68rem;line-height:1.55"></div>
+
+    <div style="margin-top:11px">
+      <b style="font-size:.72rem">確認ポイント</b>
+      <div id="instagramMatchEvidenceV449" style="margin-top:6px;display:grid;gap:6px"></div>
+    </div>
+
+    <div id="instagramMatchCandidateV449" style="display:none;margin-top:11px;padding:10px;border:1px solid #3c4650;border-radius:11px;background:#101820;font-size:.66rem;line-height:1.5"></div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:13px">
+      <button id="instagramMatchOpenBtnV449" type="button" style="border:1px solid #785d1d;background:#18150d;color:#efc45a;border-radius:11px;padding:10px;font-weight:800">Instagramを開く</button>
+      <button id="instagramMatchVerifyBtnV449" type="button" style="border:0;background:#e9be54;color:#111;border-radius:11px;padding:10px;font-weight:900">この店舗で確認済み</button>
+      <button id="instagramMatchReviewBtnV449" type="button" style="grid-column:1/-1;border:1px solid #654040;background:#1a1012;color:#ffabab;border-radius:11px;padding:9px;font-weight:800">要確認のままにする</button>
+    </div>
+    <div style="margin-top:9px;color:#72808b;font-size:.59rem;line-height:1.45">
+      高確度（96点以上）かつ独立検索の最有力アカウントと一致した場合は、自動で「確認済み」にします。微妙な場合だけ目視確認してください。
+    </div>
+  </div>
+</div>
+
 <script>
 
 
@@ -5516,6 +5559,114 @@ window.editShopOutreachNoteV428=async function(id){
 };
 
 
+
+let instagramMatchShopIdV449=0;
+
+window.closeInstagramMatchModalV449=function(){
+  const m=$("instagramMatchModalV449");
+  if(m)m.style.display="none";
+};
+
+function instagramMatchEvidenceRowV449(text,ok=true){
+  return `<div style="padding:7px 9px;border-radius:9px;background:${ok?'#102019':'#201416'};color:${ok?'#8ce4b5':'#ffaaaa'};font-size:.64rem;line-height:1.45">${ok?'✓':'!'} ${esc(text)}</div>`;
+}
+
+window.reviewInstagramMatchV449=async function(id){
+  const shop=shops.find(x=>Number(x.id)===Number(id));
+  if(!shop)return;
+  instagramMatchShopIdV449=Number(id);
+
+  const modal=$("instagramMatchModalV449");
+  if(modal)modal.style.display="block";
+  $("instagramMatchTitleV449").textContent=`${shop.name}｜Instagram一致確認`;
+  $("instagramMatchStatusV449").textContent="店舗名・エリアから独立検索して、現在登録中のInstagramと一致するか照合しています...";
+  $("instagramMatchStatusV449").style.borderColor="#334957";
+  $("instagramMatchStatusV449").style.color="#abb7c0";
+  $("instagramMatchScoreWrapV449").style.display="none";
+  $("instagramMatchEvidenceV449").innerHTML="";
+  $("instagramMatchCandidateV449").style.display="none";
+
+  const handle=cleanInstagramHandle(shop.instagram||"");
+  $("instagramMatchShopInfoV449").innerHTML=
+    `<b style="color:#eef2f5">${esc(shop.name||"")}</b><br>`+
+    `${esc(shop.area||"")} ${shop.address?` / ${esc(shop.address)}`:""}<br>`+
+    `現在のInstagram：<b style="color:#efc45a">@${esc(handle)}</b>`;
+
+  $("instagramMatchOpenBtnV449").onclick=()=>openInstagramProfile(id);
+  $("instagramMatchVerifyBtnV449").onclick=async()=>{
+    await setShopInstagramVerificationV430(id,"verified");
+    closeInstagramMatchModalV449();
+  };
+  $("instagramMatchReviewBtnV449").onclick=async()=>{
+    await setShopInstagramVerificationV430(id,"review");
+    closeInstagramMatchModalV449();
+  };
+
+  try{
+    const d=await api(`/api/admin/shops/${id}/instagram-match-review`,{method:"POST",body:{}});
+    const score=Math.max(0,Math.min(100,Number(d.score||0)));
+    $("instagramMatchScoreWrapV449").style.display="block";
+    $("instagramMatchScoreV449").textContent=`${score} / 100`;
+    $("instagramMatchScoreBarV449").style.width=`${score}%`;
+
+    const status=$("instagramMatchStatusV449");
+    if(d.auto_verified){
+      status.textContent="高確度で店舗一致を確認できました。自動で「Instagram確認済み」にしました。DM送信可能です。";
+      status.style.borderColor="#315b45";
+      status.style.color="#7ee2a8";
+      shop.instagram_match_status="verified";
+      shop.instagram_match_score=score;
+      renderShopOutreachSummaryV428();
+      renderShopList();
+    }else if(d.same){
+      status.textContent="同じInstagramが最有力候補ですが、自動確定ラインには届いていません。プロフィールを開いて最終確認してください。";
+      status.style.borderColor="#765d24";
+      status.style.color="#efc45a";
+      shop.instagram_match_status="review";
+      shop.instagram_match_score=score;
+    }else{
+      status.textContent=d.found_handle
+        ?`現在のInstagramとは別の @${d.found_handle} が最有力候補です。誤送信防止のため要確認にしました。`
+        :"独立検索で一致を確認できませんでした。目視確認してください。";
+      status.style.borderColor="#663737";
+      status.style.color="#ffaaaa";
+      shop.instagram_match_status="review";
+      shop.instagram_match_score=score;
+    }
+
+    const evidence=Array.isArray(d.evidence)?d.evidence:[];
+    $("instagramMatchEvidenceV449").innerHTML=evidence.length
+      ?evidence.map((x,i)=>instagramMatchEvidenceRowV449(x,d.auto_verified||d.same||i>0)).join("")
+      :instagramMatchEvidenceRowV449("自動照合の根拠を取得できませんでした",false);
+
+    if(d.candidate){
+      const c=d.candidate;
+      const box=$("instagramMatchCandidateV449");
+      box.style.display="block";
+      box.innerHTML=
+        `<b style="color:#eef2f5">検索上の最有力候補</b><br>`+
+        `@${esc(c.handle||"")} / スコア ${Number(c.score||0)}<br>`+
+        `${c.title?`<span style="color:#aeb9c3">${esc(c.title)}</span><br>`:""}`+
+        `${c.snippet?`<span style="color:#7e8b95">${esc(c.snippet)}</span>`:""}`;
+    }
+
+    // Auto-verified state was persisted by the endpoint.
+    if(d.auto_verified){
+      $("instagramMatchVerifyBtnV449").textContent="確認済み ✓";
+      $("instagramMatchVerifyBtnV449").disabled=true;
+    }else{
+      $("instagramMatchVerifyBtnV449").textContent="この店舗で確認済み";
+      $("instagramMatchVerifyBtnV449").disabled=false;
+    }
+  }catch(e){
+    const status=$("instagramMatchStatusV449");
+    status.textContent="自動照合に失敗しました。IGボタンからプロフィールを開いて手動確認してください。";
+    status.style.borderColor="#663737";
+    status.style.color="#ffaaaa";
+    $("instagramMatchEvidenceV449").innerHTML=instagramMatchEvidenceRowV449(String(e?.message||e),false);
+  }
+};
+
 window.setShopInstagramVerificationV430=async function(id,status){
   const shop=shops.find(x=>Number(x.id)===Number(id));
   if(!shop)return;
@@ -5582,7 +5733,11 @@ function renderShopList(){
             ${provisional && s.instagram_review_value && !cleanInstagramHandle(s.instagram||"")?`<p class="shop-outreach-note">旧Instagram保留：${esc(s.instagram_review_value)}</p>`:''}
           </div>
           <div class="admin-item-actions compact-actions dense-actions">
-            ${provisional && cleanInstagramHandle(s.instagram||"")?`<button type="button" onclick="sendProvisionalInstagramDm(${s.id})" class="shop-provisional-dm dense-icon-btn" title="この店舗へInstagramで正式掲載をお願いする">DM</button>`:""}
+            ${provisional && cleanInstagramHandle(s.instagram||"")?`<button type="button" onclick="openInstagramProfile(${s.id})" class="shop-instagram-reopen dense-icon-btn" title="Instagramプロフィールを開く">IG</button>`:""}
+            ${provisional && cleanInstagramHandle(s.instagram||"")?`<button type="button" onclick="reviewInstagramMatchV449(${s.id})" class="dense-icon-btn" style="border-color:#3b5e55;color:#7ee2b2" title="店舗との一致を自動照合">照合</button>`:""}
+            ${provisional && cleanInstagramHandle(s.instagram||"") && String(s.instagram_match_status||"unknown")==="verified"
+              ?`<button type="button" onclick="sendProvisionalInstagramDm(${s.id})" class="shop-provisional-dm dense-icon-btn" title="DM文をコピーしてInstagramを開く">DM</button>`
+              :""}
             ${!provisional?`<button type="button" onclick="reopenInstaDraft(${s.id})" class="shop-instagram-reopen dense-icon-btn" title="Instagram投稿">IG</button>`:""}
             <button onclick="editShop(${s.id})" class="shop-edit-main">編集</button>
             <details class="shop-more-menu">
@@ -5728,7 +5883,11 @@ async function openInstagramOwnerInvite(shop,url){
     ? `https://www.instagram.com/${encodeURIComponent(handle)}/`
     : "https://www.instagram.com/";
 
-  window.open(target,"_blank");
+  if(handle){
+    openInstagramUrlV448(handle);
+  }else{
+    try{window.location.assign(target)}catch{window.location.href=target}
+  }
 }
 
 
@@ -5769,6 +5928,37 @@ KUMAMOTO BAR NAVI
 ${location.origin}`;
 }
 
+
+function openInstagramUrlV448(handle){
+  const h=cleanInstagramHandle(handle||"");
+  if(!h)return false;
+  const url=`https://www.instagram.com/${encodeURIComponent(h)}/`;
+
+  // iPhone Safari / PWAでは window.open(_blank) がポップアップ扱いで
+  // 無反応になることがあるため、同一タブ遷移を第一候補にする。
+  try{
+    window.location.assign(url);
+    return true;
+  }catch(e){
+    try{
+      window.location.href=url;
+      return true;
+    }catch{}
+  }
+  return false;
+}
+
+async function kbnWaitMaxV448(promise,ms=650){
+  try{
+    return await Promise.race([
+      Promise.resolve(promise).catch(()=>false),
+      new Promise(resolve=>setTimeout(()=>resolve(false),ms))
+    ]);
+  }catch{
+    return false;
+  }
+}
+
 window.sendProvisionalInstagramDm=async function(id){
   const shop=shops.find(x=>Number(x.id)===Number(id));
   if(!shop)return;
@@ -5779,34 +5969,39 @@ window.sendProvisionalInstagramDm=async function(id){
     return;
   }
   if(String(shop.instagram_match_status||"unknown")!=="verified"){
-    alert("このInstagramは店舗一致の確認がまだ取れていません。誤送信防止のためDMを停止しています。店舗を確認後「Instagram確認済みにする」を押してください。");
+    alert("このInstagramは店舗一致の確認がまだ取れていません。プロフィール確認には「IG」を使ってください。");
     return;
   }
 
-  // タップ直後にInstagramを開く。await後だとiPhoneでポップアップ扱いになる場合があるため。
-  window.open(`https://www.instagram.com/${encodeURIComponent(handle)}/`,"_blank");
-
   const text=buildExistingProvisionalDm(shop);
-  const copied=await copyTextSafe(text);
 
-  let statusSaved=true;
-  try{
-    await updateShopOutreachV428(id,"dm_sent",{silent:true});
-  }catch(e){
-    statusSaved=false;
-    console.warn("DM status update failed",e);
+  // ユーザー操作直後にコピーを開始。Instagram遷移後すぐ貼れるようにする。
+  const copyPromise=copyTextSafe(text);
+
+  // DM済み保存も開始するが、Instagramを開くのを長時間待たせない。
+  const savePromise=updateShopOutreachV428(id,"dm_sent",{silent:true})
+    .then(()=>true)
+    .catch(e=>{
+      console.warn("DM status update failed",e);
+      return false;
+    });
+
+  const copied=await kbnWaitMaxV448(copyPromise,450);
+  await kbnWaitMaxV448(savePromise,450);
+
+  // _blankではなく同一タブで開くので、iPhoneでもポップアップブロックされにくい。
+  const opened=openInstagramUrlV448(handle);
+  if(!opened){
+    const url=`https://www.instagram.com/${encodeURIComponent(handle)}/`;
+    prompt("Instagramを自動で開けませんでした。下のURLを開いてください。",url);
+    return;
   }
 
-  if(copied){
-    alert(
-      statusSaved
-        ?"DM文をコピーしました。連絡状況も「DM済」に更新しました。"
-        :"DM文はコピーできましたが、連絡状況の保存だけ失敗しました。もう一度「DM済」を押してください。"
-    );
-  }else{
-    prompt("このDM文をコピーしてInstagramで送ってください。",text);
+  // 遷移するため通常はここは表示されない。コピー失敗時は戻った後に再実行可能。
+  if(!copied){
+    try{sessionStorage.setItem("kbn_dm_copy_failed_v448","1")}catch{}
   }
-};
+}
 
 window.openInstagramProfile=function(id){
   const s=shops.find(x=>Number(x.id)===Number(id));
@@ -5818,7 +6013,9 @@ window.openInstagramProfile=function(id){
     return;
   }
 
-  window.open(`https://www.instagram.com/${encodeURIComponent(handle)}/`,"_blank");
+  if(!openInstagramUrlV448(handle)){
+    prompt("Instagramを自動で開けませんでした。",`https://www.instagram.com/${encodeURIComponent(handle)}/`);
+  }
 };
 
 
