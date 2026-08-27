@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.60";
+      config.vars.KBN_CONFIG_VERSION="4.61";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -4450,9 +4450,159 @@ async function kbnGoogleUsageBreakdownV453(env){
   };
 }
 
-async function kbnReserveGooglePlacesBudgetV441(env){
-  const s=await kbnGooglePlacesBudgetStatusV441(env);
+
+const KBN_AUTO_GOOGLE_SLOT_LIMIT_V461=15;
+const KBN_AUTO_GOOGLE_DAILY_LIMIT_V461=120;
+const KBN_AUTO_GOOGLE_RESERVE_V461=30;
+
+function kbnAutoGoogleSlotKeyV461(){
+  const d=new Date(Date.now()+9*60*60*1000);
+  const y=d.getUTCFullYear();
+  const m=String(d.getUTCMonth()+1).padStart(2,"0");
+  const day=String(d.getUTCDate()).padStart(2,"0");
+  const h=Math.floor(d.getUTCHours()/3)*3;
+  return {
+    day:`${y}-${m}-${day}`,
+    slot:`${y}-${m}-${day} ${String(h).padStart(2,"0")}:00 JST`
+  };
+}
+
+async function ensureKbnAutoGoogleBudgetV461(env){
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS kbn_auto_google_budget(
+      period_type TEXT NOT NULL,
+      period_key TEXT NOT NULL,
+      used_count INTEGER NOT NULL DEFAULT 0,
+      limit_count INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY(period_type,period_key)
+    )
+  `).run();
+}
+
+async function kbnMaintenanceQueueActiveV461(env){
+  try{
+    await ensureKbnMaintenanceQueueV242(env);
+    const q=await env.DB.prepare(`
+      SELECT phase,run_date FROM kbn_maintenance_queue WHERE id=1
+    `).first();
+    return {
+      active:Number(q?.phase||0)>0,
+      phase:Number(q?.phase||0),
+      run_date:String(q?.run_date||"")
+    };
+  }catch{
+    return {active:false,phase:0,run_date:""};
+  }
+}
+
+async function kbnAutoGoogleBudgetStatusV461(env){
+  await ensureKbnAutoGoogleBudgetV461(env);
+  const k=kbnAutoGoogleSlotKeyV461();
+
+  await env.DB.prepare(`
+    INSERT INTO kbn_auto_google_budget(period_type,period_key,used_count,limit_count)
+    VALUES('day',?,0,?)
+    ON CONFLICT(period_type,period_key) DO UPDATE SET limit_count=excluded.limit_count
+  `).bind(k.day,KBN_AUTO_GOOGLE_DAILY_LIMIT_V461).run();
+
+  await env.DB.prepare(`
+    INSERT INTO kbn_auto_google_budget(period_type,period_key,used_count,limit_count)
+    VALUES('slot',?,0,?)
+    ON CONFLICT(period_type,period_key) DO UPDATE SET limit_count=excluded.limit_count
+  `).bind(k.slot,KBN_AUTO_GOOGLE_SLOT_LIMIT_V461).run();
+
+  const day=await env.DB.prepare(`
+    SELECT used_count,limit_count FROM kbn_auto_google_budget
+    WHERE period_type='day' AND period_key=?
+  `).bind(k.day).first();
+
+  const slot=await env.DB.prepare(`
+    SELECT used_count,limit_count FROM kbn_auto_google_budget
+    WHERE period_type='slot' AND period_key=?
+  `).bind(k.slot).first();
+
+  const du=Number(day?.used_count||0),dl=Number(day?.limit_count||KBN_AUTO_GOOGLE_DAILY_LIMIT_V461);
+  const su=Number(slot?.used_count||0),sl=Number(slot?.limit_count||KBN_AUTO_GOOGLE_SLOT_LIMIT_V461);
+
+  return {
+    day_key:k.day,slot_key:k.slot,
+    day_used:du,day_limit:dl,day_remaining:Math.max(0,dl-du),
+    slot_used:su,slot_limit:sl,slot_remaining:Math.max(0,sl-su),
+    reserve_for_manual:KBN_AUTO_GOOGLE_RESERVE_V461,
+    blocked:du>=dl||su>=sl,
+    blocked_reason:du>=dl?"KBN_AUTO_DAILY_BUDGET":(su>=sl?"KBN_AUTO_SLOT_BUDGET":"")
+  };
+}
+
+async function kbnReserveAutoGoogleBudgetV461(env){
+  const s=await kbnAutoGoogleBudgetStatusV461(env);
   if(s.blocked)return {ok:false,...s};
+
+  const sd=await env.DB.prepare(`
+    UPDATE kbn_auto_google_budget
+    SET used_count=used_count+1,updated_at=CURRENT_TIMESTAMP
+    WHERE period_type='day' AND period_key=? AND used_count<limit_count
+  `).bind(s.day_key).run();
+  if(Number(sd?.meta?.changes||0)<1){
+    return {ok:false,...(await kbnAutoGoogleBudgetStatusV461(env)),blocked:true,blocked_reason:"KBN_AUTO_DAILY_BUDGET"};
+  }
+
+  const ss=await env.DB.prepare(`
+    UPDATE kbn_auto_google_budget
+    SET used_count=used_count+1,updated_at=CURRENT_TIMESTAMP
+    WHERE period_type='slot' AND period_key=? AND used_count<limit_count
+  `).bind(s.slot_key).run();
+
+  if(Number(ss?.meta?.changes||0)<1){
+    await env.DB.prepare(`
+      UPDATE kbn_auto_google_budget
+      SET used_count=CASE WHEN used_count>0 THEN used_count-1 ELSE 0 END,updated_at=CURRENT_TIMESTAMP
+      WHERE period_type='day' AND period_key=?
+    `).bind(s.day_key).run();
+    return {ok:false,...(await kbnAutoGoogleBudgetStatusV461(env)),blocked:true,blocked_reason:"KBN_AUTO_SLOT_BUDGET"};
+  }
+
+  return {ok:true,...(await kbnAutoGoogleBudgetStatusV461(env))};
+}
+
+async function kbnRollbackAutoGoogleBudgetV461(env){
+  const k=kbnAutoGoogleSlotKeyV461();
+  try{
+    await env.DB.prepare(`
+      UPDATE kbn_auto_google_budget
+      SET used_count=CASE WHEN used_count>0 THEN used_count-1 ELSE 0 END,updated_at=CURRENT_TIMESTAMP
+      WHERE period_type='day' AND period_key=?
+    `).bind(k.day).run();
+    await env.DB.prepare(`
+      UPDATE kbn_auto_google_budget
+      SET used_count=CASE WHEN used_count>0 THEN used_count-1 ELSE 0 END,updated_at=CURRENT_TIMESTAMP
+      WHERE period_type='slot' AND period_key=?
+    `).bind(k.slot).run();
+  }catch{}
+}
+
+async function kbnReserveGooglePlacesBudgetV441(env){
+  const maintenance=await kbnMaintenanceQueueActiveV461(env);
+  let autoReservation=null;
+  if(maintenance.active){
+    autoReservation=await kbnReserveAutoGoogleBudgetV461(env);
+    if(!autoReservation.ok){
+      return {
+        ok:false,
+        blocked:true,
+        blocked_reason:autoReservation.blocked_reason,
+        auto_budget:autoReservation,
+        ...(await kbnGooglePlacesBudgetStatusV441(env))
+      };
+    }
+  }
+
+  const s=await kbnGooglePlacesBudgetStatusV441(env);
+  if(s.blocked){
+    if(autoReservation?.ok)await kbnRollbackAutoGoogleBudgetV461(env);
+    return {ok:false,...s};
+  }
 
   const d=await env.DB.prepare(`
     UPDATE kbn_google_places_budget
@@ -4460,6 +4610,7 @@ async function kbnReserveGooglePlacesBudgetV441(env){
     WHERE period_type='day' AND period_key=? AND used_count<limit_count
   `).bind(s.day_key).run();
   if(Number(d?.meta?.changes||0)<1){
+    if(autoReservation?.ok)await kbnRollbackAutoGoogleBudgetV461(env);
     return {ok:false,...(await kbnGooglePlacesBudgetStatusV441(env)),blocked:true,blocked_reason:'KBN_DAILY_BUDGET'};
   }
 
@@ -4474,10 +4625,15 @@ async function kbnReserveGooglePlacesBudgetV441(env){
       SET used_count=CASE WHEN used_count>0 THEN used_count-1 ELSE 0 END,updated_at=CURRENT_TIMESTAMP
       WHERE period_type='day' AND period_key=?
     `).bind(s.day_key).run();
+    if(autoReservation?.ok)await kbnRollbackAutoGoogleBudgetV461(env);
     return {ok:false,...(await kbnGooglePlacesBudgetStatusV441(env)),blocked:true,blocked_reason:'KBN_MONTHLY_BUDGET'};
   }
 
-  return {ok:true,...(await kbnGooglePlacesBudgetStatusV441(env))};
+  return {
+    ok:true,
+    ...(await kbnGooglePlacesBudgetStatusV441(env)),
+    auto_budget:autoReservation?.ok?autoReservation:null
+  };
 }
 
 async function ensureKbnGooglePlacesHealthV438(env){
@@ -4569,7 +4725,11 @@ async function googlePlacesTextSearch(env,{query,pageSize=20,ignoreCircuit=false
       return {
         ok:false,configured:true,skipped:true,status:0,
         error:reason==="KBN_DISCOVERY_BUDGET"
-          ?"本日のGoogle開拓枠70回に到達しました。メンテナンス用Google枠を温存します"
+          ?"本日のGoogle開拓枠に到達しました"
+          :reason==="KBN_AUTO_SLOT_BUDGET"
+            ?"この3時間枠の自動Google上限15回に到達しました。次の3時間枠で続きから再開します"
+          :reason==="KBN_AUTO_DAILY_BUDGET"
+            ?"本日の自動Google上限120回に到達しました。30回分を手動・予備用に温存します"
           :reason==='KBN_MONTHLY_BUDGET'
             ?"Google Places 月間節約上限 4,500回に到達しました"
             :"Google Places 1日節約上限 150回に到達しました",
@@ -8180,8 +8340,21 @@ async function kbnQueueMaintenanceV242(env,runDate,initialCreated=0){
 
 async function kbnQueueHourlyMaintenanceV413(env,runKey=''){
   await ensureKbnMaintenanceQueueV242(env);
-  const q=await env.DB.prepare(`SELECT phase FROM kbn_maintenance_queue WHERE id=1`).first();
-  if(Number(q?.phase||0)!==0)return {queued:false,reason:'QUEUE_BUSY'};
+  const q=await env.DB.prepare(`
+    SELECT phase,run_date,created_total,discovery_searched
+    FROM kbn_maintenance_queue WHERE id=1
+  `).first();
+  if(Number(q?.phase||0)!==0){
+    return {
+      queued:false,
+      continuing:true,
+      reason:'CONTINUE_PREVIOUS',
+      phase:Number(q?.phase||0),
+      run_date:String(q?.run_date||""),
+      created_total:Number(q?.created_total||0),
+      discovery_searched:Number(q?.discovery_searched||0)
+    };
+  }
   // v4.33: 3時間ごとの自動運転は掲載数と店舗精度をバランス良く処理。
   // phase 11から省CPU開拓で最低3・最大10店舗を狙い、
   // その後は 情報不足 → VERIFIED補完×3 → SEO を実行する。
@@ -8235,29 +8408,21 @@ async function kbnPreemptOldHourlyForCurrentSlotV437(env,hourly){
     FROM kbn_maintenance_queue WHERE id=1
   `).first();
   const phase=Number(q?.phase||0);
-  const oldKey=String(q?.run_date||'');
-  const currentKey=String(hourly?.run_key||'');
 
-  if(!phase || !/\bJST\b/i.test(oldKey) || oldKey===currentKey){
-    return {preempted:false};
+  // v4.61: 未完了キューを絶対に打ち切らない。
+  // 新しい3時間枠が来ても、前回の phase / cursor / 開拓進捗を保持して続きから処理する。
+  if(phase>0){
+    return {
+      preempted:false,
+      continuing:true,
+      old_run_key:String(q?.run_date||""),
+      current_run_key:String(hourly?.run_key||""),
+      phase,
+      created_total:Number(q?.created_total||0),
+      discovery_searched:Number(q?.discovery_searched||0)
+    };
   }
-
-  // A new 3-hour slot always wins. Do not let an unfinished old slot block the next scheduled cycle.
-  await logKbnMaintenanceHistoryV414(env,{
-    q,phase,task:'hourly_preempt',
-    result:{ok:true,checked:0},
-    status:'success',
-    note:`次の3時間枠を優先するため未完了処理を打切り / ${oldKey} → ${currentKey} / 新規${Number(q?.created_total||0)}店・${Number(q?.discovery_searched||0)}検索`
-  });
-
-  await env.DB.prepare(`
-    UPDATE kbn_maintenance_queue
-    SET phase=0,run_date=NULL,created_total=0,discovery_searched=0,discovery_mode='normal',
-        discovery_retry_count=0,discovery_retry_after=NULL,updated_at=CURRENT_TIMESTAMP
-    WHERE id=1
-  `).run();
-
-  return {preempted:true,old_run_key:oldKey,current_run_key:currentKey};
+  return {preempted:false,continuing:false};
 }
 
 async function ensureKbnMaintenanceHistoryV414(env){
@@ -8778,6 +8943,24 @@ async function kbnProcessQueuedMaintenanceV242(env){
   let createdTotal=Math.max(0,Number(q?.created_total||0));
   if(!phase)return {ok:true,processed:false};
 
+  // v4.61: 自動Google枠を使い切ったら phase を進めず、その場で停止。
+  // 次の3時間枠では同じ phase / 各タスクのcursorから必ず続行する。
+  try{
+    const autoBudget=await kbnAutoGoogleBudgetStatusV461(env);
+    if(autoBudget.blocked){
+      return {
+        ok:true,processed:true,waiting:true,
+        phase,
+        task:'google_budget_wait',
+        reason:autoBudget.blocked_reason,
+        auto_budget:autoBudget,
+        continue_from_same_phase:true
+      };
+    }
+  }catch(e){
+    console.error("auto google budget status failed",e);
+  }
+
   // v4.26: 毎時間自動開拓を手動開拓と同じ「2検索ごとに候補再選択」方式へ統一。
   // 通常は2検索×5サイクル。エラー時は3サイクル→1サイクルへ減速する。
   if(phase>=11 && phase<=49){
@@ -9019,7 +9202,14 @@ async function kbnProcessQueuedMaintenanceV242(env){
     result={ok:false,error:String(e?.message||e),task};
   }
 
-  const nextPhase=phase>=6?0:phase+1;
+  let holdSamePhase=false;
+  let autoBudgetAfter=null;
+  try{
+    autoBudgetAfter=await kbnAutoGoogleBudgetStatusV461(env);
+    holdSamePhase=!!autoBudgetAfter?.blocked;
+  }catch{}
+
+  const nextPhase=holdSamePhase?phase:(phase>=6?0:phase+1);
   await env.DB.prepare(`
     UPDATE kbn_maintenance_queue SET phase=?,updated_at=CURRENT_TIMESTAMP WHERE id=1
   `).bind(nextPhase).run();
@@ -9035,7 +9225,9 @@ async function kbnProcessQueuedMaintenanceV242(env){
           ?`位置情報補完 / 確認${Number(result?.checked||0)}店 / 座標追加${Array.isArray(result?.updated)?result.updated.length:0}店${result?.skipped?` / ${String(result.reason||"予算温存")}`:""}`
         :googleBudgetSkip
           ?`Google節約上限:${googleBudgetReason} / Google追加送信0回・代替/既存情報で処理`
-          :''
+          :holdSamePhase
+            ?`自動Google枠到達 / phase ${phase}を保持 / 次の3時間枠で必ず続きから再開`
+            :''
   });
 
   try{
@@ -11231,6 +11423,12 @@ export default {
       // ---------- System health & daily report v4.52 ----------
       if(url.pathname==="/api/admin/geo-status" && request.method==="GET"){
         return json({ok:true,coverage:await kbnGeoCoverageV457(env)},{headers:{"Cache-Control":"no-store"}});
+      }
+
+      if(url.pathname==="/api/admin/auto-google-budget" && request.method==="GET"){
+        const auto=await kbnAutoGoogleBudgetStatusV461(env);
+        const queue=await kbnMaintenanceQueueActiveV461(env);
+        return json({ok:true,auto,queue},{headers:{"Cache-Control":"no-store"}});
       }
 
       if(url.pathname==="/api/admin/maintenance-progress" && request.method==="GET"){
