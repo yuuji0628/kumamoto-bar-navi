@@ -64,6 +64,15 @@
 @media(max-width:560px){.kbn-smart-tools-v456{margin-left:-2px;margin-right:-2px}.kbn-card-subactions-v456{grid-template-columns:1fr}}
 </style>
 
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<style id="kbn-map-exact-v457">
+#kbnMapPanelV457{display:none;margin-top:12px;border:1px solid #334652;border-radius:15px;overflow:hidden;background:#0d151d}
+#kbnMapPanelV457.is-open{display:block}
+#kbnMapV457{height:min(62vh,540px);min-height:360px}
+.kbn-map-head-v457{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:9px 11px}
+.kbn-map-head-v457 b{font-size:.72rem;color:#eef2f5}.kbn-map-head-v457 small{color:#7f8c98;font-size:.59rem}
+</style>
 </head>
 <body class="public-v109 public-v142">
 
@@ -112,6 +121,7 @@
           <button type="button" id="kbnOpenNowV456">● 今営業中</button>
           <button type="button" id="kbnNearbyV456">⌖ 近い順</button>
           <button type="button" id="kbnFavOnlyV456">♥ お気に入り</button>
+          <button type="button" id="kbnMapToggleV457">🗺 地図表示</button>
           <button type="button" data-kbn-use-v456="一人">一人飲み</button>
           <button type="button" data-kbn-use-v456="デート">デート</button>
           <button type="button" data-kbn-use-v456="二次会">二次会</button>
@@ -122,6 +132,11 @@
           <button type="button" id="kbnTonightBtnV456">✨ 今夜どこ行く？</button>
           <button type="button" id="kbnClearSmartV456">条件をリセット</button>
         </div>
+      </div>
+
+      <div id="kbnMapPanelV457">
+        <div class="kbn-map-head-v457"><b>近くのBARマップ</b><small id="kbnMapCountV457">位置情報を読み込み中...</small></div>
+        <div id="kbnMapV457"></div>
       </div>
     </div>
   </section>
@@ -186,6 +201,10 @@ let kbnFavOnlyV456=false;
 let kbnUseCaseV456="";
 let kbnUserPosV456=null;
 let kbnQuizMoodV456="";
+let kbnLastFilteredV457=[];
+let kbnMapV457=null;
+let kbnMapLayerV457=null;
+let kbnUserMarkerV457=null;
 const $=id=>document.getElementById(id);
 const esc=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 
@@ -282,11 +301,26 @@ function kbnDistanceKmV456(lat1,lon1,lat2,lon2){
   const a=Math.sin(dLat/2)**2+Math.cos(toR(lat1))*Math.cos(toR(lat2))*Math.sin(dLon/2)**2;
   return 2*R*Math.asin(Math.sqrt(a));
 }
-function kbnApproxDistanceV456(s){
+function kbnDistanceInfoV457(s){
   if(!kbnUserPosV456)return null;
+  const lat=Number(s.lat),lng=Number(s.lng);
+  if(Number.isFinite(lat)&&Number.isFinite(lng)){
+    const km=kbnDistanceKmV456(kbnUserPosV456.lat,kbnUserPosV456.lng,lat,lng);
+    return {km,exact:true,walkMin:Math.max(1,Math.round((km*1.22/4.8)*60))};
+  }
   const center=KBN_AREA_CENTERS_V456[normalizeArea(s.area)];
   if(!center)return null;
-  return kbnDistanceKmV456(kbnUserPosV456.lat,kbnUserPosV456.lng,center[0],center[1]);
+  return {km:kbnDistanceKmV456(kbnUserPosV456.lat,kbnUserPosV456.lng,center[0],center[1]),exact:false,walkMin:null};
+}
+function kbnApproxDistanceV456(s){return kbnDistanceInfoV457(s)?.km??null}
+function kbnDistanceLabelV457(s){
+  const d=kbnDistanceInfoV457(s);if(!d)return "";
+  if(d.exact){
+    if(d.km<1)return `現在地から約${Math.max(10,Math.round(d.km*1000/10)*10)}m・徒歩約${d.walkMin}分`;
+    if(d.km<=3)return `現在地から約${d.km.toFixed(1)}km・徒歩約${d.walkMin}分`;
+    return `現在地から約${d.km.toFixed(1)}km`;
+  }
+  return `現在地から約${d.km<10?d.km.toFixed(1):Math.round(d.km)}km（エリア目安）`;
 }
 function kbnUseMatchV456(s,term){
   if(!term)return true;
@@ -301,13 +335,15 @@ function kbnUseMatchV456(s,term){
   return (aliases[term]||[term]).some(x=>text.includes(String(x).toLowerCase()));
 }
 function render(list){
+  kbnLastFilteredV457=list;
   $("resultCount").textContent=`${list.length}店舗`;
   $("noResult").hidden=!!list.length;
   const favs=kbnFavsV456();
   $("barCards").innerHTML=list.map(s=>{
     const name=cleanName(s.name),features=featureTokens(s.features).slice(0,2),budget=money(s);
-    const os=kbnOpenStateV456(s.hours),dist=kbnApproxDistanceV456(s);
-    const mapQuery=encodeURIComponent([name,s.address||"",normalizeArea(s.area)].filter(Boolean).join(" "));
+    const os=kbnOpenStateV456(s.hours),dist=kbnApproxDistanceV456(s),distanceLabel=kbnDistanceLabelV457(s);
+    const exactGeo=Number.isFinite(Number(s.lat))&&Number.isFinite(Number(s.lng));
+    const mapQuery=encodeURIComponent(exactGeo?`${Number(s.lat)},${Number(s.lng)}`:[name,s.address||"",normalizeArea(s.area)].filter(Boolean).join(" "));
     return `<div class="public-directory-card">
       <button type="button" class="kbn-fav-btn-v456${favs.has(String(s.slug))?" is-fav":""}" data-fav-slug="${esc(s.slug)}" aria-label="お気に入り">${favs.has(String(s.slug))?"♥":"♡"}</button>
       <a href="/shop?slug=${encodeURIComponent(s.slug)}" style="display:contents;color:inherit;text-decoration:none">
@@ -320,7 +356,7 @@ function render(list){
           <h3>${esc(name)}</h3>
           <div class="kbn-card-status-v456">
             <span class="kbn-open-v456 ${os.known?(os.open?"is-open":"is-closed"):"is-unknown"}">${esc(os.label)}</span>
-            ${dist!=null?`<span class="kbn-distance-v456">現在地から約${dist<10?dist.toFixed(1):Math.round(dist)}km（エリア目安）</span>`:""}
+            ${distanceLabel?`<span class="kbn-distance-v456">${esc(distanceLabel)}</span>`:""}
           </div>
           <div class="public-card-tags">
             ${s.area?`<span>${esc(normalizeArea(s.area))}</span>`:""}
@@ -343,6 +379,53 @@ function render(list){
   }).join("");
   document.querySelectorAll("[data-fav-slug]").forEach(btn=>btn.onclick=e=>{e.preventDefault();e.stopPropagation();kbnToggleFavV456(btn.dataset.favSlug,btn)});
 }
+
+function kbnWaitLeafletV457(){
+  return new Promise((resolve,reject)=>{
+    const started=Date.now(),t=setInterval(()=>{
+      if(window.L){clearInterval(t);resolve(window.L)}
+      else if(Date.now()-started>8000){clearInterval(t);reject(new Error("MAP_LIBRARY_TIMEOUT"))}
+    },100);
+  });
+}
+async function kbnEnsureMapV457(){
+  if(kbnMapV457)return kbnMapV457;
+  const L=await kbnWaitLeafletV457();
+  kbnMapV457=L.map("kbnMapV457").setView([32.8031,130.7079],11);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"&copy; OpenStreetMap contributors"}).addTo(kbnMapV457);
+  kbnMapLayerV457=L.layerGroup().addTo(kbnMapV457);
+  setTimeout(()=>kbnMapV457.invalidateSize(),60);
+  return kbnMapV457;
+}
+async function kbnRenderMapV457(){
+  if(!$("kbnMapPanelV457")?.classList.contains("is-open"))return;
+  try{
+    const map=await kbnEnsureMapV457(),L=window.L;
+    kbnMapLayerV457.clearLayers();
+    const pins=[];
+    for(const s of kbnLastFilteredV457.slice(0,300)){
+      const lat=Number(s.lat),lng=Number(s.lng);
+      if(!Number.isFinite(lat)||!Number.isFinite(lng))continue;
+      const name=cleanName(s.name);
+      L.marker([lat,lng]).bindPopup(`<b>${esc(name)}</b><br>${esc([normalizeArea(s.area),s.genre].filter(Boolean).join(" / "))}<br><a href="/shop?slug=${encodeURIComponent(s.slug)}">店舗を見る →</a>`).addTo(kbnMapLayerV457);
+      pins.push([lat,lng]);
+    }
+    if(kbnUserMarkerV457){map.removeLayer(kbnUserMarkerV457);kbnUserMarkerV457=null}
+    if(kbnUserPosV456){
+      kbnUserMarkerV457=L.circleMarker([kbnUserPosV456.lat,kbnUserPosV456.lng],{radius:8}).bindPopup("現在地").addTo(map);
+      pins.push([kbnUserPosV456.lat,kbnUserPosV456.lng]);
+    }
+    if($("kbnMapCountV457"))$("kbnMapCountV457").textContent=`座標あり ${pins.length-(kbnUserPosV456?1:0)}店舗を表示`;
+    if(pins.length>1)map.fitBounds(pins,{padding:[24,24],maxZoom:15});
+    else if(pins.length===1)map.setView(pins[0],14);
+    setTimeout(()=>map.invalidateSize(),80);
+  }catch(e){if($("kbnMapCountV457"))$("kbnMapCountV457").textContent="地図を読み込めませんでした"}
+}
+async function kbnToggleMapV457(){
+  const panel=$("kbnMapPanelV457"),btn=$("kbnMapToggleV457"),open=!panel.classList.contains("is-open");
+  panel.classList.toggle("is-open",open);btn?.classList.toggle("is-active",open);
+  if(open)await kbnRenderMapV457();
+}
 function filter(){
   const area=$("areaFilter").value,genre=$("genreFilter").value,q=$("keyword").value.trim().toLowerCase();
   const favs=kbnFavsV456();
@@ -360,6 +443,7 @@ function filter(){
     filtered=[...filtered].sort((x,y)=>(kbnApproxDistanceV456(x)??9999)-(kbnApproxDistanceV456(y)??9999));
   }
   render(filtered);
+  if($("kbnMapPanelV457")?.classList.contains("is-open"))kbnRenderMapV457();
   const url=new URL(location.href);
   area?url.searchParams.set("area",area):url.searchParams.delete("area");
   genre?url.searchParams.set("genre",genre):url.searchParams.delete("genre");
@@ -373,6 +457,8 @@ function applyUrlFilters(){
   $("genreFilter").value=p.get("genre")||"";
   $("keyword").value=p.get("q")||p.get("keyword")||"";
   if(p.get("open")==="1"){kbnOpenOnlyV456=true;$("kbnOpenNowV456")?.classList.add("is-active")}
+  if(p.get("near")==="1")setTimeout(()=>kbnEnableNearbyV456(),250);
+  if(p.get("quiz")==="1")setTimeout(()=>kbnOpenQuizV456(),350);
 }
 function kbnSetSmartStatusV456(text){const el=$("kbnSmartStatusV456");if(el)el.textContent=text}
 async function kbnEnableNearbyV456(){
@@ -382,8 +468,9 @@ async function kbnEnableNearbyV456(){
   navigator.geolocation.getCurrentPosition(pos=>{
     kbnUserPosV456={lat:pos.coords.latitude,lng:pos.coords.longitude};
     kbnNearbyV456=true;$("kbnNearbyV456").classList.add("is-active");
-    kbnSetSmartStatusV456("現在地からエリア中心までの距離目安で並べ替え");
+    kbnSetSmartStatusV456("座標あり店舗は実距離、未補完店舗はエリア目安で並べ替え");
     filter();
+    if($("kbnMapPanelV457")?.classList.contains("is-open"))kbnRenderMapV457();
   },()=>{
     kbnSetSmartStatusV456("現在地を取得できませんでした");
     alert("位置情報を許可すると近い順で探せます。");
@@ -423,6 +510,7 @@ document.querySelectorAll("[data-quick-q]").forEach(b=>b.addEventListener("click
 $("kbnOpenNowV456").onclick=()=>{kbnOpenOnlyV456=!kbnOpenOnlyV456;$("kbnOpenNowV456").classList.toggle("is-active",kbnOpenOnlyV456);filter()};
 $("kbnNearbyV456").onclick=kbnEnableNearbyV456;
 $("kbnFavOnlyV456").onclick=()=>{kbnFavOnlyV456=!kbnFavOnlyV456;$("kbnFavOnlyV456").classList.toggle("is-active",kbnFavOnlyV456);filter()};
+$("kbnMapToggleV457").onclick=kbnToggleMapV457;
 document.querySelectorAll("[data-kbn-use-v456]").forEach(b=>b.onclick=()=>{
   const v=b.dataset.kbnUseV456||"";kbnUseCaseV456=kbnUseCaseV456===v?"":v;
   document.querySelectorAll("[data-kbn-use-v456]").forEach(x=>x.classList.toggle("is-active",(x.dataset.kbnUseV456||"")===kbnUseCaseV456));
