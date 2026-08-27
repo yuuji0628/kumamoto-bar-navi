@@ -21,6 +21,49 @@
   "description":"熊本県内のBARをエリア・ジャンル・キーワードから探せる一覧ページ"
 }
 </script>
+
+<style id="kbn-public-convenience-v456">
+.kbn-smart-tools-v456{margin-top:14px;padding:12px;border:1px solid #33424f;border-radius:16px;background:#0d151d}
+.kbn-smart-tools-v456>div:first-child{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap}
+.kbn-smart-tools-v456 strong{font-size:.78rem;color:#eef2f5}
+.kbn-smart-tools-v456 small{color:#7e8a95;font-size:.62rem}
+.kbn-smart-actions-v456{display:flex;gap:7px;overflow:auto;padding:9px 0 2px;scrollbar-width:none}
+.kbn-smart-actions-v456::-webkit-scrollbar{display:none}
+.kbn-smart-actions-v456 button{flex:0 0 auto;min-height:38px;padding:0 11px;border:1px solid #3a4955;border-radius:999px;background:#101923;color:#cbd3da;font-size:.67rem;font-weight:850}
+.kbn-smart-actions-v456 button.is-active{border-color:#b98a22;background:#2a220f;color:#f1c653}
+.kbn-fav-btn-v456{position:absolute;right:10px;top:10px;z-index:3;width:38px;height:38px;border:1px solid rgba(255,255,255,.18);border-radius:999px;background:rgba(8,13,19,.84);color:#fff;font-size:18px;display:grid;place-items:center;backdrop-filter:blur(8px)}
+.kbn-fav-btn-v456.is-fav{color:#f3c85a;border-color:#a77b1f;background:rgba(45,35,12,.92)}
+.public-directory-card{position:relative}
+.kbn-card-status-v456{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 2px}
+.kbn-open-v456,.kbn-distance-v456{display:inline-flex;align-items:center;min-height:24px;padding:3px 7px;border-radius:999px;font-size:.59rem;font-weight:850}
+.kbn-open-v456.is-open{background:#10251a;color:#7ee2a8;border:1px solid #285c40}
+.kbn-open-v456.is-closed{background:#211719;color:#ffabab;border:1px solid #61393f}
+.kbn-open-v456.is-unknown{background:#171d24;color:#9ba7b2;border:1px solid #34414c}
+.kbn-distance-v456{background:#151d25;color:#aeb9c3;border:1px solid #33414d}
+.kbn-card-subactions-v456{display:flex;gap:7px;margin-top:10px}
+.kbn-card-subactions-v456 a{flex:1;display:flex;justify-content:center;align-items:center;min-height:36px;border:1px solid #344451;border-radius:9px;color:#cbd4db;text-decoration:none;font-size:.63rem;font-weight:800}
+.kbn-tonight-v456{margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.kbn-tonight-v456 button{min-height:46px;border-radius:12px;font-weight:900}
+#kbnTonightBtnV456{border:0;background:#e9be54;color:#111}
+#kbnClearSmartV456{border:1px solid #3d4a56;background:#111a23;color:#d7dee4}
+.kbn-quiz-modal-v456{display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.76);padding:18px;overflow:auto}
+.kbn-quiz-modal-v456.is-open{display:block}
+.kbn-quiz-card-v456{width:min(560px,100%);margin:5vh auto;padding:16px;border:1px solid #374856;border-radius:18px;background:#0d151d;color:#eef2f5}
+.kbn-quiz-card-v456 h2{margin:4px 0 6px;font-size:1.25rem}
+.kbn-quiz-grid-v456{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}
+.kbn-quiz-grid-v456 button{min-height:46px;border:1px solid #394955;border-radius:11px;background:#111b24;color:#d8e0e6;font-weight:850}
+.kbn-quiz-grid-v456 button.is-active{border-color:#b88c28;background:#2c220e;color:#efc45a}
+.kbn-quiz-result-v456{display:grid;gap:8px;margin-top:12px}
+.kbn-quiz-result-v456 a{display:block;padding:11px;border:1px solid #334652;border-radius:11px;background:#101a22;color:#eef2f5;text-decoration:none}
+.kbn-quiz-result-v456 b,.kbn-quiz-result-v456 span{display:block}
+.kbn-quiz-result-v456 span{margin-top:3px;color:#8c99a4;font-size:.64rem}
+.kbn-quiz-footer-v456{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.kbn-quiz-footer-v456 button{min-height:44px;border-radius:10px;font-weight:900}
+#kbnQuizRunV456{border:0;background:#e9be54;color:#111}
+#kbnQuizCloseV456{border:1px solid #41505c;background:#111a22;color:#e7edf1}
+@media(max-width:560px){.kbn-smart-tools-v456{margin-left:-2px;margin-right:-2px}.kbn-card-subactions-v456{grid-template-columns:1fr}}
+</style>
+
 </head>
 <body class="public-v109 public-v142">
 
@@ -62,6 +105,24 @@
         <button type="button" data-quick-q="シーシャ">シーシャ</button>
         <button type="button" data-quick-q="一人飲み">一人飲み</button>
       </div>
+
+      <div class="kbn-smart-tools-v456">
+        <div><strong>今夜の店探しをもっと早く</strong><small id="kbnSmartStatusV456">条件をワンタップで追加</small></div>
+        <div class="kbn-smart-actions-v456">
+          <button type="button" id="kbnOpenNowV456">● 今営業中</button>
+          <button type="button" id="kbnNearbyV456">⌖ 近い順</button>
+          <button type="button" id="kbnFavOnlyV456">♥ お気に入り</button>
+          <button type="button" data-kbn-use-v456="一人">一人飲み</button>
+          <button type="button" data-kbn-use-v456="デート">デート</button>
+          <button type="button" data-kbn-use-v456="二次会">二次会</button>
+          <button type="button" data-kbn-use-v456="深夜">深夜営業</button>
+          <button type="button" data-kbn-use-v456="静か">静かめ</button>
+        </div>
+        <div class="kbn-tonight-v456">
+          <button type="button" id="kbnTonightBtnV456">✨ 今夜どこ行く？</button>
+          <button type="button" id="kbnClearSmartV456">条件をリセット</button>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -88,6 +149,28 @@
   </section>
 </main>
 
+
+<div id="kbnQuizModalV456" class="kbn-quiz-modal-v456" aria-hidden="true">
+  <div class="kbn-quiz-card-v456">
+    <p class="public-kicker">TONIGHT PICK</p>
+    <h2>今夜どこ行く？</h2>
+    <p style="margin:0;color:#8e9aa5;font-size:.7rem;line-height:1.55">気分を選ぶと、掲載店から最大3店舗を提案します。</p>
+    <div class="kbn-quiz-grid-v456" id="kbnQuizMoodV456">
+      <button type="button" data-mood="">おまかせ</button>
+      <button type="button" data-mood="一人">一人でゆっくり</button>
+      <button type="button" data-mood="デート">デート</button>
+      <button type="button" data-mood="カラオケ">盛り上がりたい</button>
+      <button type="button" data-mood="ダーツ">遊びたい</button>
+      <button type="button" data-mood="静か">静かに飲みたい</button>
+    </div>
+    <div class="kbn-quiz-result-v456" id="kbnQuizResultV456"></div>
+    <div class="kbn-quiz-footer-v456">
+      <button type="button" id="kbnQuizRunV456">3店舗選ぶ</button>
+      <button type="button" id="kbnQuizCloseV456">閉じる</button>
+    </div>
+  </div>
+</div>
+
 <nav class="public-bottom-nav" aria-label="スマホ用メニュー">
   <a href="index.html"><span>⌂</span><b>ホーム</b></a>
   <a href="bars.html" class="active"><span>⌕</span><b>BARを探す</b></a>
@@ -97,6 +180,12 @@
 
 <script>
 let allShops=[];
+let kbnOpenOnlyV456=false;
+let kbnNearbyV456=false;
+let kbnFavOnlyV456=false;
+let kbnUseCaseV456="";
+let kbnUserPosV456=null;
+let kbnQuizMoodV456="";
 const $=id=>document.getElementById(id);
 const esc=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 
@@ -110,19 +199,18 @@ function cleanName(s){
 function isEditorial(s){
   return String(s.listing_status||"")==="provisional" || /^【KBN独自掲載】/.test(String(s.name||""));
 }
-function featureTokens(v){
-  return String(v||"").split(/[、,／/・\s]+/).map(x=>x.trim()).filter(Boolean);
-}
+function featureTokens(v){return String(v||"").split(/[、,／/・\s]+/).map(x=>x.trim()).filter(Boolean);}
 const KBN_AREAS=["熊本市","八代市","人吉市","荒尾市","水俣市","玉名市","山鹿市","菊池市","宇土市","上天草市","宇城市","阿蘇市","天草市","合志市","美里町","玉東町","南関町","長洲町","和水町","大津町","菊陽町","南小国町","小国町","産山村","高森町","西原村","南阿蘇村","御船町","嘉島町","益城町","甲佐町","山都町","氷川町","芦北町","津奈木町","錦町","多良木町","湯前町","水上村","相良村","五木村","山江村","球磨村","あさぎり町","苓北町"];
 const KBN_AREA_ALIASES={
   "熊本市中央区":"熊本市","熊本市東区":"熊本市","熊本市西区":"熊本市","熊本市南区":"熊本市","熊本市北区":"熊本市",
   "八代郡氷川町":"氷川町","葦北郡芦北町":"芦北町","葦北郡津奈木町":"津奈木町",
   "上益城郡御船町":"御船町","上益城郡嘉島町":"嘉島町","上益城郡益城町":"益城町","上益城郡甲佐町":"甲佐町","上益城郡山都町":"山都町",
-  "菊池郡大津町":"大津町","菊池郡菊陽町":"菊陽町",
-  "玉名郡玉東町":"玉東町","玉名郡南関町":"南関町","玉名郡長洲町":"長洲町","玉名郡和水町":"和水町",
+  "菊池郡大津町":"大津町","菊池郡菊陽町":"菊陽町","玉名郡玉東町":"玉東町","玉名郡南関町":"南関町","玉名郡長洲町":"長洲町","玉名郡和水町":"和水町",
   "阿蘇郡南小国町":"南小国町","阿蘇郡小国町":"小国町","阿蘇郡産山村":"産山村","阿蘇郡高森町":"高森町","阿蘇郡西原村":"西原村","阿蘇郡南阿蘇村":"南阿蘇村",
-  "下益城郡美里町":"美里町","天草郡苓北町":"苓北町",
-  "球磨郡錦町":"錦町","球磨郡多良木町":"多良木町","球磨郡湯前町":"湯前町","球磨郡水上村":"水上村","球磨郡相良村":"相良村","球磨郡五木村":"五木村","球磨郡山江村":"山江村","球磨郡球磨村":"球磨村","球磨郡あさぎり町":"あさぎり町"
+  "下益城郡美里町":"美里町","天草郡苓北町":"苓北町","球磨郡錦町":"錦町","球磨郡多良木町":"多良木町","球磨郡湯前町":"湯前町","球磨郡水上村":"水上村","球磨郡相良村":"相良村","球磨郡五木村":"五木村","球磨郡山江村":"山江村","球磨郡球磨村":"球磨村","球磨郡あさぎり町":"あさぎり町"
+};
+const KBN_AREA_CENTERS_V456={
+"熊本市":[32.8031,130.7079],"八代市":[32.5074,130.6016],"人吉市":[32.2168,130.7549],"荒尾市":[32.9866,130.4334],"水俣市":[32.2116,130.4087],"玉名市":[32.9284,130.5598],"山鹿市":[33.0175,130.6910],"菊池市":[32.9798,130.8135],"宇土市":[32.6874,130.6584],"上天草市":[32.5874,130.4303],"宇城市":[32.6477,130.6840],"阿蘇市":[32.9517,131.1213],"天草市":[32.4587,130.1931],"合志市":[32.8859,130.7899],"大津町":[32.8784,130.8683],"菊陽町":[32.8596,130.8280],"益城町":[32.7918,130.8162],"嘉島町":[32.7409,130.7579],"御船町":[32.7146,130.8016],"西原村":[32.8340,130.9030],"南阿蘇村":[32.8456,131.0315],"高森町":[32.8274,131.1227],"小国町":[33.1217,131.0684],"南小国町":[33.0980,131.0705],"芦北町":[32.2991,130.4937],"氷川町":[32.5824,130.6732],"錦町":[32.2014,130.8410],"あさぎり町":[32.2378,130.8972],"苓北町":[32.5144,130.0555]
 };
 function normalizeArea(v){
   const s=String(v||"").trim();
@@ -143,86 +231,213 @@ function money(s){
   return "";
 }
 function cardMedia(s){
-  const name=cleanName(s.name);
-  const src=s.image_url||"default-bar.svg";
+  const name=cleanName(s.name),src=s.image_url||"default-bar.svg";
   return `<div class="public-card-photo${s.image_url?"":" is-placeholder"}">
     <img src="${esc(src)}" alt="${esc(name)}" loading="lazy" onerror="this.onerror=null;this.src='default-bar.svg'">
     ${s.is_new?'<span class="public-photo-badge">NEW</span>':""}
   </div>`;
 }
+function kbnFavsV456(){
+  try{return new Set(JSON.parse(localStorage.getItem("kbn_public_favorites_v456")||"[]").map(String))}catch{return new Set()}
+}
+function kbnToggleFavV456(slug,btn){
+  const favs=kbnFavsV456(),key=String(slug||"");
+  favs.has(key)?favs.delete(key):favs.add(key);
+  localStorage.setItem("kbn_public_favorites_v456",JSON.stringify([...favs]));
+  btn?.classList.toggle("is-fav",favs.has(key));
+  if(btn)btn.textContent=favs.has(key)?"♥":"♡";
+  if(kbnFavOnlyV456)filter();
+}
+function kbnMinutesV456(h,m){return Number(h)*60+Number(m)}
+function kbnParseTimeV456(x){
+  const m=String(x||"").match(/(\d{1,2})[:：](\d{2})/);
+  if(!m)return null;
+  let mins=kbnMinutesV456(m[1],m[2]);
+  if(Number(m[1])>=24)mins-=24*60;
+  return mins;
+}
+function kbnOpenStateV456(hours){
+  const raw=String(hours||"").trim();
+  if(!raw)return {known:false,open:false,label:"営業時間未確認"};
+  if(/24時間/.test(raw))return {known:true,open:true,label:"営業中"};
+  const now=new Date(),cur=now.getHours()*60+now.getMinutes();
+  const times=[...raw.matchAll(/(\d{1,2})[:：](\d{2})/g)].map(m=>{
+    let v=Number(m[1])*60+Number(m[2]);
+    if(Number(m[1])>=24)v-=1440;
+    return v;
+  });
+  if(times.length<2)return {known:false,open:false,label:"営業時間要確認"};
+  for(let i=0;i+1<times.length;i+=2){
+    const start=times[i],end=times[i+1];
+    if(start===end)return {known:true,open:true,label:"営業中"};
+    if(end<start){
+      if(cur>=start||cur<=end)return {known:true,open:true,label:"営業中"};
+    }else if(cur>=start&&cur<=end)return {known:true,open:true,label:"営業中"};
+  }
+  return {known:true,open:false,label:"営業時間外"};
+}
+function kbnDistanceKmV456(lat1,lon1,lat2,lon2){
+  const R=6371,toR=x=>x*Math.PI/180;
+  const dLat=toR(lat2-lat1),dLon=toR(lon2-lon1);
+  const a=Math.sin(dLat/2)**2+Math.cos(toR(lat1))*Math.cos(toR(lat2))*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+function kbnApproxDistanceV456(s){
+  if(!kbnUserPosV456)return null;
+  const center=KBN_AREA_CENTERS_V456[normalizeArea(s.area)];
+  if(!center)return null;
+  return kbnDistanceKmV456(kbnUserPosV456.lat,kbnUserPosV456.lng,center[0],center[1]);
+}
+function kbnUseMatchV456(s,term){
+  if(!term)return true;
+  const text=[s.genre,s.features,s.description,s.hours,cleanName(s.name)].join(" ").toLowerCase();
+  const aliases={
+    "一人":["一人","ひとり","カウンター","静か"],
+    "デート":["デート","カクテル","夜景","おしゃれ","落ち着"],
+    "二次会":["二次会","カラオケ","ダーツ","飲み放題"],
+    "深夜":["深夜","翌","24:","25:","26:","27:","28:"],
+    "静か":["静か","落ち着","隠れ家","カウンター"]
+  };
+  return (aliases[term]||[term]).some(x=>text.includes(String(x).toLowerCase()));
+}
 function render(list){
   $("resultCount").textContent=`${list.length}店舗`;
   $("noResult").hidden=!!list.length;
+  const favs=kbnFavsV456();
   $("barCards").innerHTML=list.map(s=>{
-    const name=cleanName(s.name);
-    const features=featureTokens(s.features).slice(0,2);
-    const budget=money(s);
-    return `<a class="public-directory-card" href="/shop?slug=${encodeURIComponent(s.slug)}">
-      ${cardMedia(s)}
-      <div class="public-directory-card-body">
-        <div class="public-card-meta">
-          ${isEditorial(s)?'<span class="public-editorial-badge">KBN独自掲載</span>':'<span class="public-official-badge"><i>✓</i>正式掲載店舗</span>'}
-          ${s.is_featured?'<span class="public-recommend-badge">おすすめ</span>':""}
+    const name=cleanName(s.name),features=featureTokens(s.features).slice(0,2),budget=money(s);
+    const os=kbnOpenStateV456(s.hours),dist=kbnApproxDistanceV456(s);
+    const mapQuery=encodeURIComponent([name,s.address||"",normalizeArea(s.area)].filter(Boolean).join(" "));
+    return `<div class="public-directory-card">
+      <button type="button" class="kbn-fav-btn-v456${favs.has(String(s.slug))?" is-fav":""}" data-fav-slug="${esc(s.slug)}" aria-label="お気に入り">${favs.has(String(s.slug))?"♥":"♡"}</button>
+      <a href="/shop?slug=${encodeURIComponent(s.slug)}" style="display:contents;color:inherit;text-decoration:none">
+        ${cardMedia(s)}
+        <div class="public-directory-card-body">
+          <div class="public-card-meta">
+            ${isEditorial(s)?'<span class="public-editorial-badge">KBN独自掲載</span>':'<span class="public-official-badge"><i>✓</i>正式掲載店舗</span>'}
+            ${s.is_featured?'<span class="public-recommend-badge">おすすめ</span>':""}
+          </div>
+          <h3>${esc(name)}</h3>
+          <div class="kbn-card-status-v456">
+            <span class="kbn-open-v456 ${os.known?(os.open?"is-open":"is-closed"):"is-unknown"}">${esc(os.label)}</span>
+            ${dist!=null?`<span class="kbn-distance-v456">現在地から約${dist<10?dist.toFixed(1):Math.round(dist)}km（エリア目安）</span>`:""}
+          </div>
+          <div class="public-card-tags">
+            ${s.area?`<span>${esc(normalizeArea(s.area))}</span>`:""}
+            ${s.genre?`<span>${esc(s.genre)}</span>`:""}
+            ${features.map(x=>`<span>${esc(x)}</span>`).join("")}
+          </div>
+          <div class="public-card-facts">
+            ${s.hours?`<span><small>営業時間</small><b>${esc(s.hours)}</b></span>`:""}
+            ${budget?`<span><small>料金目安</small><b>${esc(budget)}</b></span>`:""}
+          </div>
+          <p>${esc((s.description||"").replace(/※本ページ[\s\S]*/,"").slice(0,78))}${(s.description||"").length>78?"…":""}</p>
+          <strong class="public-card-link">店舗を見る <i>›</i></strong>
         </div>
-        <h3>${esc(name)}</h3>
-        <div class="public-card-tags">
-          ${s.area?`<span>${esc(normalizeArea(s.area))}</span>`:""}
-          ${s.genre?`<span>${esc(s.genre)}</span>`:""}
-          ${features.map(x=>`<span>${esc(x)}</span>`).join("")}
-        </div>
-        <div class="public-card-facts">
-          ${s.hours?`<span><small>営業時間</small><b>${esc(s.hours)}</b></span>`:""}
-          ${budget?`<span><small>料金目安</small><b>${esc(budget)}</b></span>`:""}
-        </div>
-        <p>${esc((s.description||"").replace(/※本ページ[\s\S]*/,"").slice(0,78))}${(s.description||"").length>78?"…":""}</p>
-        <strong class="public-card-link">店舗を見る <i>›</i></strong>
+      </a>
+      <div class="kbn-card-subactions-v456">
+        <a href="https://www.google.com/maps/search/?api=1&query=${mapQuery}" target="_blank" rel="noopener">地図で見る</a>
+        ${s.phone?`<a href="tel:${esc(String(s.phone).replace(/[^\d+]/g,""))}">電話する</a>`:""}
       </div>
-    </a>`;
+    </div>`;
   }).join("");
+  document.querySelectorAll("[data-fav-slug]").forEach(btn=>btn.onclick=e=>{e.preventDefault();e.stopPropagation();kbnToggleFavV456(btn.dataset.favSlug,btn)});
 }
 function filter(){
-  const area=$("areaFilter").value;
-  const genre=$("genreFilter").value;
-  const q=$("keyword").value.trim().toLowerCase();
-
-  const filtered=allShops.filter(s=>{
+  const area=$("areaFilter").value,genre=$("genreFilter").value,q=$("keyword").value.trim().toLowerCase();
+  const favs=kbnFavsV456();
+  let filtered=allShops.filter(s=>{
     const text=[cleanName(s.name),s.address,s.features,s.description,s.genre,normalizeArea(s.area),s.hours].join(" ").toLowerCase();
-    return (!area||normalizeArea(s.area)===area)&&(!genre||String(s.genre||"").includes(genre))&&(!q||text.includes(q));
+    const open=kbnOpenStateV456(s.hours);
+    return (!area||normalizeArea(s.area)===area)
+      &&(!genre||String(s.genre||"").includes(genre))
+      &&(!q||text.includes(q))
+      &&(!kbnOpenOnlyV456||open.open)
+      &&(!kbnFavOnlyV456||favs.has(String(s.slug)))
+      &&kbnUseMatchV456(s,kbnUseCaseV456);
   });
+  if(kbnNearbyV456&&kbnUserPosV456){
+    filtered=[...filtered].sort((x,y)=>(kbnApproxDistanceV456(x)??9999)-(kbnApproxDistanceV456(y)??9999));
+  }
   render(filtered);
   const url=new URL(location.href);
   area?url.searchParams.set("area",area):url.searchParams.delete("area");
   genre?url.searchParams.set("genre",genre):url.searchParams.delete("genre");
   q?url.searchParams.set("q",q):url.searchParams.delete("q");
+  kbnOpenOnlyV456?url.searchParams.set("open","1"):url.searchParams.delete("open");
   history.replaceState(null,"",url);
 }
 function applyUrlFilters(){
   const p=new URLSearchParams(location.search);
   $("areaFilter").value=p.get("area")||"";
   $("genreFilter").value=p.get("genre")||"";
-  $("keyword").value=p.get("q")||"";
+  $("keyword").value=p.get("q")||p.get("keyword")||"";
+  if(p.get("open")==="1"){kbnOpenOnlyV456=true;$("kbnOpenNowV456")?.classList.add("is-active")}
+}
+function kbnSetSmartStatusV456(text){const el=$("kbnSmartStatusV456");if(el)el.textContent=text}
+async function kbnEnableNearbyV456(){
+  if(kbnNearbyV456){kbnNearbyV456=false;$("kbnNearbyV456").classList.remove("is-active");filter();return}
+  if(!navigator.geolocation){alert("この端末では現在地を取得できません。");return}
+  kbnSetSmartStatusV456("現在地を取得中...");
+  navigator.geolocation.getCurrentPosition(pos=>{
+    kbnUserPosV456={lat:pos.coords.latitude,lng:pos.coords.longitude};
+    kbnNearbyV456=true;$("kbnNearbyV456").classList.add("is-active");
+    kbnSetSmartStatusV456("現在地からエリア中心までの距離目安で並べ替え");
+    filter();
+  },()=>{
+    kbnSetSmartStatusV456("現在地を取得できませんでした");
+    alert("位置情報を許可すると近い順で探せます。");
+  },{enableHighAccuracy:false,timeout:8000,maximumAge:300000});
+}
+function kbnQuizRunV456(){
+  let pool=allShops.filter(s=>kbnUseMatchV456(s,kbnQuizMoodV456));
+  const area=$("areaFilter").value;
+  if(area)pool=pool.filter(s=>normalizeArea(s.area)===area);
+  if(kbnOpenOnlyV456)pool=pool.filter(s=>kbnOpenStateV456(s.hours).open);
+  pool=[...pool].sort(()=>Math.random()-.5).slice(0,3);
+  const box=$("kbnQuizResultV456");
+  box.innerHTML=pool.length?pool.map(s=>`<a href="/shop?slug=${encodeURIComponent(s.slug)}"><b>${esc(cleanName(s.name))}</b><span>${esc([normalizeArea(s.area),s.genre,money(s)].filter(Boolean).join(" / "))}</span></a>`).join(""):'<div style="color:#9ca8b2;font-size:.7rem">条件に合う店舗が少ないため、気分を「おまかせ」にしてみてください。</div>';
+}
+function kbnOpenQuizV456(){
+  const m=$("kbnQuizModalV456");m.classList.add("is-open");m.setAttribute("aria-hidden","false");kbnQuizRunV456();
+}
+function kbnCloseQuizV456(){const m=$("kbnQuizModalV456");m.classList.remove("is-open");m.setAttribute("aria-hidden","true")}
+function kbnResetSmartV456(){
+  kbnOpenOnlyV456=kbnNearbyV456=kbnFavOnlyV456=false;kbnUseCaseV456="";
+  document.querySelectorAll(".kbn-smart-actions-v456 button").forEach(x=>x.classList.remove("is-active"));
+  $("areaFilter").value="";$("genreFilter").value="";$("keyword").value="";
+  kbnSetSmartStatusV456("条件をリセットしました");filter();
 }
 async function load(){
   try{
-    const r=await fetch("/api/shops",{cache:"no-store"});
-    const d=await r.json();
+    const r=await fetch("/api/shops",{cache:"no-store"}),d=await r.json();
     if(!r.ok||!d.ok)throw new Error("LOAD_FAILED");
-    allShops=d.shops||[];
-    fillFilters();
-    applyUrlFilters();
-    filter();
-  }catch(e){
-    $("resultCount").textContent="0店舗";
-    $("loadError").hidden=false;
-  }
+    allShops=d.shops||[];fillFilters();applyUrlFilters();filter();
+  }catch(e){$("resultCount").textContent="0店舗";$("loadError").hidden=false}
 }
+
 $("filterBtn").addEventListener("click",filter);
 ["areaFilter","genreFilter"].forEach(id=>$(id).addEventListener("change",filter));
 $("keyword").addEventListener("keydown",e=>{if(e.key==="Enter")filter()});
-document.querySelectorAll("[data-quick-q]").forEach(b=>b.addEventListener("click",()=>{
-  $("keyword").value=b.dataset.quickQ||"";
+document.querySelectorAll("[data-quick-q]").forEach(b=>b.addEventListener("click",()=>{$("keyword").value=b.dataset.quickQ||"";filter()}));
+$("kbnOpenNowV456").onclick=()=>{kbnOpenOnlyV456=!kbnOpenOnlyV456;$("kbnOpenNowV456").classList.toggle("is-active",kbnOpenOnlyV456);filter()};
+$("kbnNearbyV456").onclick=kbnEnableNearbyV456;
+$("kbnFavOnlyV456").onclick=()=>{kbnFavOnlyV456=!kbnFavOnlyV456;$("kbnFavOnlyV456").classList.toggle("is-active",kbnFavOnlyV456);filter()};
+document.querySelectorAll("[data-kbn-use-v456]").forEach(b=>b.onclick=()=>{
+  const v=b.dataset.kbnUseV456||"";kbnUseCaseV456=kbnUseCaseV456===v?"":v;
+  document.querySelectorAll("[data-kbn-use-v456]").forEach(x=>x.classList.toggle("is-active",(x.dataset.kbnUseV456||"")===kbnUseCaseV456));
   filter();
-}));
+});
+$("kbnTonightBtnV456").onclick=kbnOpenQuizV456;
+$("kbnClearSmartV456").onclick=kbnResetSmartV456;
+$("kbnQuizCloseV456").onclick=kbnCloseQuizV456;
+$("kbnQuizRunV456").onclick=kbnQuizRunV456;
+document.querySelectorAll("#kbnQuizMoodV456 [data-mood]").forEach(b=>b.onclick=()=>{
+  kbnQuizMoodV456=b.dataset.mood||"";
+  document.querySelectorAll("#kbnQuizMoodV456 [data-mood]").forEach(x=>x.classList.toggle("is-active",x===b));
+  kbnQuizRunV456();
+});
+$("kbnQuizModalV456").onclick=e=>{if(e.target.id==="kbnQuizModalV456")kbnCloseQuizV456()};
 load();
 </script>
 </body>
