@@ -73,6 +73,11 @@
 .kbn-map-head-v457{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:9px 11px}
 .kbn-map-head-v457 b{font-size:.72rem;color:#eef2f5}.kbn-map-head-v457 small{color:#7f8c98;font-size:.59rem}
 </style>
+
+<style id="kbn-updated-date-v458">
+.kbn-updated-date-v458{display:block;margin-top:8px;color:#6f7d88;font-size:.56rem;line-height:1.35;letter-spacing:.01em}
+</style>
+
 </head>
 <body class="public-v109 public-v142">
 
@@ -207,6 +212,17 @@ let kbnMapLayerV457=null;
 let kbnUserMarkerV457=null;
 const $=id=>document.getElementById(id);
 const esc=x=>String(x??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+
+function kbnUpdatedDateV458(v){
+  const raw=String(v||"").trim();
+  if(!raw)return "";
+  const m=raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(m)return `${m[1]}/${String(m[2]).padStart(2,"0")}/${String(m[3]).padStart(2,"0")}`;
+  const d=new Date(raw);
+  if(Number.isNaN(d.getTime()))return "";
+  return new Intl.DateTimeFormat("ja-JP",{timeZone:"Asia/Tokyo",year:"numeric",month:"2-digit",day:"2-digit"}).format(d).replace(/\//g,"/");
+}
+
 
 function cleanName(s){
   return String(s||"")
@@ -368,6 +384,7 @@ function render(list){
             ${budget?`<span><small>料金目安</small><b>${esc(budget)}</b></span>`:""}
           </div>
           <p>${esc((s.description||"").replace(/※本ページ[\s\S]*/,"").slice(0,78))}${(s.description||"").length>78?"…":""}</p>
+          ${kbnUpdatedDateV458(s.updated_at||s.published_at||s.created_at)?`<small class="kbn-updated-date-v458">情報更新 ${esc(kbnUpdatedDateV458(s.updated_at||s.published_at||s.created_at))}</small>`:""}
           <strong class="public-card-link">店舗を見る <i>›</i></strong>
         </div>
       </a>
