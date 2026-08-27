@@ -4479,7 +4479,7 @@ html,body{max-width:100%;overflow-x:hidden}
       <div class="lead-smart-icon">✓</div>
       <div>
         <h3>自動メンテナンス</h3>
-        <p>毎時間の自動運転をここで確認。手動メニューはそのまま使えます。</p>
+        <p>3時間ごとの自動運転・健康診断・Google予算・日次結果をここで確認できます。</p>
       </div>
     </div>
     <div class="kbn-maintenance-grid">
@@ -4507,6 +4507,34 @@ html,body{max-width:100%;overflow-x:hidden}
       </div>
       <div id="maintenanceGoogleBudgetNoteV445" style="margin-top:7px;color:#7e8c97;font-size:.61rem;line-height:1.45">開拓・情報補完・閉業確認・精密補完・レビュー・写真・接続テストをすべて共通枠で管理します。</div>
     </div>
+
+    <div id="maintenanceHealthCardV452" style="margin-top:10px;padding:12px;border:1px solid #315b45;border-radius:13px;background:#0d171f">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+        <b style="font-size:.78rem;color:#eef2f5">システム健康診断</b>
+        <span id="maintenanceHealthStateV452" style="padding:4px 8px;border-radius:999px;background:#102219;color:#7ee2a8;font-size:.6rem;font-weight:900">確認中</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:9px">
+        <div style="padding:8px;border-radius:9px;background:#111d26"><small style="color:#7f8c98">健康度</small><b id="maintenanceHealthScoreV452" style="display:block;color:#fff">—</b></div>
+        <div style="padding:8px;border-radius:9px;background:#111d26"><small style="color:#7f8c98">DB / Cron</small><b id="maintenanceHealthCoreV452" style="display:block;color:#fff">—</b></div>
+        <div style="padding:8px;border-radius:9px;background:#111d26"><small style="color:#7f8c98">要確認変更</small><b id="maintenanceHealthReviewV452" style="display:block;color:#efc45a">—</b></div>
+      </div>
+      <div id="maintenanceHealthIssuesV452" style="margin-top:7px;color:#82919c;font-size:.61rem;line-height:1.45">診断結果を読み込み中...</div>
+    </div>
+
+    <div id="maintenanceDailySummaryV452" style="margin-top:10px;padding:12px;border:1px solid #334957;border-radius:13px;background:#0d171f">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+        <b style="font-size:.78rem;color:#eef2f5">今日のメンテナンスまとめ</b>
+        <small id="maintenanceDailyDateV452" style="color:#7f8c98">—</small>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:9px">
+        <div style="padding:8px;border-radius:9px;background:#111d26"><small style="color:#7f8c98">新規</small><b id="dailyCreatedV452" style="display:block;color:#7ee3b7">—</b></div>
+        <div style="padding:8px;border-radius:9px;background:#111d26"><small style="color:#7f8c98">更新</small><b id="dailyUpdatedV452" style="display:block;color:#7ee3b7">—</b></div>
+        <div style="padding:8px;border-radius:9px;background:#111d26"><small style="color:#7f8c98">確認</small><b id="dailyCheckedV452" style="display:block;color:#fff">—</b></div>
+        <div style="padding:8px;border-radius:9px;background:#111d26"><small style="color:#7f8c98">エラー</small><b id="dailyErrorsV452" style="display:block;color:#fff">—</b></div>
+      </div>
+      <div id="dailyDetailV452" style="margin-top:7px;color:#82919c;font-size:.61rem;line-height:1.45">集計中...</div>
+    </div>
+
     <div class="kbn-schedule-note kbn-schedule-editor">
       <div class="kbn-schedule-title">
         <b>3時間ごとの自動運転</b><span>日本時間（JST）</span>
@@ -9483,7 +9511,10 @@ function renderGoogleUsageCardV443(g,d){
     const photoUsed=Number(pb.day_used||0),photoLimit=Number(pb.day_limit||30);
     note.textContent=(g?.disabled
       ?`Googleは現在 ${stateText}。追加送信0回。今日残り${dayRemain.toLocaleString()}回・今月残り${monthRemain.toLocaleString()}回。`
-      :`3時間ごとの自動運転＋全メンテ込み。今日残り${dayRemain.toLocaleString()}回・今月残り${monthRemain.toLocaleString()}回。公開写真は本日${photoUsed}/${photoLimit}回までに制限し、メンテナンス枠を温存します。`);
+      :(()=>{
+        const db=g?.discovery_budget||{};
+        return `Google総枠：今日残り${dayRemain.toLocaleString()}回。内訳は開拓${Number(db.day_used||0)}/${Number(db.day_limit||70)}回・写真${photoUsed}/${photoLimit}回。開拓70＋写真30に制限し、メンテナンス等へ最低50回を温存します。`;
+      })());
   }
 }
 
@@ -11604,6 +11635,41 @@ async function kbnLoadHourlyStatusV421(){
     }
   }catch{}
 }
+
+async function loadSystemHealthV452(refresh=false){
+  try{
+    const d=await api(`/api/admin/system-health${refresh?"?refresh=1":""}`),h=d.health||{};
+    const state=$("maintenanceHealthStateV452");
+    const score=Number(h.score||0);
+    if(state){
+      state.textContent=h.status==="good"?"正常":h.status==="warning"?"注意":"要対応";
+      state.style.color=h.status==="good"?"#7ee2a8":h.status==="warning"?"#efc45a":"#ffaaaa";
+      state.style.background=h.status==="good"?"#102219":h.status==="warning"?"#241d0e":"#251515";
+    }
+    $("maintenanceHealthScoreV452").textContent=`${score}/100`;
+    $("maintenanceHealthCoreV452").textContent=`DB ${h.db_ok?"✓":"×"} / Cron ${h.cron_ok?"✓":"×"}`;
+    $("maintenanceHealthReviewV452").textContent=`${Number(h.pending_change_reviews||0)}件`;
+    const issues=Array.isArray(h.issues)?h.issues:[];
+    $("maintenanceHealthIssuesV452").textContent=issues.length?`要確認：${issues.join(" / ")}`:`問題なし。停止監視・API・DB・自動処理履歴を確認済み。`;
+  }catch(e){
+    if($("maintenanceHealthIssuesV452"))$("maintenanceHealthIssuesV452").textContent=`健康診断を取得できません：${e?.message||e}`;
+  }
+}
+
+async function loadDailySummaryV452(){
+  try{
+    const d=await api("/api/admin/daily-maintenance-summary"),s=d.summary||{};
+    $("maintenanceDailyDateV452").textContent=String(s.day||"");
+    $("dailyCreatedV452").textContent=`${Number(s.created||0)}店`;
+    $("dailyUpdatedV452").textContent=`${Number(s.updated||0)}店`;
+    $("dailyCheckedV452").textContent=`${Number(s.checked||0)}`;
+    $("dailyErrorsV452").textContent=`${Number(s.errors||0)}`;
+    $("dailyDetailV452").textContent=`自動処理${Number(s.runs||0)}回 / SEO +${Number(s.seo_gain||0)}点 / Google ${Number(s.google?.used||0)}/${Number(s.google?.limit||150)}回（開拓${Number(s.google?.discovery_used||0)}/${Number(s.google?.discovery_limit||70)}・写真${Number(s.google?.photo_used||0)}/${Number(s.google?.photo_limit||30)}） / 要確認変更 ${Number(s.pending_change_reviews||0)}件`;
+  }catch(e){
+    if($("dailyDetailV452"))$("dailyDetailV452").textContent=`本日の集計を取得できません：${e?.message||e}`;
+  }
+}
+
 let kbnScheduleLiveRefreshV421=null;
 document.addEventListener("DOMContentLoaded",()=>{
   loadDiscoverySourceHealthV438().catch(()=>{});
@@ -11622,9 +11688,11 @@ document.addEventListener("DOMContentLoaded",()=>{
     }
   },60000);
   loadMaintenanceHistoryV414().catch(()=>{});kbnLoadHourlyStatusV421().catch(()=>{});
+  loadSystemHealthV452().catch(()=>{});loadDailySummaryV452().catch(()=>{});
   document.getElementById('reloadMaintenanceHistoryBtn')?.addEventListener('click',()=>loadMaintenanceHistoryV414());
   if(kbnScheduleLiveRefreshV421)return;
   kbnScheduleLiveRefreshV421=setInterval(()=>{if(document.visibilityState!=="visible")return;kbnLoadHourlyStatusV421().catch(()=>{});loadMaintenanceHistoryV414().catch(()=>{});},5000);
+  setInterval(()=>{if(document.visibilityState!=="visible")return;loadSystemHealthV452().catch(()=>{});loadDailySummaryV452().catch(()=>{});},60000);
 });
 </script>
 
