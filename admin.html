@@ -4560,6 +4560,40 @@ html,body{max-width:100%;overflow-x:hidden}
       <div id="geoCoverageTextV457" style="margin-top:5px;color:#8996a1;font-size:.61rem">読み込み中...</div>
     </div>
 
+    
+    <div id="maintenanceProgressV460" style="margin-top:10px;padding:13px;border:1px solid #4a5a67;border-radius:14px;background:#0d171f">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+        <div>
+          <b id="maintenanceProgressTitleV460" style="font-size:.8rem;color:#eef2f5">自動メンテナンス</b>
+          <small id="maintenanceProgressPhaseV460" style="display:block;margin-top:3px;color:#8d9aa5">待機中</small>
+        </div>
+        <span id="maintenanceProgressPctV460" style="font-size:.76rem;font-weight:900;color:#efc45a">待機</span>
+      </div>
+
+      <div style="margin-top:10px;height:11px;border-radius:999px;background:#1b2730;overflow:hidden">
+        <div id="maintenanceProgressBarV460" style="height:100%;width:0%;border-radius:inherit;background:linear-gradient(90deg,#d5a72f,#efc45a);transition:width .35s ease"></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:10px">
+        <div style="padding:8px;border-radius:9px;background:#111d26">
+          <small style="color:#7f8c98">確認</small>
+          <b id="maintenanceProgressCheckedV460" style="display:block;color:#fff">—</b>
+        </div>
+        <div style="padding:8px;border-radius:9px;background:#111d26">
+          <small style="color:#7f8c98">新規 / 更新</small>
+          <b id="maintenanceProgressChangesV460" style="display:block;color:#7ee3b7">—</b>
+        </div>
+        <div style="padding:8px;border-radius:9px;background:#111d26">
+          <small style="color:#7f8c98">エラー</small>
+          <b id="maintenanceProgressErrorsV460" style="display:block;color:#fff">—</b>
+        </div>
+      </div>
+
+      <div id="maintenanceProgressDetailV460" style="margin-top:8px;color:#83909b;font-size:.61rem;line-height:1.45">
+        次の自動実行を待っています。
+      </div>
+    </div>
+
     <div id="maintenanceHealthCardV452" style="margin-top:10px;padding:12px;border:1px solid #315b45;border-radius:13px;background:#0d171f">
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
         <b style="font-size:.78rem;color:#eef2f5">システム健康診断</b>
@@ -11755,6 +11789,40 @@ async function loadGeoCoverageV457(){
   }catch(e){if($("geoCoverageTextV457"))$("geoCoverageTextV457").textContent="位置情報の集計を取得できませんでした"}
 }
 
+
+function kbnFormatElapsedV460(sec){
+  const s=Math.max(0,Number(sec||0));
+  if(s<60)return `${s}秒`;
+  const m=Math.floor(s/60),r=s%60;
+  return `${m}分${r?`${r}秒`:""}`;
+}
+
+async function loadMaintenanceProgressV460(){
+  try{
+    const d=await api("/api/admin/maintenance-progress"),p=d.progress||{};
+    const pct=Math.max(0,Math.min(100,Number(p.percent||0)));
+
+    if($("maintenanceProgressBarV460"))$("maintenanceProgressBarV460").style.width=`${p.active?pct:0}%`;
+    if($("maintenanceProgressPctV460"))$("maintenanceProgressPctV460").textContent=p.active?`${pct}%`:"待機";
+    if($("maintenanceProgressPhaseV460"))$("maintenanceProgressPhaseV460").textContent=p.active
+      ?`現在：${p.phase_label||"メンテナンス"} (${Number(p.phase_order||0)}/${Number(p.phase_total||6)})`
+      :"待機中";
+    if($("maintenanceProgressTitleV460"))$("maintenanceProgressTitleV460").textContent=p.active
+      ?"自動メンテナンス実行中"
+      :"自動メンテナンス";
+
+    if($("maintenanceProgressCheckedV460"))$("maintenanceProgressCheckedV460").textContent=Number(p.today?.checked||0).toLocaleString();
+    if($("maintenanceProgressChangesV460"))$("maintenanceProgressChangesV460").textContent=`${Number(p.today?.created||0)} / ${Number(p.today?.updated||0)}`;
+    if($("maintenanceProgressErrorsV460"))$("maintenanceProgressErrorsV460").textContent=Number(p.today?.errors||0);
+
+    if($("maintenanceProgressDetailV460"))$("maintenanceProgressDetailV460").textContent=p.active
+      ?`工程 ${Number(p.phase_order||0)}/${Number(p.phase_total||6)}・${p.phase_label||"処理中"}。直近更新から ${kbnFormatElapsedV460(p.elapsed_seconds)}。画面を閉じてもDB上の進捗から復元されます。`
+      :"現在は待機中です。次の3時間枠または手動実行時に進捗を表示します。";
+  }catch(e){
+    if($("maintenanceProgressDetailV460"))$("maintenanceProgressDetailV460").textContent=`進捗を取得できません：${e?.message||e}`;
+  }
+}
+
 async function loadSystemHealthV452(refresh=false){
   try{
     const d=await api(`/api/admin/system-health${refresh?"?refresh=1":""}`),h=d.health||{};
@@ -11809,7 +11877,7 @@ document.addEventListener("DOMContentLoaded",()=>{
     }
   },60000);
   loadMaintenanceHistoryV414().catch(()=>{});kbnLoadHourlyStatusV421().catch(()=>{});
-  loadSystemHealthV452().catch(()=>{});loadDailySummaryV452().catch(()=>{});loadGeoCoverageV457().catch(()=>{});
+  loadMaintenanceProgressV460().catch(()=>{});loadSystemHealthV452().catch(()=>{});loadDailySummaryV452().catch(()=>{});loadGeoCoverageV457().catch(()=>{});
   document.getElementById('reloadMaintenanceHistoryBtn')?.addEventListener('click',()=>loadMaintenanceHistoryV414());
   if(kbnScheduleLiveRefreshV421)return;
   kbnScheduleLiveRefreshV421=setInterval(()=>{if(document.visibilityState!=="visible")return;kbnLoadHourlyStatusV421().catch(()=>{});loadMaintenanceHistoryV414().catch(()=>{});},5000);
@@ -12074,5 +12142,7 @@ async function loadSeoMonitor(){
   });
   window.loadSeoMonitor=loadSeoMonitor;
 })();
+
+setInterval(()=>{if(document.visibilityState==="visible")loadMaintenanceProgressV460().catch(()=>{});},3000);
 </script>
 </body></html>
