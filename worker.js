@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.52";
+      config.vars.KBN_CONFIG_VERSION="4.53";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -4337,6 +4337,81 @@ async function kbnReserveGoogleDiscoveryBudgetV452(env){
   return {ok:true,global,discovery:await kbnGoogleDiscoveryBudgetStatusV452(env)};
 }
 
+
+async function kbnRecordGoogleUsageCategoryV453(env,category){
+  await ensureKbnGoogleCategoryBudgetV451(env);
+  const p=kbnGoogleBudgetPeriodV441();
+  const cat=String(category||"other").slice(0,40);
+  await env.DB.prepare(`
+    INSERT INTO kbn_google_category_budget(category,period_type,period_key,used_count,limit_count,updated_at)
+    VALUES(?,'day',?,1,999999,CURRENT_TIMESTAMP)
+    ON CONFLICT(category,period_type,period_key)
+    DO UPDATE SET used_count=used_count+1,updated_at=CURRENT_TIMESTAMP
+  `).bind(cat,p.day).run();
+  await env.DB.prepare(`
+    INSERT INTO kbn_google_category_budget(category,period_type,period_key,used_count,limit_count,updated_at)
+    VALUES(?,'month',?,1,999999,CURRENT_TIMESTAMP)
+    ON CONFLICT(category,period_type,period_key)
+    DO UPDATE SET used_count=used_count+1,updated_at=CURRENT_TIMESTAMP
+  `).bind(cat,p.month).run();
+}
+
+async function kbnGoogleUsageBreakdownV453(env){
+  await ensureKbnGoogleCategoryBudgetV451(env);
+  const p=kbnGoogleBudgetPeriodV441();
+  const global=await kbnGooglePlacesBudgetStatusV441(env);
+  const r=await env.DB.prepare(`
+    SELECT category,used_count
+    FROM kbn_google_category_budget
+    WHERE period_type='day' AND period_key=?
+  `).bind(p.day).all();
+
+  const raw={};
+  for(const row of (r.results||[]))raw[String(row.category||"other")]=Number(row.used_count||0);
+
+  const breakdown={
+    discovery:Number(raw.discovery||0),
+    photo:Number(raw.photo||0),
+    search:Number(raw.search||0),
+    details:Number(raw.details||0),
+    reviews:Number(raw.reviews||0),
+    connection_test:Number(raw.connection_test||0)
+  };
+  const known=Object.values(breakdown).reduce((x,y)=>x+Number(y||0),0);
+  const total=Number(global.day_used||0);
+  breakdown.other=Math.max(0,total-known);
+
+  const rows=[
+    {key:"discovery",label:"BAR開拓",used:breakdown.discovery},
+    {key:"search",label:"検索・店舗照合",used:breakdown.search},
+    {key:"details",label:"店舗詳細・情報補完",used:breakdown.details},
+    {key:"reviews",label:"Googleレビュー",used:breakdown.reviews},
+    {key:"photo",label:"Google写真",used:breakdown.photo},
+    {key:"connection_test",label:"接続テスト",used:breakdown.connection_test},
+    {key:"other",label:"その他・旧カウント",used:breakdown.other}
+  ];
+
+  const maxRow=rows.reduce((m,x)=>x.used>m.used?x:m,{key:"",label:"",used:0});
+  const warnings=[];
+  if(total>=120)warnings.push(`本日のGoogle使用量が${total}/150回です`);
+  if(total>=40 && maxRow.used>=Math.ceil(total*0.70)){
+    warnings.push(`${maxRow.label}が全使用量の約${Math.round(maxRow.used/total*100)}%を占めています`);
+  }
+  if(breakdown.other>=30){
+    warnings.push(`「その他・旧カウント」が${breakdown.other}回あります。内訳記録開始前の使用、または未分類経路を含みます`);
+  }
+  if(breakdown.connection_test>=5){
+    warnings.push(`接続テストが本日${breakdown.connection_test}回です。通常は必要時だけで十分です`);
+  }
+
+  return {
+    day_key:p.day,total,limit:Number(global.day_limit||150),remaining:Number(global.day_remaining||0),
+    rows,anomaly:warnings.length>0,
+    anomaly_level:total>=145?"critical":warnings.length?"warning":"normal",
+    warnings
+  };
+}
+
 async function kbnReserveGooglePlacesBudgetV441(env){
   const s=await kbnGooglePlacesBudgetStatusV441(env);
   if(s.blocked)return {ok:false,...s};
@@ -4470,6 +4545,9 @@ async function googlePlacesTextSearch(env,{query,pageSize=20,ignoreCircuit=false
   }
 
   try{
+    if(String(purpose)!=="discovery"){
+      try{await kbnRecordGoogleUsageCategoryV453(env,"search")}catch(e){console.error("google usage category search failed",e)}
+    }
     const r=await fetch("https://places.googleapis.com/v1/places:searchText",{
       method:"POST",
       headers:{"Content-Type":"application/json","X-Goog-Api-Key":cfg.apiKey,"X-Goog-FieldMask":"places.id,places.displayName,places.formattedAddress,places.primaryType,places.types"},
@@ -4538,6 +4616,7 @@ async function googlePlaceDetails(env,placeId){
   }
 
   try{
+    try{await kbnRecordGoogleUsageCategoryV453(env,"details")}catch(e){console.error("google usage category details failed",e)}
     const fieldMask=[
       "id","displayName","formattedAddress","primaryType","types","businessStatus",
       "nationalPhoneNumber","internationalPhoneNumber",
@@ -4593,6 +4672,7 @@ async function googlePlaceReviewDetails(env,placeId){
   }
 
   try{
+    try{await kbnRecordGoogleUsageCategoryV453(env,"reviews")}catch(e){console.error("google usage category reviews failed",e)}
     const fieldMask=[
       "id",
       "displayName",
@@ -9236,6 +9316,7 @@ async function kbnGooglePlacesSingleProbeV446(env){
   }
 
   try{
+    try{await kbnRecordGoogleUsageCategoryV453(env,"connection_test")}catch(e){console.error("google usage category connection test failed",e)}
     const r=await fetch("https://places.googleapis.com/v1/places:searchText",{
       method:"POST",
       headers:{
@@ -9354,6 +9435,7 @@ async function kbnDailySummaryV452(env,day=null){
   const google=await kbnGooglePlacesBudgetStatusV441(env);
   const discovery=await kbnGoogleDiscoveryBudgetStatusV452(env);
   const photo=await kbnGooglePhotoBudgetStatusV451(env);
+  const usage_breakdown=await kbnGoogleUsageBreakdownV453(env);
 
   return {
     day:target,
@@ -9367,7 +9449,10 @@ async function kbnDailySummaryV452(env,day=null){
     google:{
       used:Number(google.day_used||0),limit:Number(google.day_limit||150),
       discovery_used:Number(discovery.day_used||0),discovery_limit:Number(discovery.day_limit||70),
-      photo_used:Number(photo.day_used||0),photo_limit:Number(photo.day_limit||30)
+      photo_used:Number(photo.day_used||0),photo_limit:Number(photo.day_limit||30),
+      breakdown:usage_breakdown.rows,
+      anomaly:usage_breakdown.anomaly,
+      warnings:usage_breakdown.warnings
     }
   };
 }
@@ -9393,6 +9478,8 @@ async function kbnRunSystemHealthV452(env){
     const h=await kbnGooglePlacesHealthV438(env);
     googleState=h?.disabled?String(h.error_code||"disabled"):"ok";
     if(h?.disabled && !/KBN_(DAILY|MONTHLY)_BUDGET/.test(googleState))issues.push(`Google Places:${googleState}`);
+    const ub=await kbnGoogleUsageBreakdownV453(env);
+    if(ub.anomaly && ub.warnings.length)issues.push(`Google使用量:${ub.warnings[0]}`);
   }catch{issues.push("Google状態取得失敗")}
 
   try{
@@ -9481,7 +9568,7 @@ async function kbnMaybeDailyOpsV452(env,event){
         await createKbnAlert(env,{
           type:"daily_maintenance_report",
           title:`本日のメンテナンス結果 ${key}`,
-          message:`新規${s.created}店 / 更新${s.updated}店 / 確認${s.checked} / エラー${s.errors} / SEO +${s.seo_gain} / Google ${s.google.used}/${s.google.limit}回 / 要確認変更${s.pending_change_reviews}件`
+          message:`新規${s.created}店 / 更新${s.updated}店 / 確認${s.checked} / エラー${s.errors} / SEO +${s.seo_gain} / Google ${s.google.used}/${s.google.limit}回 / 要確認変更${s.pending_change_reviews}件${s.google.anomaly?` / Google使用注意:${(s.google.warnings||[]).join("・")}`:""}`
         });
       }catch{}
     }
@@ -11912,9 +11999,10 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
         const budget=await kbnGooglePlacesBudgetStatusV441(env);
         const photo_budget=await kbnGooglePhotoBudgetStatusV451(env);
         const discovery_budget=await kbnGoogleDiscoveryBudgetStatusV452(env);
+        const usage_breakdown=await kbnGoogleUsageBreakdownV453(env);
         return json({
           ok:true,
-          google:{configured:!!googlePlacesConfig(env).apiKey,...g,budget,photo_budget,discovery_budget},
+          google:{configured:!!googlePlacesConfig(env).apiKey,...g,budget,photo_budget,discovery_budget,usage_breakdown},
           foursquare:{configured:!!foursquareConfig(env).apiKey},
           cost_guard:{
             daily_limit:KBN_GOOGLE_PLACES_DAILY_LIMIT_V441,
