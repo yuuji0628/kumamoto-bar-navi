@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.54";
+      config.vars.KBN_CONFIG_VERSION="4.55";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -4356,6 +4356,38 @@ async function kbnRecordGoogleUsageCategoryV453(env,category){
   `).bind(cat,p.month).run();
 }
 
+
+async function ensureKbnGoogleUsageBaselineV455(env){
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS kbn_google_usage_baseline(
+      period_type TEXT NOT NULL,
+      period_key TEXT NOT NULL,
+      baseline_count INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY(period_type,period_key)
+    )
+  `).run();
+}
+
+async function kbnEnsureGoogleUsageBaselineForTodayV455(env){
+  await ensureKbnGoogleUsageBaselineV455(env);
+  const p=kbnGoogleBudgetPeriodV441();
+  const existing=await env.DB.prepare(`
+    SELECT baseline_count FROM kbn_google_usage_baseline
+    WHERE period_type='day' AND period_key=?
+  `).bind(p.day).first();
+  if(existing)return Number(existing.baseline_count||0);
+
+  const global=await kbnGooglePlacesBudgetStatusV441(env);
+  const baseline=Math.max(0,Number(global.day_used||0));
+  await env.DB.prepare(`
+    INSERT INTO kbn_google_usage_baseline(period_type,period_key,baseline_count)
+    VALUES('day',?,?)
+    ON CONFLICT(period_type,period_key) DO NOTHING
+  `).bind(p.day,baseline).run();
+  return baseline;
+}
+
 async function kbnGoogleUsageBreakdownV453(env){
   await ensureKbnGoogleCategoryBudgetV451(env);
   const p=kbnGoogleBudgetPeriodV441();
@@ -4379,7 +4411,9 @@ async function kbnGoogleUsageBreakdownV453(env){
   };
   const known=Object.values(breakdown).reduce((x,y)=>x+Number(y||0),0);
   const total=Number(global.day_used||0);
-  breakdown.other=Math.max(0,total-known);
+  const legacyBaseline=await kbnEnsureGoogleUsageBaselineForTodayV455(env);
+  const postBaselineTotal=Math.max(0,total-legacyBaseline);
+  breakdown.other=Math.max(0,postBaselineTotal-known);
 
   const rows=[
     {key:"discovery",label:"BAR開拓",used:breakdown.discovery},
@@ -4388,7 +4422,8 @@ async function kbnGoogleUsageBreakdownV453(env){
     {key:"reviews",label:"Googleレビュー",used:breakdown.reviews},
     {key:"photo",label:"Google写真",used:breakdown.photo},
     {key:"connection_test",label:"接続テスト",used:breakdown.connection_test},
-    {key:"other",label:"その他・旧カウント",used:breakdown.other}
+    {key:"other",label:"未分類",used:breakdown.other},
+    {key:"legacy",label:"反映前の既存カウント",used:legacyBaseline}
   ];
 
   const maxRow=rows.reduce((m,x)=>x.used>m.used?x:m,{key:"",label:"",used:0});
@@ -4397,8 +4432,8 @@ async function kbnGoogleUsageBreakdownV453(env){
   if(total>=40 && maxRow.used>=Math.ceil(total*0.70)){
     warnings.push(`${maxRow.label}が全使用量の約${Math.round(maxRow.used/total*100)}%を占めています`);
   }
-  if(breakdown.other>=30){
-    warnings.push(`「その他・旧カウント」が${breakdown.other}回あります。内訳記録開始前の使用、または未分類経路を含みます`);
+  if(breakdown.other>=10){
+    warnings.push(`新しい未分類Google利用が${breakdown.other}回あります。未分類経路を確認してください`);
   }
   if(breakdown.connection_test>=5){
     warnings.push(`接続テストが本日${breakdown.connection_test}回です。通常は必要時だけで十分です`);
@@ -4406,6 +4441,9 @@ async function kbnGoogleUsageBreakdownV453(env){
 
   return {
     day_key:p.day,total,limit:Number(global.day_limit||150),remaining:Number(global.day_remaining||0),
+    baseline_legacy:legacyBaseline,
+    categorized_total:known,
+    post_baseline_total:postBaselineTotal,
     rows,anomaly:warnings.length>0,
     anomaly_level:total>=145?"critical":warnings.length?"warning":"normal",
     warnings
@@ -12233,6 +12271,23 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
 
       if(url.pathname==="/api/admin/instagram-full-audit/process" && request.method==="POST"){
         return json(await kbnProcessInstagramFullAuditV432(env));
+      }
+
+      if(url.pathname==="/api/admin/google-usage/rebaseline" && request.method==="POST"){
+        await ensureKbnGoogleUsageBaselineV455(env);
+        const p=kbnGoogleBudgetPeriodV441();
+        const global=await kbnGooglePlacesBudgetStatusV441(env);
+        const current=Number(global.day_used||0);
+        await env.DB.prepare(`
+          INSERT INTO kbn_google_usage_baseline(period_type,period_key,baseline_count,created_at)
+          VALUES('day',?,?,CURRENT_TIMESTAMP)
+          ON CONFLICT(period_type,period_key)
+          DO UPDATE SET baseline_count=excluded.baseline_count,created_at=CURRENT_TIMESTAMP
+        `).bind(p.day,current).run();
+        return json({
+          ok:true,day_key:p.day,baseline_count:current,
+          usage:await kbnGoogleUsageBreakdownV453(env)
+        },{headers:{"Cache-Control":"no-store"}});
       }
 
       if(url.pathname==="/api/admin/seo-index-audit" && request.method==="GET"){
