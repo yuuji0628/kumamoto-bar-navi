@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.55";
+      config.vars.KBN_CONFIG_VERSION="4.57";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -1372,7 +1372,7 @@ async function kbnMaintenanceQueueStatusV257(env){
       };
     }
 
-    const task=phase===1?"missing":phase>=2&&phase<=4?"verified_info":phase===5?"seo":phase===9?"verified_auto":"maintenance";
+    const task=phase===1?"missing":phase>=2&&phase<=4?"verified_info":phase===5?"seo":phase===6?"coordinates":phase===9?"verified_auto":"maintenance";
     return {
       active:true,
       phase,
@@ -4588,7 +4588,7 @@ async function googlePlacesTextSearch(env,{query,pageSize=20,ignoreCircuit=false
     }
     const r=await fetch("https://places.googleapis.com/v1/places:searchText",{
       method:"POST",
-      headers:{"Content-Type":"application/json","X-Goog-Api-Key":cfg.apiKey,"X-Goog-FieldMask":"places.id,places.displayName,places.formattedAddress,places.primaryType,places.types"},
+      headers:{"Content-Type":"application/json","X-Goog-Api-Key":cfg.apiKey,"X-Goog-FieldMask":"places.id,places.displayName,places.formattedAddress,places.primaryType,places.types,places.location"},
       body:JSON.stringify({textQuery:String(query||""),languageCode:"ja",regionCode:"JP",pageSize:Math.max(1,Math.min(Number(pageSize)||20,20))})
     });
     const text=await r.text();let d={};try{d=text?JSON.parse(text):{}}catch{d={raw:text}}
@@ -4656,7 +4656,7 @@ async function googlePlaceDetails(env,placeId){
   try{
     try{await kbnRecordGoogleUsageCategoryV453(env,"details")}catch(e){console.error("google usage category details failed",e)}
     const fieldMask=[
-      "id","displayName","formattedAddress","primaryType","types","businessStatus",
+      "id","displayName","formattedAddress","primaryType","types","businessStatus","location",
       "nationalPhoneNumber","internationalPhoneNumber",
       "regularOpeningHours","currentOpeningHours",
       "websiteUri","priceLevel","priceRange","googleMapsUri","photos"
@@ -5260,6 +5260,7 @@ async function kbnMapConcurrentV425(items,limit,fn){
 
 async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit=3,uniqueAreas=false,discoveryMode="normal"){
   await ensureLeadDiscoveryTables(env);
+  await ensureShopGeoColumnsV457(env);
 
   const osmSnap=await fetchKumamotoOsmBars(env);
   const geoSnap=await fetchKumamotoGeoapifyBars(env);
@@ -5577,12 +5578,13 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
         INSERT INTO shops(
           slug,name,name_kana,area,address,hours,holiday,instagram,genre,features,description,
           budget_min,budget_max,seats,phone,is_recruiting,is_published,image_url,image_key,
-          is_featured,is_new,sort_order,listing_status,published_at
-        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'provisional',CURRENT_TIMESTAMP)
+          is_featured,is_new,sort_order,listing_status,published_at,lat,lng,geo_source,geo_checked_at
+        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'provisional',CURRENT_TIMESTAMP,?,?,?,CURRENT_TIMESTAMP)
       `).bind(
         slug,gName,"",area,address,finalHours,finalHoliday,instagram,
         genre,finalFeatures,desc,budgetMin,budgetMax,null,phone,
-        0,1,"","",0,1,100
+        0,1,"","",0,1,100,
+        kbnGoogleLatLngV457(gp)?.lat??null,kbnGoogleLatLngV457(gp)?.lng??null,kbnGoogleLatLngV457(gp)?"google_places":""
       ).run();
 
       const id=Number(ins.meta?.last_row_id||0);
@@ -5842,6 +5844,69 @@ function normalizeListingStatus(v){
   return String(v||"published")==="provisional"?"provisional":"published";
 }
 
+
+async function ensureShopGeoColumnsV457(env){
+  if(!env.DB)return;
+  try{
+    const info=await env.DB.prepare("PRAGMA table_info(shops)").all();
+    const cols=new Set((info.results||[]).map(x=>String(x.name||"")));
+    const alters=[];
+    if(!cols.has("lat"))alters.push("ALTER TABLE shops ADD COLUMN lat REAL");
+    if(!cols.has("lng"))alters.push("ALTER TABLE shops ADD COLUMN lng REAL");
+    if(!cols.has("geo_source"))alters.push("ALTER TABLE shops ADD COLUMN geo_source TEXT DEFAULT ''");
+    if(!cols.has("geo_checked_at"))alters.push("ALTER TABLE shops ADD COLUMN geo_checked_at TEXT");
+    for(const sql of alters)await env.DB.prepare(sql).run();
+  }catch(e){console.error("ensureShopGeoColumnsV457 failed",e)}
+}
+function kbnGoogleLatLngV457(place){
+  const loc=place?.location||{},lat=Number(loc.latitude),lng=Number(loc.longitude);
+  if(!Number.isFinite(lat)||!Number.isFinite(lng))return null;
+  if(lat<32.0||lat>33.4||lng<129.7||lng>131.4)return null;
+  return {lat,lng};
+}
+async function kbnSaveShopGeoV457(env,id,geo,source){
+  if(!geo)return false;
+  await ensureShopGeoColumnsV457(env);
+  await env.DB.prepare(`UPDATE shops SET lat=?,lng=?,geo_source=?,geo_checked_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?`)
+    .bind(Number(geo.lat),Number(geo.lng),String(source||"").slice(0,40),Number(id)).run();
+  return true;
+}
+async function fillMissingShopCoordinatesV457(env,{limit=3}={}){
+  await ensureShopGeoColumnsV457(env);
+  const max=Math.max(1,Math.min(Number(limit)||3,5));
+  let budget=null;try{budget=await kbnGooglePlacesBudgetStatusV441(env)}catch{}
+  if(budget&&Number(budget.day_remaining||0)<25)return {ok:true,checked:0,updated:[],skipped:true,reason:"GOOGLE_RESERVE_FOR_MAINTENANCE"};
+
+  const r=await env.DB.prepare(`
+    SELECT id,name,area,address,lat,lng,geo_checked_at
+    FROM shops
+    WHERE is_published=1 AND (lat IS NULL OR lng IS NULL)
+      AND (geo_checked_at IS NULL OR datetime(geo_checked_at)<datetime('now','-30 days'))
+    ORDER BY CASE WHEN geo_checked_at IS NULL THEN 0 ELSE 1 END,id ASC LIMIT ?
+  `).bind(max).all();
+
+  const updated=[],failed=[];
+  for(const shop of (r.results||[])){
+    let geo=null;
+    try{
+      const found=await findGooglePlaceForShop(env,{name:shop.name,area:shop.area});
+      if(found?.matched)geo=kbnGoogleLatLngV457(found.place);
+    }catch(e){failed.push({id:Number(shop.id),reason:String(e?.message||e)})}
+    if(geo){
+      await kbnSaveShopGeoV457(env,shop.id,geo,"google_search");
+      updated.push({id:Number(shop.id),name:String(shop.name||""),...geo});
+    }else{
+      await env.DB.prepare(`UPDATE shops SET geo_checked_at=CURRENT_TIMESTAMP WHERE id=?`).bind(Number(shop.id)).run();
+    }
+  }
+  return {ok:true,checked:(r.results||[]).length,updated,failed};
+}
+async function kbnGeoCoverageV457(env){
+  await ensureShopGeoColumnsV457(env);
+  const r=await env.DB.prepare(`SELECT COUNT(*) AS total,SUM(CASE WHEN lat IS NOT NULL AND lng IS NOT NULL THEN 1 ELSE 0 END) AS geocoded FROM shops WHERE is_published=1`).first();
+  const total=Number(r?.total||0),geocoded=Number(r?.geocoded||0);
+  return {total,geocoded,missing:Math.max(0,total-geocoded),percent:total?Math.round(geocoded/total*1000)/10:0};
+}
 function publicShopRow(s){
   if(!s)return s;
   const provisional=normalizeListingStatus(s.listing_status)==="provisional";
@@ -8901,7 +8966,7 @@ async function kbnProcessQueuedMaintenanceV242(env){
   // BAR開拓の直後に、軽量な情報不足補完 → VERIFIED公開情報補完×3 → SEO の順で処理。
   // 閉業・Instagram全件再検査・対象外チェックは低優先の1日1回処理へ分離し、
   // 次の毎時間BAR開拓をブロックしない。
-  const task=phase===1?"missing":phase>=2&&phase<=4?"verified_info":phase===5?"seo":phase===9?"verified_auto":"";
+  const task=phase===1?"missing":phase>=2&&phase<=4?"verified_info":phase===5?"seo":phase===6?"coordinates":phase===9?"verified_auto":"";
   if(!task){
     await env.DB.prepare(`
       UPDATE kbn_maintenance_queue
@@ -8925,6 +8990,8 @@ async function kbnProcessQueuedMaintenanceV242(env){
   try{
     if(task==="exclusion"){
       result=await kbnScanExclusionCandidatesV267(env);
+    }else if(task==="coordinates"){
+      result=await fillMissingShopCoordinatesV457(env,{limit:3});
     }else if(task==="verified_info" || task==="verified_auto"){
       // v4.42: heavy enrichment is limited to 5 shops per Worker invocation.
       result=await enrichPriorityPublishedInfoV401(env,{targetUpdated:5,maxChecked:5});
@@ -8939,7 +9006,7 @@ async function kbnProcessQueuedMaintenanceV242(env){
     result={ok:false,error:String(e?.message||e),task};
   }
 
-  const nextPhase=phase>=5?0:phase+1;
+  const nextPhase=phase>=6?0:phase+1;
   await env.DB.prepare(`
     UPDATE kbn_maintenance_queue SET phase=?,updated_at=CURRENT_TIMESTAMP WHERE id=1
   `).bind(nextPhase).run();
@@ -8951,6 +9018,8 @@ async function kbnProcessQueuedMaintenanceV242(env){
       ?`VERIFIED情報補完 / SEO +${Number(result?.score_gain_total||0)}点${googleBudgetSkip?` / Google節約上限:${googleBudgetReason} / Google追加送信0回・代替/既存情報で処理`:''}`
       :task==='exclusion'
         ?`対象外候補 ${Number(result?.candidate_count||0)}件`
+        :task==='coordinates'
+          ?`位置情報補完 / 確認${Number(result?.checked||0)}店 / 座標追加${Array.isArray(result?.updated)?result.updated.length:0}店${result?.skipped?` / ${String(result.reason||"予算温存")}`:""}`
         :googleBudgetSkip
           ?`Google節約上限:${googleBudgetReason} / Google追加送信0回・代替/既存情報で処理`
           :''
@@ -8971,6 +9040,12 @@ async function kbnProcessQueuedMaintenanceV242(env){
         type:"maintenance_exclusion_scan",
         title:"自動メンテナンス: 対象外候補チェック",
         message:`${checked}店舗を確認 / 対象外候補 ${candidateCount}件 / 店舗管理から確認できます`
+      });
+    }else if(task==="coordinates"){
+      await createKbnAlert(env,{
+        type:"maintenance_coordinates",
+        title:"自動メンテナンス: 店舗位置情報",
+        message:`${Number(result?.checked||0)}店舗を確認 / 座標追加 ${Array.isArray(result?.updated)?result.updated.length:0}店舗${result?.skipped?" / Google枠温存のため今回はスキップ":""}`
       });
     }else{
       const checked=Number(result?.checked||0);
@@ -10310,6 +10385,7 @@ export default {
     }
 
     if(url.pathname==="/api/shops" && request.method==="GET"){
+      await ensureShopGeoColumnsV457(env);
       if(url.searchParams.get("homeStats")==="1"){
         const row=await env.DB.prepare(`
           SELECT COUNT(*) AS shop_count, COUNT(DISTINCT NULLIF(TRIM(area),'')) AS area_count
@@ -11070,6 +11146,10 @@ export default {
       }
 
       // ---------- System health & daily report v4.52 ----------
+      if(url.pathname==="/api/admin/geo-status" && request.method==="GET"){
+        return json({ok:true,coverage:await kbnGeoCoverageV457(env)},{headers:{"Cache-Control":"no-store"}});
+      }
+
       if(url.pathname==="/api/admin/system-health" && request.method==="GET"){
         const refresh=url.searchParams.get("refresh")==="1";
         const health=refresh?await kbnRunSystemHealthV452(env):await kbnSystemHealthStatusV452(env);
