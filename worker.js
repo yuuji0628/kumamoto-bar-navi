@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.61";
+      config.vars.KBN_CONFIG_VERSION="4.62";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -4120,7 +4120,7 @@ const KBN_GOOGLE_PLACES_MONTHLY_LIMIT_V441=4500;
 // v4.51: 公開ページのGoogle写真が日付変更直後に共通150回を食い切らないための内訳上限。
 // 写真も総150回には含めるが、写真だけでは1日30回まで。
 const KBN_GOOGLE_PHOTO_DAILY_LIMIT_V451=30;
-const KBN_GOOGLE_PHOTO_MONTHLY_LIMIT_V451=900;
+const KBN_GOOGLE_PHOTO_MONTHLY_LIMIT_V451=800;
 
 // v4.52 Google予算の用途別ガード。
 // 開拓は最大70回/日、写真は最大30回/日。
@@ -4451,6 +4451,44 @@ async function kbnGoogleUsageBreakdownV453(env){
 }
 
 
+const KBN_GOOGLE_SKU_SAFETY_LIMITS_V462={
+  text_search_pro:4500,
+  place_details_pro:4500,
+  place_details_essentials:9000,
+  photo_media:800,
+  reviews_atmosphere:800
+};
+
+async function kbnGoogleSkuSafetyStatusV462(env){
+  await ensureKbnGoogleCategoryBudgetV451(env);
+  const p=kbnGoogleBudgetPeriodV441();
+  const r=await env.DB.prepare(`
+    SELECT category,used_count FROM kbn_google_category_budget
+    WHERE period_type='month' AND period_key=?
+  `).bind(p.month).all();
+  const raw={};
+  for(const row of (r.results||[]))raw[String(row.category||'')]=Number(row.used_count||0);
+  const defs=[
+    {key:'text_search_pro',label:'Text Search Pro',used:Number(raw.discovery||0)+Number(raw.search||0),limit:KBN_GOOGLE_SKU_SAFETY_LIMITS_V462.text_search_pro,note:'BAR開拓＋検索・店舗照合'},
+    {key:'place_details_pro',label:'Place Details Pro',used:Number(raw.details||0),limit:KBN_GOOGLE_SKU_SAFETY_LIMITS_V462.place_details_pro,note:'店舗詳細・情報補完'},
+    {key:'place_details_essentials',label:'Place Details Essentials',used:0,limit:KBN_GOOGLE_SKU_SAFETY_LIMITS_V462.place_details_essentials,note:'現在のKBNでは独立利用なし'},
+    {key:'photo_media',label:'Google写真',used:Number(raw.photo||0),limit:KBN_GOOGLE_SKU_SAFETY_LIMITS_V462.photo_media,note:'Place Photo取得'},
+    {key:'reviews_atmosphere',label:'レビュー / Atmosphere',used:Number(raw.reviews||0),limit:KBN_GOOGLE_SKU_SAFETY_LIMITS_V462.reviews_atmosphere,note:'Googleレビュー取得'}
+  ];
+  return {
+    month_key:p.month,
+    rows:defs.map(x=>({...x,remaining:Math.max(0,x.limit-x.used),percent:x.limit?Math.round(x.used/x.limit*1000)/10:0,blocked:x.used>=x.limit})),
+    connection_test:Number(raw.connection_test||0),
+    note:'KBN内部のAPI用途別カウンターです。Google Cloud請求の確定件数ではありません。'
+  };
+}
+
+async function kbnGoogleSkuCanUseV462(env,key){
+  const s=await kbnGoogleSkuSafetyStatusV462(env);
+  const row=s.rows.find(x=>x.key===key);
+  return row?{ok:!row.blocked,...row,month_key:s.month_key}:{ok:true,key};
+}
+
 const KBN_AUTO_GOOGLE_SLOT_LIMIT_V461=15;
 const KBN_AUTO_GOOGLE_DAILY_LIMIT_V461=120;
 const KBN_AUTO_GOOGLE_RESERVE_V461=30;
@@ -4706,6 +4744,8 @@ async function kbnRecordGooglePlacesSuccessV438(env){
 }
 
 async function googlePlacesTextSearch(env,{query,pageSize=20,ignoreCircuit=false,purpose="general"}={}){
+  const skuSafety=await kbnGoogleSkuCanUseV462(env,'text_search_pro');
+  if(!skuSafety.ok)return {ok:false,configured:true,skipped:true,error:`Text Search Pro のKBN月間安全上限 ${skuSafety.used}/${skuSafety.limit}回に到達しました`,error_code:'KBN_SKU_TEXT_SEARCH_LIMIT',places:[],sku_safety:skuSafety};
   const cfg=googlePlacesConfig(env);
   if(!cfg.apiKey)return {ok:false,configured:false,error:"GOOGLE_PLACES_NOT_CONFIGURED",error_code:"NOT_CONFIGURED",places:[]};
   if(!ignoreCircuit){
@@ -4798,6 +4838,8 @@ async function findGooglePlaceForShop(env,{name,area}){
 }
 
 async function googlePlaceDetails(env,placeId){
+  const skuSafety=await kbnGoogleSkuCanUseV462(env,'place_details_pro');
+  if(!skuSafety.ok)return {ok:false,configured:true,skipped:true,error:`Place Details Pro のKBN月間安全上限 ${skuSafety.used}/${skuSafety.limit}回に到達しました`,error_code:'KBN_SKU_DETAILS_LIMIT',place:null,sku_safety:skuSafety};
   const cfg=googlePlacesConfig(env);
   const id=String(placeId||"").trim();
   if(!cfg.apiKey)return {ok:false,configured:false,error:"GOOGLE_PLACES_NOT_CONFIGURED",place:null};
@@ -4850,6 +4892,8 @@ async function googlePlaceDetails(env,placeId){
 
 // KBN Google Reviews v1.84
 async function googlePlaceReviewDetails(env,placeId){
+  const skuSafety=await kbnGoogleSkuCanUseV462(env,'reviews_atmosphere');
+  if(!skuSafety.ok)return {ok:false,configured:true,skipped:true,error:`レビュー / Atmosphere のKBN月間安全上限 ${skuSafety.used}/${skuSafety.limit}回に到達しました`,error_code:'KBN_SKU_REVIEWS_LIMIT',place:null,sku_safety:skuSafety};
   const cfg=googlePlacesConfig(env);
   const id=String(placeId||"").trim();
   if(!cfg.apiKey){
@@ -11423,6 +11467,10 @@ export default {
       // ---------- System health & daily report v4.52 ----------
       if(url.pathname==="/api/admin/geo-status" && request.method==="GET"){
         return json({ok:true,coverage:await kbnGeoCoverageV457(env)},{headers:{"Cache-Control":"no-store"}});
+      }
+
+      if(url.pathname==="/api/admin/google-sku-safety" && request.method==="GET"){
+        return json({ok:true,sku:await kbnGoogleSkuSafetyStatusV462(env)},{headers:{"Cache-Control":"no-store"}});
       }
 
       if(url.pathname==="/api/admin/auto-google-budget" && request.method==="GET"){
