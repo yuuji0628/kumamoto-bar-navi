@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="description" content="熊本のBAR店舗情報｜KUMAMOTO BAR NAVI">
   <meta name="theme-color" content="#080b10">
-  <meta name="robots" content="index,follow,max-image-preview:large">
+  <meta name="robots" content="noindex,follow,max-image-preview:large">
   <title>店舗詳細｜KUMAMOTO BAR NAVI</title>
   <link rel="stylesheet" href="style.css?v=196">
 <link id="dynamicCanonical" rel="canonical" href="https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/shop.html">
@@ -313,6 +313,11 @@ body{
   .public-member-cta-v196 .member-icon-v196{display:none}
 }
 </style>
+
+<style id="kbn-shop-updated-v459">
+.public-shop-info .public-shop-updated-v459 dt{color:#76828d;font-size:.82rem}
+.public-shop-info .public-shop-updated-v459 dd{color:#aeb7c0;font-size:.86rem}
+</style>
 </head>
 <body class="public-v109 public-v196">
 
@@ -376,6 +381,19 @@ function normalizeInstagramUrl(value){
   v=v.replace(/^www\./i,"").replace(/^instagram\.com\//i,"").replace(/^\/+|\/+$/g,"");
   return "https://www.instagram.com/"+encodeURIComponent(v)+"/";
 }
+
+function updatedDateV459(v){
+  const raw=String(v||"").trim();
+  if(!raw)return "";
+  const m=raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(m)return `${m[1]}/${String(m[2]).padStart(2,"0")}/${String(m[3]).padStart(2,"0")}`;
+  const d=new Date(raw);
+  if(Number.isNaN(d.getTime()))return "";
+  return new Intl.DateTimeFormat("ja-JP",{
+    timeZone:"Asia/Tokyo",year:"numeric",month:"2-digit",day:"2-digit"
+  }).format(d);
+}
+
 function budgetText(s){
   const min=Number(s.budget_min||0),max=Number(s.budget_max||0);
   if(min&&max&&min!==max)return `${min.toLocaleString()}〜${max.toLocaleString()}円`;
@@ -398,7 +416,7 @@ function setMeta(selector,content){
   if(el && content)el.setAttribute("content",content);
 }
 function updateShopSeo(s,name,desc){
-  const canonical=`https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/shop?slug=${encodeURIComponent(s.slug||slug||"")}`;
+  const canonical=`https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev/shop.html?slug=${encodeURIComponent(s.slug||slug||"")}`;
   const title=`${name}｜${normalizeArea(s.area)||"熊本"}のBAR｜KUMAMOTO BAR NAVI`;
   const description=[
     `${normalizeArea(s.area)||"熊本"}の${s.genre||"BAR"}「${name}」`,
@@ -606,6 +624,9 @@ async function load(){
               ${(s.budget_min||s.budget_max)?`<div><dt>料金目安</dt><dd>${esc(budgetText(s))}</dd></div>`:""}
               ${s.seats?`<div><dt>席数</dt><dd>${Number(s.seats)}席</dd></div>`:""}
               ${s.phone?`<div><dt>電話番号</dt><dd><a href="tel:${esc(s.phone)}">${esc(s.phone)}</a></dd></div>`:""}
+              ${updatedDateV459(s.updated_at||s.published_at||s.created_at)
+                ?`<div class="public-shop-updated-v459"><dt>最終情報更新</dt><dd>${esc(updatedDateV459(s.updated_at||s.published_at||s.created_at))}</dd></div>`
+                :""}
             </dl>
           </div>
 
