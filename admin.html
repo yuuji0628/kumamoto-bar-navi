@@ -4562,7 +4562,16 @@ html,body{max-width:100%;overflow-x:hidden}
 
     
 
-    <div id="autoGoogleBudgetV461" style="margin-top:10px;padding:12px;border:1px solid #4a5a67;border-radius:13px;background:#0d171f">
+        <div id="googleSkuSafetyV462" style="margin-top:10px;padding:12px;border:1px solid #3a4d5b;border-radius:13px;background:#0d171f">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+        <div><b style="font-size:.76rem;color:#eef2f5">Google API SKU別 安全枠</b><small id="googleSkuMonthV462" style="display:block;margin-top:3px;color:#83909b">今月</small></div>
+        <span style="padding:4px 8px;border-radius:999px;background:#102219;color:#7ee2a8;font-size:.56rem;font-weight:900">KBN安全管理</span>
+      </div>
+      <div id="googleSkuRowsV462" style="display:grid;gap:7px;margin-top:10px"></div>
+      <div style="margin-top:8px;color:#72808b;font-size:.58rem;line-height:1.45">※ Google Cloud請求の確定件数ではなく、KBNが実際のAPI用途を分類した安全カウンターです。実請求はGoogle Cloud側が基準です。</div>
+    </div>
+
+<div id="autoGoogleBudgetV461" style="margin-top:10px;padding:12px;border:1px solid #4a5a67;border-radius:13px;background:#0d171f">
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
         <div>
           <b style="font-size:.76rem;color:#eef2f5">自動メンテ Google枠</b>
@@ -11815,6 +11824,18 @@ async function loadGeoCoverageV457(){
 
 
 
+async function loadGoogleSkuSafetyV462(){
+  try{
+    const d=await api('/api/admin/google-sku-safety'),s=d.sku||{},rows=Array.isArray(s.rows)?s.rows:[];
+    if($("googleSkuMonthV462"))$("googleSkuMonthV462").textContent=`${String(s.month_key||'今月')} / 月間安全枠`;
+    if($("googleSkuRowsV462"))$("googleSkuRowsV462").innerHTML=rows.map(r=>{
+      const pct=Math.max(0,Math.min(100,Number(r.percent||0)));
+      const tone=pct>=90?'#ffaaaa':pct>=75?'#efc45a':'#7ee2a8';
+      return `<div style="padding:9px 10px;border-radius:9px;background:#111d26"><div style="display:flex;justify-content:space-between;gap:8px"><span style="color:#b8c2ca;font-size:.62rem">${esc(r.label||'')}</span><b style="color:${tone};font-size:.68rem">${Number(r.used||0).toLocaleString()} / ${Number(r.limit||0).toLocaleString()}回</b></div><div style="height:6px;margin-top:6px;border-radius:999px;background:#1d2932;overflow:hidden"><div style="height:100%;width:${pct}%;background:${tone};border-radius:inherit"></div></div><small style="display:block;margin-top:4px;color:#73808b;font-size:.55rem">残り ${Number(r.remaining||0).toLocaleString()}回・${esc(r.note||'')}</small></div>`;
+    }).join('');
+  }catch(e){if($("googleSkuRowsV462"))$("googleSkuRowsV462").innerHTML=`<div style="color:#ffaaaa;font-size:.61rem">SKU別使用量を取得できません：${esc(e?.message||e)}</div>`}
+}
+
 async function loadAutoGoogleBudgetV461(){
   try{
     const d=await api("/api/admin/auto-google-budget");
@@ -11925,7 +11946,7 @@ document.addEventListener("DOMContentLoaded",()=>{
     }
   },60000);
   loadMaintenanceHistoryV414().catch(()=>{});kbnLoadHourlyStatusV421().catch(()=>{});
-  loadAutoGoogleBudgetV461().catch(()=>{});loadMaintenanceProgressV460().catch(()=>{});loadSystemHealthV452().catch(()=>{});loadDailySummaryV452().catch(()=>{});loadGeoCoverageV457().catch(()=>{});
+  loadGoogleSkuSafetyV462().catch(()=>{});loadAutoGoogleBudgetV461().catch(()=>{});loadMaintenanceProgressV460().catch(()=>{});loadSystemHealthV452().catch(()=>{});loadDailySummaryV452().catch(()=>{});loadGeoCoverageV457().catch(()=>{});
   document.getElementById('reloadMaintenanceHistoryBtn')?.addEventListener('click',()=>loadMaintenanceHistoryV414());
   if(kbnScheduleLiveRefreshV421)return;
   kbnScheduleLiveRefreshV421=setInterval(()=>{if(document.visibilityState!=="visible")return;kbnLoadHourlyStatusV421().catch(()=>{});loadMaintenanceHistoryV414().catch(()=>{});},5000);
@@ -12193,5 +12214,6 @@ async function loadSeoMonitor(){
 
 setInterval(()=>{if(document.visibilityState==="visible")loadMaintenanceProgressV460().catch(()=>{});},3000);
 setInterval(()=>{if(document.visibilityState==="visible")loadAutoGoogleBudgetV461().catch(()=>{});},3000);
+setInterval(()=>{if(document.visibilityState==="visible")loadGoogleSkuSafetyV462().catch(()=>{});},10000);
 </script>
 </body></html>
