@@ -4508,6 +4508,21 @@ html,body{max-width:100%;overflow-x:hidden}
       <div id="maintenanceGoogleBudgetNoteV445" style="margin-top:7px;color:#7e8c97;font-size:.61rem;line-height:1.45">開拓・情報補完・閉業確認・精密補完・レビュー・写真・接続テストをすべて共通枠で管理します。</div>
     </div>
 
+
+    <div id="googleUsageBreakdownV453" style="margin-top:10px;padding:12px;border:1px solid #334957;border-radius:13px;background:#0d171f">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+        <div>
+          <b style="font-size:.78rem;color:#eef2f5">Google使用量の内訳</b>
+          <small id="googleUsageBreakdownDateV453" style="display:block;margin-top:2px;color:#7f8c98">本日</small>
+        </div>
+        <span id="googleUsageAnomalyV453" style="padding:4px 8px;border-radius:999px;background:#102219;color:#7ee2a8;font-size:.59rem;font-weight:900">正常</span>
+      </div>
+      <div id="googleUsageBreakdownRowsV453" style="display:grid;gap:6px;margin-top:10px">
+        <small style="color:#82919c">読み込み中...</small>
+      </div>
+      <div id="googleUsageWarningsV453" style="margin-top:8px;padding:8px 9px;border-radius:9px;background:#101820;color:#82919c;font-size:.6rem;line-height:1.5">使用量を確認中...</div>
+    </div>
+
     <div id="maintenanceHealthCardV452" style="margin-top:10px;padding:12px;border:1px solid #315b45;border-radius:13px;background:#0d171f">
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
         <b style="font-size:.78rem;color:#eef2f5">システム健康診断</b>
@@ -9505,6 +9520,7 @@ function renderGoogleUsageCardV443(g,d){
   set("maintenanceGoogleMonthUsedV445",`使用 ${monthUsed.toLocaleString()}回`);
   const mst=$("maintenanceGoogleStateV445");
   if(mst){mst.textContent=stateText;mst.style.color=stateColor;mst.style.borderColor=stateBorder;mst.style.background=stateBg}
+  renderGoogleUsageBreakdownV453(g);
   const note=$("maintenanceGoogleBudgetNoteV445");
   if(note){
     const pb=g?.photo_budget||{};
@@ -11636,6 +11652,49 @@ async function kbnLoadHourlyStatusV421(){
   }catch{}
 }
 
+
+function renderGoogleUsageBreakdownV453(g){
+  const u=g?.usage_breakdown||{};
+  const rows=Array.isArray(u.rows)?u.rows:[];
+  const total=Number(u.total||0),limit=Number(u.limit||150);
+  const date=$("googleUsageBreakdownDateV453");
+  if(date)date.textContent=`${String(u.day_key||"本日")} / 合計 ${total}/${limit}回`;
+
+  const box=$("googleUsageBreakdownRowsV453");
+  if(box){
+    box.innerHTML=rows.map(r=>{
+      const used=Number(r.used||0);
+      const pct=limit?Math.min(100,used/limit*100):0;
+      return `<div style="display:grid;grid-template-columns:minmax(110px,1fr) auto;gap:8px;align-items:center;padding:7px 8px;border-radius:9px;background:#111d26">
+        <div>
+          <small style="color:#aeb9c3">${esc(r.label||r.key||"")}</small>
+          <div style="height:5px;margin-top:5px;border-radius:999px;background:#202d36;overflow:hidden"><i style="display:block;height:100%;width:${pct}%;background:#e9be54;border-radius:inherit"></i></div>
+        </div>
+        <b style="color:${r.key==="other"&&used>0?"#efc45a":"#eef2f5"};font-size:.74rem">${used}回</b>
+      </div>`;
+    }).join("")||'<small style="color:#82919c">まだ分類済みのGoogle利用がありません。</small>';
+  }
+
+  const anomaly=$("googleUsageAnomalyV453");
+  const warnings=Array.isArray(u.warnings)?u.warnings:[];
+  if(anomaly){
+    if(u.anomaly_level==="critical"){
+      anomaly.textContent="要注意";anomaly.style.color="#ffaaaa";anomaly.style.background="#251515";
+    }else if(u.anomaly){
+      anomaly.textContent="注意";anomaly.style.color="#efc45a";anomaly.style.background="#241d0e";
+    }else{
+      anomaly.textContent="正常";anomaly.style.color="#7ee2a8";anomaly.style.background="#102219";
+    }
+  }
+  const note=$("googleUsageWarningsV453");
+  if(note){
+    note.textContent=warnings.length
+      ?`消費チェック：${warnings.join(" / ")}`
+      :"異常な偏りはありません。何にGoogle枠を使ったかを自動記録しています。";
+    note.style.color=warnings.length?"#efc45a":"#82919c";
+  }
+}
+
 async function loadSystemHealthV452(refresh=false){
   try{
     const d=await api(`/api/admin/system-health${refresh?"?refresh=1":""}`),h=d.health||{};
@@ -11664,7 +11723,9 @@ async function loadDailySummaryV452(){
     $("dailyUpdatedV452").textContent=`${Number(s.updated||0)}店`;
     $("dailyCheckedV452").textContent=`${Number(s.checked||0)}`;
     $("dailyErrorsV452").textContent=`${Number(s.errors||0)}`;
-    $("dailyDetailV452").textContent=`自動処理${Number(s.runs||0)}回 / SEO +${Number(s.seo_gain||0)}点 / Google ${Number(s.google?.used||0)}/${Number(s.google?.limit||150)}回（開拓${Number(s.google?.discovery_used||0)}/${Number(s.google?.discovery_limit||70)}・写真${Number(s.google?.photo_used||0)}/${Number(s.google?.photo_limit||30)}） / 要確認変更 ${Number(s.pending_change_reviews||0)}件`;
+    const br=Array.isArray(s.google?.breakdown)?s.google.breakdown:[];
+    const bmap=Object.fromEntries(br.map(x=>[x.key,Number(x.used||0)]));
+    $("dailyDetailV452").textContent=`自動処理${Number(s.runs||0)}回 / SEO +${Number(s.seo_gain||0)}点 / Google ${Number(s.google?.used||0)}/${Number(s.google?.limit||150)}回（開拓${bmap.discovery||0}・検索/照合${bmap.search||0}・詳細/補完${bmap.details||0}・レビュー${bmap.reviews||0}・写真${bmap.photo||0}・接続テスト${bmap.connection_test||0}・その他${bmap.other||0}） / 要確認変更 ${Number(s.pending_change_reviews||0)}件`;
   }catch(e){
     if($("dailyDetailV452"))$("dailyDetailV452").textContent=`本日の集計を取得できません：${e?.message||e}`;
   }
