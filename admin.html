@@ -4561,6 +4561,30 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
 
     
+
+    <div id="autoGoogleBudgetV461" style="margin-top:10px;padding:12px;border:1px solid #4a5a67;border-radius:13px;background:#0d171f">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+        <div>
+          <b style="font-size:.76rem;color:#eef2f5">自動メンテ Google枠</b>
+          <small id="autoGoogleBudgetSlotV461" style="display:block;margin-top:3px;color:#83909b">3時間枠を確認中...</small>
+        </div>
+        <span id="autoGoogleBudgetStateV461" style="padding:4px 8px;border-radius:999px;background:#102219;color:#7ee2a8;font-size:.58rem;font-weight:900">確認中</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:9px">
+        <div style="padding:9px;border-radius:9px;background:#111d26">
+          <small style="color:#7f8c98">この3時間枠</small>
+          <b id="autoGoogleSlotCountV461" style="display:block;margin-top:2px;color:#efc45a;font-size:.9rem">— / 15回</b>
+        </div>
+        <div style="padding:9px;border-radius:9px;background:#111d26">
+          <small style="color:#7f8c98">今日の自動処理</small>
+          <b id="autoGoogleDayCountV461" style="display:block;margin-top:2px;color:#efc45a;font-size:.9rem">— / 120回</b>
+        </div>
+      </div>
+      <div id="autoGoogleBudgetNoteV461" style="margin-top:8px;color:#84919b;font-size:.61rem;line-height:1.45">
+        1枠15回・1日120回まで。残り30回は手動操作と予備用に温存します。
+      </div>
+    </div>
+
     <div id="maintenanceProgressV460" style="margin-top:10px;padding:13px;border:1px solid #4a5a67;border-radius:14px;background:#0d171f">
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
         <div>
@@ -11790,6 +11814,30 @@ async function loadGeoCoverageV457(){
 }
 
 
+
+async function loadAutoGoogleBudgetV461(){
+  try{
+    const d=await api("/api/admin/auto-google-budget");
+    const a=d.auto||{},q=d.queue||{};
+    if($("autoGoogleSlotCountV461"))$("autoGoogleSlotCountV461").textContent=`${Number(a.slot_used||0)} / ${Number(a.slot_limit||15)}回`;
+    if($("autoGoogleDayCountV461"))$("autoGoogleDayCountV461").textContent=`${Number(a.day_used||0)} / ${Number(a.day_limit||120)}回`;
+    if($("autoGoogleBudgetSlotV461"))$("autoGoogleBudgetSlotV461").textContent=String(a.slot_key||"現在の3時間枠");
+    const state=$("autoGoogleBudgetStateV461");
+    if(state){
+      state.textContent=a.blocked?"次枠へ継続":"利用可能";
+      state.style.color=a.blocked?"#efc45a":"#7ee2a8";
+      state.style.background=a.blocked?"#241d0e":"#102219";
+    }
+    if($("autoGoogleBudgetNoteV461")){
+      $("autoGoogleBudgetNoteV461").textContent=a.blocked
+        ?`Google枠に到達したため現在の工程を保持中。次の3時間枠で同じ工程・前回の続きから自動再開します。`
+        :q.active
+          ?`前回のキューを保持して処理中。1枠15回・1日120回で停止し、必ず続きから再開します。`
+          :`1枠15回・1日120回まで。残り30回は手動操作と予備用に温存します。`;
+    }
+  }catch(e){}
+}
+
 function kbnFormatElapsedV460(sec){
   const s=Math.max(0,Number(sec||0));
   if(s<60)return `${s}秒`;
@@ -11877,7 +11925,7 @@ document.addEventListener("DOMContentLoaded",()=>{
     }
   },60000);
   loadMaintenanceHistoryV414().catch(()=>{});kbnLoadHourlyStatusV421().catch(()=>{});
-  loadMaintenanceProgressV460().catch(()=>{});loadSystemHealthV452().catch(()=>{});loadDailySummaryV452().catch(()=>{});loadGeoCoverageV457().catch(()=>{});
+  loadAutoGoogleBudgetV461().catch(()=>{});loadMaintenanceProgressV460().catch(()=>{});loadSystemHealthV452().catch(()=>{});loadDailySummaryV452().catch(()=>{});loadGeoCoverageV457().catch(()=>{});
   document.getElementById('reloadMaintenanceHistoryBtn')?.addEventListener('click',()=>loadMaintenanceHistoryV414());
   if(kbnScheduleLiveRefreshV421)return;
   kbnScheduleLiveRefreshV421=setInterval(()=>{if(document.visibilityState!=="visible")return;kbnLoadHourlyStatusV421().catch(()=>{});loadMaintenanceHistoryV414().catch(()=>{});},5000);
@@ -12144,5 +12192,6 @@ async function loadSeoMonitor(){
 })();
 
 setInterval(()=>{if(document.visibilityState==="visible")loadMaintenanceProgressV460().catch(()=>{});},3000);
+setInterval(()=>{if(document.visibilityState==="visible")loadAutoGoogleBudgetV461().catch(()=>{});},3000);
 </script>
 </body></html>
