@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.51";
+      config.vars.KBN_CONFIG_VERSION="4.52";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -3497,6 +3497,78 @@ function extractPublicMetadata(lead){
   };
 }
 
+
+function kbnBigramsV452(s){
+  const x=String(s||"").toLowerCase().replace(/[\s　\-‐‑‒–—―ー,，.。/／()（）[\]【】]/g,"");
+  const out=[];
+  for(let i=0;i<x.length-1;i++)out.push(x.slice(i,i+2));
+  return out;
+}
+function kbnTextSimilarityV452(a,b){
+  const aa=kbnBigramsV452(a),bb=kbnBigramsV452(b);
+  if(!aa.length||!bb.length)return String(a||"")===String(b||"")?1:0;
+  const m=new Map();
+  for(const x of aa)m.set(x,(m.get(x)||0)+1);
+  let hit=0;
+  for(const x of bb){const n=m.get(x)||0;if(n>0){hit++;m.set(x,n-1)}}
+  return (2*hit)/(aa.length+bb.length);
+}
+async function ensureKbnChangeReviewV452(env){
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS kbn_change_review(
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      shop_id INTEGER NOT NULL,
+      shop_name TEXT,
+      field_name TEXT NOT NULL,
+      old_value TEXT,
+      proposed_value TEXT,
+      reason TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      reviewed_at TEXT
+    )
+  `).run();
+}
+async function kbnHoldMajorChangeV452(env,shop,field,oldValue,newValue,reason){
+  await ensureKbnChangeReviewV452(env);
+  const existing=await env.DB.prepare(`
+    SELECT id FROM kbn_change_review
+    WHERE shop_id=? AND field_name=? AND status='pending'
+      AND COALESCE(proposed_value,'')=COALESCE(?,'')
+    ORDER BY id DESC LIMIT 1
+  `).bind(Number(shop.id),String(field),String(newValue||"")).first();
+  if(!existing){
+    await env.DB.prepare(`
+      INSERT INTO kbn_change_review(shop_id,shop_name,field_name,old_value,proposed_value,reason,status)
+      VALUES(?,?,?,?,?,?,'pending')
+    `).bind(Number(shop.id),String(shop.name||""),String(field),String(oldValue||""),String(newValue||""),String(reason||"大幅変更")).run();
+  }
+}
+async function kbnGuardMajorChangesV452(env,shop,{address,phone,hours}){
+  let safeAddress=String(address||""),safePhone=String(phone||""),safeHours=String(hours||"");
+  const held=[];
+
+  const oldPhone=String(shop.phone||"").trim(),newPhone=String(phone||"").trim();
+  if(oldPhone && newPhone && normalizePhoneDigits(oldPhone)!==normalizePhoneDigits(newPhone)){
+    await kbnHoldMajorChangeV452(env,shop,"phone",oldPhone,newPhone,"既存電話番号と異なるため自動上書きを保留");
+    safePhone=oldPhone;held.push("phone");
+  }
+
+  const oldAddress=String(shop.address||"").trim(),newAddress=String(address||"").trim();
+  if(oldAddress && newAddress && oldAddress!==newAddress && kbnTextSimilarityV452(oldAddress,newAddress)<0.55){
+    await kbnHoldMajorChangeV452(env,shop,"address",oldAddress,newAddress,"住所の差分が大きいため自動上書きを保留");
+    safeAddress=oldAddress;held.push("address");
+  }
+
+  const oldHours=String(shop.hours||"").trim(),newHours=String(hours||"").trim();
+  if(oldHours && newHours && oldHours!==newHours && kbnTextSimilarityV452(oldHours,newHours)<0.30){
+    await kbnHoldMajorChangeV452(env,shop,"hours",oldHours,newHours,"営業時間の変化が大きいため自動上書きを保留");
+    safeHours=oldHours;held.push("hours");
+  }
+
+  return {address:safeAddress,phone:safePhone,hours:safeHours,held};
+}
+
 async function refreshIndependentListings(env,{limit=10,afterId=0,revalidate=false,force=false,missingOnly=false}={}){
   const max=Math.max(1,Math.min(Number(limit)||10,30));
   const cursor=Math.max(0,Number(afterId)||0);
@@ -3631,6 +3703,14 @@ async function refreshIndependentListings(env,{limit=10,afterId=0,revalidate=fal
       const finalHoliday=holiday||webMeta.holiday||shop.holiday||"";
       if(webMeta.features)features=[features,webMeta.features].filter(Boolean).join("、");
 
+      // v4.52: 大幅変更は即上書きせず「要確認」へ。
+      const guarded=await kbnGuardMajorChangesV452(env,shop,{
+        address:gAddress,phone,hours:finalHours
+      });
+      const safeAddress=guarded.address;
+      const safePhone=guarded.phone;
+      const safeHours=guarded.hours;
+
       const budgetMin=
         webMeta.price?.min ??
         gPrice.min ??
@@ -3645,9 +3725,9 @@ async function refreshIndependentListings(env,{limit=10,afterId=0,revalidate=fal
 
       const changed=
         String(area)!==String(shop.area||"") ||
-        String(gAddress)!==String(shop.address||"") ||
-        String(phone)!==String(shop.phone||"") ||
-        String(finalHours)!==String(shop.hours||"") ||
+        String(safeAddress)!==String(shop.address||"") ||
+        String(safePhone)!==String(shop.phone||"") ||
+        String(safeHours)!==String(shop.hours||"") ||
         String(finalHoliday)!==String(shop.holiday||"") ||
         String(instagram)!==String(shop.instagram||"") ||
         String(features)!==String(shop.features||"") ||
@@ -3669,17 +3749,17 @@ async function refreshIndependentListings(env,{limit=10,afterId=0,revalidate=fal
           budget_min=?,budget_max=?,phone=?,updated_at=CURRENT_TIMESTAMP
         WHERE id=?
       `).bind(
-        area,gAddress,finalHours,finalHoliday,instagram,features,
-        budgetMin,budgetMax,phone,shop.id
+        area,safeAddress,safeHours,finalHoliday,instagram,features,
+        budgetMin,budgetMax,safePhone,shop.id
       ).run();
 
       updated.push({
-        id:shop.id,name:shop.name,area,address:gAddress,phone,
-        hours:finalHours,holiday:finalHoliday,instagram,
+        id:shop.id,name:shop.name,area,address:safeAddress,phone:safePhone,
+        hours:safeHours,holiday:finalHoliday,instagram,
         budget_min:budgetMin,budget_max:budgetMax,
         match_confidence:found.confidence,match_score:found.score,
         google_details:!!details.ok,
-        source:"google_details+secondary+official_web"
+        source:"google_details+secondary+official_web",held_fields:guarded.held
       });
     }catch(e){
       failed.push({
@@ -4042,6 +4122,12 @@ const KBN_GOOGLE_PLACES_MONTHLY_LIMIT_V441=4500;
 const KBN_GOOGLE_PHOTO_DAILY_LIMIT_V451=30;
 const KBN_GOOGLE_PHOTO_MONTHLY_LIMIT_V451=900;
 
+// v4.52 Google予算の用途別ガード。
+// 開拓は最大70回/日、写真は最大30回/日。
+// 総上限150回なので、最低50回を店舗情報補完・閉業確認・詳細取得等へ温存できる。
+const KBN_GOOGLE_DISCOVERY_DAILY_LIMIT_V452=70;
+const KBN_GOOGLE_DISCOVERY_MONTHLY_LIMIT_V452=2100;
+
 function kbnGoogleBudgetPeriodV441(){
   const d=new Date(Date.now()+9*60*60*1000);
   const y=d.getUTCFullYear(),m=String(d.getUTCMonth()+1).padStart(2,'0'),day=String(d.getUTCDate()).padStart(2,'0');
@@ -4178,6 +4264,79 @@ async function kbnReserveGooglePhotoBudgetV451(env){
   return {ok:true,global,photo:await kbnGooglePhotoBudgetStatusV451(env)};
 }
 
+
+async function kbnGoogleDiscoveryBudgetStatusV452(env){
+  await ensureKbnGoogleCategoryBudgetV451(env);
+  const p=kbnGoogleBudgetPeriodV441();
+
+  await env.DB.prepare(`
+    INSERT INTO kbn_google_category_budget(category,period_type,period_key,used_count,limit_count)
+    VALUES('discovery','day',?,0,?)
+    ON CONFLICT(category,period_type,period_key) DO UPDATE SET limit_count=excluded.limit_count
+  `).bind(p.day,KBN_GOOGLE_DISCOVERY_DAILY_LIMIT_V452).run();
+
+  await env.DB.prepare(`
+    INSERT INTO kbn_google_category_budget(category,period_type,period_key,used_count,limit_count)
+    VALUES('discovery','month',?,0,?)
+    ON CONFLICT(category,period_type,period_key) DO UPDATE SET limit_count=excluded.limit_count
+  `).bind(p.month,KBN_GOOGLE_DISCOVERY_MONTHLY_LIMIT_V452).run();
+
+  const day=await env.DB.prepare(`
+    SELECT used_count,limit_count FROM kbn_google_category_budget
+    WHERE category='discovery' AND period_type='day' AND period_key=?
+  `).bind(p.day).first();
+
+  const month=await env.DB.prepare(`
+    SELECT used_count,limit_count FROM kbn_google_category_budget
+    WHERE category='discovery' AND period_type='month' AND period_key=?
+  `).bind(p.month).first();
+
+  const du=Number(day?.used_count||0),dl=Number(day?.limit_count||KBN_GOOGLE_DISCOVERY_DAILY_LIMIT_V452);
+  const mu=Number(month?.used_count||0),ml=Number(month?.limit_count||KBN_GOOGLE_DISCOVERY_MONTHLY_LIMIT_V452);
+  return {
+    day_used:du,day_limit:dl,day_remaining:Math.max(0,dl-du),
+    month_used:mu,month_limit:ml,month_remaining:Math.max(0,ml-mu),
+    blocked:du>=dl||mu>=ml
+  };
+}
+
+async function kbnReserveGoogleDiscoveryBudgetV452(env){
+  const s=await kbnGoogleDiscoveryBudgetStatusV452(env);
+  if(s.blocked)return {ok:false,...s,blocked:true,blocked_reason:"KBN_DISCOVERY_BUDGET"};
+
+  // 総150回の枠も同時に1回だけ予約。
+  const global=await kbnReserveGooglePlacesBudgetV441(env);
+  if(!global.ok)return {ok:false,...s,global,blocked:true,blocked_reason:global.blocked_reason||"KBN_BUDGET_LIMIT"};
+
+  const p=kbnGoogleBudgetPeriodV441();
+  const d=await env.DB.prepare(`
+    UPDATE kbn_google_category_budget
+    SET used_count=used_count+1,updated_at=CURRENT_TIMESTAMP
+    WHERE category='discovery' AND period_type='day' AND period_key=? AND used_count<limit_count
+  `).bind(p.day).run();
+
+  if(Number(d?.meta?.changes||0)<1){
+    await env.DB.prepare(`UPDATE kbn_google_places_budget SET used_count=CASE WHEN used_count>0 THEN used_count-1 ELSE 0 END WHERE period_type='day' AND period_key=?`).bind(p.day).run();
+    await env.DB.prepare(`UPDATE kbn_google_places_budget SET used_count=CASE WHEN used_count>0 THEN used_count-1 ELSE 0 END WHERE period_type='month' AND period_key=?`).bind(p.month).run();
+    return {ok:false,...s,blocked:true,blocked_reason:"KBN_DISCOVERY_BUDGET"};
+  }
+
+  const m=await env.DB.prepare(`
+    UPDATE kbn_google_category_budget
+    SET used_count=used_count+1,updated_at=CURRENT_TIMESTAMP
+    WHERE category='discovery' AND period_type='month' AND period_key=? AND used_count<limit_count
+  `).bind(p.month).run();
+
+  if(Number(m?.meta?.changes||0)<1){
+    await env.DB.prepare(`UPDATE kbn_google_category_budget SET used_count=CASE WHEN used_count>0 THEN used_count-1 ELSE 0 END WHERE category='discovery' AND period_type='day' AND period_key=?`).bind(p.day).run();
+    await env.DB.prepare(`UPDATE kbn_google_places_budget SET used_count=CASE WHEN used_count>0 THEN used_count-1 ELSE 0 END WHERE period_type='day' AND period_key=?`).bind(p.day).run();
+    await env.DB.prepare(`UPDATE kbn_google_places_budget SET used_count=CASE WHEN used_count>0 THEN used_count-1 ELSE 0 END WHERE period_type='month' AND period_key=?`).bind(p.month).run();
+    return {ok:false,...s,blocked:true,blocked_reason:"KBN_DISCOVERY_BUDGET"};
+  }
+
+  return {ok:true,global,discovery:await kbnGoogleDiscoveryBudgetStatusV452(env)};
+}
+
 async function kbnReserveGooglePlacesBudgetV441(env){
   const s=await kbnGooglePlacesBudgetStatusV441(env);
   if(s.blocked)return {ok:false,...s};
@@ -4277,7 +4436,7 @@ async function kbnRecordGooglePlacesSuccessV438(env){
   `).run();
 }
 
-async function googlePlacesTextSearch(env,{query,pageSize=20,ignoreCircuit=false}={}){
+async function googlePlacesTextSearch(env,{query,pageSize=20,ignoreCircuit=false,purpose="general"}={}){
   const cfg=googlePlacesConfig(env);
   if(!cfg.apiKey)return {ok:false,configured:false,error:"GOOGLE_PLACES_NOT_CONFIGURED",error_code:"NOT_CONFIGURED",places:[]};
   if(!ignoreCircuit){
@@ -4289,14 +4448,19 @@ async function googlePlacesTextSearch(env,{query,pageSize=20,ignoreCircuit=false
 
   let budgetReservation=null;
   try{
-    budgetReservation=await kbnReserveGooglePlacesBudgetV441(env);
+    budgetReservation=String(purpose)==="discovery"
+      ?await kbnReserveGoogleDiscoveryBudgetV452(env)
+      :await kbnReserveGooglePlacesBudgetV441(env);
     if(!budgetReservation.ok){
+      const reason=String(budgetReservation.blocked_reason||"KBN_BUDGET_LIMIT");
       return {
         ok:false,configured:true,skipped:true,status:0,
-        error:budgetReservation.blocked_reason==='KBN_MONTHLY_BUDGET'
-          ?"Google Places 月間節約上限 4,500回に到達しました"
-          :"Google Places 1日節約上限 150回に到達しました",
-        error_code:String(budgetReservation.blocked_reason||"KBN_BUDGET_LIMIT"),
+        error:reason==="KBN_DISCOVERY_BUDGET"
+          ?"本日のGoogle開拓枠70回に到達しました。メンテナンス用Google枠を温存します"
+          :reason==='KBN_MONTHLY_BUDGET'
+            ?"Google Places 月間節約上限 4,500回に到達しました"
+            :"Google Places 1日節約上限 150回に到達しました",
+        error_code:reason,
         budget:budgetReservation,places:[]
       };
     }
@@ -5013,7 +5177,7 @@ async function autoDiscover(env,request,maxListings=20,pairLimit=15,perPairLimit
     : [pair.search_area||pair.area,"熊本県",pair.label||"BAR"].filter(Boolean).join(" ")
   );
   const googlePrefetch=googleConfigured
-    ? await kbnMapConcurrentV425(pairs,2,async(pair,i)=>googlePlacesTextSearch(env,{query:pairQueries[i],pageSize:20}))
+    ? await kbnMapConcurrentV425(pairs,2,async(pair,i)=>googlePlacesTextSearch(env,{query:pairQueries[i],pageSize:20,purpose:"discovery"}))
     : pairs.map(()=>({ok:false,configured:false,places:[],error:"GOOGLE_PLACES_NOT_CONFIGURED",error_code:"NOT_CONFIGURED"}));
   const googleFailedAll=googlePrefetch.length>0&&googlePrefetch.every(x=>!x?.ok);
   const googleErrorSummary=googlePrefetch.reduce((acc,x)=>{if(!x?.ok){const k=String(x?.error_code||"GOOGLE_ERROR");acc[k]=(acc[k]||0)+1}return acc},{});
@@ -9116,6 +9280,214 @@ async function kbnGooglePlacesSingleProbeV446(env){
   }
 }
 
+
+async function ensureKbnSystemHealthV452(env){
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS kbn_system_health(
+      id INTEGER PRIMARY KEY CHECK(id=1),
+      status TEXT NOT NULL DEFAULT 'unknown',
+      score INTEGER NOT NULL DEFAULT 0,
+      db_ok INTEGER NOT NULL DEFAULT 0,
+      cron_ok INTEGER NOT NULL DEFAULT 0,
+      google_state TEXT,
+      queue_state TEXT,
+      pending_change_reviews INTEGER NOT NULL DEFAULT 0,
+      issues_json TEXT,
+      checked_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run();
+  await env.DB.prepare(`INSERT INTO kbn_system_health(id,status) VALUES(1,'unknown') ON CONFLICT(id) DO NOTHING`).run();
+}
+
+async function kbnRecoverStuckQueueV452(env){
+  await ensureKbnMaintenanceQueueV242(env);
+  const q=await env.DB.prepare(`
+    SELECT phase,run_date,updated_at
+    FROM kbn_maintenance_queue WHERE id=1
+  `).first();
+  const phase=Number(q?.phase||0);
+  if(!phase)return {recovered:false};
+
+  const ts=String(q?.updated_at||"").replace(" ","T")+"Z";
+  const ageMs=Date.now()-new Date(ts).getTime();
+  if(!Number.isFinite(ageMs)||ageMs<45*60*1000)return {recovered:false,age_minutes:Math.max(0,Math.round(ageMs/60000))};
+
+  await env.DB.prepare(`
+    UPDATE kbn_maintenance_queue
+    SET phase=0,discovery_retry_count=0,discovery_retry_after=NULL,updated_at=CURRENT_TIMESTAMP
+    WHERE id=1
+  `).run();
+
+  try{
+    await createKbnAlert(env,{
+      type:"maintenance_stuck_recovered",
+      title:"停止した自動処理を自動復旧",
+      message:`${Math.round(ageMs/60000)}分更新がなかったキューを解除しました。次の自動枠から再開します。`
+    });
+  }catch{}
+
+  return {recovered:true,age_minutes:Math.round(ageMs/60000),old_phase:phase,run_date:String(q?.run_date||"")};
+}
+
+async function kbnDailySummaryV452(env,day=null){
+  await ensureKbnMaintenanceHistoryV414(env);
+  await ensureKbnChangeReviewV452(env);
+  const target=String(day||kbnGoogleBudgetPeriodV441().day);
+
+  const s=await env.DB.prepare(`
+    SELECT
+      COUNT(*) AS runs,
+      COALESCE(SUM(checked_count),0) AS checked,
+      COALESCE(SUM(updated_count),0) AS updated,
+      COALESCE(SUM(created_count),0) AS created,
+      COALESCE(SUM(seo_gain),0) AS seo_gain,
+      COALESCE(SUM(error_count),0) AS errors
+    FROM kbn_maintenance_history
+    WHERE date(datetime(created_at,'+9 hours'))=?
+  `).bind(target).first();
+
+  const changes=await env.DB.prepare(`
+    SELECT COUNT(*) AS pending
+    FROM kbn_change_review WHERE status='pending'
+  `).first();
+
+  const google=await kbnGooglePlacesBudgetStatusV441(env);
+  const discovery=await kbnGoogleDiscoveryBudgetStatusV452(env);
+  const photo=await kbnGooglePhotoBudgetStatusV451(env);
+
+  return {
+    day:target,
+    runs:Number(s?.runs||0),
+    checked:Number(s?.checked||0),
+    created:Number(s?.created||0),
+    updated:Number(s?.updated||0),
+    seo_gain:Number(s?.seo_gain||0),
+    errors:Number(s?.errors||0),
+    pending_change_reviews:Number(changes?.pending||0),
+    google:{
+      used:Number(google.day_used||0),limit:Number(google.day_limit||150),
+      discovery_used:Number(discovery.day_used||0),discovery_limit:Number(discovery.day_limit||70),
+      photo_used:Number(photo.day_used||0),photo_limit:Number(photo.day_limit||30)
+    }
+  };
+}
+
+async function kbnRunSystemHealthV452(env){
+  await ensureKbnSystemHealthV452(env);
+  await ensureKbnChangeReviewV452(env);
+  const issues=[];
+  let dbOk=0,cronOk=0,queueState="idle",googleState="unknown";
+
+  try{const x=await env.DB.prepare(`SELECT 1 AS ok`).first();dbOk=Number(x?.ok||0)===1?1:0}catch{issues.push("DB接続エラー")}
+
+  let q=null;
+  try{q=await kbnMaintenanceQueueStatusV225(env)}catch{}
+  if(q?.active){
+    queueState=`active:${String(q.stage||"unknown")}`;
+    const raw=String(q.updated_at||"").replace(" ","T")+"Z";
+    const age=Date.now()-new Date(raw).getTime();
+    if(Number.isFinite(age)&&age>45*60*1000)issues.push("メンテナンスキュー停止疑い");
+  }
+
+  try{
+    const h=await kbnGooglePlacesHealthV438(env);
+    googleState=h?.disabled?String(h.error_code||"disabled"):"ok";
+    if(h?.disabled && !/KBN_(DAILY|MONTHLY)_BUDGET/.test(googleState))issues.push(`Google Places:${googleState}`);
+  }catch{issues.push("Google状態取得失敗")}
+
+  try{
+    const last=await env.DB.prepare(`
+      SELECT created_at FROM kbn_maintenance_history
+      ORDER BY id DESC LIMIT 1
+    `).first();
+    if(last?.created_at){
+      const age=Date.now()-new Date(String(last.created_at).replace(" ","T")+"Z").getTime();
+      cronOk=Number.isFinite(age)&&age<8*60*60*1000?1:0;
+      if(!cronOk)issues.push("自動処理の履歴が8時間以上更新されていません");
+    }else{
+      issues.push("自動処理履歴なし");
+    }
+  }catch{issues.push("自動処理履歴確認失敗")}
+
+  const pc=await env.DB.prepare(`SELECT COUNT(*) AS n FROM kbn_change_review WHERE status='pending'`).first();
+  const pending=Number(pc?.n||0);
+
+  let score=100;
+  if(!dbOk)score-=40;
+  if(!cronOk)score-=25;
+  if(issues.some(x=>x.includes("停止疑い")))score-=20;
+  if(issues.some(x=>x.startsWith("Google Places")))score-=15;
+  score=Math.max(0,score);
+  const status=score>=90?"good":score>=70?"warning":"critical";
+
+  await env.DB.prepare(`
+    UPDATE kbn_system_health
+    SET status=?,score=?,db_ok=?,cron_ok=?,google_state=?,queue_state=?,
+        pending_change_reviews=?,issues_json=?,checked_at=CURRENT_TIMESTAMP
+    WHERE id=1
+  `).bind(status,score,dbOk,cronOk,googleState,queueState,pending,JSON.stringify(issues)).run();
+
+  return {status,score,db_ok:!!dbOk,cron_ok:!!cronOk,google_state:googleState,queue_state:queueState,pending_change_reviews:pending,issues};
+}
+
+async function kbnSystemHealthStatusV452(env){
+  await ensureKbnSystemHealthV452(env);
+  const row=await env.DB.prepare(`SELECT * FROM kbn_system_health WHERE id=1`).first();
+  let issues=[];
+  try{issues=JSON.parse(String(row?.issues_json||"[]"))}catch{}
+  return {
+    status:String(row?.status||"unknown"),
+    score:Number(row?.score||0),
+    db_ok:!!Number(row?.db_ok||0),
+    cron_ok:!!Number(row?.cron_ok||0),
+    google_state:String(row?.google_state||"unknown"),
+    queue_state:String(row?.queue_state||"idle"),
+    pending_change_reviews:Number(row?.pending_change_reviews||0),
+    issues,
+    checked_at:String(row?.checked_at||"")
+  };
+}
+
+async function kbnMaybeDailyOpsV452(env,event){
+  const ms=Number(event?.scheduledTime||Date.now());
+  const d=new Date(ms+9*60*60*1000);
+  const y=d.getUTCFullYear(),m=String(d.getUTCMonth()+1).padStart(2,"0"),day=String(d.getUTCDate()).padStart(2,"0");
+  const key=`${y}-${m}-${day}`;
+  const h=d.getUTCHours();
+
+  // 健康診断：毎日06時以降、最初のCronで1回だけ。
+  if(h>=6){
+    const claimed=await kbnClaimRuntimeSlotV231(env,`health-${key}`,'daily_health');
+    if(claimed){
+      const health=await kbnRunSystemHealthV452(env);
+      if(health.status!=="good"){
+        try{
+          await createKbnAlert(env,{
+            type:"daily_health_warning",
+            title:"自動メンテナンス健康診断",
+            message:`健康度 ${health.score}/100 / ${health.issues.join(" / ")||"要確認"}`
+          });
+        }catch{}
+      }
+    }
+  }
+
+  // 1日の終了レポート：23時以降、最初のCronで1回だけ。
+  if(h>=23){
+    const claimed=await kbnClaimRuntimeSlotV231(env,`daily-report-${key}`,'daily_report');
+    if(claimed){
+      const s=await kbnDailySummaryV452(env,key);
+      try{
+        await createKbnAlert(env,{
+          type:"daily_maintenance_report",
+          title:`本日のメンテナンス結果 ${key}`,
+          message:`新規${s.created}店 / 更新${s.updated}店 / 確認${s.checked} / エラー${s.errors} / SEO +${s.seo_gain} / Google ${s.google.used}/${s.google.limit}回 / 要確認変更${s.pending_change_reviews}件`
+        });
+      }catch{}
+    }
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url=new URL(request.url);
@@ -10377,6 +10749,30 @@ export default {
         });
       }
 
+      // ---------- System health & daily report v4.52 ----------
+      if(url.pathname==="/api/admin/system-health" && request.method==="GET"){
+        const refresh=url.searchParams.get("refresh")==="1";
+        const health=refresh?await kbnRunSystemHealthV452(env):await kbnSystemHealthStatusV452(env);
+        return json({ok:true,health},{headers:{"Cache-Control":"no-store"}});
+      }
+
+      if(url.pathname==="/api/admin/daily-maintenance-summary" && request.method==="GET"){
+        const day=String(url.searchParams.get("day")||"").trim()||null;
+        const summary=await kbnDailySummaryV452(env,day);
+        return json({ok:true,summary},{headers:{"Cache-Control":"no-store"}});
+      }
+
+      if(url.pathname==="/api/admin/change-reviews" && request.method==="GET"){
+        await ensureKbnChangeReviewV452(env);
+        const r=await env.DB.prepare(`
+          SELECT id,shop_id,shop_name,field_name,old_value,proposed_value,reason,status,created_at
+          FROM kbn_change_review
+          WHERE status='pending'
+          ORDER BY id DESC LIMIT 100
+        `).all();
+        return json({ok:true,items:r.results||[]},{headers:{"Cache-Control":"no-store"}});
+      }
+
       // ---------- Maintenance history dashboard v4.14 ----------
       if(url.pathname==="/api/admin/maintenance-history" && request.method==="GET"){
         const days=Number(url.searchParams.get('days')||7);
@@ -11515,15 +11911,18 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
         const g=await kbnGooglePlacesHealthV438(env);
         const budget=await kbnGooglePlacesBudgetStatusV441(env);
         const photo_budget=await kbnGooglePhotoBudgetStatusV451(env);
+        const discovery_budget=await kbnGoogleDiscoveryBudgetStatusV452(env);
         return json({
           ok:true,
-          google:{configured:!!googlePlacesConfig(env).apiKey,...g,budget,photo_budget},
+          google:{configured:!!googlePlacesConfig(env).apiKey,...g,budget,photo_budget,discovery_budget},
           foursquare:{configured:!!foursquareConfig(env).apiKey},
           cost_guard:{
             daily_limit:KBN_GOOGLE_PLACES_DAILY_LIMIT_V441,
             monthly_limit:KBN_GOOGLE_PLACES_MONTHLY_LIMIT_V441,
             photo_daily_limit:KBN_GOOGLE_PHOTO_DAILY_LIMIT_V451,
-            policy:"Google Places総利用を1日150回・月4,500回まで。公開写真はその内1日30回まで"
+            discovery_daily_limit:KBN_GOOGLE_DISCOVERY_DAILY_LIMIT_V452,
+            maintenance_reserved_min:50,
+            policy:"Google総利用150回/日。開拓最大70・写真最大30・メンテナンス等へ最低50回を温存"
           }
         });
       }
@@ -12241,6 +12640,12 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
       // 2) 同じ時間内では進行中パイプラインを処理
       // 3) 空き時間だけ日次精度（閉業→Instagram全件→対象外）
       const hourly=kbnHourlyMaintenanceSlotV421(event);
+
+      // v4.52: 45分以上更新がない処理は自動解除。
+      try{await kbnRecoverStuckQueueV452(env)}catch(e){console.error("stuck queue recovery failed",e)}
+
+      // 1日1回の健康診断と23時台の日次結果レポート。
+      try{await kbnMaybeDailyOpsV452(env,event)}catch(e){console.error("daily ops failed",e)}
 
       // まず進行中の3時間サイクルを小分けで続行。
       const queued=await kbnProcessQueuedMaintenanceV242(env);
