@@ -554,7 +554,15 @@
   .public-hero h1,.public-hero-lead,.public-kicker,.public-hero-total-copy-v211,.public-hero-area-copy-v211{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif}
   .public-hero-total-v211,.public-hero-area-v211{contain:layout paint style}
 }
-</style></head>
+</style>
+<style id="kbn-home-smart-v456">
+.kbn-home-smart-v456{margin-top:10px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.kbn-home-smart-v456 a{display:flex;align-items:center;justify-content:center;min-height:46px;padding:8px;border:1px solid #334451;border-radius:12px;background:#0f1820;color:#dbe2e8;text-decoration:none;font-size:.68rem;font-weight:900;text-align:center}
+.kbn-home-smart-v456 a:first-child{border-color:#a47a20;background:#2a210e;color:#efc45a}
+@media(max-width:600px){.kbn-home-smart-v456{grid-template-columns:1fr 1fr}.kbn-home-smart-v456 a:first-child{grid-column:1/-1}}
+</style>
+
+</head>
 <body class="public-v109">
 
 <div class="public-notice">
@@ -659,6 +667,13 @@
         <a href="bars.html?genre=ダーツバー">ダーツ</a>
         <a href="bars.html?genre=カラオケバー">カラオケ</a>
       </div>
+
+      <div class="kbn-home-smart-v456" aria-label="便利なBAR検索">
+        <a href="/bars.html?open=1">● 今営業中の店を探す</a>
+        <a href="/bars.html#filters">⌖ 近い店を探す</a>
+        <a href="/bars.html#filters">✨ 今夜どこ行く？</a>
+      </div>
+
     </div>
   </section>
 
