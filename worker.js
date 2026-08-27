@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.58";
+      config.vars.KBN_CONFIG_VERSION="4.59";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -6709,7 +6709,8 @@ async function renderSeoShopDetailV250(request,env,url){
     shop.holiday?["定休日",shop.holiday]:null,
     budget?["料金目安",budget]:null,
     shop.seats?["席数",`${shop.seats}席`]:null,
-    shop.phone?["電話",shop.phone]:null
+    shop.phone?["電話番号",shop.phone]:null,
+    updatedLabel?["最終情報更新",updatedLabel]:null
   ].filter(Boolean);
   const areaHref=areaSlug?`/area/${encodeURIComponent(areaSlug)}`:`/bars.html?area=${encodeURIComponent(area)}`;
   const genreHref=genreSlug&&genreCount>=3?`/genre/${encodeURIComponent(genreSlug)}`:`/bars.html?genre=${encodeURIComponent(genre)}`;
@@ -6727,7 +6728,7 @@ async function renderSeoShopDetailV250(request,env,url){
       ${featureList.length?`<div class="kbn-seo-features" aria-label="店舗の特徴">${featureList.map(x=>`<span>${kbnSeoEsc(x)}</span>`).join("")}</div>`:""}
       ${facts.length?`<section><h2>${kbnSeoEsc(name)}の基本情報</h2><dl>${facts.map(([k,v])=>`<div><dt>${kbnSeoEsc(k)}</dt><dd>${kbnSeoEsc(v)}</dd></div>`).join("")}</dl></section>`:""}
       ${(sameAs.length||shop.phone)?`<section><h2>公式・連絡先</h2><p>${shop.phone?`<a href="tel:${kbnSeoEsc(String(shop.phone).replace(/[^0-9+]/g,""))}">電話で確認する</a> `:""}${sameAs.length?`<a href="${kbnSeoEsc(sameAs[0])}" rel="nofollow noopener">Instagramを確認する</a>`:""}</p></section>`:""}
-      ${updatedLabel?`<p class="kbn-seo-updated"><small>情報更新 ${kbnSeoEsc(updatedLabel)}</small></p>`:""}
+      
       ${seoNav}
       ${relatedAreaHtml}
       ${relatedGenreHtml}
