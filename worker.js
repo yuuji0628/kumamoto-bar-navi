@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.53";
+      config.vars.KBN_CONFIG_VERSION="4.54";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -9575,6 +9575,210 @@ async function kbnMaybeDailyOpsV452(env,event){
   }
 }
 
+
+function kbnSeoRobotsStateV454(html){
+  const s=String(html||"");
+  const noindex=/<meta\s+name=["']robots["'][^>]*content=["'][^"']*noindex/i.test(s);
+  const canonical=(s.match(/<link\s+rel=["']canonical["']\s+href=["']([^"']+)/i)||[])[1]||"";
+  return {indexable:!noindex,noindex,canonical};
+}
+
+async function kbnSeoIndexAuditV454(env,origin){
+  const base=String(origin||"https://kumamoto-bar-navi.rrwpvwmz8p.workers.dev").replace(/\/+$/,"");
+  const sitemapUrls=[];
+  const issues=[];
+  const details=[];
+  const add=(path,type,meta={})=>{
+    const url=path.startsWith("http")?path:`${base}${path}`;
+    sitemapUrls.push({url,path:new URL(url).pathname+new URL(url).search,type,...meta});
+  };
+
+  // Static/public pages submitted by sitemap-pages.xml.
+  const staticPaths=[
+    "/","/bars.html","/jobs.html","/column.html","/areas.html","/all-shops",
+    "/listing-form.html","/about.html","/faq.html","/contact.html",
+    "/column-bar-beginner.html","/column-kumamoto-night.html","/column-solo-bar.html",
+    "/pricing.html","/coupons.html","/events.html"
+  ];
+  for(const p of staticPaths)add(p,"static");
+
+  // Public shops and duplicate slug safety.
+  let publicShops=[];
+  try{
+    const rr=await env.DB.prepare(`
+      SELECT id,slug,name,updated_at
+      FROM shops
+      WHERE COALESCE(is_published,1)=1 AND TRIM(COALESCE(slug,''))<>''
+      ORDER BY id ASC
+      LIMIT 45000
+    `).all();
+    publicShops=rr.results||[];
+  }catch(e){
+    issues.push({severity:"error",type:"db",path:"/sitemap-shops.xml",reason:`公開店舗一覧を取得できません: ${String(e?.message||e)}`});
+  }
+
+  const slugCount=new Map();
+  for(const s of publicShops){
+    const slug=String(s.slug||"").trim();
+    slugCount.set(slug,(slugCount.get(slug)||0)+1);
+    add(`/shop?slug=${encodeURIComponent(slug)}`,"shop",{shop_id:Number(s.id||0),shop_name:String(s.name||"")});
+  }
+  for(const [slug,count] of slugCount){
+    if(count>1){
+      issues.push({severity:"error",type:"duplicate_shop_slug",path:`/shop?slug=${encodeURIComponent(slug)}`,reason:`同じslugの公開店舗が${count}件あります`});
+    }
+  }
+
+  // Area pages: exactly same sitemap rule.
+  let liveAreas=new Set();
+  try{
+    const areaRes=await env.DB.prepare(`
+      SELECT DISTINCT area FROM shops
+      WHERE COALESCE(is_published,1)=1 AND COALESCE(slug,'')<>'' AND COALESCE(area,'')<>''
+    `).all();
+    liveAreas=new Set((areaRes.results||[]).map(r=>String(r.area||"").trim()).filter(Boolean));
+  }catch(e){
+    issues.push({severity:"error",type:"db",path:"/sitemap-pages.xml",reason:"エリア在庫を取得できません"});
+  }
+
+  const generatedChecks=[];
+  for(const [slug,areaName] of Object.entries(KBN_LOCAL_SEO_AREAS||{})){
+    if(liveAreas.size && !liveAreas.has(areaName))continue;
+    const path=`/area/${encodeURIComponent(slug)}`;
+    add(path,"area");
+    generatedChecks.push({path,type:"area",slug});
+  }
+
+  // Genre pages: same >=3 rule.
+  try{
+    for(const [gslug,gcfg] of Object.entries(KBN_LOCAL_SEO_GENRES||{})){
+      const terms=gcfg.terms||[];
+      if(!terms.length)continue;
+      const cond=terms.map(()=>`LOWER(COALESCE(genre,'') || ' ' || COALESCE(features,'') || ' ' || COALESCE(description,'') || ' ' || COALESCE(hours,'')) LIKE ?`).join(' OR ');
+      const row=await env.DB.prepare(`
+        SELECT COUNT(*) AS total FROM shops
+        WHERE COALESCE(is_published,1)=1 AND COALESCE(slug,'')<>'' AND (${cond})
+      `).bind(...terms.map(t=>`%${String(t).toLowerCase()}%`)).first();
+      const count=Number(row?.total||0);
+      if(count>=3){
+        const path=`/genre/${encodeURIComponent(gslug)}`;
+        add(path,"genre",{matched_shops:count});
+        generatedChecks.push({path,type:"genre",slug:gslug,matched_shops:count});
+      }
+    }
+  }catch(e){
+    issues.push({severity:"error",type:"db",path:"/sitemap-pages.xml",reason:"ジャンル在庫を取得できません"});
+  }
+
+  // Area × genre: same >=5 rule.
+  try{
+    const areaSlugByName=new Map(Object.entries(KBN_LOCAL_SEO_AREAS||{}).map(([slug,name])=>[String(name||"").trim(),slug]));
+    for(const [gslug,gcfg] of Object.entries(KBN_LOCAL_SEO_GENRES||{})){
+      const {terms,condition,binds}=kbnGenreSqlParts(gcfg);
+      if(!terms.length||!condition)continue;
+      const rr=await env.DB.prepare(`
+        SELECT area,COUNT(*) AS total FROM shops
+        WHERE COALESCE(is_published,1)=1
+          AND COALESCE(slug,'')<>''
+          AND COALESCE(area,'')<>''
+          AND (${condition})
+        GROUP BY area HAVING COUNT(*)>=5
+      `).bind(...binds).all();
+      for(const row of (rr.results||[])){
+        const aslug=areaSlugByName.get(String(row.area||"").trim());
+        if(!aslug)continue;
+        const path=`/area/${encodeURIComponent(aslug)}/${encodeURIComponent(gslug)}`;
+        add(path,"area_genre",{matched_shops:Number(row.total||0)});
+        generatedChecks.push({path,type:"area_genre",area_slug:aslug,genre_slug:gslug,matched_shops:Number(row.total||0)});
+      }
+    }
+  }catch(e){
+    issues.push({severity:"error",type:"db",path:"/sitemap-pages.xml",reason:"エリア×ジャンル在庫を取得できません"});
+  }
+
+  // Detect sitemap duplicates before rendering checks.
+  const seen=new Map();
+  for(const x of sitemapUrls)seen.set(x.url,(seen.get(x.url)||0)+1);
+  for(const [url,count] of seen){
+    if(count>1){
+      const u=new URL(url);
+      issues.push({severity:"error",type:"duplicate_sitemap_url",path:u.pathname+u.search,reason:`サイトマップ内に${count}回重複しています`});
+    }
+  }
+
+  // Check generated area/genre pages by server renderer. These are the pages where
+  // DB thresholds can accidentally disagree with the sitemap inclusion rules.
+  for(const x of generatedChecks){
+    try{
+      let html="";
+      if(x.type==="area")html=await renderLocalSeoAreaPage(env,x.slug);
+      else if(x.type==="genre")html=await renderLocalSeoGenrePage(env,x.slug);
+      else html=await renderLocalSeoAreaGenrePage(env,x.area_slug,x.genre_slug);
+      const state=kbnSeoRobotsStateV454(html);
+      details.push({path:x.path,type:x.type,indexable:state.indexable,canonical:state.canonical,matched_shops:Number(x.matched_shops||0)});
+      if(!state.indexable){
+        issues.push({severity:"error",type:"sitemap_noindex",path:x.path,reason:"サイトマップ掲載URLなのにページ側がnoindexです"});
+      }
+      if(state.canonical && !state.canonical.endsWith(x.path)){
+        issues.push({severity:"warning",type:"canonical_mismatch",path:x.path,reason:`canonicalが一致しません: ${state.canonical}`});
+      }
+    }catch(e){
+      issues.push({severity:"error",type:"render_error",path:x.path,reason:`ページ生成確認に失敗: ${String(e?.message||e)}`});
+    }
+  }
+
+  // Static assets are only 15 files + root; verify meta robots/canonical cheaply.
+  // /all-shops is dynamic and known indexable by its renderer.
+  for(const p of staticPaths){
+    if(p==="/all-shops")continue;
+    try{
+      const assetPath=p==="/"?"/index.html":p;
+      const res=await env.ASSETS.fetch(new Request(`${base}${assetPath}`,{method:"GET"}));
+      const html=res.ok?await res.text():"";
+      const state=kbnSeoRobotsStateV454(html);
+      details.push({path:p,type:"static",indexable:res.ok&&state.indexable,status:res.status,canonical:state.canonical});
+      if(!res.ok){
+        issues.push({severity:"error",type:"static_http",path:p,reason:`静的ページがHTTP ${res.status}`});
+      }else if(!state.indexable){
+        issues.push({severity:"error",type:"sitemap_noindex",path:p,reason:"サイトマップ掲載URLなのに静的ページがnoindexです"});
+      }
+    }catch(e){
+      issues.push({severity:"error",type:"static_check_error",path:p,reason:`静的ページ確認失敗: ${String(e?.message||e)}`});
+    }
+  }
+
+  // Shop detail renderer always returns index for a public unique slug; audit DB invariants instead of
+  // rendering 1,000+ full pages, avoiding excessive Worker CPU.
+  const uniqueShopCount=[...slugCount.values()].filter(x=>x===1).length;
+  const duplicateShopRows=[...slugCount.values()].filter(x=>x>1).reduce((n,x)=>n+x,0);
+
+  const counts={
+    static:staticPaths.length,
+    area:sitemapUrls.filter(x=>x.type==="area").length,
+    genre:sitemapUrls.filter(x=>x.type==="genre").length,
+    area_genre:sitemapUrls.filter(x=>x.type==="area_genre").length,
+    shops:publicShops.length,
+    total_submitted:sitemapUrls.length,
+    unique_urls:seen.size,
+    unique_shop_slugs:uniqueShopCount,
+    duplicate_shop_rows:duplicateShopRows,
+    generated_checked:generatedChecks.length,
+    static_checked:staticPaths.length
+  };
+  const errors=issues.filter(x=>x.severity==="error").length;
+  const warnings=issues.filter(x=>x.severity==="warning").length;
+
+  return {
+    ok:errors===0,
+    status:errors?"error":warnings?"warning":"good",
+    checked_at:new Date().toISOString(),
+    counts,
+    issues,
+    details:details.slice(0,250),
+    note:"Search Consoleの実登録数ではなく、サイトマップ掲載条件・robots・canonical・公開店舗slugをサイト側で全件照合した結果です。"
+  };
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url=new URL(request.url);
@@ -9946,17 +10150,8 @@ export default {
           }
         }catch(e){ console.error("shop sitemap generation error",e); }
       }
-      // Genre landing pages are included only when at least 3 matching public shops exist.
-      // This prevents thin genre pages from being submitted while allowing useful pages to appear automatically.
-      try{
-        for(const [gslug,gcfg] of Object.entries(KBN_LOCAL_SEO_GENRES||{})){
-          const terms=gcfg.terms||[];
-          if(!terms.length)continue;
-          const cond=terms.map(()=>`LOWER(COALESCE(genre,'') || ' ' || COALESCE(features,'') || ' ' || COALESCE(description,'') || ' ' || COALESCE(hours,'')) LIKE ?`).join(' OR ');
-          const row=await env.DB.prepare(`SELECT COUNT(*) AS total FROM shops WHERE COALESCE(is_published,1)=1 AND COALESCE(slug,'')<>'' AND (${cond})`).bind(...terms.map(t=>`%${String(t).toLowerCase()}%`)).first();
-          if(Number(row?.total||0)>=3)urls.push({loc:`${base}/genre/${encodeURIComponent(gslug)}`,priority:"0.8",freq:"daily"});
-        }
-      }catch(e){ console.error("sitemap genre inventory",e); }
+      // v4.54: ジャンルページは sitemap-pages.xml にだけ掲載。
+      // sitemap-shops.xml は店舗詳細URL専用にして、重複送信を防ぐ。
       const escXml=v=>String(v||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&apos;");
       const xml=`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map(x=>`  <url>\n    <loc>${escXml(x.loc)}</loc>${x.lastmod?`\n    <lastmod>${escXml(x.lastmod)}</lastmod>`:""}\n    <changefreq>weekly</changefreq>\n    <priority>0.8</priority>\n  </url>`).join("\n")}\n</urlset>`;
       return new Response(xml,{headers:{
@@ -12038,6 +12233,11 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
 
       if(url.pathname==="/api/admin/instagram-full-audit/process" && request.method==="POST"){
         return json(await kbnProcessInstagramFullAuditV432(env));
+      }
+
+      if(url.pathname==="/api/admin/seo-index-audit" && request.method==="GET"){
+        const audit=await kbnSeoIndexAuditV454(env,url.origin);
+        return json(audit,{headers:{"Cache-Control":"no-store"}});
       }
 
       if(url.pathname==="/api/admin/seo-robots-check" && request.method==="GET"){
