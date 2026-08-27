@@ -3889,6 +3889,32 @@ html,body{max-width:100%;overflow-x:hidden}
       <span style="display:block;color:#efc45a;font-size:.67rem;font-weight:900;letter-spacing:.12em">INDEX PROMOTION</span>
       <h3 style="margin:4px 0 4px;font-size:1.03rem">インデックス促進モード</h3>
       <p style="margin:0;color:#9da9b5;font-size:.73rem;line-height:1.55">店舗情報の安全な改善に加えて、ページ側の技術SEOを別枠で自動監視します。店舗情報の点数を無理に水増しせず、canonical・構造化データ・内部リンクなどを全公開ページへ適用します。</p>
+      <div id="seoIndexAuditV454" style="margin-top:12px;padding:13px;border:1px solid #334957;border-radius:14px;background:#0d171f">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
+          <div>
+            <b style="font-size:.8rem;color:#eef2f5">サイトマップ × index 全件照合</b>
+            <small id="seoIndexAuditTimeV454" style="display:block;margin-top:3px;color:#7f8c98">未確認</small>
+          </div>
+          <div style="display:flex;gap:7px;align-items:center">
+            <span id="seoIndexAuditStateV454" style="padding:5px 8px;border-radius:999px;background:#111d26;color:#aeb9c3;font-size:.59rem;font-weight:900">待機</span>
+            <button type="button" id="seoIndexAuditBtnV454" onclick="loadSeoIndexAuditV454(true)" style="border:1px solid #53616d;background:#121c25;color:#eef2f5;border-radius:9px;padding:7px 10px;font-weight:800">全件検査</button>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:10px">
+          <div style="padding:8px;border-radius:9px;background:#111d26"><small style="display:block;color:#7f8c98">送信URL</small><b id="seoAuditTotalV454" style="color:#fff">—</b></div>
+          <div style="padding:8px;border-radius:9px;background:#111d26"><small style="display:block;color:#7f8c98">店舗詳細</small><b id="seoAuditShopsV454" style="color:#7ee3b7">—</b></div>
+          <div style="padding:8px;border-radius:9px;background:#111d26"><small style="display:block;color:#7f8c98">noindex不一致</small><b id="seoAuditNoindexV454" style="color:#fff">—</b></div>
+          <div style="padding:8px;border-radius:9px;background:#111d26"><small style="display:block;color:#7f8c98">重複/異常</small><b id="seoAuditErrorsV454" style="color:#fff">—</b></div>
+        </div>
+
+        <div id="seoIndexAuditSummaryV454" style="margin-top:8px;padding:8px 9px;border-radius:9px;background:#101820;color:#8f9ca6;font-size:.62rem;line-height:1.5">
+          サイトマップに送っているURLと、サイト側のindex/noindex条件を照合します。
+        </div>
+        <div id="seoIndexAuditIssuesV454" style="display:grid;gap:6px;margin-top:8px"></div>
+        <div style="margin-top:7px;color:#6f7d89;font-size:.59rem;line-height:1.45">※ Google Search Consoleの「実際に登録済みか」はSearch Console側の再クロール状況に依存します。ここではサイト側の矛盾を検査します。</div>
+      </div>
+
     </div>
     <button type="button" id="runIndexPromotionBtn" style="border:1px solid #b88a2b;background:#2a2110;color:#f3ca63;border-radius:11px;padding:10px 13px;font-weight:900">促進 20店舗</button>
   </div>
@@ -11781,7 +11807,50 @@ document.addEventListener("DOMContentLoaded",()=>{
 <script id="kbnSeoMonitorScript">
 (function(){
   const n=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=Number(v||0).toLocaleString('ja-JP');};
-  async function loadSeoMonitor(){
+  
+async function loadSeoIndexAuditV454(force=false){
+  const btn=$("seoIndexAuditBtnV454");
+  if(btn){btn.disabled=true;btn.textContent="検査中...";}
+  const state=$("seoIndexAuditStateV454");
+  if(state){state.textContent="検査中";state.style.color="#efc45a";state.style.background="#241d0e";}
+  try{
+    const d=await api("/api/admin/seo-index-audit");
+    const c=d.counts||{},issues=Array.isArray(d.issues)?d.issues:[];
+    const errors=issues.filter(x=>x.severity==="error");
+    const noindex=issues.filter(x=>x.type==="sitemap_noindex");
+    set("seoAuditTotalV454",Number(c.total_submitted||0).toLocaleString("ja-JP"));
+    set("seoAuditShopsV454",`${Number(c.shops||0).toLocaleString("ja-JP")}店`);
+    set("seoAuditNoindexV454",`${noindex.length}件`);
+    set("seoAuditErrorsV454",`${errors.length}件`);
+    set("seoIndexAuditTimeV454",`最終確認 ${new Date(d.checked_at||Date.now()).toLocaleString("ja-JP")}`);
+
+    if(state){
+      if(d.status==="good"){state.textContent="一致";state.style.color="#7ee2a8";state.style.background="#102219";}
+      else if(d.status==="warning"){state.textContent="注意";state.style.color="#efc45a";state.style.background="#241d0e";}
+      else{state.textContent="要修正";state.style.color="#ffaaaa";state.style.background="#251515";}
+    }
+
+    const summary=$("seoIndexAuditSummaryV454");
+    if(summary){
+      summary.textContent=`サイトマップ送信 ${Number(c.total_submitted||0).toLocaleString("ja-JP")}URL（ユニーク${Number(c.unique_urls||0).toLocaleString("ja-JP")}）／ 静的${Number(c.static||0)}・エリア${Number(c.area||0)}・ジャンル${Number(c.genre||0)}・エリア×ジャンル${Number(c.area_genre||0)}・店舗${Number(c.shops||0).toLocaleString("ja-JP")}。生成SEOページ${Number(c.generated_checked||0)}件と静的ページをrobots/canonical照合、店舗詳細は公開slug全件を検査しました。`;
+    }
+
+    const box=$("seoIndexAuditIssuesV454");
+    if(box){
+      box.innerHTML=issues.length
+        ?issues.slice(0,20).map(x=>`<div style="padding:7px 8px;border:1px solid ${x.severity==="error"?"#663737":"#655526"};border-radius:8px;background:${x.severity==="error"?"#211417":"#211d12"};font-size:.6rem;line-height:1.45"><b style="color:${x.severity==="error"?"#ffaaaa":"#efc45a"}">${x.severity==="error"?"要修正":"注意"}</b> <span style="color:#eef2f5">${esc(x.path||"")}</span><br><span style="color:#9da9b5">${esc(x.reason||"")}</span></div>`).join("")
+        :'<div style="padding:8px 9px;border-radius:8px;background:#102019;color:#7ee2a8;font-size:.62rem">✓ サイトマップとindex条件に矛盾は見つかりませんでした。</div>';
+    }
+  }catch(e){
+    if(state){state.textContent="取得失敗";state.style.color="#ffaaaa";state.style.background="#251515";}
+    const box=$("seoIndexAuditIssuesV454");
+    if(box)box.innerHTML=`<div style="color:#ffaaaa;font-size:.62rem">全件検査に失敗：${esc(e?.message||e)}</div>`;
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent="全件検査";}
+  }
+}
+
+async function loadSeoMonitor(){
     const btn=document.getElementById('reloadSeoMonitorBtn');
     if(btn){btn.disabled=true;btn.textContent='確認中...';}
     try{
@@ -11964,6 +12033,7 @@ document.addEventListener("DOMContentLoaded",()=>{
     document.getElementById('runPriorityInfoEnrichBtn')?.addEventListener('click',runPriorityInfoEnrich);
     document.getElementById('checkStructuredDataBtn')?.addEventListener('click',checkStructuredData);
     loadSeoMonitor();
+    loadSeoIndexAuditV454().catch(()=>{});
     loadTodayInfoEnrichSummary();
     loadAutoInfoRecheckStatus();
   });
