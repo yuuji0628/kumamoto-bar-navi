@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.59";
+      config.vars.KBN_CONFIG_VERSION="4.60";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -9488,6 +9488,76 @@ async function kbnGooglePlacesSingleProbeV446(env){
 }
 
 
+
+function kbnMaintenancePhaseMetaV460(phase){
+  const p=Number(phase||0);
+  const map={
+    0:{label:"待機中",order:0,total:6},
+    1:{label:"情報補完",order:1,total:6},
+    2:{label:"精密補完①",order:2,total:6},
+    3:{label:"精密補完②",order:3,total:6},
+    4:{label:"精密補完③",order:4,total:6},
+    5:{label:"SEO改善",order:5,total:6},
+    6:{label:"位置情報補完",order:6,total:6},
+    9:{label:"Instagram再検査",order:5,total:6}
+  };
+  return map[p]||{label:"メンテナンス",order:1,total:6};
+}
+
+async function kbnMaintenanceProgressV460(env){
+  await ensureKbnMaintenanceQueueV242(env);
+  await ensureKbnMaintenanceHistoryV414(env);
+
+  const q=await env.DB.prepare(`
+    SELECT phase,run_date,updated_at
+    FROM kbn_maintenance_queue
+    WHERE id=1
+  `).first();
+
+  const phase=Number(q?.phase||0);
+  const meta=kbnMaintenancePhaseMetaV460(phase);
+  const active=phase>0;
+
+  const today=kbnGoogleBudgetPeriodV441().day;
+  const h=await env.DB.prepare(`
+    SELECT
+      COALESCE(SUM(checked_count),0) AS checked,
+      COALESCE(SUM(updated_count),0) AS updated,
+      COALESCE(SUM(created_count),0) AS created,
+      COALESCE(SUM(error_count),0) AS errors
+    FROM kbn_maintenance_history
+    WHERE date(datetime(created_at,'+9 hours'))=?
+  `).bind(today).first();
+
+  let percent=100;
+  if(active){
+    percent=Math.max(5,Math.min(95,Math.round((meta.order/meta.total)*100)));
+  }
+
+  let elapsedSec=0;
+  if(q?.updated_at){
+    const t=new Date(String(q.updated_at).replace(" ","T")+"Z").getTime();
+    if(Number.isFinite(t))elapsedSec=Math.max(0,Math.round((Date.now()-t)/1000));
+  }
+
+  return {
+    active,
+    phase,
+    phase_label:meta.label,
+    phase_order:meta.order,
+    phase_total:meta.total,
+    percent,
+    updated_at:String(q?.updated_at||""),
+    elapsed_seconds:elapsedSec,
+    today:{
+      checked:Number(h?.checked||0),
+      created:Number(h?.created||0),
+      updated:Number(h?.updated||0),
+      errors:Number(h?.errors||0)
+    }
+  };
+}
+
 async function ensureKbnSystemHealthV452(env){
   await env.DB.prepare(`
     CREATE TABLE IF NOT EXISTS kbn_system_health(
@@ -11161,6 +11231,10 @@ export default {
       // ---------- System health & daily report v4.52 ----------
       if(url.pathname==="/api/admin/geo-status" && request.method==="GET"){
         return json({ok:true,coverage:await kbnGeoCoverageV457(env)},{headers:{"Cache-Control":"no-store"}});
+      }
+
+      if(url.pathname==="/api/admin/maintenance-progress" && request.method==="GET"){
+        return json({ok:true,progress:await kbnMaintenanceProgressV460(env)},{headers:{"Cache-Control":"no-store"}});
       }
 
       if(url.pathname==="/api/admin/system-health" && request.method==="GET"){
