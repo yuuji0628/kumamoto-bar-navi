@@ -4541,7 +4541,10 @@ html,body{max-width:100%;overflow-x:hidden}
           <b style="font-size:.78rem;color:#eef2f5">Google使用量の内訳</b>
           <small id="googleUsageBreakdownDateV453" style="display:block;margin-top:2px;color:#7f8c98">本日</small>
         </div>
-        <span id="googleUsageAnomalyV453" style="padding:4px 8px;border-radius:999px;background:#102219;color:#7ee2a8;font-size:.59rem;font-weight:900">正常</span>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span id="googleUsageAnomalyV453" style="padding:4px 8px;border-radius:999px;background:#102219;color:#7ee2a8;font-size:.59rem;font-weight:900">正常</span>
+          <button type="button" onclick="rebaselineGoogleUsageV455()" style="border:1px solid #53616d;background:#121c25;color:#d9e1e8;border-radius:8px;padding:5px 7px;font-size:.55rem;font-weight:800">今の旧分を確定</button>
+        </div>
       </div>
       <div id="googleUsageBreakdownRowsV453" style="display:grid;gap:6px;margin-top:10px">
         <small style="color:#82919c">読み込み中...</small>
@@ -11679,12 +11682,27 @@ async function kbnLoadHourlyStatusV421(){
 }
 
 
+
+async function rebaselineGoogleUsageV455(){
+  if(!confirm("現在までのGoogle使用回数を「反映前の既存カウント」として確定しますか？\nこれ以降の利用だけが新しい内訳として分類されます。"))return;
+  try{
+    const d=await api("/api/admin/google-usage/rebaseline",{method:"POST",body:{}});
+    alert(`本日 ${Number(d.baseline_count||0)}回を反映前カウントとして確定しました。`);
+    await loadDiscoverySourceHealthV438();
+  }catch(e){
+    alert(`旧カウント確定に失敗：${e?.message||e}`);
+  }
+}
+
 function renderGoogleUsageBreakdownV453(g){
   const u=g?.usage_breakdown||{};
   const rows=Array.isArray(u.rows)?u.rows:[];
   const total=Number(u.total||0),limit=Number(u.limit||150);
   const date=$("googleUsageBreakdownDateV453");
-  if(date)date.textContent=`${String(u.day_key||"本日")} / 合計 ${total}/${limit}回`;
+  if(date){
+    const legacy=Number(u.baseline_legacy||0);
+    date.textContent=`${String(u.day_key||"本日")} / 合計 ${total}/${limit}回${legacy?`（反映前 ${legacy}回）`:""}`;
+  }
 
   const box=$("googleUsageBreakdownRowsV453");
   if(box){
@@ -11696,7 +11714,7 @@ function renderGoogleUsageBreakdownV453(g){
           <small style="color:#aeb9c3">${esc(r.label||r.key||"")}</small>
           <div style="height:5px;margin-top:5px;border-radius:999px;background:#202d36;overflow:hidden"><i style="display:block;height:100%;width:${pct}%;background:#e9be54;border-radius:inherit"></i></div>
         </div>
-        <b style="color:${r.key==="other"&&used>0?"#efc45a":"#eef2f5"};font-size:.74rem">${used}回</b>
+        <b style="color:${(r.key==="other"&&used>0)?"#ffaaaa":(r.key==="legacy"&&used>0)?"#9aa6b0":"#eef2f5"};font-size:.74rem">${used}回</b>
       </div>`;
     }).join("")||'<small style="color:#82919c">まだ分類済みのGoogle利用がありません。</small>';
   }
@@ -11716,7 +11734,7 @@ function renderGoogleUsageBreakdownV453(g){
   if(note){
     note.textContent=warnings.length
       ?`消費チェック：${warnings.join(" / ")}`
-      :"異常な偏りはありません。何にGoogle枠を使ったかを自動記録しています。";
+      :"異常な偏りはありません。反映後のGoogle利用だけを用途別に自動記録しています。";
     note.style.color=warnings.length?"#efc45a":"#82919c";
   }
 }
@@ -11751,7 +11769,7 @@ async function loadDailySummaryV452(){
     $("dailyErrorsV452").textContent=`${Number(s.errors||0)}`;
     const br=Array.isArray(s.google?.breakdown)?s.google.breakdown:[];
     const bmap=Object.fromEntries(br.map(x=>[x.key,Number(x.used||0)]));
-    $("dailyDetailV452").textContent=`自動処理${Number(s.runs||0)}回 / SEO +${Number(s.seo_gain||0)}点 / Google ${Number(s.google?.used||0)}/${Number(s.google?.limit||150)}回（開拓${bmap.discovery||0}・検索/照合${bmap.search||0}・詳細/補完${bmap.details||0}・レビュー${bmap.reviews||0}・写真${bmap.photo||0}・接続テスト${bmap.connection_test||0}・その他${bmap.other||0}） / 要確認変更 ${Number(s.pending_change_reviews||0)}件`;
+    $("dailyDetailV452").textContent=`自動処理${Number(s.runs||0)}回 / SEO +${Number(s.seo_gain||0)}点 / Google ${Number(s.google?.used||0)}/${Number(s.google?.limit||150)}回（開拓${bmap.discovery||0}・検索/照合${bmap.search||0}・詳細/補完${bmap.details||0}・レビュー${bmap.reviews||0}・写真${bmap.photo||0}・接続テスト${bmap.connection_test||0}・未分類${bmap.other||0}・反映前${bmap.legacy||0}） / 要確認変更 ${Number(s.pending_change_reviews||0)}件`;
   }catch(e){
     if($("dailyDetailV452"))$("dailyDetailV452").textContent=`本日の集計を取得できません：${e?.message||e}`;
   }
@@ -11809,6 +11827,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   const n=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=Number(v||0).toLocaleString('ja-JP');};
   
 async function loadSeoIndexAuditV454(force=false){
+  const setText=(id,value)=>{const el=$(id);if(el)el.textContent=String(value??"");};
   const btn=$("seoIndexAuditBtnV454");
   if(btn){btn.disabled=true;btn.textContent="検査中...";}
   const state=$("seoIndexAuditStateV454");
@@ -11818,11 +11837,11 @@ async function loadSeoIndexAuditV454(force=false){
     const c=d.counts||{},issues=Array.isArray(d.issues)?d.issues:[];
     const errors=issues.filter(x=>x.severity==="error");
     const noindex=issues.filter(x=>x.type==="sitemap_noindex");
-    set("seoAuditTotalV454",Number(c.total_submitted||0).toLocaleString("ja-JP"));
-    set("seoAuditShopsV454",`${Number(c.shops||0).toLocaleString("ja-JP")}店`);
-    set("seoAuditNoindexV454",`${noindex.length}件`);
-    set("seoAuditErrorsV454",`${errors.length}件`);
-    set("seoIndexAuditTimeV454",`最終確認 ${new Date(d.checked_at||Date.now()).toLocaleString("ja-JP")}`);
+    setText("seoAuditTotalV454",Number(c.total_submitted||0).toLocaleString("ja-JP"));
+    setText("seoAuditShopsV454",`${Number(c.shops||0).toLocaleString("ja-JP")}店`);
+    setText("seoAuditNoindexV454",`${noindex.length}件`);
+    setText("seoAuditErrorsV454",`${errors.length}件`);
+    setText("seoIndexAuditTimeV454",`最終確認 ${new Date(d.checked_at||Date.now()).toLocaleString("ja-JP")}`);
 
     if(state){
       if(d.status==="good"){state.textContent="一致";state.style.color="#7ee2a8";state.style.background="#102219";}
