@@ -4564,7 +4564,8 @@ html,body{max-width:100%;overflow-x:hidden}
 
         <div id="googleSkuSafetyV462" style="margin-top:10px;padding:12px;border:1px solid #3a4d5b;border-radius:13px;background:#0d171f">
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
-        <div><b style="font-size:.76rem;color:#eef2f5">Google API SKU別 安全枠</b><small id="googleSkuMonthV462" style="display:block;margin-top:3px;color:#83909b">今月</small></div>
+        <div><b style="font-size:.76rem;color:#eef2f5">Google API SKU別 安全枠</b><small id="googleSkuMonthV462" style="display:block;margin-top:3px;color:#83909b">今月</small>
+        <small id="googleSkuResetV463" style="display:block;margin-top:2px;color:#efc45a;font-size:.58rem">リセットまで計算中...</small></div>
         <span style="padding:4px 8px;border-radius:999px;background:#102219;color:#7ee2a8;font-size:.56rem;font-weight:900">KBN安全管理</span>
       </div>
       <div id="googleSkuRowsV462" style="display:grid;gap:7px;margin-top:10px"></div>
@@ -11824,10 +11825,29 @@ async function loadGeoCoverageV457(){
 
 
 
+
+let googleSkuNextResetMsV463=0;
+let googleSkuCountdownTimerV463=null;
+function formatGoogleResetCountdownV463(ms){
+  const sec=Math.max(0,Math.floor((Number(ms||0)-Date.now())/1000));
+  const d=Math.floor(sec/86400),h=Math.floor((sec%86400)/3600),m=Math.floor((sec%3600)/60);
+  return `${d}日 ${h}時間 ${m}分`;
+}
+function renderGoogleResetCountdownV463(){
+  const el=$("googleSkuResetV463");
+  if(!el)return;
+  el.textContent=googleSkuNextResetMsV463
+    ?`Google無料枠リセットまで ${formatGoogleResetCountdownV463(googleSkuNextResetMsV463)}`
+    :"リセット時刻を取得中...";
+}
+
 async function loadGoogleSkuSafetyV462(){
   try{
     const d=await api('/api/admin/google-sku-safety'),s=d.sku||{},rows=Array.isArray(s.rows)?s.rows:[];
-    if($("googleSkuMonthV462"))$("googleSkuMonthV462").textContent=`${String(s.month_key||'今月')} / 月間安全枠`;
+    if($("googleSkuMonthV462"))$("googleSkuMonthV462").textContent=`${String(s.month_key||'今月')} / Pacific Time 月間安全枠`;
+    googleSkuNextResetMsV463=s.next_reset_iso?new Date(s.next_reset_iso).getTime():0;
+    renderGoogleResetCountdownV463();
+    if(!googleSkuCountdownTimerV463)googleSkuCountdownTimerV463=setInterval(renderGoogleResetCountdownV463,30000);
     if($("googleSkuRowsV462"))$("googleSkuRowsV462").innerHTML=rows.map(r=>{
       const pct=Math.max(0,Math.min(100,Number(r.percent||0)));
       const tone=pct>=90?'#ffaaaa':pct>=75?'#efc45a':'#7ee2a8';
@@ -11843,6 +11863,9 @@ async function loadAutoGoogleBudgetV461(){
     if($("autoGoogleSlotCountV461"))$("autoGoogleSlotCountV461").textContent=`${Number(a.slot_used||0)} / ${Number(a.slot_limit||15)}回`;
     if($("autoGoogleDayCountV461"))$("autoGoogleDayCountV461").textContent=`${Number(a.day_used||0)} / ${Number(a.day_limit||120)}回`;
     if($("autoGoogleBudgetSlotV461"))$("autoGoogleBudgetSlotV461").textContent=String(a.slot_key||"現在の3時間枠");
+    if($("autoGoogleBudgetNoteV461") && !a.blocked){
+      $("autoGoogleBudgetNoteV461").textContent=`残り${Number(a.monthly_days_remaining||0)}日とSKU残量から自動配分。今日は最大${Number(a.day_limit||0)}回、現在の3時間枠は最大${Number(a.slot_limit||0)}回。前回の続きから処理します。`;
+    }
     const state=$("autoGoogleBudgetStateV461");
     if(state){
       state.textContent=a.blocked?"次枠へ継続":"利用可能";
@@ -11851,7 +11874,7 @@ async function loadAutoGoogleBudgetV461(){
     }
     if($("autoGoogleBudgetNoteV461")){
       $("autoGoogleBudgetNoteV461").textContent=a.blocked
-        ?`Google枠に到達したため現在の工程を保持中。次の3時間枠で同じ工程・前回の続きから自動再開します。`
+        ?`現在の自動配分枠に到達したため工程を保持中。次の3時間枠で同じ工程・前回の続きから自動再開します。`
         :q.active
           ?`前回のキューを保持して処理中。1枠15回・1日120回で停止し、必ず続きから再開します。`
           :`1枠15回・1日120回まで。残り30回は手動操作と予備用に温存します。`;
