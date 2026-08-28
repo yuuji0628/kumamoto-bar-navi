@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.62";
+      config.vars.KBN_CONFIG_VERSION="4.63";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -4115,12 +4115,12 @@ function googlePlaceScore(place,{name="",area=""}={}){
 
 
 const KBN_GOOGLE_PLACES_DAILY_LIMIT_V441=150;
-const KBN_GOOGLE_PLACES_MONTHLY_LIMIT_V441=4500;
+const KBN_GOOGLE_PLACES_MONTHLY_LIMIT_V441=999999; // v4.63: combined monthly count is diagnostic; SKU caps are the actual monthly safety guard
 
 // v4.51: 公開ページのGoogle写真が日付変更直後に共通150回を食い切らないための内訳上限。
 // 写真も総150回には含めるが、写真だけでは1日30回まで。
-const KBN_GOOGLE_PHOTO_DAILY_LIMIT_V451=30;
-const KBN_GOOGLE_PHOTO_MONTHLY_LIMIT_V451=800;
+const KBN_GOOGLE_PHOTO_DAILY_LIMIT_V451=20;
+const KBN_GOOGLE_PHOTO_MONTHLY_LIMIT_V451=700;
 
 // v4.52 Google予算の用途別ガード。
 // 開拓は最大70回/日、写真は最大30回/日。
@@ -4128,10 +4128,59 @@ const KBN_GOOGLE_PHOTO_MONTHLY_LIMIT_V451=800;
 const KBN_GOOGLE_DISCOVERY_DAILY_LIMIT_V452=70;
 const KBN_GOOGLE_DISCOVERY_MONTHLY_LIMIT_V452=2100;
 
+function kbnTzPartsV463(date,timeZone){
+  const parts=new Intl.DateTimeFormat("en-US",{
+    timeZone,year:"numeric",month:"2-digit",day:"2-digit",
+    hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"
+  }).formatToParts(date);
+  const o={};
+  for(const p of parts)if(p.type!=="literal")o[p.type]=p.value;
+  return {year:+o.year,month:+o.month,day:+o.day,hour:+o.hour,minute:+o.minute,second:+o.second};
+}
+
+function kbnTzOffsetMsV463(date,timeZone){
+  const p=kbnTzPartsV463(date,timeZone);
+  return Date.UTC(p.year,p.month-1,p.day,p.hour,p.minute,p.second)-date.getTime();
+}
+
+function kbnZonedEpochV463(parts,timeZone){
+  const base=Date.UTC(parts.year,parts.month-1,parts.day,parts.hour||0,parts.minute||0,parts.second||0);
+  let t=base;
+  for(let i=0;i<3;i++)t=base-kbnTzOffsetMsV463(new Date(t),timeZone);
+  return t;
+}
+
+function kbnGooglePacificPeriodV463(){
+  const tz="America/Los_Angeles";
+  const now=new Date();
+  const p=kbnTzPartsV463(now,tz);
+  const month=`${p.year}-${String(p.month).padStart(2,"0")}`;
+  let y=p.year,m=p.month+1;
+  if(m===13){m=1;y++}
+  const nextResetMs=kbnZonedEpochV463({year:y,month:m,day:1,hour:0,minute:0,second:0},tz);
+  const remainingSeconds=Math.max(0,Math.floor((nextResetMs-Date.now())/1000));
+  return {
+    month,
+    reset_timezone:tz,
+    next_reset_iso:new Date(nextResetMs).toISOString(),
+    remaining_seconds:remainingSeconds,
+    remaining_days:Math.max(1,Math.ceil(remainingSeconds/86400))
+  };
+}
+
 function kbnGoogleBudgetPeriodV441(){
+  // 日次の暴走防止はJST。Google無料枠の月次境界はPacific Time。
   const d=new Date(Date.now()+9*60*60*1000);
   const y=d.getUTCFullYear(),m=String(d.getUTCMonth()+1).padStart(2,'0'),day=String(d.getUTCDate()).padStart(2,'0');
-  return {day:`${y}-${m}-${day}`,month:`${y}-${m}`};
+  const pac=kbnGooglePacificPeriodV463();
+  return {
+    day:`${y}-${m}-${day}`,
+    month:pac.month,
+    month_reset_timezone:pac.reset_timezone,
+    month_next_reset_iso:pac.next_reset_iso,
+    month_remaining_seconds:pac.remaining_seconds,
+    month_remaining_days:pac.remaining_days
+  };
 }
 
 async function ensureKbnGooglePlacesBudgetV441(env){
@@ -4452,11 +4501,12 @@ async function kbnGoogleUsageBreakdownV453(env){
 
 
 const KBN_GOOGLE_SKU_SAFETY_LIMITS_V462={
-  text_search_pro:4500,
-  place_details_pro:4500,
-  place_details_essentials:9000,
-  photo_media:800,
-  reviews_atmosphere:800
+  // Googleの無料使用枠ギリギリではなく余裕を残すKBN側安全値
+  text_search_pro:4000,
+  place_details_pro:4000,
+  place_details_essentials:8000,
+  photo_media:700,
+  reviews_atmosphere:700
 };
 
 async function kbnGoogleSkuSafetyStatusV462(env){
@@ -4477,9 +4527,13 @@ async function kbnGoogleSkuSafetyStatusV462(env){
   ];
   return {
     month_key:p.month,
+    reset_timezone:p.month_reset_timezone||"America/Los_Angeles",
+    next_reset_iso:p.month_next_reset_iso||"",
+    remaining_seconds:Number(p.month_remaining_seconds||0),
+    remaining_days:Number(p.month_remaining_days||1),
     rows:defs.map(x=>({...x,remaining:Math.max(0,x.limit-x.used),percent:x.limit?Math.round(x.used/x.limit*1000)/10:0,blocked:x.used>=x.limit})),
     connection_test:Number(raw.connection_test||0),
-    note:'KBN内部のAPI用途別カウンターです。Google Cloud請求の確定件数ではありません。'
+    note:'KBN内部のAPI用途別安全カウンターです。月次境界はGoogle無料枠と同じPacific Time。Google Cloud請求の確定件数ではありません。'
   };
 }
 
@@ -4534,21 +4588,69 @@ async function kbnMaintenanceQueueActiveV461(env){
   }
 }
 
+
+function kbnRemainingJstSlotsV463(){
+  const d=new Date(Date.now()+9*60*60*1000);
+  const h=d.getUTCHours();
+  const currentSlot=Math.floor(h/3);
+  return Math.max(1,8-currentSlot);
+}
+
+async function kbnAdaptiveAutoGooglePlanV463(env){
+  const sku=await kbnGoogleSkuSafetyStatusV462(env);
+  const byKey=Object.fromEntries((sku.rows||[]).map(x=>[x.key,x]));
+  const days=Math.max(1,Number(sku.remaining_days||1));
+
+  // 自動開拓・通常メンテの中心であるText Search / Detailsの残量を基準にする。
+  // どちらかが先に枯渇しないよう、少ない側を残り日数で均等配分する。
+  const searchRemaining=Math.max(0,Number(byKey.text_search_pro?.remaining||0));
+  const detailsRemaining=Math.max(0,Number(byKey.place_details_pro?.remaining||0));
+  const coreDaily=Math.floor(Math.min(searchRemaining,detailsRemaining)/days);
+
+  // 従来の120/日を上限にしつつ、月末まで均等に持つよう自動縮小。
+  const recommendedDaily=Math.max(0,Math.min(KBN_AUTO_GOOGLE_DAILY_LIMIT_V461,coreDaily));
+  return {
+    daily_limit:recommendedDaily,
+    monthly_days_remaining:days,
+    reset_iso:sku.next_reset_iso||"",
+    search_remaining:searchRemaining,
+    details_remaining:detailsRemaining,
+    photos_remaining:Math.max(0,Number(byKey.photo_media?.remaining||0)),
+    reviews_remaining:Math.max(0,Number(byKey.reviews_atmosphere?.remaining||0))
+  };
+}
+
 async function kbnAutoGoogleBudgetStatusV461(env){
   await ensureKbnAutoGoogleBudgetV461(env);
   const k=kbnAutoGoogleSlotKeyV461();
+  const adaptive=await kbnAdaptiveAutoGooglePlanV463(env);
+  const dayLimit=Math.max(0,Number(adaptive.daily_limit||0));
+
+  // 残りの日次枠を、今日残っている3時間枠へ均等配分。
+  // ただし1枠15回を超えない。使い切ることが目的ではなく上限として扱う。
+  const existingDay=await env.DB.prepare(`
+    SELECT used_count FROM kbn_auto_google_budget
+    WHERE period_type='day' AND period_key=?
+  `).bind(k.day).first();
+  const currentDayUsed=Number(existingDay?.used_count||0);
+  const slotsLeft=kbnRemainingJstSlotsV463();
+  const remainingToday=Math.max(0,dayLimit-currentDayUsed);
+  const adaptiveSlotLimit=Math.max(0,Math.min(
+    KBN_AUTO_GOOGLE_SLOT_LIMIT_V461,
+    remainingToday>0?Math.ceil(remainingToday/slotsLeft):0
+  ));
 
   await env.DB.prepare(`
     INSERT INTO kbn_auto_google_budget(period_type,period_key,used_count,limit_count)
     VALUES('day',?,0,?)
     ON CONFLICT(period_type,period_key) DO UPDATE SET limit_count=excluded.limit_count
-  `).bind(k.day,KBN_AUTO_GOOGLE_DAILY_LIMIT_V461).run();
+  `).bind(k.day,dayLimit).run();
 
   await env.DB.prepare(`
     INSERT INTO kbn_auto_google_budget(period_type,period_key,used_count,limit_count)
     VALUES('slot',?,0,?)
     ON CONFLICT(period_type,period_key) DO UPDATE SET limit_count=excluded.limit_count
-  `).bind(k.slot,KBN_AUTO_GOOGLE_SLOT_LIMIT_V461).run();
+  `).bind(k.slot,adaptiveSlotLimit).run();
 
   const day=await env.DB.prepare(`
     SELECT used_count,limit_count FROM kbn_auto_google_budget
@@ -4568,8 +4670,15 @@ async function kbnAutoGoogleBudgetStatusV461(env){
     day_used:du,day_limit:dl,day_remaining:Math.max(0,dl-du),
     slot_used:su,slot_limit:sl,slot_remaining:Math.max(0,sl-su),
     reserve_for_manual:KBN_AUTO_GOOGLE_RESERVE_V461,
-    blocked:du>=dl||su>=sl,
-    blocked_reason:du>=dl?"KBN_AUTO_DAILY_BUDGET":(su>=sl?"KBN_AUTO_SLOT_BUDGET":"")
+    adaptive:true,
+    monthly_days_remaining:Number(adaptive.monthly_days_remaining||1),
+    next_month_reset_iso:adaptive.reset_iso||"",
+    core_search_remaining:Number(adaptive.search_remaining||0),
+    core_details_remaining:Number(adaptive.details_remaining||0),
+    photo_remaining:Number(adaptive.photos_remaining||0),
+    reviews_remaining:Number(adaptive.reviews_remaining||0),
+    blocked:dl<=0||sl<=0||du>=dl||su>=sl,
+    blocked_reason:dl<=0?"KBN_AUTO_MONTHLY_ALLOCATION":(sl<=0?"KBN_AUTO_SLOT_ALLOCATION":(du>=dl?"KBN_AUTO_DAILY_BUDGET":(su>=sl?"KBN_AUTO_SLOT_BUDGET":"")))
   };
 }
 
