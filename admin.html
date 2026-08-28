@@ -4516,22 +4516,22 @@ html,body{max-width:100%;overflow-x:hidden}
 
     <div id="maintenanceGoogleBudgetV445" style="margin-top:10px;padding:11px 12px;border:1px solid #3d4b57;border-radius:12px;background:#0d171f">
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap">
-        <b style="font-size:.76rem;color:#eef2f5">Google Places 残り回数</b>
+        <b style="font-size:.76rem;color:#eef2f5">Google予算</b>
         <span id="maintenanceGoogleStateV445" style="padding:4px 7px;border:1px solid #315b45;border-radius:999px;background:#102219;color:#7ee2a8;font-size:.59rem;font-weight:800">確認中</span>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px">
         <div style="padding:9px 10px;border-radius:10px;background:#111d26">
-          <small style="display:block;color:#7f8c98">今日の残り</small>
-          <b id="maintenanceGoogleDayRemainV445" style="display:block;margin-top:3px;color:#efc45a;font-size:1rem">— / 150回</b>
-          <small id="maintenanceGoogleDayUsedV445" style="display:block;margin-top:2px;color:#82919c">使用 —回</small>
+          <small style="display:block;color:#7f8c98">今日の自動Google予算</small>
+          <b id="maintenanceGoogleDayRemainV445" style="display:block;margin-top:3px;color:#efc45a;font-size:1rem">— / —回</b>
+          <small id="maintenanceGoogleDayUsedV445" style="display:block;margin-top:2px;color:#82919c">残り —回</small>
         </div>
         <div style="padding:9px 10px;border-radius:10px;background:#111d26">
-          <small style="display:block;color:#7f8c98">今月の残り</small>
-          <b id="maintenanceGoogleMonthRemainV445" style="display:block;margin-top:3px;color:#efc45a;font-size:1rem">— / 4,500回</b>
-          <small id="maintenanceGoogleMonthUsedV445" style="display:block;margin-top:2px;color:#82919c">使用 —回</small>
+          <small style="display:block;color:#7f8c98">現在の3時間枠</small>
+          <b id="maintenanceGoogleMonthRemainV445" style="display:block;margin-top:3px;color:#efc45a;font-size:1rem">— / —回</b>
+          <small id="maintenanceGoogleMonthUsedV445" style="display:block;margin-top:2px;color:#82919c">残り —回</small>
         </div>
       </div>
-      <div id="maintenanceGoogleBudgetNoteV445" style="margin-top:7px;color:#7e8c97;font-size:.61rem;line-height:1.45">開拓・情報補完・閉業確認・精密補完・レビュー・写真・接続テストをすべて共通枠で管理します。</div>
+      <div id="maintenanceGoogleBudgetNoteV445" style="margin-top:7px;color:#7e8c97;font-size:.61rem;line-height:1.45">月間SKU残量とGoogle無料枠のリセットまでの日数から、自動利用数を調整します。工程は前回の続きから再開します。</div>
     </div>
 
 
@@ -4564,38 +4564,15 @@ html,body{max-width:100%;overflow-x:hidden}
 
         <div id="googleSkuSafetyV462" style="margin-top:10px;padding:12px;border:1px solid #3a4d5b;border-radius:13px;background:#0d171f">
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
-        <div><b style="font-size:.76rem;color:#eef2f5">Google API SKU別 安全枠</b><small id="googleSkuMonthV462" style="display:block;margin-top:3px;color:#83909b">今月</small>
+        <div><b style="font-size:.76rem;color:#eef2f5">月間SKU残量</b><small id="googleSkuMonthV462" style="display:block;margin-top:3px;color:#83909b">今月</small>
         <small id="googleSkuResetV463" style="display:block;margin-top:2px;color:#efc45a;font-size:.58rem">リセットまで計算中...</small></div>
-        <span style="padding:4px 8px;border-radius:999px;background:#102219;color:#7ee2a8;font-size:.56rem;font-weight:900">KBN安全管理</span>
+        <span style="padding:4px 8px;border-radius:999px;background:#102219;color:#7ee2a8;font-size:.56rem;font-weight:900">安全管理</span>
       </div>
       <div id="googleSkuRowsV462" style="display:grid;gap:7px;margin-top:10px"></div>
       <div style="margin-top:8px;color:#72808b;font-size:.58rem;line-height:1.45">※ Google Cloud請求の確定件数ではなく、KBNが実際のAPI用途を分類した安全カウンターです。実請求はGoogle Cloud側が基準です。</div>
     </div>
 
-<div id="autoGoogleBudgetV461" style="margin-top:10px;padding:12px;border:1px solid #4a5a67;border-radius:13px;background:#0d171f">
-      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
-        <div>
-          <b style="font-size:.76rem;color:#eef2f5">自動メンテ Google枠</b>
-          <small id="autoGoogleBudgetSlotV461" style="display:block;margin-top:3px;color:#83909b">3時間枠を確認中...</small>
-        </div>
-        <span id="autoGoogleBudgetStateV461" style="padding:4px 8px;border-radius:999px;background:#102219;color:#7ee2a8;font-size:.58rem;font-weight:900">確認中</span>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:9px">
-        <div style="padding:9px;border-radius:9px;background:#111d26">
-          <small style="color:#7f8c98">この3時間枠</small>
-          <b id="autoGoogleSlotCountV461" style="display:block;margin-top:2px;color:#efc45a;font-size:.9rem">— / 15回</b>
-        </div>
-        <div style="padding:9px;border-radius:9px;background:#111d26">
-          <small style="color:#7f8c98">今日の自動処理</small>
-          <b id="autoGoogleDayCountV461" style="display:block;margin-top:2px;color:#efc45a;font-size:.9rem">— / 120回</b>
-        </div>
-      </div>
-      <div id="autoGoogleBudgetNoteV461" style="margin-top:8px;color:#84919b;font-size:.61rem;line-height:1.45">
-        1枠15回・1日120回まで。残り30回は手動操作と予備用に温存します。
-      </div>
-    </div>
-
-    <div id="maintenanceProgressV460" style="margin-top:10px;padding:13px;border:1px solid #4a5a67;border-radius:14px;background:#0d171f">
+<div id="maintenanceProgressV460" style="margin-top:10px;padding:13px;border:1px solid #4a5a67;border-radius:14px;background:#0d171f">
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
         <div>
           <b id="maintenanceProgressTitleV460" style="font-size:.8rem;color:#eef2f5">自動メンテナンス</b>
@@ -9618,25 +9595,12 @@ function renderGoogleUsageCardV443(g,d){
   else if(g?.disabled){stateText=String(g?.error_code||"停止中");stateColor="#efc45a";stateBorder="#7a5b24";stateBg="#241d0e"}
   if(st){st.textContent=stateText;st.style.color=stateColor;st.style.borderColor=stateBorder;st.style.background=stateBg}
 
-  // v4.45: メンテナンス欄にも同じ残量を表示
-  set("maintenanceGoogleDayRemainV445",`${dayRemain.toLocaleString()} / ${dayLimit.toLocaleString()}回`);
-  set("maintenanceGoogleDayUsedV445",`使用 ${dayUsed.toLocaleString()}回`);
-  set("maintenanceGoogleMonthRemainV445",`${monthRemain.toLocaleString()} / ${monthLimit.toLocaleString()}回`);
-  set("maintenanceGoogleMonthUsedV445",`使用 ${monthUsed.toLocaleString()}回`);
+  // v4.64: メンテナンス欄はSKU連動の自動予算を表示するため、旧合算月間値では上書きしない。
   const mst=$("maintenanceGoogleStateV445");
   if(mst){mst.textContent=stateText;mst.style.color=stateColor;mst.style.borderColor=stateBorder;mst.style.background=stateBg}
   renderGoogleUsageBreakdownV453(g);
   const note=$("maintenanceGoogleBudgetNoteV445");
-  if(note){
-    const pb=g?.photo_budget||{};
-    const photoUsed=Number(pb.day_used||0),photoLimit=Number(pb.day_limit||30);
-    note.textContent=(g?.disabled
-      ?`Googleは現在 ${stateText}。追加送信0回。今日残り${dayRemain.toLocaleString()}回・今月残り${monthRemain.toLocaleString()}回。`
-      :(()=>{
-        const db=g?.discovery_budget||{};
-        return `Google総枠：今日残り${dayRemain.toLocaleString()}回。内訳は開拓${Number(db.day_used||0)}/${Number(db.day_limit||70)}回・写真${photoUsed}/${photoLimit}回。開拓70＋写真30に制限し、メンテナンス等へ最低50回を温存します。`;
-      })());
-  }
+  if(note && g?.disabled)note.textContent=`Googleは現在 ${stateText}。自動工程を保持し、利用可能になったら前回の続きから再開します。`;
 }
 
 async function loadDiscoverySourceHealthV438(){
@@ -11862,9 +11826,25 @@ async function loadAutoGoogleBudgetV461(){
     const a=d.auto||{},q=d.queue||{};
     if($("autoGoogleSlotCountV461"))$("autoGoogleSlotCountV461").textContent=`${Number(a.slot_used||0)} / ${Number(a.slot_limit||15)}回`;
     if($("autoGoogleDayCountV461"))$("autoGoogleDayCountV461").textContent=`${Number(a.day_used||0)} / ${Number(a.day_limit||120)}回`;
+    if($("maintenanceGoogleDayRemainV445"))$("maintenanceGoogleDayRemainV445").textContent=`${Number(a.day_used||0).toLocaleString()} / ${Number(a.day_limit||0).toLocaleString()}回`;
+    if($("maintenanceGoogleDayUsedV445"))$("maintenanceGoogleDayUsedV445").textContent=`残り ${Math.max(0,Number(a.day_limit||0)-Number(a.day_used||0)).toLocaleString()}回`;
+    if($("maintenanceGoogleMonthRemainV445"))$("maintenanceGoogleMonthRemainV445").textContent=`${Number(a.slot_used||0).toLocaleString()} / ${Number(a.slot_limit||0).toLocaleString()}回`;
+    if($("maintenanceGoogleMonthUsedV445"))$("maintenanceGoogleMonthUsedV445").textContent=`残り ${Math.max(0,Number(a.slot_limit||0)-Number(a.slot_used||0)).toLocaleString()}回`;
+    if($("maintenanceGoogleBudgetNoteV445")){
+      $("maintenanceGoogleBudgetNoteV445").textContent=a.blocked
+        ?`現在の自動配分枠に到達。工程を保持し、次の3時間枠で前回の続きから再開します。`
+        :`リセットまで残り${Number(a.monthly_days_remaining||0)}日。SKU残量から今日は最大${Number(a.day_limit||0)}回、現在枠は最大${Number(a.slot_limit||0)}回に自動調整しています。`;
+    }
     if($("autoGoogleBudgetSlotV461"))$("autoGoogleBudgetSlotV461").textContent=String(a.slot_key||"現在の3時間枠");
     if($("autoGoogleBudgetNoteV461") && !a.blocked){
       $("autoGoogleBudgetNoteV461").textContent=`残り${Number(a.monthly_days_remaining||0)}日とSKU残量から自動配分。今日は最大${Number(a.day_limit||0)}回、現在の3時間枠は最大${Number(a.slot_limit||0)}回。前回の続きから処理します。`;
+    }
+    const mst=$("maintenanceGoogleStateV445");
+    if(mst){
+      mst.textContent=a.blocked?"次枠へ継続":"利用可能";
+      mst.style.color=a.blocked?"#efc45a":"#7ee2a8";
+      mst.style.borderColor=a.blocked?"#7a5b24":"#315b45";
+      mst.style.background=a.blocked?"#241d0e":"#102219";
     }
     const state=$("autoGoogleBudgetStateV461");
     if(state){
