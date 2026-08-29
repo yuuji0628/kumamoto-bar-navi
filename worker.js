@@ -4114,7 +4114,7 @@ function googlePlaceScore(place,{name="",area=""}={}){
 
 
 
-const KBN_GOOGLE_PLACES_DAILY_LIMIT_V441=150;
+const KBN_GOOGLE_PLACES_DAILY_LIMIT_V441=999999; // v4.65: legacy daily counter is diagnostic only; automatic control is 120/day + 15/3h + SKU safety
 const KBN_GOOGLE_PLACES_MONTHLY_LIMIT_V441=999999; // v4.63: combined monthly count is diagnostic; SKU caps are the actual monthly safety guard
 
 // v4.51: 公開ページのGoogle写真が日付変更直後に共通150回を食い切らないための内訳上限。
@@ -4222,8 +4222,9 @@ async function kbnGooglePlacesBudgetStatusV441(env){
     month_used:monthUsed,month_limit:monthLimit,month_remaining:Math.max(0,monthLimit-monthUsed),
     reset_timezone:"Asia/Tokyo",
     daily_reset:`${p.day} 00:00 JST`,
-    blocked:dayUsed>=dayLimit||monthUsed>=monthLimit,
-    blocked_reason:monthUsed>=monthLimit?'KBN_MONTHLY_BUDGET':(dayUsed>=dayLimit?'KBN_DAILY_BUDGET':'')
+    // v4.65: legacy aggregate counter never blocks Google. Actual guards are auto budget + SKU/category safety.
+    blocked:false,
+    blocked_reason:''
   };
 }
 
@@ -4746,35 +4747,20 @@ async function kbnReserveGooglePlacesBudgetV441(env){
   }
 
   const s=await kbnGooglePlacesBudgetStatusV441(env);
-  if(s.blocked){
-    if(autoReservation?.ok)await kbnRollbackAutoGoogleBudgetV461(env);
-    return {ok:false,...s};
-  }
 
-  const d=await env.DB.prepare(`
+  // v4.65: keep the legacy aggregate counters for diagnostics only.
+  // Do not use the old 150/day or aggregate monthly counter as a hard stop.
+  await env.DB.prepare(`
     UPDATE kbn_google_places_budget
     SET used_count=used_count+1,updated_at=CURRENT_TIMESTAMP
-    WHERE period_type='day' AND period_key=? AND used_count<limit_count
+    WHERE period_type='day' AND period_key=?
   `).bind(s.day_key).run();
-  if(Number(d?.meta?.changes||0)<1){
-    if(autoReservation?.ok)await kbnRollbackAutoGoogleBudgetV461(env);
-    return {ok:false,...(await kbnGooglePlacesBudgetStatusV441(env)),blocked:true,blocked_reason:'KBN_DAILY_BUDGET'};
-  }
 
-  const m=await env.DB.prepare(`
+  await env.DB.prepare(`
     UPDATE kbn_google_places_budget
     SET used_count=used_count+1,updated_at=CURRENT_TIMESTAMP
-    WHERE period_type='month' AND period_key=? AND used_count<limit_count
+    WHERE period_type='month' AND period_key=?
   `).bind(s.month_key).run();
-  if(Number(m?.meta?.changes||0)<1){
-    await env.DB.prepare(`
-      UPDATE kbn_google_places_budget
-      SET used_count=CASE WHEN used_count>0 THEN used_count-1 ELSE 0 END,updated_at=CURRENT_TIMESTAMP
-      WHERE period_type='day' AND period_key=?
-    `).bind(s.day_key).run();
-    if(autoReservation?.ok)await kbnRollbackAutoGoogleBudgetV461(env);
-    return {ok:false,...(await kbnGooglePlacesBudgetStatusV441(env)),blocked:true,blocked_reason:'KBN_MONTHLY_BUDGET'};
-  }
 
   return {
     ok:true,
@@ -4881,7 +4867,7 @@ async function googlePlacesTextSearch(env,{query,pageSize=20,ignoreCircuit=false
             ?"本日の自動Google上限120回に到達しました。30回分を手動・予備用に温存します"
           :reason==='KBN_MONTHLY_BUDGET'
             ?"Google Places 月間節約上限 4,500回に到達しました"
-            :"Google Places 1日節約上限 150回に到達しました",
+            :"旧Google日次カウンタ（診断用）",
         error_code:reason,
         budget:budgetReservation,places:[]
       };
