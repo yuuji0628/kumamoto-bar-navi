@@ -9613,7 +9613,7 @@ async function loadDiscoverySourceHealthV438(){
     const usage=`本日 ${dayUsed}/${dayLimit}回・今月 ${monthUsed}/${monthLimit}回`;
     if(!g.configured){el.style.borderColor="#7a3d3d";el.style.color="#ff9a9a";el.textContent=`Google Places：APIキー未設定。${usage}。代替ソースへ自動切替します。`;return}
     if(g.disabled){el.style.borderColor="#7a5b24";el.style.color="#efc45a";el.textContent=`Google Places：一時停止中（${g.error_code||"API_ERROR"}${g.http_status?` / HTTP ${g.http_status}`:""}）。${usage}。上限到達後は代替ソースへ自動切替します。`;return}
-    el.style.borderColor="#315b45";el.style.color="#7ee2a8";el.textContent=`Google Places：利用可能。${usage}。開拓・全メンテ込みの共通節約上限は1日150回・月4,500回です。超えたらGoogleを停止して代替ソースへ自動切替します。`;
+    el.style.borderColor="#315b45";el.style.color="#7ee2a8";el.textContent=`Google Places：利用可能。${usage}。旧合計カウンタは診断表示のみです。自動処理は1日120回・3時間枠15回とSKU安全枠で制御し、枠到達時は工程を保持して次枠から続行します。`;
   }catch(e){el.textContent=`検索API状態：取得失敗 ${e?.message||e}`}
 }
 window.testGooglePlacesV438=async function(){
@@ -11594,7 +11594,7 @@ function kbnMaintenanceDurationV434(start,end){
 function kbnMaintenanceErrorCauseV450(run){
   const notes=String(run?.notes||"");
   const errors=Number(run?.errors||0);
-  if(/KBN_DAILY_BUDGET/i.test(notes))return "Google 1日上限到達（追加送信0回・代替/後続処理へ）";
+  if(/KBN_DAILY_BUDGET/i.test(notes))return "旧日次上限の履歴（現在は停止条件に使用しません）";
   if(/KBN_MONTHLY_BUDGET/i.test(notes))return "Google 月間上限到達（追加送信0回・代替/後続処理へ）";
   if(/QUOTA_OR_RATE_LIMIT|quota|rate.?limit/i.test(notes))return "外部APIのクォータ / レート制限";
   if(/PERMISSION_DENIED|HTTP403/i.test(notes))return "Google Places 権限・課金設定";
