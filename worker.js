@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.64";
+      config.vars.KBN_CONFIG_VERSION="4.66";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -4457,13 +4457,20 @@ async function kbnGoogleUsageBreakdownV453(env){
     search:Number(raw.search||0),
     details:Number(raw.details||0),
     reviews:Number(raw.reviews||0),
-    connection_test:Number(raw.connection_test||0)
+    connection_test:Number(raw.connection_test||0),
+    other:Number(raw.other||0)
   };
-  const known=Object.values(breakdown).reduce((x,y)=>x+Number(y||0),0);
+  const knownWithoutOther=
+    breakdown.discovery+breakdown.photo+breakdown.search+
+    breakdown.details+breakdown.reviews+breakdown.connection_test;
+  const known=knownWithoutOther+breakdown.other;
   const total=Number(global.day_used||0);
   const legacyBaseline=await kbnEnsureGoogleUsageBaselineForTodayV455(env);
   const postBaselineTotal=Math.max(0,total-legacyBaseline);
-  breakdown.other=Math.max(0,postBaselineTotal-known);
+
+  // v4.66: historical gaps created before atomic classification are not
+  // treated as a live anomaly. Future reservations are categorized atomically.
+  const classificationGap=Math.max(0,postBaselineTotal-known);
 
   const rows=[
     {key:"discovery",label:"BAR開拓",used:breakdown.discovery},
@@ -4472,31 +4479,37 @@ async function kbnGoogleUsageBreakdownV453(env){
     {key:"reviews",label:"Googleレビュー",used:breakdown.reviews},
     {key:"photo",label:"Google写真",used:breakdown.photo},
     {key:"connection_test",label:"接続テスト",used:breakdown.connection_test},
-    {key:"other",label:"未分類",used:breakdown.other},
+    {key:"other",label:"未分類（新方式）",used:breakdown.other},
+    {key:"classification_gap",label:"旧方式の分類差分",used:classificationGap},
     {key:"legacy",label:"反映前の既存カウント",used:legacyBaseline}
   ];
 
-  const maxRow=rows.reduce((m,x)=>x.used>m.used?x:m,{key:"",label:"",used:0});
+  const activeRows=rows.filter(x=>!["classification_gap","legacy"].includes(x.key));
+  const maxRow=activeRows.reduce((m,x)=>x.used>m.used?x:m,{key:"",label:"",used:0});
   const warnings=[];
-  if(total>=120)warnings.push(`本日のGoogle使用量が${total}/150回です`);
-  if(total>=40 && maxRow.used>=Math.ceil(total*0.70)){
-    warnings.push(`${maxRow.label}が全使用量の約${Math.round(maxRow.used/total*100)}%を占めています`);
+  if(total>=40 && maxRow.used>=Math.ceil(total*0.80)){
+    warnings.push(`${maxRow.label}が本日の監視件数の約${Math.round(maxRow.used/Math.max(1,total)*100)}%です`);
   }
-  if(breakdown.other>=10){
-    warnings.push(`新しい未分類Google利用が${breakdown.other}回あります。未分類経路を確認してください`);
+  if(breakdown.other>0){
+    warnings.push(`新方式で未分類Google利用が${breakdown.other}回あります`);
   }
   if(breakdown.connection_test>=5){
     warnings.push(`接続テストが本日${breakdown.connection_test}回です。通常は必要時だけで十分です`);
   }
 
   return {
-    day_key:p.day,total,limit:Number(global.day_limit||150),remaining:Number(global.day_remaining||0),
+    day_key:p.day,total,
+    limit:0,remaining:0,
+    monitor_only:true,
     baseline_legacy:legacyBaseline,
+    classification_gap:classificationGap,
     categorized_total:known,
     post_baseline_total:postBaselineTotal,
-    rows,anomaly:warnings.length>0,
-    anomaly_level:total>=145?"critical":warnings.length?"warning":"normal",
-    warnings
+    rows,
+    anomaly:warnings.length>0,
+    anomaly_level:breakdown.other>0?"warning":warnings.length?"warning":"normal",
+    warnings,
+    note:"この合計は監視専用です。自動停止判定には使用しません。"
   };
 }
 
@@ -4730,7 +4743,7 @@ async function kbnRollbackAutoGoogleBudgetV461(env){
   }catch{}
 }
 
-async function kbnReserveGooglePlacesBudgetV441(env){
+async function kbnReserveGooglePlacesBudgetV441(env,usageCategory=""){
   const maintenance=await kbnMaintenanceQueueActiveV461(env);
   let autoReservation=null;
   if(maintenance.active){
@@ -4761,6 +4774,14 @@ async function kbnReserveGooglePlacesBudgetV441(env){
     SET used_count=used_count+1,updated_at=CURRENT_TIMESTAMP
     WHERE period_type='month' AND period_key=?
   `).bind(s.month_key).run();
+
+  // v4.66: diagnostic category is recorded at the same time as the
+  // aggregate reservation so future usage cannot become "unclassified".
+  const category=String(usageCategory||"").trim();
+  if(category){
+    try{await kbnRecordGoogleUsageCategoryV453(env,category)}
+    catch(e){console.error("google usage category reserve record failed",category,e)}
+  }
 
   return {
     ok:true,
@@ -4854,7 +4875,7 @@ async function googlePlacesTextSearch(env,{query,pageSize=20,ignoreCircuit=false
   try{
     budgetReservation=String(purpose)==="discovery"
       ?await kbnReserveGoogleDiscoveryBudgetV452(env)
-      :await kbnReserveGooglePlacesBudgetV441(env);
+      :await kbnReserveGooglePlacesBudgetV441(env,"search");
     if(!budgetReservation.ok){
       const reason=String(budgetReservation.blocked_reason||"KBN_BUDGET_LIMIT");
       return {
@@ -4878,9 +4899,6 @@ async function googlePlacesTextSearch(env,{query,pageSize=20,ignoreCircuit=false
   }
 
   try{
-    if(String(purpose)!=="discovery"){
-      try{await kbnRecordGoogleUsageCategoryV453(env,"search")}catch(e){console.error("google usage category search failed",e)}
-    }
     const r=await fetch("https://places.googleapis.com/v1/places:searchText",{
       method:"POST",
       headers:{"Content-Type":"application/json","X-Goog-Api-Key":cfg.apiKey,"X-Goog-FieldMask":"places.id,places.displayName,places.formattedAddress,places.primaryType,places.types,places.location"},
@@ -4942,7 +4960,7 @@ async function googlePlaceDetails(env,placeId){
 
   let budgetReservation=null;
   try{
-    budgetReservation=await kbnReserveGooglePlacesBudgetV441(env);
+    budgetReservation=await kbnReserveGooglePlacesBudgetV441(env,"details");
     if(!budgetReservation.ok){
       return {ok:false,configured:true,skipped:true,error:budgetReservation.blocked_reason||"KBN_BUDGET_LIMIT",error_code:budgetReservation.blocked_reason||"KBN_BUDGET_LIMIT",budget:budgetReservation,place:null};
     }
@@ -4951,7 +4969,6 @@ async function googlePlaceDetails(env,placeId){
   }
 
   try{
-    try{await kbnRecordGoogleUsageCategoryV453(env,"details")}catch(e){console.error("google usage category details failed",e)}
     const fieldMask=[
       "id","displayName","formattedAddress","primaryType","types","businessStatus","location",
       "nationalPhoneNumber","internationalPhoneNumber",
@@ -5000,7 +5017,7 @@ async function googlePlaceReviewDetails(env,placeId){
 
   let budgetReservation=null;
   try{
-    budgetReservation=await kbnReserveGooglePlacesBudgetV441(env);
+    budgetReservation=await kbnReserveGooglePlacesBudgetV441(env,"reviews");
     if(!budgetReservation.ok){
       return {ok:false,configured:true,skipped:true,error:budgetReservation.blocked_reason||"KBN_BUDGET_LIMIT",error_code:budgetReservation.blocked_reason||"KBN_BUDGET_LIMIT",budget:budgetReservation,place:null};
     }
@@ -5009,7 +5026,6 @@ async function googlePlaceReviewDetails(env,placeId){
   }
 
   try{
-    try{await kbnRecordGoogleUsageCategoryV453(env,"reviews")}catch(e){console.error("google usage category reviews failed",e)}
     const fieldMask=[
       "id",
       "displayName",
@@ -9763,7 +9779,7 @@ async function kbnGooglePlacesSingleProbeV446(env){
 
   // 先に共通節約枠を1回だけ予約する。
   const before=await kbnGooglePlacesBudgetStatusV441(env);
-  const reserved=await kbnReserveGooglePlacesBudgetV441(env);
+  const reserved=await kbnReserveGooglePlacesBudgetV441(env,"connection_test");
   if(!reserved.ok){
     return {
       ok:false,status:0,error_code:String(reserved.blocked_reason||"KBN_BUDGET_LIMIT"),
@@ -9773,7 +9789,6 @@ async function kbnGooglePlacesSingleProbeV446(env){
   }
 
   try{
-    try{await kbnRecordGoogleUsageCategoryV453(env,"connection_test")}catch(e){console.error("google usage category connection test failed",e)}
     const r=await fetch("https://places.googleapis.com/v1/places:searchText",{
       method:"POST",
       headers:{
