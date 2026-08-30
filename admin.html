@@ -4380,7 +4380,7 @@ html,body{max-width:100%;overflow-x:hidden}
       <p class="lead-smart-helper">県内を順番に検索し、重複を避けながら高精度で自動掲載します。</p>
       <button type="button" id="autoDiscoverBtn" class="btn-gold lead-smart-primary">低コスト・高精度自動掲載</button>
       <div style="margin-top:8px;color:#f1c75b;font-weight:800;font-size:.82rem">1回の実行で最大10店舗まで自動掲載</div>
-      <div style="margin-top:4px;color:#9ca7b3;font-size:.72rem">最低目標3店舗・最大10店舗。2検索ずつ小分け保存し、Google Placesの全利用（開拓・情報補完・閉業確認・レビュー・写真・接続テスト）を1日150回／月4,500回の共通枠に収めます。503/通信エラー時は自動クールダウン後に続きから再開します。画面を再読み込みしても未完了なら自動復帰します。通常判定で新規が見つからない場合は後半を自動で「拡張探索」に切替。重複は店名だけ・住所だけでは落とさず、電話/Instagram一致または店名＋住所一致で判定します。</div>
+      <div style="margin-top:4px;color:#9ca7b3;font-size:.72rem">最低目標3店舗・最大10店舗。2検索ずつ小分け保存し、Google Placesは自動Google予算（最大120回/日・最大15回/3時間枠）とSKU別月間安全枠で管理します。503/通信エラー時は自動クールダウン後に続きから再開します。画面を再読み込みしても未完了なら自動復帰します。通常判定で新規が見つからない場合は後半を自動で「拡張探索」に切替。重複は店名だけ・住所だけでは落とさず、電話/Instagram一致または店名＋住所一致で判定します。</div>
       <style id="kbn-google-usage-card-v443">
         .kbn-google-usage-v443{margin:11px 0;padding:13px;border:1px solid #3b4c59;border-radius:14px;background:linear-gradient(180deg,#101b24,#0b141c)}
         .kbn-google-usage-head-v443{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
@@ -4408,7 +4408,7 @@ html,body{max-width:100%;overflow-x:hidden}
         <div class="kbn-google-usage-grid-v443">
           <div class="kbn-google-usage-box-v443">
             <small>今日</small>
-            <div class="kbn-google-usage-num-v443" id="googleDailyUsageV443">— / 150回</div>
+            <div class="kbn-google-usage-num-v443" id="googleDailyUsageV443">—回（監視）</div>
             <div class="kbn-google-usage-remain-v443" id="googleDailyRemainV443">残り —回</div>
             <div class="kbn-google-progress-v443"><i id="googleDailyBarV443"></i></div>
           </div>
@@ -4420,7 +4420,7 @@ html,body{max-width:100%;overflow-x:hidden}
           </div>
         </div>
         <div class="kbn-google-reset-v443" id="googleUsageResetV443">次回リセット：確認中...</div>
-        <div class="kbn-google-usage-note-v443">総上限は1日150回。公開ページのGoogle写真はその内1日30回までに制限し、写真だけで新しい日の150回を使い切らないようにします。日次判定は日本時間（JST）です。</div>
+        <div class="kbn-google-usage-note-v443">この旧合算カウンターは監視専用です。自動停止は最大120回/日・最大15回/3時間枠・SKU別安全枠で判定します。</div>
       </div>
       <div id="discoverySourceHealthV438" style="margin:10px 0;padding:10px 12px;border:1px solid #334957;border-radius:12px;background:#0f1922;font-size:.72rem;line-height:1.55;color:#aeb9c3">検索API状態：確認中... / Free Workers省CPUモード ON</div>
       <button type="button" id="testGooglePlacesV438" style="margin-bottom:10px">Google Places接続テスト（1回だけ）</button>
@@ -11737,24 +11737,25 @@ async function rebaselineGoogleUsageV455(){
 function renderGoogleUsageBreakdownV453(g){
   const u=g?.usage_breakdown||{};
   const rows=Array.isArray(u.rows)?u.rows:[];
-  const total=Number(u.total||0),limit=Number(u.limit||150);
+  const total=Number(u.total||0);
+  const visualMax=Math.max(1,...rows.map(r=>Number(r.used||0)));
   const date=$("googleUsageBreakdownDateV453");
   if(date){
     const legacy=Number(u.baseline_legacy||0);
-    date.textContent=`${String(u.day_key||"本日")} / 合計 ${total}/${limit}回${legacy?`（反映前 ${legacy}回）`:""}`;
+    date.textContent=`${String(u.day_key||"本日")} / 合計 ${total}回（監視のみ）${legacy?` / 反映前 ${legacy}回`:""}`;
   }
 
   const box=$("googleUsageBreakdownRowsV453");
   if(box){
     box.innerHTML=rows.map(r=>{
       const used=Number(r.used||0);
-      const pct=limit?Math.min(100,used/limit*100):0;
+      const pct=Math.min(100,used/visualMax*100);
       return `<div style="display:grid;grid-template-columns:minmax(110px,1fr) auto;gap:8px;align-items:center;padding:7px 8px;border-radius:9px;background:#111d26">
         <div>
           <small style="color:#aeb9c3">${esc(r.label||r.key||"")}</small>
           <div style="height:5px;margin-top:5px;border-radius:999px;background:#202d36;overflow:hidden"><i style="display:block;height:100%;width:${pct}%;background:#e9be54;border-radius:inherit"></i></div>
         </div>
-        <b style="color:${(r.key==="other"&&used>0)?"#ffaaaa":(r.key==="legacy"&&used>0)?"#9aa6b0":"#eef2f5"};font-size:.74rem">${used}回</b>
+        <b style="color:${(r.key==="other"&&used>0)?"#ffaaaa":(["legacy","classification_gap"].includes(r.key)&&used>0)?"#9aa6b0":"#eef2f5"};font-size:.74rem">${used}回</b>
       </div>`;
     }).join("")||'<small style="color:#82919c">まだ分類済みのGoogle利用がありません。</small>';
   }
@@ -11774,7 +11775,7 @@ function renderGoogleUsageBreakdownV453(g){
   if(note){
     note.textContent=warnings.length
       ?`消費チェック：${warnings.join(" / ")}`
-      :"異常な偏りはありません。反映後のGoogle利用だけを用途別に自動記録しています。";
+      :"監視専用の実利用内訳です。停止判定は「自動Google予算」とSKU安全枠で行います。";
     note.style.color=warnings.length?"#efc45a":"#82919c";
   }
 }
@@ -11925,7 +11926,7 @@ async function loadDailySummaryV452(){
     $("dailyErrorsV452").textContent=`${Number(s.errors||0)}`;
     const br=Array.isArray(s.google?.breakdown)?s.google.breakdown:[];
     const bmap=Object.fromEntries(br.map(x=>[x.key,Number(x.used||0)]));
-    $("dailyDetailV452").textContent=`自動処理${Number(s.runs||0)}回 / SEO +${Number(s.seo_gain||0)}点 / Google ${Number(s.google?.used||0)}/${Number(s.google?.limit||150)}回（開拓${bmap.discovery||0}・検索/照合${bmap.search||0}・詳細/補完${bmap.details||0}・レビュー${bmap.reviews||0}・写真${bmap.photo||0}・接続テスト${bmap.connection_test||0}・未分類${bmap.other||0}・反映前${bmap.legacy||0}） / 要確認変更 ${Number(s.pending_change_reviews||0)}件`;
+    $("dailyDetailV452").textContent=`自動処理${Number(s.runs||0)}回 / SEO +${Number(s.seo_gain||0)}点 / Google ${Number(s.google?.used||0)}回（監視のみ）（開拓${bmap.discovery||0}・検索/照合${bmap.search||0}・詳細/補完${bmap.details||0}・レビュー${bmap.reviews||0}・写真${bmap.photo||0}・接続テスト${bmap.connection_test||0}・未分類${bmap.other||0}・反映前${bmap.legacy||0}） / 要確認変更 ${Number(s.pending_change_reviews||0)}件`;
   }catch(e){
     if($("dailyDetailV452"))$("dailyDetailV452").textContent=`本日の集計を取得できません：${e?.message||e}`;
   }
