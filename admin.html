@@ -11751,6 +11751,16 @@ function kbnMaintenanceClockV434(raw){
     return d.toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
   }catch{return '—'}
 }
+function kbnMaintenanceActiveDurationV469(ms){
+  const sec=Math.max(0,Math.round(Number(ms||0)/1000));
+  if(!sec)return '';
+  if(sec<60)return `${sec}秒`;
+  const min=Math.floor(sec/60),rest=sec%60;
+  if(min<60)return `${min}分${rest?`${rest}秒`:''}`;
+  const h=Math.floor(min/60),m=min%60;
+  return `${h}時間${m?`${m}分`:''}`;
+}
+
 function kbnMaintenanceDurationV434(start,end){
   try{
     const s=new Date(String(start).replace(' ','T')+'Z').getTime(),e=new Date(String(end).replace(' ','T')+'Z').getTime();
@@ -11814,7 +11824,10 @@ async function loadMaintenanceHistoryV414(){
       const dateLabel=String(latest.group_key||'').replace(/\s*JST\s*$/i,'').replace(' daily_precision','');
       const isDaily=String(latest.run_kind||'')==='daily_precision';
       set('lastRunTitleV447',isDaily?`日次精度メンテ ${dateLabel}`:`${dateLabel} 自動運転`);
-      set('lastRunTimeV447',`${startClock} → ${endClock}${dur?`（${dur}）`:''}`);
+      const activeDur=kbnMaintenanceActiveDurationV469(latest.active_duration_ms);
+      set('lastRunTimeV447',isDaily
+        ?`${startClock}開始 / ${endClock}最終（分割実行${activeDur?`・実働${activeDur}`:''}）`
+        :`${startClock} → ${endClock}${dur?`（${dur}）`:''}`);
       set('lastRunCheckedV447',`${Number(latest.checked||0)}`);
       set('lastRunCreatedV447',`${Number(latest.created||0)}店`);
       set('lastRunUpdatedV447',`${Number(latest.updated||0)}店`);
@@ -11854,6 +11867,10 @@ async function loadMaintenanceHistoryV414(){
       runBox.innerHTML=runs.length?runs.slice(0,5).map((r,i)=>{
         const startClock=kbnMaintenanceClockV434(r.started_at),endClock=kbnMaintenanceClockV434(r.finished_at),dur=kbnMaintenanceDurationV434(r.started_at,r.finished_at);
         const isDaily=String(r.run_kind||'')==='daily_precision';
+        const activeDur=kbnMaintenanceActiveDurationV469(r.active_duration_ms);
+        const timeLabel=isDaily
+          ?`${startClock}開始 / ${endClock}最終（分割実行${activeDur?`・実働${activeDur}`:''}）`
+          :`${startClock} → ${endClock}${dur?`（${dur}）`:''}`;
         const key=String(r.group_key||'').replace(/\s*JST\s*$/i,'').replace(' daily_precision','');
         const title=isDaily?`日次精度 ${key}`:`${key} 自動運転`;
         const bad=Number(r.errors||0)>0;
@@ -11868,7 +11885,7 @@ async function loadMaintenanceHistoryV414(){
             <div style="display:flex;align-items:center;gap:6px"><b style="font-size:.72rem;color:#eef2f5">${esc(title)}</b>${i===0?'<span style="padding:2px 5px;border-radius:999px;background:#172a32;color:#7ee3b7;font-size:.53rem;font-weight:800">最新</span>':''}</div>
             <span style="font-size:.58rem;font-weight:800;color:${bad?'#ff9b9b':zeroDaily?'#aeb9c3':'#7ee2a8'}">${status}</span>
           </div>
-          <div style="margin-top:5px;color:#efc45a;font-size:.63rem;font-weight:700">${startClock} → ${endClock}${dur?`（${dur}）`:''}</div>
+          <div style="margin-top:5px;color:#efc45a;font-size:.63rem;font-weight:700">${timeLabel}</div>
           <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin-top:7px">
             <div style="padding:6px;border-radius:7px;background:#0d151c"><small style="display:block;color:#71808b">確認</small><b style="color:#fff;font-size:.7rem">${Number(r.checked||0)}</b></div>
             <div style="padding:6px;border-radius:7px;background:#0d151c"><small style="display:block;color:#71808b">新規</small><b style="color:#7ee3b7;font-size:.7rem">${Number(r.created||0)}店</b></div>
