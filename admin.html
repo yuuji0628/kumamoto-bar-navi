@@ -4831,7 +4831,7 @@ html,body{max-width:100%;overflow-x:hidden}
       <div class="siteupdate-topline">
         <div>
           <h3>かんたん更新</h3>
-          <p>完成した <b>admin.html</b> や <b>worker.js</b> を選ぶだけで、同じ名前のGitHubファイルへそのまま上書きします。</p>
+          <p>完成した更新ZIPを<b>そのまま1個選ぶ</b>だけで、中の更新ファイルを自動展開してGitHubへ反映できます。個別ファイル選択にも対応しています。</p>
         </div>
       </div>
 
@@ -4850,9 +4850,9 @@ html,body{max-width:100%;overflow-x:hidden}
 
       <div class="siteupdate-drop-wrap">
         <div id="kbnFileDrop" class="file-drop">
-          <input id="kbnUploadFiles" type="file" multiple>
-          <strong>更新ファイルを選択</strong>
-          <span>タップして選択 / PCではドラッグ＆ドロップも可能</span>
+          <input id="kbnUploadFiles" type="file" multiple accept=".zip,.js,.html,.json,.css,.txt">
+          <strong>更新ZIPまたはファイルを選択</strong>
+          <span>ZIPは解凍不要 / タップして選択 / PCではドラッグ＆ドロップも可能</span>
         </div>
       </div>
 
@@ -10881,6 +10881,133 @@ loadNoCodeSiteSettings();
 
 
 
+
+const KBN_ZIP_ALLOWED_FILES_V467=new Set([
+  "worker.js","admin.html","index.html","shop.html","admin-login.html",
+  "sitemap.xml","robots.txt","manifest.json","sw.js"
+]);
+
+function kbnReadU16V467(v,o){return v.getUint16(o,true)}
+function kbnReadU32V467(v,o){return v.getUint32(o,true)}
+function kbnDecodeUtf8V467(bytes){
+  try{return new TextDecoder("utf-8",{fatal:false}).decode(bytes)}
+  catch{return Array.from(bytes).map(x=>String.fromCharCode(x)).join("")}
+}
+async function kbnInflateRawV467(bytes){
+  if(typeof DecompressionStream==="undefined"){
+    throw new Error("この端末ではZIP自動解凍に対応していません。個別ファイルで反映してください。");
+  }
+  let ds;
+  try{ds=new DecompressionStream("deflate-raw")}
+  catch{
+    try{ds=new DecompressionStream("deflate")}
+    catch{throw new Error("ZIPの圧縮方式をこの端末で解凍できません。")}
+  }
+  const stream=new Blob([bytes]).stream().pipeThrough(ds);
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+async function kbnExtractZipV467(file){
+  const buf=await file.arrayBuffer();
+  const v=new DataView(buf);
+  const bytes=new Uint8Array(buf);
+
+  // Find End Of Central Directory from the end (ZIP comment can exist).
+  let eocd=-1;
+  for(let i=Math.max(0,bytes.length-65557);i<=bytes.length-22;i++){
+    if(kbnReadU32V467(v,i)===0x06054b50)eocd=i;
+  }
+  if(eocd<0)throw new Error("ZIPの終端情報を読み取れませんでした。");
+
+  const entries=kbnReadU16V467(v,eocd+10);
+  const cdOffset=kbnReadU32V467(v,eocd+16);
+  let p=cdOffset;
+  const extracted=[];
+  const skipped=[];
+
+  for(let n=0;n<entries;n++){
+    if(p+46>bytes.length || kbnReadU32V467(v,p)!==0x02014b50){
+      throw new Error("ZIPのファイル一覧を読み取れませんでした。");
+    }
+    const flags=kbnReadU16V467(v,p+8);
+    const method=kbnReadU16V467(v,p+10);
+    const compressedSize=kbnReadU32V467(v,p+20);
+    const uncompressedSize=kbnReadU32V467(v,p+24);
+    const nameLen=kbnReadU16V467(v,p+28);
+    const extraLen=kbnReadU16V467(v,p+30);
+    const commentLen=kbnReadU16V467(v,p+32);
+    const localOffset=kbnReadU32V467(v,p+42);
+    const rawName=bytes.slice(p+46,p+46+nameLen);
+    const fullName=kbnDecodeUtf8V467(rawName).replace(/\\/g,"/");
+    p+=46+nameLen+extraLen+commentLen;
+
+    if(fullName.endsWith("/"))continue;
+    const baseName=fullName.split("/").pop()||"";
+    if(!KBN_ZIP_ALLOWED_FILES_V467.has(baseName)){
+      skipped.push(baseName);
+      continue;
+    }
+    if(localOffset+30>bytes.length || kbnReadU32V467(v,localOffset)!==0x04034b50){
+      throw new Error(`${baseName}: ZIP内データ位置が不正です。`);
+    }
+    const localNameLen=kbnReadU16V467(v,localOffset+26);
+    const localExtraLen=kbnReadU16V467(v,localOffset+28);
+    const dataStart=localOffset+30+localNameLen+localExtraLen;
+    const comp=bytes.slice(dataStart,dataStart+compressedSize);
+
+    let data;
+    if(method===0)data=comp;
+    else if(method===8)data=await kbnInflateRawV467(comp);
+    else throw new Error(`${baseName}: 未対応のZIP圧縮方式です (${method})`);
+
+    if(uncompressedSize && data.length!==uncompressedSize){
+      console.warn("ZIP size mismatch",baseName,data.length,uncompressedSize,flags);
+    }
+    extracted.push(new File([data],baseName,{
+      type:baseName.endsWith(".html")?"text/html":
+           baseName.endsWith(".js")?"text/javascript":
+           baseName.endsWith(".json")?"application/json":
+           baseName.endsWith(".css")?"text/css":"text/plain"
+    }));
+  }
+
+  // Duplicate target names are dangerous because nested folders are flattened.
+  const seen=new Set(),dupes=[];
+  for(const f of extracted){
+    if(seen.has(f.name))dupes.push(f.name);
+    seen.add(f.name);
+  }
+  if(dupes.length)throw new Error(`ZIP内に同名ファイルがあります: ${[...new Set(dupes)].join(", ")}`);
+  if(!extracted.length){
+    throw new Error("ZIP内に反映対象ファイルがありません。worker.js / admin.html などを確認してください。");
+  }
+  return {files:extracted,skipped};
+}
+
+async function kbnPrepareSelectedFilesV467(list){
+  const raw=[...list];
+  const out=[];
+  const zipSummaries=[];
+  for(const f of raw){
+    if(String(f.name||"").toLowerCase().endsWith(".zip")){
+      const r=await kbnExtractZipV467(f);
+      out.push(...r.files);
+      zipSummaries.push(`${f.name} → ${r.files.map(x=>x.name).join(" / ")}`);
+    }else{
+      out.push(f);
+    }
+  }
+
+  const seen=new Set(),dupes=[];
+  for(const f of out){
+    if(seen.has(f.name))dupes.push(f.name);
+    seen.add(f.name);
+  }
+  if(dupes.length)throw new Error(`同じ更新先のファイルが重複しています: ${[...new Set(dupes)].join(", ")}`);
+
+  return {files:out,zipSummaries};
+}
+
+
 let kbnSelectedFiles=[];
 
 function kbnFormatBytes(n){
@@ -10903,12 +11030,38 @@ function kbnRenderUploadList(){
     </div>
   `).join("");
 }
-function kbnSetFiles(list){
-  kbnSelectedFiles=[...list];
-  kbnRenderUploadList();
-  $("kbnUploadResult").style.display="none";
+async function kbnSetFiles(list){
+  const result=$("kbnUploadResult");
+  try{
+    if(result){
+      result.style.display="block";
+      result.textContent="ファイルを確認中...";
+    }
+    const prepared=await kbnPrepareSelectedFilesV467(list);
+    kbnSelectedFiles=prepared.files;
+    kbnRenderUploadList();
+    if(result){
+      if(prepared.zipSummaries.length){
+        result.style.display="block";
+        result.innerHTML=`ZIPを自動展開しました。<br>${prepared.zipSummaries.map(esc).join("<br>")}<br><small>反映対象だけを抽出しています。</small>`;
+      }else{
+        result.style.display="none";
+      }
+    }
+  }catch(e){
+    kbnSelectedFiles=[];
+    kbnRenderUploadList();
+    if(result){
+      result.style.display="block";
+      result.innerHTML=`❌ ${esc(e?.message||"ZIPの読み込みに失敗しました")}`;
+    }
+    throw e;
+  }
 }
-$("kbnUploadFiles")?.addEventListener("change",e=>kbnSetFiles(e.target.files||[]));
+$("kbnUploadFiles")?.addEventListener("change",async e=>{
+  try{await kbnSetFiles(e.target.files||[])}
+  catch{}
+});
 
 $("kbnUploadFiles")?.addEventListener("change",()=>{
   $("kbnUploadStart").disabled=true;
@@ -10929,20 +11082,26 @@ $("kbnUploadClear")?.addEventListener("click",()=>{
   $("kbnUploadApprove").dataset.approved="";
   $("kbnUploadApprove").textContent="このファイルで更新する";
   kbnRenderUploadList();
+  $("kbnUploadResult").style.display="none";
 });
 const kbnDrop=$("kbnFileDrop");
 kbnDrop?.addEventListener("dragover",e=>{e.preventDefault();kbnDrop.classList.add("dragover")});
 kbnDrop?.addEventListener("dragleave",()=>kbnDrop.classList.remove("dragover"));
-kbnDrop?.addEventListener("drop",e=>{
+kbnDrop?.addEventListener("drop",async e=>{
   e.preventDefault();kbnDrop.classList.remove("dragover");
-  if(e.dataTransfer?.files?.length){kbnSetFiles(e.dataTransfer.files);$("kbnUploadStart").disabled=true;$("kbnUploadApprove").dataset.approved="";$("kbnUploadApprove").textContent="このファイルで更新する"}
+  if(e.dataTransfer?.files?.length){
+    try{await kbnSetFiles(e.dataTransfer.files)}catch{}
+    $("kbnUploadStart").disabled=true;
+    $("kbnUploadApprove").dataset.approved="";
+    $("kbnUploadApprove").textContent="このファイルで更新する";
+  }
 });
 $("kbnGithubReload")?.addEventListener("click",()=>window.loadKbnGithubStatus());
 
 $("kbnUploadStart")?.addEventListener("click",async()=>{
   if(!kbnSelectedFiles.length){alert("更新するファイルを選択してください。");return}
   if($("kbnUploadApprove").dataset.approved!=="1"){alert("先に「このファイルで更新する」を押してください。");return}
-  if(!confirm(`${kbnSelectedFiles.length}個のファイルをGitHubへ反映しますか？`))return;
+  if(!confirm(`${kbnSelectedFiles.length}個の更新ファイルをGitHubへ反映しますか？\nZIPを選んだ場合は自動展開済みです。`))return;
 
   const btn=$("kbnUploadStart"),result=$("kbnUploadResult");
   btn.disabled=true;btn.textContent="反映中...";
@@ -10979,7 +11138,10 @@ $("kbnUploadStart")?.addEventListener("click",async()=>{
       }
     }
     result.style.display="block";
-    result.innerHTML=`反映完了：${ok}件 / 失敗：${ng}件<br>${details.map(esc).join("<br>")}<br><br>Cloudflareの自動デプロイが開始されます。`;
+    const deployMsg=ok>0
+      ?`<br><br>✅ ${ok}件をGitHubへ反映しました。Cloudflareの自動デプロイ対象です。`
+      :`<br><br>⚠️ GitHubへ反映できたファイルはありません。Cloudflareデプロイは開始されません。`;
+    result.innerHTML=`反映完了：${ok}件 / 失敗：${ng}件<br>${details.map(esc).join("<br>")}${deployMsg}`;
   }finally{
     btn.disabled=false;btn.textContent="選択したファイルを反映";
   }
