@@ -11486,7 +11486,14 @@ async function loadDailyPrecisionStatusV433(){
     const stage=String(d.stage||"idle");
     const skip=String(d.closed_skip_reason||"");
     const igTarget=Number(d.instagram_target||50);
-    el.textContent=`日次精度メンテ：${labels[stage]||stage} / 閉業確認 ${Number(d.checked_closed||0)}店舗${skip?`（本日保留:${skip}）`:""} / 閉業APIエラー ${Number(d.closed_error_count||0)}件 / Instagram再検査 ${Number(d.checked_instagram||0)}/${igTarget}店舗 / 対象外候補 ${Number(d.exclusion_count||0)}件。Instagramは1日50店舗だけ、10店舗ずつ小分けして前日の続きから確認します。`;
+    const noDailyTargets=stage==="done" &&
+      Number(d.checked_closed||0)===0 &&
+      Number(d.checked_instagram||0)===0 &&
+      Number(d.exclusion_count||0)===0 &&
+      Number(d.closed_error_count||0)===0;
+    el.textContent=noDailyTargets
+      ?`日次精度メンテ：本日分完了 / 対象0件・更新対象なし。エラーではありません。`
+      :`日次精度メンテ：${labels[stage]||stage} / 閉業確認 ${Number(d.checked_closed||0)}店舗${skip?`（本日保留:${skip}）`:""} / 閉業APIエラー ${Number(d.closed_error_count||0)}件 / Instagram再検査 ${Number(d.checked_instagram||0)}/${igTarget}店舗 / 対象外候補 ${Number(d.exclusion_count||0)}件。Instagramは1日50店舗だけ、10店舗ずつ小分けして前日の続きから確認します。`;
   }catch(e){
     el.textContent=`日次精度メンテ：状態取得失敗 ${e?.message||e}`;
   }
@@ -11813,14 +11820,31 @@ async function loadMaintenanceHistoryV414(){
       set('lastRunUpdatedV447',`${Number(latest.updated||0)}店`);
       set('lastRunErrorsV447',`${Number(latest.errors||0)}件`);
       const cause=kbnMaintenanceErrorCauseV450(latest);
-      set('lastRunTasksV447',`${kbnMaintenanceTaskDetailV434(latest.task_detail)||'処理記録あり'}${cause?`｜原因：${cause}`:''}`);
+      const latestZeroDaily=isDaily &&
+        Number(latest.checked||0)===0 &&
+        Number(latest.updated||0)===0 &&
+        Number(latest.created||0)===0 &&
+        Number(latest.errors||0)===0;
+      set('lastRunTasksV447',latestZeroDaily
+        ?`対象0件・更新対象なし。エラーではありません。${kbnMaintenanceTaskDetailV434(latest.task_detail)?`｜${kbnMaintenanceTaskDetailV434(latest.task_detail)}`:""}`
+        :`${kbnMaintenanceTaskDetailV434(latest.task_detail)||'処理記録あり'}${cause?`｜原因：${cause}`:''}`);
       const badge=document.getElementById('lastRunStatusV447');
       const card=document.getElementById('lastAutomaticRunCardV447');
+      const zeroDaily=isDaily &&
+        Number(latest.checked||0)===0 &&
+        Number(latest.updated||0)===0 &&
+        Number(latest.created||0)===0 &&
+        Number(latest.errors||0)===0;
       if(badge){
-        if(Number(latest.errors||0)>0){badge.textContent='要確認';badge.style.color='#ffadad';badge.style.borderColor='#733b3b';badge.style.background='#251515';}
-        else{badge.textContent='完了';badge.style.color='#7ee2a8';badge.style.borderColor='#315b45';badge.style.background='#102219';}
+        if(Number(latest.errors||0)>0){
+          badge.textContent='要確認';badge.style.color='#ffadad';badge.style.borderColor='#733b3b';badge.style.background='#251515';
+        }else if(zeroDaily){
+          badge.textContent='対象0件';badge.style.color='#aeb9c3';badge.style.borderColor='#40515d';badge.style.background='#121d25';
+        }else{
+          badge.textContent='完了';badge.style.color='#7ee2a8';badge.style.borderColor='#315b45';badge.style.background='#102219';
+        }
       }
-      if(card)card.style.borderColor=Number(latest.errors||0)>0?'#663737':'#315b45';
+      if(card)card.style.borderColor=Number(latest.errors||0)>0?'#663737':zeroDaily?'#40515d':'#315b45';
     }else{
       set('lastRunTitleV447','まだ実行記録がありません');
       set('lastRunTimeV447','次回の3時間枠から記録します');
@@ -11833,11 +11857,16 @@ async function loadMaintenanceHistoryV414(){
         const key=String(r.group_key||'').replace(/\s*JST\s*$/i,'').replace(' daily_precision','');
         const title=isDaily?`日次精度 ${key}`:`${key} 自動運転`;
         const bad=Number(r.errors||0)>0;
-        const status=bad?'要確認':'完了';
-        return `<div style="padding:10px 11px;border:1px solid ${bad?'#663737':'#2d414f'};border-radius:11px;background:#101a23">
+        const zeroDaily=isDaily &&
+          Number(r.checked||0)===0 &&
+          Number(r.updated||0)===0 &&
+          Number(r.created||0)===0 &&
+          !bad;
+        const status=bad?'要確認':zeroDaily?'対象0件':'完了';
+        return `<div style="padding:10px 11px;border:1px solid ${bad?'#663737':zeroDaily?'#40515d':'#2d414f'};border-radius:11px;background:#101a23">
           <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap">
             <div style="display:flex;align-items:center;gap:6px"><b style="font-size:.72rem;color:#eef2f5">${esc(title)}</b>${i===0?'<span style="padding:2px 5px;border-radius:999px;background:#172a32;color:#7ee3b7;font-size:.53rem;font-weight:800">最新</span>':''}</div>
-            <span style="font-size:.58rem;font-weight:800;color:${bad?'#ff9b9b':'#7ee2a8'}">${status}</span>
+            <span style="font-size:.58rem;font-weight:800;color:${bad?'#ff9b9b':zeroDaily?'#aeb9c3':'#7ee2a8'}">${status}</span>
           </div>
           <div style="margin-top:5px;color:#efc45a;font-size:.63rem;font-weight:700">${startClock} → ${endClock}${dur?`（${dur}）`:''}</div>
           <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin-top:7px">
@@ -11846,7 +11875,9 @@ async function loadMaintenanceHistoryV414(){
             <div style="padding:6px;border-radius:7px;background:#0d151c"><small style="display:block;color:#71808b">更新</small><b style="color:#7ee3b7;font-size:.7rem">${Number(r.updated||0)}店</b></div>
             <div style="padding:6px;border-radius:7px;background:#0d151c"><small style="display:block;color:#71808b">エラー</small><b style="color:${bad?'#ff9b9b':'#fff'};font-size:.7rem">${Number(r.errors||0)}</b></div>
           </div>
-          <div style="margin-top:6px;color:#9eabb5;font-size:.61rem;line-height:1.5">${esc(kbnMaintenanceTaskDetailV434(r.task_detail)||'処理記録あり')}</div>
+          <div style="margin-top:6px;color:#9eabb5;font-size:.61rem;line-height:1.5">${zeroDaily
+            ?`対象0件・更新対象なし。エラーではありません。${kbnMaintenanceTaskDetailV434(r.task_detail)?` ${esc(kbnMaintenanceTaskDetailV434(r.task_detail))}`:""}`
+            :esc(kbnMaintenanceTaskDetailV434(r.task_detail)||'処理記録あり')}</div>
           ${kbnMaintenanceErrorCauseV450(r)?`<div style="margin-top:6px;padding:6px 8px;border-radius:8px;background:${Number(r.errors||0)>0?'#211417':'#111d1a'};color:${Number(r.errors||0)>0?'#ffaaaa':'#8ee1b3'};font-size:.59rem;line-height:1.4">原因：${esc(kbnMaintenanceErrorCauseV450(r))}</div>`:''}
         </div>`;
       }).join(''):'<small style="color:#8794a1">まだ自動運転の履歴がありません。</small>';
@@ -12037,22 +12068,32 @@ async function loadMaintenanceProgressV460(){
     const d=await api("/api/admin/maintenance-progress"),p=d.progress||{};
     const pct=Math.max(0,Math.min(100,Number(p.percent||0)));
 
-    if($("maintenanceProgressBarV460"))$("maintenanceProgressBarV460").style.width=`${p.active?pct:0}%`;
-    if($("maintenanceProgressPctV460"))$("maintenanceProgressPctV460").textContent=p.active?`${pct}%`:"待機";
-    if($("maintenanceProgressPhaseV460"))$("maintenanceProgressPhaseV460").textContent=p.active
-      ?`現在：${p.phase_label||"メンテナンス"} (${Number(p.phase_order||0)}/${Number(p.phase_total||6)})`
-      :"待機中";
-    if($("maintenanceProgressTitleV460"))$("maintenanceProgressTitleV460").textContent=p.active
+    const running=!!p.running;
+    const pending=!!p.queue_pending;
+    const waiting=pending&&!running;
+
+    if($("maintenanceProgressBarV460"))$("maintenanceProgressBarV460").style.width=`${pending?pct:0}%`;
+    if($("maintenanceProgressPctV460"))$("maintenanceProgressPctV460").textContent=running?`${pct}%`:waiting?"保存済":"待機";
+    if($("maintenanceProgressPhaseV460"))$("maintenanceProgressPhaseV460").textContent=running
+      ?`現在：実行中・${p.phase_label||"メンテナンス"} (${Number(p.phase_order||0)}/${Number(p.phase_total||6)})`
+      :waiting
+        ?`待機：${p.phase_label||"メンテナンス"}の続きから再開`
+        :"待機中";
+    if($("maintenanceProgressTitleV460"))$("maintenanceProgressTitleV460").textContent=running
       ?"自動メンテナンス実行中"
-      :"自動メンテナンス";
+      :waiting
+        ?"自動メンテナンス・続き保存済み"
+        :"自動メンテナンス";
 
     if($("maintenanceProgressCheckedV460"))$("maintenanceProgressCheckedV460").textContent=Number(p.today?.checked||0).toLocaleString();
     if($("maintenanceProgressChangesV460"))$("maintenanceProgressChangesV460").textContent=`${Number(p.today?.created||0)} / ${Number(p.today?.updated||0)}`;
     if($("maintenanceProgressErrorsV460"))$("maintenanceProgressErrorsV460").textContent=Number(p.today?.errors||0);
 
-    if($("maintenanceProgressDetailV460"))$("maintenanceProgressDetailV460").textContent=p.active
-      ?`工程 ${Number(p.phase_order||0)}/${Number(p.phase_total||6)}・${p.phase_label||"処理中"}。直近更新から ${kbnFormatElapsedV460(p.elapsed_seconds)}。画面を閉じてもDB上の進捗から復元されます。`
-      :"現在は待機中です。次の3時間枠または手動実行時に進捗を表示します。";
+    if($("maintenanceProgressDetailV460"))$("maintenanceProgressDetailV460").textContent=running
+      ?`工程 ${Number(p.phase_order||0)}/${Number(p.phase_total||6)}・${p.phase_label||"処理中"}。小分け保存しながら実行しています。`
+      :waiting
+        ?`${p.phase_label||"次工程"}の進捗はDBに保存済みです。現在はWorker実行中ではありません。次の自動実行で前回の続きから再開します。`
+        :"現在は待機中です。次の3時間枠または手動実行時に進捗を表示します。";
   }catch(e){
     if($("maintenanceProgressDetailV460"))$("maintenanceProgressDetailV460").textContent=`進捗を取得できません：${e?.message||e}`;
   }
