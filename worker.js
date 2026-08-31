@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.67";
+      config.vars.KBN_CONFIG_VERSION="4.68";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -9862,7 +9862,18 @@ async function kbnMaintenanceProgressV460(env){
 
   const phase=Number(q?.phase||0);
   const meta=kbnMaintenancePhaseMetaV460(phase);
-  const active=phase>0;
+  const queuePending=phase>0;
+
+  // v4.68:
+  // phase>0 only means there is unfinished work saved in DB.
+  // It must not be shown as "executing" between cron invocations.
+  // Consider the Worker actively executing only while queue.updated_at is fresh.
+  let queueAgeSec=999999;
+  if(q?.updated_at){
+    const qt=new Date(String(q.updated_at).replace(" ","T")+"Z").getTime();
+    if(Number.isFinite(qt))queueAgeSec=Math.max(0,Math.round((Date.now()-qt)/1000));
+  }
+  const running=queuePending && queueAgeSec<=90;
 
   const today=kbnGoogleBudgetPeriodV441().day;
   const h=await env.DB.prepare(`
@@ -9875,10 +9886,7 @@ async function kbnMaintenanceProgressV460(env){
     WHERE date(datetime(created_at,'+9 hours'))=?
   `).bind(today).first();
 
-  let percent=100;
-  if(active){
-    percent=Math.max(5,Math.min(95,Math.round((meta.order/meta.total)*100)));
-  }
+  let percent=queuePending?Math.max(5,Math.min(95,Math.round((meta.order/meta.total)*100))):100;
 
   let elapsedSec=0;
   if(q?.updated_at){
@@ -9887,14 +9895,25 @@ async function kbnMaintenanceProgressV460(env){
   }
 
   return {
-    active,
+    // active is kept for backward compatibility but now means truly executing.
+    active:running,
+    running,
+    queue_pending:queuePending,
+    waiting:queuePending && !running,
+    queue_age_seconds:queueAgeSec,
     phase,
     phase_label:meta.label,
     phase_order:meta.order,
     phase_total:meta.total,
     percent,
+    state:running?"running":queuePending?"waiting":"idle",
     updated_at:String(q?.updated_at||""),
     elapsed_seconds:elapsedSec,
+    message:running
+      ?`${meta.label}を実行中`
+      :queuePending
+        ?`${meta.label}の続きはDBに保存済み。次の自動実行で再開`
+        :"待機中",
     today:{
       checked:Number(h?.checked||0),
       created:Number(h?.created||0),
