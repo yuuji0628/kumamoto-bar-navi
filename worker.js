@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.68";
+      config.vars.KBN_CONFIG_VERSION="4.69";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -8593,10 +8593,16 @@ async function ensureKbnMaintenanceHistoryV414(env){
       created_count INTEGER DEFAULT 0,
       seo_gain INTEGER DEFAULT 0,
       error_count INTEGER DEFAULT 0,
+      duration_ms INTEGER DEFAULT 0,
       note TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `).run();
+  try{
+    const info=await env.DB.prepare(`PRAGMA table_info(kbn_maintenance_history)`).all();
+    const names=new Set((info?.results||[]).map(x=>String(x.name||'')));
+    if(!names.has('duration_ms'))await env.DB.prepare(`ALTER TABLE kbn_maintenance_history ADD COLUMN duration_ms INTEGER DEFAULT 0`).run();
+  }catch{}
   try{await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_kbn_maintenance_history_created_at ON kbn_maintenance_history(created_at)`).run()}catch{}
   try{await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_kbn_maintenance_history_run_kind ON kbn_maintenance_history(run_kind,created_at)`).run()}catch{}
 }
@@ -8613,7 +8619,7 @@ function kbnMaintenanceRunKindV414(q,phase,task){
 function kbnMaintenanceStatsV414(result,task){
   const r=result||{};
   const arrLen=v=>Array.isArray(v)?v.length:0;
-  let checked=Number(r.checked||0);
+  let checked=Array.isArray(r.checked)?r.checked.length:Number(r.checked||0);
   if(!checked && Array.isArray(r.searched))checked=r.searched.length;
   let updated=Number(r.updated_count||0);
   if(!updated)updated=arrLen(r.updated);
@@ -8633,7 +8639,7 @@ function kbnMaintenanceStatsV414(result,task){
   };
 }
 
-async function logKbnMaintenanceHistoryV414(env,{q=null,phase=0,task='',result=null,status='success',note=''}={}){
+async function logKbnMaintenanceHistoryV414(env,{q=null,phase=0,task='',result=null,status='success',note='',duration_ms=0}={}){
   try{
     await ensureKbnMaintenanceHistoryV414(env);
     const stats=kbnMaintenanceStatsV414(result,task);
@@ -8641,11 +8647,11 @@ async function logKbnMaintenanceHistoryV414(env,{q=null,phase=0,task='',result=n
     const runKey=String(q?.run_date||'').slice(0,120);
     await env.DB.prepare(`
       INSERT INTO kbn_maintenance_history(
-        run_key,run_kind,task,status,checked_count,updated_count,created_count,seo_gain,error_count,note,created_at
-      ) VALUES(?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
+        run_key,run_kind,task,status,checked_count,updated_count,created_count,seo_gain,error_count,duration_ms,note,created_at
+      ) VALUES(?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
     `).bind(
       runKey,runKind,String(task||'maintenance').slice(0,50),String(status||'success').slice(0,20),
-      stats.checked,stats.updated,stats.created,stats.seo_gain,stats.errors,String(note||'').slice(0,600)
+      stats.checked,stats.updated,stats.created,stats.seo_gain,stats.errors,Math.max(0,Number(duration_ms||0)),String(note||'').slice(0,600)
     ).run();
   }catch(e){console.error('maintenance history log failed',e)}
 }
@@ -8698,7 +8704,7 @@ async function kbnMaintenanceHistoryV414(env,{days=7,limit=24}={}){
   `).bind(since).all();
 
   const recent=await env.DB.prepare(`
-    SELECT id,run_key,run_kind,task,status,checked_count,updated_count,created_count,seo_gain,error_count,note,created_at
+    SELECT id,run_key,run_kind,task,status,checked_count,updated_count,created_count,seo_gain,error_count,duration_ms,note,created_at
     FROM kbn_maintenance_history
     ORDER BY id DESC
     LIMIT ?
@@ -8716,6 +8722,7 @@ async function kbnMaintenanceHistoryV414(env,{days=7,limit=24}={}){
       SUM(created_count) AS created,
       SUM(seo_gain) AS seo_gain,
       SUM(error_count) AS errors,
+      SUM(COALESCE(duration_ms,0)) AS active_duration_ms,
       GROUP_CONCAT(task||':'||checked_count||':'||updated_count||':'||created_count||':'||seo_gain||':'||error_count,'|') AS task_detail,
       GROUP_CONCAT(COALESCE(note,''),' || ') AS notes
     FROM kbn_maintenance_history
@@ -8724,6 +8731,24 @@ async function kbnMaintenanceHistoryV414(env,{days=7,limit=24}={}){
     ORDER BY MAX(created_at) DESC
     LIMIT 30
   `).bind(since).all();
+
+  // v4.69: older daily-precision rows could record closed_daily checked=0 even though
+  // the note contains the real batch count. Repair grouped display from the saved notes.
+  const groupedFixed=(groupedRuns.results||[]).map(row=>{
+    if(String(row?.run_kind||'')!=='daily_precision')return row;
+    const detail=String(row?.task_detail||'');
+    const notes=String(row?.notes||'');
+    let storedClosed=0;
+    for(const part of detail.split('|')){
+      const p=part.split(':');
+      if(p[0]==='closed_daily')storedClosed+=Math.max(0,Number(p[1]||0));
+    }
+    let noteClosed=0;
+    const re=/閉業確認\s*\/\s*判定(\d+)店\s*\/\s*一致候補なし(\d+)店/g;
+    let m; while((m=re.exec(notes)))noteClosed+=Number(m[1]||0)+Number(m[2]||0);
+    const correction=Math.max(0,noteClosed-storedClosed);
+    return correction?{...row,checked:Number(row.checked||0)+correction,history_count_repaired:true}:row;
+  });
 
   let queue=null;
   try{queue=await kbnMaintenanceQueueStatusV257(env)}catch{}
@@ -8734,7 +8759,7 @@ async function kbnMaintenanceHistoryV414(env,{days=7,limit=24}={}){
     today:today||{},
     daily:daily.results||[],
     recent:recent.results||[],
-    grouped_runs:groupedRuns.results||[],
+    grouped_runs:groupedFixed,
     queue
   };
 }
@@ -8950,7 +8975,9 @@ async function kbnProcessDailyPrecisionV433(env){
       return {ok:true,processed:true,stage:'closed_skipped',reason,budget_skip:budgetStop};
     }
 
+    const batchStartedAt=Date.now();
     const r=await runMaintenanceBatchV242(env,'closed',{limit:5});
+    const batchDurationMs=Math.max(0,Date.now()-batchStartedAt);
     const checkedCount=Array.isArray(r?.checked)?r.checked.length:Number(r?.checked||0);
     const unverifiedCount=Array.isArray(r?.unverified)?r.unverified.length:0;
     const failedCount=Array.isArray(r?.failed)?r.failed.length:0;
@@ -8981,8 +9008,14 @@ async function kbnProcessDailyPrecisionV433(env){
     ).run();
 
     await logKbnMaintenanceHistoryV414(env,{
-      q:{run_date:`${today} daily_precision`},phase:0,task:'closed_daily',result:r,
-      status:failedCount>0?'failed':'success',
+      q:{run_date:`${today} daily_precision`},phase:0,task:'closed_daily',
+      result:{
+        ...r,
+        checked:checkedCount+unverifiedCount,
+        updated_count:Math.max(Number(r?.updated_count||0),Array.isArray(r?.closed)?r.closed.length:0),
+        errors:Array.from({length:failedCount},()=>1)
+      },
+      status:failedCount>0?'failed':'success',duration_ms:batchDurationMs,
       note:hardFail
         ?`日次精度 / 閉業確認をエラー累積${nextErrors}件で本日保留 / Instagram再検査へ進行`
         :`日次精度 / 閉業確認 / 判定${checkedCount}店 / 一致候補なし${unverifiedCount}店 / エラー${failedCount}件${r?.cycle_completed?' / 本日分一巡':''}`
@@ -9036,7 +9069,9 @@ async function kbnProcessDailyPrecisionV433(env){
     const batchLimit=Math.min(10,remaining);
     const cursor=Math.max(0,Number(fresh?.instagram_cursor||0));
 
+    const batchStartedAt=Date.now();
     const r=await kbnAuditInstagramDailySliceV440(env,{afterId:cursor,limit:batchLimit});
+    const batchDurationMs=Math.max(0,Date.now()-batchStartedAt);
     const nextChecked=checkedToday+Number(r?.checked||0);
     const nextStage=(nextChecked>=target || Number(r?.checked||0)===0)?'exclusion':'instagram_wait';
 
@@ -9061,7 +9096,7 @@ async function kbnProcessDailyPrecisionV433(env){
         updated_count:Number(r?.verified?.length||0)+Number(r?.corrected?.length||0),
         errors:Number(r?.failed?.length||0)?Array(Number(r.failed.length)).fill(1):[]
       },
-      status:r?.ok===false?'failed':'success',
+      status:r?.ok===false?'failed':'success',duration_ms:batchDurationMs,
       note:`日次精度 / Instagram再検査 ${nextChecked}/${target}店舗 / 正常${Number(r?.verified?.length||0)} / 差替${Number(r?.corrected?.length||0)} / 公開から除外${Number(r?.removed?.length||0)} / 要確認${Number(r?.review?.length||0)}${r?.wrapped?' / 一巡して先頭へ':''}`
     });
 
@@ -9072,14 +9107,16 @@ async function kbnProcessDailyPrecisionV433(env){
   }
 
   if(stage==='exclusion'){
+    const batchStartedAt=Date.now();
     const r=await kbnScanExclusionCandidatesV267(env);
+    const batchDurationMs=Math.max(0,Date.now()-batchStartedAt);
     await env.DB.prepare(`
       UPDATE kbn_daily_precision_state
       SET exclusion_count=?,stage='done',updated_at=CURRENT_TIMESTAMP WHERE id=1
     `).bind(Number(r?.candidate_count||0)).run();
     await logKbnMaintenanceHistoryV414(env,{
       q:{run_date:`${today} daily_precision`},phase:0,task:'exclusion_daily',result:r,
-      status:r?.ok===false?'failed':'success',
+      status:r?.ok===false?'failed':'success',duration_ms:batchDurationMs,
       note:`日次精度 / 対象外確認 / 候補${Number(r?.candidate_count||0)}件 / 本日分完了`
     });
     return {ok:true,processed:true,stage:'exclusion',result:r};
