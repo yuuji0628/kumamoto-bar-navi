@@ -711,23 +711,21 @@ function kbnJstTimeToCron(value){
 
 
 function kbnHomeTypographyStyleV472(){
-  return `<style id="kbn-home-typography-v472">
-  /* v4.72 Home hero headline refinement: lighter first line, stronger gold destination line */
+  return `<style id="kbn-home-typography-v473">
+  /* v4.73 Home hero: apply the headline style directly to the actual SSR hero markup. */
   body.public-v109{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
   body.public-v109 .public-kicker{font-family:"Helvetica Neue",Arial,sans-serif!important;font-weight:700!important;letter-spacing:.22em!important;line-height:1.35!important}
-  body.public-v109 main h1{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif!important;font-weight:700!important;letter-spacing:-.045em!important;line-height:1.12!important;font-feature-settings:"palt" 1,"pkna" 1;text-wrap:balance}
-  body.public-v109 main h1 .kbn-hero-line1-v472{display:block;color:#f6f7f8;font-size:.78em;font-weight:600!important;letter-spacing:-.035em!important;line-height:1.18;margin-bottom:.12em}
-  body.public-v109 main h1 .kbn-hero-line2-v472{display:block;color:#f1c653;font-size:1.03em;font-weight:800!important;letter-spacing:-.055em!important;line-height:1.08}
-  body.public-v109 main h1 strong,body.public-v109 main h1 em{font-family:inherit!important;letter-spacing:inherit!important}
-  body.public-v109 main h1 em,body.public-v109 main h1 .accent{font-style:normal!important}
+  body.public-v109 main h1{font-family:"Hiragino Mincho ProN","Yu Mincho","YuMincho","Noto Serif JP",serif!important;font-weight:600!important;letter-spacing:.005em!important;line-height:1.16!important;font-feature-settings:"palt" 1,"pkna" 1;text-wrap:balance}
+  body.public-v109 main h1 .kbn-hero-line1-v473{display:block;color:#f7f7f5;font-family:"Hiragino Mincho ProN","Yu Mincho","YuMincho","Noto Serif JP",serif!important;font-size:.69em!important;font-weight:600!important;letter-spacing:.025em!important;line-height:1.28!important;margin:0 0 .18em}
+  body.public-v109 main h1 .kbn-hero-line2-v473{display:block;color:#f1c653;font-family:"Hiragino Mincho ProN","Yu Mincho","YuMincho","Noto Serif JP",serif!important;font-size:.91em!important;font-weight:700!important;letter-spacing:.005em!important;line-height:1.18!important}
   body.public-v109 .public-hero p,body.public-v109 main section:first-of-type>div>p:not(.public-kicker){font-weight:500!important;letter-spacing:.015em!important;line-height:1.85!important}
   body.public-v109 #heroTotalShopCount,body.public-v109 #heroAreaCount{font-family:"Helvetica Neue",Arial,sans-serif!important;font-weight:800!important;letter-spacing:-.055em!important;font-variant-numeric:tabular-nums lining-nums}
   body.public-v109 .public-hero-unit-v211{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif!important;font-weight:700!important;letter-spacing:.02em!important}
   body.public-v109 .public-header-cta,body.public-v109 button,body.public-v109 .btn{font-weight:700;letter-spacing:.01em}
   @media(max-width:640px){
-    body.public-v109 main h1{font-size:clamp(2.65rem,12.2vw,3.55rem)!important;line-height:1.08!important;letter-spacing:-.045em!important}
-    body.public-v109 main h1 .kbn-hero-line1-v472{font-size:.74em!important;letter-spacing:-.04em!important;margin-bottom:.16em}
-    body.public-v109 main h1 .kbn-hero-line2-v472{font-size:1em!important}
+    body.public-v109 main h1{font-size:clamp(2.7rem,12vw,3.45rem)!important;line-height:1.12!important;letter-spacing:0!important}
+    body.public-v109 main h1 .kbn-hero-line1-v473{font-size:.67em!important;letter-spacing:.02em!important;margin-bottom:.22em!important}
+    body.public-v109 main h1 .kbn-hero-line2-v473{font-size:.89em!important;letter-spacing:0!important}
     body.public-v109 .public-kicker{font-size:.72rem!important;letter-spacing:.2em!important}
   }
   </style>`;
@@ -1224,7 +1222,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.72";
+      config.vars.KBN_CONFIG_VERSION="4.73";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -13594,7 +13592,7 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
           const areaCount=Number(row?.area_count||0);
           html=html
             .replace('<body class="public-v109">','<body class="public-v109" data-kbn-ssr-stats="1">')
-            .replace(/<h1[^>]*>\s*今夜行きたいBARを、\s*(?:<br\s*\/?>)?\s*熊本で見つける。\s*<\/h1>/i,'<h1><span class="kbn-hero-line1-v472">今夜行きたいBARを、</span><span class="kbn-hero-line2-v472">熊本で見つける。</span></h1>')
+            .replace(/<h1([^>]*)>[\s\S]*?今夜行きたいBARを、[\s\S]*?熊本で見つける。[\s\S]*?<\/h1>/i,'<h1$1><span class="kbn-hero-line1-v473">今夜行きたいBARを、</span><span class="kbn-hero-line2-v473">熊本で見つける。</span></h1>')
             .replace(/<strong id="heroTotalShopCount">[\s\S]*?<\/strong>/,'<strong id="heroTotalShopCount">'+shopCount+'<span class="public-hero-unit-v211">店舗</span></strong>')
             .replace(/<strong id="heroAreaCount">[\s\S]*?<\/strong>/,'<strong id="heroAreaCount">'+areaCount+'<span class="public-hero-unit-v211">地域</span></strong>')
             .replace(/<span id="publicNoticeCountText">[\s\S]*?<\/span>/,'<span id="publicNoticeCountText">熊本県内のBARを '+shopCount+' 店舗掲載中</span>');
