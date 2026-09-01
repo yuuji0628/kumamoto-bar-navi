@@ -711,21 +711,21 @@ function kbnJstTimeToCron(value){
 
 
 function kbnHomeTypographyStyleV472(){
-  return `<style id="kbn-home-typography-v474">
+  return `<style id="kbn-home-typography-v477">
   /* v4.73 Home hero: apply the headline style directly to the actual SSR hero markup. */
   body.public-v109{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
   body.public-v109 .public-kicker{font-family:"Helvetica Neue",Arial,sans-serif!important;font-weight:700!important;letter-spacing:.22em!important;line-height:1.35!important}
   body.public-v109 main h1{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif!important;font-weight:800!important;letter-spacing:-.035em!important;line-height:1.08!important;font-feature-settings:"palt" 1,"pkna" 1;text-wrap:balance}
-  body.public-v109 main h1 .kbn-hero-line1-v474{display:block!important;color:#f7f7f5!important;font-family:inherit!important;font-size:.58em!important;font-weight:600!important;letter-spacing:-.018em!important;line-height:1.2!important;margin:0 0 .25em!important}
-  body.public-v109 main h1 .kbn-hero-bar-v476{color:#f1ca58!important;font-weight:750!important;letter-spacing:-.025em!important}
-  body.public-v109 main h1 .kbn-hero-line2-v474{display:block!important;color:#f1ca58!important;font-family:inherit!important;font-size:1em!important;font-weight:850!important;letter-spacing:-.055em!important;line-height:1.04!important}
+  body.public-v109 main h1 .kbn-hero-line1-v474{display:block!important;color:#f7f7f5!important;font-family:inherit!important;font-size:.55em!important;font-weight:600!important;letter-spacing:-.018em!important;line-height:1.2!important;margin:0 0 .25em!important}
+  body.public-v109 main h1 .kbn-hero-bar-v476{color:#D4AF37!important;font-weight:750!important;letter-spacing:-.025em!important}
+  body.public-v109 main h1 .kbn-hero-line2-v474{display:block!important;color:#D4AF37!important;font-family:inherit!important;font-size:1em!important;font-weight:850!important;letter-spacing:-.055em!important;line-height:1.04!important}
   body.public-v109 .public-hero p,body.public-v109 main section:first-of-type>div>p:not(.public-kicker){font-weight:500!important;letter-spacing:.015em!important;line-height:1.85!important}
   body.public-v109 #heroTotalShopCount,body.public-v109 #heroAreaCount{font-family:"Helvetica Neue",Arial,sans-serif!important;font-weight:800!important;letter-spacing:-.055em!important;font-variant-numeric:tabular-nums lining-nums}
   body.public-v109 .public-hero-unit-v211{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif!important;font-weight:700!important;letter-spacing:.02em!important}
   body.public-v109 .public-header-cta,body.public-v109 button,body.public-v109 .btn{font-weight:700;letter-spacing:.01em}
   @media(max-width:640px){
-    body.public-v109 main h1{font-size:clamp(2.45rem,10.8vw,3rem)!important;line-height:1.06!important;letter-spacing:-.04em!important}
-    body.public-v109 main h1 .kbn-hero-line1-v474{font-size:.58em!important;letter-spacing:-.018em!important;margin-bottom:.25em!important;font-weight:600!important}
+    body.public-v109 main h1{font-size:clamp(2.25rem,9.9vw,2.82rem)!important;line-height:1.06!important;letter-spacing:-.04em!important}
+    body.public-v109 main h1 .kbn-hero-line1-v474{font-size:.55em!important;letter-spacing:-.018em!important;margin-bottom:.25em!important;font-weight:600!important}
     body.public-v109 main h1 .kbn-hero-line2-v474{font-size:1em!important;letter-spacing:-.055em!important}
     body.public-v109 .public-kicker{font-size:.72rem!important;letter-spacing:.2em!important}
   }
@@ -1223,7 +1223,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.76";
+      config.vars.KBN_CONFIG_VERSION="4.77";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
