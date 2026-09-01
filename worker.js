@@ -1201,7 +1201,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.69";
+      config.vars.KBN_CONFIG_VERSION="4.70";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -10402,6 +10402,52 @@ export default {
       }});
     }
 
+    // v4.70: Search Console canonical URL normalization.
+    // Serve exactly one crawlable URL for dynamic SEO pages and remove common tracking
+    // parameters before Google can treat them as separate discovered URLs.
+    if(request.method==="GET" || request.method==="HEAD"){
+      const p=url.pathname;
+      let normalizedPath=p;
+      let shouldRedirect=false;
+
+      // Dynamic SEO pages use the no-trailing-slash form as canonical.
+      if(p!=="/" && (p==="/all-shops/" || /^\/(?:area|genre)\/.+\/$/.test(p))){
+        normalizedPath=p.replace(/\/+$/,'');
+        shouldRedirect=true;
+      }
+
+      // Keep only the slug parameter on public shop detail URLs. Any UTM/click IDs or
+      // accidental parameters become a direct 301 to the canonical detail URL.
+      if((p==="/shop" || p==="/shop.html") && url.searchParams.get("slug")){
+        const slug=String(url.searchParams.get("slug")||"").trim();
+        const clean=new URL("/shop",url.origin);
+        clean.searchParams.set("slug",slug);
+        if(url.pathname!=="/shop" || url.toString()!==clean.toString()){
+          return new Response(null,{status:301,headers:{
+            "location":clean.toString(),
+            "cache-control":"public, max-age=86400",
+            "x-kbn-seo-normalize":"shop-canonical-v470"
+          }});
+        }
+      }
+
+      // Static index targets and local SEO pages should not proliferate via analytics params.
+      const indexableStatic=/^\/(?:bars|jobs|column|areas|listing-form|about|faq|contact|pricing|coupons|events|column-bar-beginner|column-kumamoto-night|column-solo-bar)\.html$/.test(p);
+      const localSeo=/^\/(?:area|genre)\//.test(p) || p==="/all-shops" || p==="/all-shops/";
+      if((indexableStatic || localSeo) && url.search){
+        shouldRedirect=true;
+      }
+
+      if(shouldRedirect){
+        const clean=new URL(normalizedPath,url.origin);
+        return new Response(null,{status:301,headers:{
+          "location":clean.toString(),
+          "cache-control":"public, max-age=86400",
+          "x-kbn-seo-normalize":"canonical-v470"
+        }});
+      }
+    }
+
     // v4.17: Search Console legacy URL redirect cleanup.
     // Old SEO landing pages are no longer index targets. Redirect each old URL directly
     // to ONE current canonical page. Also catch extensionless variants so Cloudflare's
@@ -10458,8 +10504,7 @@ export default {
         headers:{
           "location":target.toString(),
           "cache-control":"public, max-age=86400",
-          "x-robots-tag":"noindex, follow",
-          "x-kbn-legacy-redirect":"direct-301-v417"
+          "x-kbn-legacy-redirect":"direct-301-v470"
         }
       });
     }
@@ -10730,11 +10775,13 @@ export default {
       if(env.DB){
         try{
           const r=await env.DB.prepare(`
-            SELECT slug,updated_at
+            SELECT slug,MAX(updated_at) AS updated_at
             FROM shops
             WHERE COALESCE(is_published,1)=1
               AND TRIM(COALESCE(slug,''))<>''
-            ORDER BY COALESCE(updated_at,published_at,created_at) DESC, id DESC
+            GROUP BY slug
+            HAVING COUNT(*)=1
+            ORDER BY MAX(COALESCE(updated_at,published_at,created_at)) DESC
             LIMIT 45000
           `).all();
           const seen=new Set();
