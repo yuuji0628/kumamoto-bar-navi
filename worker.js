@@ -1223,7 +1223,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.78";
+      config.vars.KBN_CONFIG_VERSION="4.79";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -6247,8 +6247,15 @@ async function kbnGeoCoverageV457(env){
 function publicShopRow(s){
   if(!s)return s;
   const provisional=normalizeListingStatus(s.listing_status)==="provisional";
+  const imageKey=String(s.image_key||"").trim();
+  let publicImage=String(s.image_url||"").trim();
+  // v4.79: Google由来画像は期限切れの外部URLを返さず、常に自前の写真プロキシを使う。
+  if(Number(s.id)>0 && imageKey.startsWith("google:")){
+    publicImage=`/api/shop-photo?id=${encodeURIComponent(String(s.id))}&w=960`;
+  }
   return {
     ...s,
+    image_url:publicImage,
     listing_status:provisional?"provisional":"published",
     is_provisional:provisional?1:0,
     name:provisional?`【KBN独自掲載】${s.name}`:s.name
