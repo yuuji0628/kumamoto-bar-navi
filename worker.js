@@ -1223,7 +1223,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.79";
+      config.vars.KBN_CONFIG_VERSION="4.80";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -6244,6 +6244,25 @@ async function kbnGeoCoverageV457(env){
   const total=Number(r?.total||0),geocoded=Number(r?.geocoded||0);
   return {total,geocoded,missing:Math.max(0,total-geocoded),percent:total?Math.round(geocoded/total*1000)/10:0};
 }
+function kbnPublicDescriptionV480(s,provisional){
+  const raw=String(s?.description||"").trim();
+  if(provisional)return raw;
+
+  // v4.80: 正式掲載へ切り替わった店舗に、旧「KBN独自掲載」説明を残さない。
+  // 店舗固有の紹介文が前半にある場合は残し、免責文だけ正式掲載用へ差し替える。
+  const officialNote="※本ページは、KUMAMOTO BAR NAVIの正式掲載店舗として掲載しています。掲載内容は店舗情報および確認済み情報をもとに掲載しています。";
+  if(!raw)return officialNote;
+
+  if(/KUMAMOTO BAR NAVIが独自に掲載|KBN独自掲載|公開されている(?:店舗)?情報をもとに/i.test(raw)){
+    const lead=raw
+      .replace(/※本ページ[\s\S]*$/u,"")
+      .replace(/掲載内容の修正・削除をご希望の場合[\s\S]*$/u,"")
+      .trim();
+    return lead?`${lead}\n\n${officialNote}`:officialNote;
+  }
+  return raw;
+}
+
 function publicShopRow(s){
   if(!s)return s;
   const provisional=normalizeListingStatus(s.listing_status)==="provisional";
@@ -6256,6 +6275,7 @@ function publicShopRow(s){
   return {
     ...s,
     image_url:publicImage,
+    description:kbnPublicDescriptionV480(s,provisional),
     listing_status:provisional?"provisional":"published",
     is_provisional:provisional?1:0,
     name:provisional?`【KBN独自掲載】${s.name}`:s.name
