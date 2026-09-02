@@ -1983,6 +1983,17 @@ html,body{max-width:100%;overflow-x:hidden}
   font-size:.7rem;
   font-weight:800;
 }
+.shop-name-search-v478{margin-bottom:12px}
+.shop-name-search-v478 label{display:grid;gap:6px}
+.shop-name-search-v478 label>span{color:#c6ced7;font-size:.82rem;font-weight:900}
+.shop-name-search-box-v478{display:flex;align-items:center;gap:8px;border:1px solid #354654;border-radius:14px;background:#101a23;padding:0 8px 0 12px;min-height:48px}
+.shop-name-search-box-v478:focus-within{border-color:#d4af37;box-shadow:0 0 0 2px rgba(212,175,55,.13)}
+.shop-name-search-icon-v478{color:#d4af37;font-size:1rem;line-height:1}
+#shopNameSearch{flex:1;min-width:0;border:0!important;background:transparent!important;color:#f4f6f8!important;padding:0!important;outline:0!important;box-shadow:none!important;font-size:16px}
+#shopNameSearch::placeholder{color:#788692}
+#shopNameSearchClear{border:0;background:transparent;color:#aeb9c3;padding:7px 9px;border-radius:10px;font-weight:900;cursor:pointer}
+#shopNameSearchClear:hover{background:#1a2732;color:#fff}
+.shop-name-search-hint-v478{color:#778590;font-size:.72rem;line-height:1.45}
 .shop-outreach-tools{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
 .shop-outreach-tools label{display:grid;gap:6px}
 .shop-outreach-tools label>span{color:#c6ced7;font-size:.76rem;font-weight:800}
@@ -4068,6 +4079,17 @@ html,body{max-width:100%;overflow-x:hidden}
 
 
 <div class="shop-filter-panel">
+  <div class="shop-name-search-v478">
+    <label>
+      <span>店舗名検索</span>
+      <div class="shop-name-search-box-v478">
+        <span class="shop-name-search-icon-v478" aria-hidden="true">⌕</span>
+        <input id="shopNameSearch" type="search" placeholder="店舗名を入力（例：Cafe bar A plus）" autocomplete="off" enterkeyhint="search" aria-label="店舗名で検索">
+        <button type="button" id="shopNameSearchClear" title="検索文字を消す" aria-label="検索文字を消す" hidden>×</button>
+      </div>
+      <small class="shop-name-search-hint-v478">店舗名の一部・読み方でも検索できます。下のエリア・掲載区分などの条件と組み合わせ可能です。</small>
+    </label>
+  </div>
   <div class="shop-filter-grid">
     <label>
       <span>エリア</span>
@@ -5811,13 +5833,28 @@ window.setShopInstagramVerificationV430=async function(id,status){
   }
 };
 
+function normalizeShopSearchV478(value){
+  return String(value||"")
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[\s　]+/g,"");
+}
+
 function renderShopList(){
+  const shopNameQueryRaw=String($("shopNameSearch")?.value||"").trim();
+  const shopNameQuery=normalizeShopSearchV478(shopNameQueryRaw);
   const areaFilter=String($("shopAreaFilter")?.value||"");
   const statusFilter=String($("shopStatusFilter")?.value||"");
   const instagramFilter=String($("shopInstagramFilter")?.value||"");
   const outreachFilter=String($("shopOutreachFilter")?.value||"");
 
+  if($("shopNameSearchClear"))$("shopNameSearchClear").hidden=!shopNameQueryRaw;
+
   const filtered=shops.filter(s=>{
+    if(shopNameQuery){
+      const haystack=normalizeShopSearchV478(`${s.name||""} ${s.name_kana||""}`);
+      if(!haystack.includes(shopNameQuery))return false;
+    }
     if(areaFilter && String(s.area||"")!==areaFilter)return false;
     const status=String(s.listing_status||"published");
     if(statusFilter && status!==statusFilter)return false;
@@ -5831,7 +5868,8 @@ function renderShopList(){
 
   if($("shopFilteredCount"))$("shopFilteredCount").textContent=String(filtered.length);
 
-  const visible=shopListExpanded?filtered:filtered.slice(0,SHOP_LIST_PREVIEW_COUNT);
+  const previewCount=shopNameQuery?20:SHOP_LIST_PREVIEW_COUNT;
+  const visible=shopListExpanded?filtered:filtered.slice(0,previewCount);
 
   $("shopList").innerHTML=visible.length
     ? visible.map(s=>{
@@ -5891,15 +5929,15 @@ function renderShopList(){
   const btn=$("toggleShopListBtn");
   const note=$("shopListPreviewNote");
   if(wrap && btn && note){
-    const hasMore=filtered.length>SHOP_LIST_PREVIEW_COUNT;
+    const hasMore=filtered.length>previewCount;
     wrap.hidden=!hasMore;
     if(hasMore){
       note.textContent=shopListExpanded
         ? `全${filtered.length}件を表示中`
-        : `全${filtered.length}件のうち、上位${SHOP_LIST_PREVIEW_COUNT}件を表示中`;
+        : `全${filtered.length}件のうち、上位${previewCount}件を表示中`;
       btn.textContent=shopListExpanded
-        ? `3件表示に戻す`
-        : `すべて見る（残り${filtered.length-SHOP_LIST_PREVIEW_COUNT}件）`;
+        ? `${previewCount}件表示に戻す`
+        : `すべて見る（残り${filtered.length-previewCount}件）`;
     }
   }
 }
@@ -10728,6 +10766,24 @@ document.addEventListener("click",e=>{
 });
 
 
+let shopNameSearchTimerV478=null;
+document.addEventListener("input",e=>{
+  if(e.target?.id!=="shopNameSearch")return;
+  clearTimeout(shopNameSearchTimerV478);
+  shopNameSearchTimerV478=setTimeout(()=>{
+    shopListExpanded=false;
+    renderShopList?.();
+  },100);
+});
+
+document.addEventListener("keydown",e=>{
+  if(e.target?.id==="shopNameSearch" && e.key==="Escape"){
+    e.target.value="";
+    shopListExpanded=false;
+    renderShopList?.();
+  }
+});
+
 document.addEventListener("change",e=>{
   if(["shopAreaFilter","shopStatusFilter","shopInstagramFilter","shopOutreachFilter"].includes(e.target?.id)){
     shopListExpanded=false;
@@ -10736,6 +10792,16 @@ document.addEventListener("change",e=>{
 });
 
 document.addEventListener("click",e=>{
+  const searchClear=e.target.closest?.("#shopNameSearchClear");
+  if(searchClear){
+    e.preventDefault();
+    if($("shopNameSearch"))$("shopNameSearch").value="";
+    shopListExpanded=false;
+    renderShopList?.();
+    $("shopNameSearch")?.focus();
+    return;
+  }
+
   const statusToggle=e.target.closest?.("[data-shop-status-toggle]");
   if(statusToggle){
     e.preventDefault();
@@ -10783,7 +10849,10 @@ document.addEventListener("click",e=>{
   const reset=e.target.closest?.("#shopFilterResetBtn");
   if(reset){
     e.preventDefault();
+    if($("shopNameSearch"))$("shopNameSearch").value="";
     if($("shopAreaFilter"))$("shopAreaFilter").value="";
+    if($("shopInstagramFilter"))$("shopInstagramFilter").value="";
+    if($("shopOutreachFilter"))$("shopOutreachFilter").value="";
     if($("shopStatusFilter"))$("shopStatusFilter").value="provisional";
     document.querySelectorAll("[data-shop-status-toggle]").forEach(btn=>{
       btn.classList.toggle("active",(btn.dataset.shopStatusToggle||"")==="provisional");
