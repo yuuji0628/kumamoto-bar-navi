@@ -6244,25 +6244,6 @@ async function kbnGeoCoverageV457(env){
   const total=Number(r?.total||0),geocoded=Number(r?.geocoded||0);
   return {total,geocoded,missing:Math.max(0,total-geocoded),percent:total?Math.round(geocoded/total*1000)/10:0};
 }
-function kbnPublicDescriptionV480(s,provisional){
-  const raw=String(s?.description||"").trim();
-  if(provisional)return raw;
-
-  // v4.80: 正式掲載へ切り替わった店舗に、旧「KBN独自掲載」説明を残さない。
-  // 店舗固有の紹介文が前半にある場合は残し、免責文だけ正式掲載用へ差し替える。
-  const officialNote="※本ページは、KUMAMOTO BAR NAVIの正式掲載店舗として掲載しています。掲載内容は店舗情報および確認済み情報をもとに掲載しています。";
-  if(!raw)return officialNote;
-
-  if(/KUMAMOTO BAR NAVIが独自に掲載|KBN独自掲載|公開されている(?:店舗)?情報をもとに/i.test(raw)){
-    const lead=raw
-      .replace(/※本ページ[\s\S]*$/u,"")
-      .replace(/掲載内容の修正・削除をご希望の場合[\s\S]*$/u,"")
-      .trim();
-    return lead?`${lead}\n\n${officialNote}`:officialNote;
-  }
-  return raw;
-}
-
 function publicShopRow(s){
   if(!s)return s;
   const provisional=normalizeListingStatus(s.listing_status)==="provisional";
@@ -6275,7 +6256,6 @@ function publicShopRow(s){
   return {
     ...s,
     image_url:publicImage,
-    description:kbnPublicDescriptionV480(s,provisional),
     listing_status:provisional?"provisional":"published",
     is_provisional:provisional?1:0,
     name:provisional?`【KBN独自掲載】${s.name}`:s.name
@@ -7141,6 +7121,53 @@ async function renderAllShopsSeoIndexV250(env,origin){
   const desc=`KUMAMOTO BAR NAVIに掲載中の熊本県内BAR全店舗一覧。現在${shops.length}店舗をエリア別に掲載しています。`;
   const itemList={"@context":"https://schema.org","@graph":[...kbnSchemaSiteNodes(origin),{"@type":"CollectionPage","@id":canonical,"url":canonical,"name":"熊本県の掲載BAR全店舗一覧","description":desc,"inLanguage":"ja-JP","isPartOf":{"@id":`${origin}/#website`},"publisher":{"@id":`${origin}/#organization`},"mainEntity":{"@id":`${canonical}#items`}},{"@type":"ItemList","@id":`${canonical}#items`,"name":"熊本県の掲載BAR全店舗一覧","numberOfItems":shops.length,"itemListElement":shops.slice(0,5000).map((x,i)=>({"@type":"ListItem","position":i+1,"name":kbnCleanShopName(x.name)||"BAR","url":`${origin}/shop?slug=${encodeURIComponent(x.slug||"")}`}))}]};
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${kbnSeoEsc(title)}</title><meta name="description" content="${kbnSeoEsc(desc)}"><meta name="robots" content="index,follow,max-image-preview:large"><link rel="canonical" href="${canonical}"><script type="application/ld+json">${JSON.stringify(itemList).replace(/</g,"\u003c")}</script><link rel="stylesheet" href="/style.css?v=196"></head><body class="public-v109"><header class="public-header"><div class="container public-header-inner"><a class="public-brand" href="/"><img src="/logo.png" alt="KUMAMOTO BAR NAVI"><span><b>KUMAMOTO</b><strong>BAR NAVI</strong><small>BAR & JOB INFORMATION</small></span></a></div></header><main class="container" style="padding:32px 18px 100px"><nav style="margin-bottom:20px"><a href="/">ホーム</a> › <b>掲載店舗一覧</b></nav><h1>熊本県の掲載BAR全店舗一覧</h1><p>${kbnSeoEsc(desc)}</p><div style="display:grid;gap:28px">${sections}</div></main></body></html>`;
+}
+
+
+async function renderOfficialShopsIndexV480(env,origin){
+  let shops=[];
+  try{
+    const r=await env.DB.prepare(`
+      SELECT id,slug,name,area,genre,description,image_url,image_key,is_new,is_featured,updated_at
+      FROM shops
+      WHERE COALESCE(is_published,1)=1
+        AND COALESCE(listing_status,'published') <> 'provisional'
+        AND TRIM(COALESCE(slug,''))<>''
+      ORDER BY COALESCE(is_featured,0) DESC, COALESCE(updated_at,created_at) DESC, name ASC
+      LIMIT 1000
+    `).all();
+    shops=(r.results||[]).map(publicShopRow);
+  }catch(e){console.error('official shops index',e)}
+
+  const canonical=`${origin}/official-shops`;
+  const title=`KBN正式掲載店舗（${shops.length}店舗）｜熊本BARナビ`;
+  const desc=`店舗確認・掲載承認を経てKUMAMOTO BAR NAVIに正式掲載している店舗をまとめたページです。現在${shops.length}店舗を掲載しています。`;
+  const esc=kbnSeoEsc;
+  const cards=shops.map((s,i)=>{
+    const name=kbnCleanShopName(s.name)||'BAR';
+    const image=String(s.image_url||'').trim();
+    const meta=[s.area,s.genre].filter(Boolean).map(esc).join(' / ');
+    const updated=kbnPublicUpdatedDateV458(s.updated_at);
+    return `<article class="official-shop-card">
+      <a class="official-shop-image" href="/shop?slug=${encodeURIComponent(s.slug||'')}">
+        ${image?`<img src="${esc(image)}" alt="${esc(name)}" loading="${i<4?'eager':'lazy'}" decoding="async" onerror="this.style.display='none';this.parentElement.classList.add('is-fallback')">`:''}
+        <span class="official-shop-fallback">KBN<br><small>OFFICIAL</small></span>
+        <b class="official-badge">正式掲載</b>
+      </a>
+      <div class="official-shop-body">
+        <p>${meta||'熊本県'}</p>
+        <h2><a href="/shop?slug=${encodeURIComponent(s.slug||'')}">${esc(name)}</a></h2>
+        ${s.description?`<p class="official-shop-desc">${esc(String(s.description).slice(0,90))}</p>`:''}
+        <div class="official-shop-foot">${updated?`<small>情報更新 ${esc(updated)}</small>`:'<small>KBN正式掲載店</small>'}<a href="/shop?slug=${encodeURIComponent(s.slug||'')}">詳細を見る →</a></div>
+      </div>
+    </article>`;
+  }).join('');
+
+  const jsonLd={"@context":"https://schema.org","@graph":[...kbnSchemaSiteNodes(origin),{"@type":"CollectionPage","@id":canonical,"url":canonical,"name":"KBN正式掲載店舗","description":desc,"inLanguage":"ja-JP","isPartOf":{"@id":`${origin}/#website`},"publisher":{"@id":`${origin}/#organization`},"mainEntity":{"@id":`${canonical}#items`}}, {"@type":"ItemList","@id":`${canonical}#items`,"name":"KBN正式掲載店舗","numberOfItems":shops.length,"itemListElement":shops.map((x,i)=>({"@type":"ListItem","position":i+1,"name":kbnCleanShopName(x.name)||'BAR',"url":`${origin}/shop?slug=${encodeURIComponent(x.slug||'')}`}))}]};
+
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>${esc(title)}</title><meta name="description" content="${esc(desc)}"><meta name="robots" content="index,follow,max-image-preview:large"><link rel="canonical" href="${canonical}"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(desc)}"><meta property="og:url" content="${canonical}"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/style.css?v=210"><script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g,'\\u003c')}</script><style>
+  .official-page{padding-bottom:110px}.official-hero{padding:52px 0 34px;background:radial-gradient(circle at 50% 0,rgba(212,175,55,.16),transparent 45%)}.official-hero-inner{text-align:center}.official-crown{font-size:1.7rem;color:#d4af37}.official-hero h1{margin:8px 0 12px;font-size:clamp(2rem,7vw,4rem)}.official-hero h1 span{color:#d4af37}.official-hero p{max-width:720px;margin:0 auto;color:#b8c0ca;line-height:1.8}.official-count{display:inline-flex;align-items:baseline;gap:7px;margin-top:22px;padding:12px 20px;border:1px solid rgba(212,175,55,.45);border-radius:999px;background:rgba(212,175,55,.07)}.official-count strong{font-size:1.8rem;color:#d4af37}.official-intro{margin:24px 0 30px;padding:18px;border:1px solid rgba(212,175,55,.25);border-radius:18px;background:rgba(212,175,55,.045)}.official-intro strong{color:#d4af37}.official-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}.official-shop-card{overflow:hidden;border:1px solid rgba(255,255,255,.11);border-radius:20px;background:#0d141b}.official-shop-image{position:relative;display:block;aspect-ratio:16/10;background:linear-gradient(135deg,#111820,#1b1408);overflow:hidden}.official-shop-image img{width:100%;height:100%;object-fit:cover}.official-shop-fallback{position:absolute;inset:0;display:grid;place-content:center;text-align:center;color:#d4af37;font-weight:900;letter-spacing:.18em;opacity:.5}.official-shop-image img+.official-shop-fallback{display:none}.official-shop-image.is-fallback .official-shop-fallback{display:grid}.official-badge{position:absolute;left:12px;top:12px;padding:6px 10px;border-radius:999px;background:#d4af37;color:#0a0d12;font-size:.72rem}.official-shop-body{padding:16px}.official-shop-body>p:first-child{margin:0 0 6px;color:#d4af37;font-size:.75rem}.official-shop-body h2{margin:0;font-size:1.15rem}.official-shop-body h2 a{color:inherit;text-decoration:none}.official-shop-desc{margin:9px 0 0;color:#aeb7c2;font-size:.82rem;line-height:1.6}.official-shop-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:15px;padding-top:12px;border-top:1px solid rgba(255,255,255,.08)}.official-shop-foot small{opacity:.58}.official-shop-foot a{color:#d4af37;text-decoration:none;font-weight:800;font-size:.82rem}.official-empty{text-align:center;padding:60px 20px;border:1px solid rgba(255,255,255,.1);border-radius:18px}.official-cta{margin-top:34px;padding:24px;text-align:center;border:1px solid rgba(212,175,55,.3);border-radius:20px;background:linear-gradient(135deg,rgba(212,175,55,.1),rgba(255,255,255,.02))}.official-cta a{display:inline-block;margin-top:12px;padding:12px 18px;border-radius:999px;background:#d4af37;color:#0a0d12;text-decoration:none;font-weight:900}@media(max-width:820px){.official-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:560px){.official-hero{padding-top:34px}.official-grid{grid-template-columns:1fr}.official-shop-image{aspect-ratio:16/9}}
+  </style></head><body class="public-v109 official-page"><header class="public-header"><div class="container public-header-inner"><a class="public-brand" href="/"><img src="/logo.png" alt="KUMAMOTO BAR NAVI"><span><b>KUMAMOTO</b><strong>BAR NAVI</strong><small>BAR & JOB INFORMATION</small></span></a><nav class="public-desktop-nav"><a href="/bars.html">BARを探す</a><a href="/official-shops" class="active">正式掲載店</a><a href="/jobs.html">求人</a><a href="/column.html">コラム</a></nav><a class="public-header-cta" href="/bars.html">BARを探す</a></div></header><main><section class="official-hero"><div class="container official-hero-inner"><nav style="margin-bottom:18px"><a href="/">ホーム</a> › <b>正式掲載店舗</b></nav><div class="official-crown">♛</div><p class="public-kicker">KBN OFFICIAL LISTING</p><h1><span>正式掲載</span>店舗</h1><p>店舗確認・掲載承認を経て、KUMAMOTO BAR NAVIに正式掲載しているお店をご紹介します。信頼できる店舗情報から、今夜行きたい一軒を探してください。</p><div class="official-count"><strong>${shops.length}</strong><span>店舗掲載中</span></div></div></section><section class="container"><div class="official-intro"><strong>KBN正式掲載とは</strong><br>店舗側との確認・承認を経て掲載している店舗です。KBN独自掲載店舗とは区別して表示しています。</div>${shops.length?`<div class="official-grid">${cards}</div>`:`<div class="official-empty"><h2>正式掲載店舗を準備中です</h2></div>`}<div class="official-cta"><h2>店舗様へ</h2><p>KUMAMOTO BAR NAVIへの正式掲載をご希望の場合は、掲載フォームからお申し込みいただけます。</p><a href="/listing-form.html">正式掲載を申し込む</a></div></section></main><nav class="public-bottom-nav"><a href="/"><span>⌂</span><b>ホーム</b></a><a href="/bars.html"><span>⌕</span><b>BARを探す</b></a><a href="/jobs.html"><span>▣</span><b>求人</b></a><a href="/listing-form.html"><span>＋</span><b>店舗掲載</b></a></nav></body></html>`;
 }
 
 async function ensureShopMaintenanceStatusColumn(env){
@@ -9811,7 +9838,7 @@ async function runScheduledKbnAutoDiscoveryOnly(env){
 function kbnApplyPublicPerformanceHeaders(response,url){
   const h=new Headers(response.headers);
   const path=String(url.pathname||"").toLowerCase();
-  const isHtml=path==="/" || path.endsWith(".html") || path==="/shop" || path==="/all-shops" || path.startsWith("/area/") || path.startsWith("/genre/");
+  const isHtml=path==="/" || path.endsWith(".html") || path==="/shop" || path==="/all-shops" || path==="/official-shops" || path.startsWith("/area/") || path.startsWith("/genre/");
   const isCss=path.endsWith(".css");
   const isJs=path.endsWith(".js");
   const isImage=/\.(?:png|jpe?g|webp|avif|gif|svg|ico)$/.test(path);
@@ -10242,7 +10269,7 @@ async function kbnSeoIndexAuditV454(env,origin){
 
   // Static/public pages submitted by sitemap-pages.xml.
   const staticPaths=[
-    "/","/bars.html","/jobs.html","/column.html","/areas.html","/all-shops",
+    "/","/bars.html","/jobs.html","/column.html","/areas.html","/all-shops","/official-shops",
     "/listing-form.html","/about.html","/faq.html","/contact.html",
     "/column-bar-beginner.html","/column-kumamoto-night.html","/column-solo-bar.html",
     "/pricing.html","/coupons.html","/events.html"
@@ -10377,7 +10404,7 @@ async function kbnSeoIndexAuditV454(env,origin){
   // Static assets are only 15 files + root; verify meta robots/canonical cheaply.
   // /all-shops is dynamic and known indexable by its renderer.
   for(const p of staticPaths){
-    if(p==="/all-shops")continue;
+    if(p==="/all-shops" || p==="/official-shops")continue;
     try{
       const assetPath=p==="/"?"/index.html":p;
       const res=await env.ASSETS.fetch(new Request(`${base}${assetPath}`,{method:"GET"}));
@@ -10460,7 +10487,7 @@ export default {
       let shouldRedirect=false;
 
       // Dynamic SEO pages use the no-trailing-slash form as canonical.
-      if(p!=="/" && (p==="/all-shops/" || /^\/(?:area|genre)\/.+\/$/.test(p))){
+      if(p!=="/" && (p==="/all-shops/" || p==="/official-shops/" || /^\/(?:area|genre)\/.+\/$/.test(p))){
         normalizedPath=p.replace(/\/+$/,'');
         shouldRedirect=true;
       }
@@ -10482,7 +10509,7 @@ export default {
 
       // Static index targets and local SEO pages should not proliferate via analytics params.
       const indexableStatic=/^\/(?:bars|jobs|column|areas|listing-form|about|faq|contact|pricing|coupons|events|column-bar-beginner|column-kumamoto-night|column-solo-bar)\.html$/.test(p);
-      const localSeo=/^\/(?:area|genre)\//.test(p) || p==="/all-shops" || p==="/all-shops/";
+      const localSeo=/^\/(?:area|genre)\//.test(p) || p==="/all-shops" || p==="/all-shops/" || p==="/official-shops" || p==="/official-shops/";
       if((indexableStatic || localSeo) && url.search){
         shouldRedirect=true;
       }
@@ -10679,6 +10706,12 @@ export default {
       });
     }
 
+    if((url.pathname==="/official-shops" || url.pathname==="/official-shops/") && request.method==="GET"){
+      return new Response(kbnInjectCwvHints(await renderOfficialShopsIndexV480(env,url.origin)),{
+        headers:{"content-type":"text/html; charset=utf-8","cache-control":"public, max-age=180, stale-while-revalidate=900","x-robots-tag":"index, follow"}
+      });
+    }
+
     // ---------- SEO endpoints ----------
     if(url.pathname==="/robots.txt" && request.method==="GET"){
       const body=[
@@ -10760,6 +10793,7 @@ export default {
         {loc:`${base}/column.html`,priority:"0.6",freq:"weekly"},
         {loc:`${base}/areas.html`,priority:"0.8",freq:"weekly"},
         {loc:`${base}/all-shops`,priority:"0.9",freq:"daily"},
+        {loc:`${base}/official-shops`,priority:"0.9",freq:"daily"},
         {loc:`${base}/listing-form.html`,priority:"0.6",freq:"monthly"},
         {loc:`${base}/about.html`,priority:"0.6",freq:"monthly"},
         {loc:`${base}/faq.html`,priority:"0.5",freq:"monthly"},
