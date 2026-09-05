@@ -1223,7 +1223,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.81";
+      config.vars.KBN_CONFIG_VERSION="4.83";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -4556,7 +4556,7 @@ async function kbnGoogleSkuSafetyStatusV462(env){
   for(const row of (r.results||[]))raw[String(row.category||'')]=Number(row.used_count||0);
   const defs=[
     {key:'text_search_pro',label:'Text Search Pro',used:Number(raw.discovery||0)+Number(raw.search||0),limit:KBN_GOOGLE_SKU_SAFETY_LIMITS_V462.text_search_pro,note:'BAR開拓＋検索・店舗照合'},
-    {key:'place_details_pro',label:'Place Details Pro',used:Number(raw.details||0),limit:KBN_GOOGLE_SKU_SAFETY_LIMITS_V462.place_details_pro,note:'店舗詳細・情報補完'},
+    {key:'place_details_pro',label:'Place Details Pro',used:Number(raw.details||0),limit:KBN_GOOGLE_SKU_SAFETY_LIMITS_V462.place_details_pro,note:'低コストFieldMask（電話・営業時間・Web・料金はGoogle自動取得しない）'},
     {key:'place_details_essentials',label:'Place Details Essentials',used:0,limit:KBN_GOOGLE_SKU_SAFETY_LIMITS_V462.place_details_essentials,note:'現在のKBNでは独立利用なし'},
     {key:'photo_media',label:'Google写真',used:Number(raw.photo||0),limit:KBN_GOOGLE_SKU_SAFETY_LIMITS_V462.photo_media,note:'Place Photo取得'},
     {key:'reviews_atmosphere',label:'レビュー / Atmosphere',used:Number(raw.reviews||0),limit:KBN_GOOGLE_SKU_SAFETY_LIMITS_V462.reviews_atmosphere,note:'Googleレビュー取得'}
@@ -4569,7 +4569,7 @@ async function kbnGoogleSkuSafetyStatusV462(env){
     remaining_days:Number(p.month_remaining_days||1),
     rows:defs.map(x=>({...x,remaining:Math.max(0,x.limit-x.used),percent:x.limit?Math.round(x.used/x.limit*1000)/10:0,blocked:x.used>=x.limit})),
     connection_test:Number(raw.connection_test||0),
-    note:'KBN内部のAPI用途別安全カウンターです。月次境界はGoogle無料枠と同じPacific Time。Google Cloud請求の確定件数ではありません。'
+    note:'KBN内部のAPI用途別安全カウンターです。v4.83以降、自動Place DetailsはPro以下のFieldMaskに固定しEnterprise項目を除外しています。月次境界はPacific Time。Google Cloud請求の確定件数ではありません。'
   };
 }
 
@@ -4991,11 +4991,13 @@ async function googlePlaceDetails(env,placeId){
   }
 
   try{
+    // v4.83: 自動処理では Place Details Enterprise を絶対に発生させない。
+    // Google Cloud実請求で Enterprise が主因だったため、Pro以下のFieldMaskだけに固定。
+    // 電話・営業時間・Webサイト・料金は Enterprise 対象なので自動取得せず、
+    // 既存DB値または Foursquare / Geoapify / OSM / 公式Web補完を優先する。
     const fieldMask=[
-      "id","displayName","formattedAddress","primaryType","types","businessStatus","location",
-      "nationalPhoneNumber","internationalPhoneNumber",
-      "regularOpeningHours","currentOpeningHours",
-      "websiteUri","priceLevel","priceRange","googleMapsUri","photos"
+      "id","displayName","formattedAddress","primaryType","types",
+      "businessStatus","location","googleMapsUri","photos"
     ].join(",");
 
     const r=await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(id)}`,{
@@ -8686,7 +8688,7 @@ async function ensureKbnMaintenanceHistoryV414(env){
 function kbnMaintenanceRunKindV414(q,phase,task){
   if(task==='verified_auto' || phase===9)return 'auto_recheck';
   const key=String(q?.run_date||'');
-  if(/daily_precision/i.test(key) || ['closed_daily','instagram_daily','exclusion_daily'].includes(String(task||'')))return 'daily_precision';
+  if(/daily_precision/i.test(key) || ['closed_daily','closed_retry_daily','instagram_daily','exclusion_daily'].includes(String(task||'')))return 'daily_precision';
   if(/\bJST\b/i.test(key) || /hourly/i.test(key))return 'hourly';
   if(phase>=11 && phase<=49)return 'full_maintenance';
   return 'full_maintenance';
@@ -8810,7 +8812,7 @@ async function kbnMaintenanceHistoryV414(env,{days=7,limit=24}={}){
 
   // v4.69: older daily-precision rows could record closed_daily checked=0 even though
   // the note contains the real batch count. Repair grouped display from the saved notes.
-  const groupedFixed=(groupedRuns.results||[]).map(row=>{
+  let groupedFixed=(groupedRuns.results||[]).map(row=>{
     if(String(row?.run_kind||'')!=='daily_precision')return row;
     const detail=String(row?.task_detail||'');
     const notes=String(row?.notes||'');
@@ -8825,6 +8827,36 @@ async function kbnMaintenanceHistoryV414(env,{days=7,limit=24}={}){
     const correction=Math.max(0,noteClosed-storedClosed);
     return correction?{...row,checked:Number(row.checked||0)+correction,history_count_repaired:true}:row;
   });
+
+  // v4.82: 閉業確認の一時エラーは「累積失敗数」ではなく、再試行後に残っている未解決件数で表示する。
+  // 成功した通信エラーは日次カード・今日の集計から自動的に消える。
+  try{
+    await ensureKbnDailyPrecisionV433(env);
+    const ps=await env.DB.prepare(`SELECT * FROM kbn_daily_precision_state WHERE id=1`).first();
+    const todayJst=kbnJstDateV433();
+    if(String(ps?.run_date||'')===todayJst){
+      const remainingClosed=Math.max(0,Number(ps?.closed_error_count||0));
+      groupedFixed=groupedFixed.map(row=>{
+        if(String(row?.run_kind||'')!=='daily_precision' || !String(row?.group_key||'').startsWith(todayJst))return row;
+        let otherErrors=0;
+        for(const part of String(row?.task_detail||'').split('|')){
+          const p=part.split(':');
+          if(!['closed_daily','closed_retry_daily'].includes(String(p[0]||'')))otherErrors+=Math.max(0,Number(p[5]||0));
+        }
+        return {...row,errors:otherErrors+remainingClosed,closed_errors_remaining:remainingClosed,closed_retry_success_count:Number(ps?.closed_retry_success_count||0)};
+      });
+      const otherToday=await env.DB.prepare(`
+        SELECT COALESCE(SUM(error_count),0) AS errors
+        FROM kbn_maintenance_history
+        WHERE date(datetime(created_at,'+9 hours'))=date(datetime('now','+9 hours'))
+          AND NOT (run_kind='daily_precision' AND task IN ('closed_daily','closed_retry_daily'))
+      `).first();
+      today.errors=Math.max(0,Number(otherToday?.errors||0))+remainingClosed;
+      for(const d of (daily.results||[])){
+        if(String(d?.day_jst||'')===todayJst)d.errors=today.errors;
+      }
+    }
+  }catch(e){console.error('daily precision resolved error display failed',e)}
 
   let queue=null;
   try{queue=await kbnMaintenanceQueueStatusV257(env)}catch{}
@@ -8866,6 +8898,8 @@ async function ensureKbnDailyPrecisionV433(env){
       exclusion_count INTEGER NOT NULL DEFAULT 0,
       closed_error_count INTEGER NOT NULL DEFAULT 0,
       closed_skip_reason TEXT NOT NULL DEFAULT '',
+      closed_retry_json TEXT NOT NULL DEFAULT '[]',
+      closed_retry_success_count INTEGER NOT NULL DEFAULT 0,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `).run();
@@ -8877,6 +8911,8 @@ async function ensureKbnDailyPrecisionV433(env){
     if(!names.has("closed_skip_reason"))await env.DB.prepare("ALTER TABLE kbn_daily_precision_state ADD COLUMN closed_skip_reason TEXT NOT NULL DEFAULT ''").run();
     if(!names.has("instagram_cursor"))await env.DB.prepare("ALTER TABLE kbn_daily_precision_state ADD COLUMN instagram_cursor INTEGER NOT NULL DEFAULT 0").run();
     if(!names.has("instagram_target"))await env.DB.prepare("ALTER TABLE kbn_daily_precision_state ADD COLUMN instagram_target INTEGER NOT NULL DEFAULT 50").run();
+    if(!names.has("closed_retry_json"))await env.DB.prepare("ALTER TABLE kbn_daily_precision_state ADD COLUMN closed_retry_json TEXT NOT NULL DEFAULT '[]'").run();
+    if(!names.has("closed_retry_success_count"))await env.DB.prepare("ALTER TABLE kbn_daily_precision_state ADD COLUMN closed_retry_success_count INTEGER NOT NULL DEFAULT 0").run();
   }catch(e){
     if(!/duplicate column/i.test(String(e?.message||e||"")))throw e;
   }
@@ -9020,10 +9056,10 @@ async function kbnProcessDailyPrecisionV433(env){
       UPDATE kbn_daily_precision_state
       SET run_date=?,stage='closed',checked_closed=0,checked_instagram=0,
           instagram_target=50,
-          exclusion_count=0,closed_error_count=0,closed_skip_reason='',updated_at=CURRENT_TIMESTAMP
+          exclusion_count=0,closed_error_count=0,closed_skip_reason='',closed_retry_json='[]',closed_retry_success_count=0,updated_at=CURRENT_TIMESTAMP
       WHERE id=1
     `).bind(today).run();
-    st={...(st||{}),run_date:today,stage:'closed',checked_closed:0,checked_instagram:0,instagram_target:50,exclusion_count:0,closed_error_count:0,closed_skip_reason:''};
+    st={...(st||{}),run_date:today,stage:'closed',checked_closed:0,checked_instagram:0,instagram_target:50,exclusion_count:0,closed_error_count:0,closed_skip_reason:'',closed_retry_json:'[]',closed_retry_success_count:0};
   }
 
   const stage=String(st?.stage||'idle');
@@ -9057,15 +9093,12 @@ async function kbnProcessDailyPrecisionV433(env){
     const checkedCount=Array.isArray(r?.checked)?r.checked.length:Number(r?.checked||0);
     const unverifiedCount=Array.isArray(r?.unverified)?r.unverified.length:0;
     const failedCount=Array.isArray(r?.failed)?r.failed.length:0;
-    const priorErrors=Math.max(0,Number(st?.closed_error_count||0));
-    const nextErrors=priorErrors+failedCount;
-
-    // API/通信失敗が10件累積、または1バッチ10件すべて失敗なら本日分を保留。
-    const hardFail=
-      nextErrors>=10 ||
-      (failedCount>=5 && checkedCount===0 && unverifiedCount===0);
-
-    const nextStage=(r?.cycle_completed||hardFail)?'instagram_start':'closed';
+    // v4.82: 通信/API失敗は店舗IDを保存し、通常の閉業確認が一巡した後に失敗店舗だけ再試行する。
+    const retryQueue=kbnMergeClosedRetryQueueV482(st?.closed_retry_json,r?.failed||[]);
+    const unresolvedErrors=retryQueue.length;
+    const hardFail=unresolvedErrors>=10 || (failedCount>=5 && checkedCount===0 && unverifiedCount===0);
+    const closedPassEnded=!!r?.cycle_completed||hardFail;
+    const nextStage=closedPassEnded?(retryQueue.length?'closed_retry':'instagram_start'):'closed';
     const skipReason=hardFail?'GOOGLE_CLOSED_CHECK_ERRORS':'';
 
     await env.DB.prepare(`
@@ -9073,13 +9106,15 @@ async function kbnProcessDailyPrecisionV433(env){
       SET checked_closed=checked_closed+?,
           closed_error_count=?,
           closed_skip_reason=?,
+          closed_retry_json=?,
           stage=?,
           updated_at=CURRENT_TIMESTAMP
       WHERE id=1
     `).bind(
       checkedCount+unverifiedCount,
-      nextErrors,
+      unresolvedErrors,
       skipReason,
+      JSON.stringify(retryQueue),
       nextStage
     ).run();
 
@@ -9093,11 +9128,47 @@ async function kbnProcessDailyPrecisionV433(env){
       },
       status:failedCount>0?'failed':'success',duration_ms:batchDurationMs,
       note:hardFail
-        ?`日次精度 / 閉業確認をエラー累積${nextErrors}件で本日保留 / Instagram再検査へ進行`
+        ?`日次精度 / 閉業確認で通信エラー${unresolvedErrors}件を保存 / 失敗店舗だけ再試行へ`
         :`日次精度 / 閉業確認 / 判定${checkedCount}店 / 一致候補なし${unverifiedCount}店 / エラー${failedCount}件${r?.cycle_completed?' / 本日分一巡':''}`
     });
 
-    return {ok:true,processed:true,stage:hardFail?'closed_skipped':'closed',result:r,failed_total:nextErrors};
+    return {ok:true,processed:true,stage:nextStage,result:r,failed_total:unresolvedErrors,retry_queued:retryQueue.length};
+  }
+
+  if(stage==='closed_retry'){
+    const fresh=await env.DB.prepare(`SELECT * FROM kbn_daily_precision_state WHERE id=1`).first();
+    const queue=kbnParseClosedRetryQueueV482(fresh?.closed_retry_json);
+    if(!queue.length){
+      await env.DB.prepare(`UPDATE kbn_daily_precision_state SET closed_error_count=0,closed_skip_reason='',stage='instagram_start',updated_at=CURRENT_TIMESTAMP WHERE id=1`).run();
+      return {ok:true,processed:true,stage:'closed_retry_complete',remaining:0};
+    }
+
+    // Google側が一時停止中なら無理に再送せず、次回Cronへ持ち越す。
+    let googleHealth=null; try{googleHealth=await kbnGooglePlacesHealthV438(env)}catch{}
+    if(googleHealth?.disabled){
+      return {ok:true,processed:false,stage:'closed_retry',waiting:true,remaining:queue.length,reason:String(googleHealth.error_code||'GOOGLE_PLACES_UNAVAILABLE')};
+    }
+
+    const retryStartedAt=Date.now();
+    const rr=await kbnRetryClosedFailuresV482(env,queue,{limit:3});
+    const durationMs=Math.max(0,Date.now()-retryStartedAt);
+    const totalSuccess=Math.max(0,Number(fresh?.closed_retry_success_count||0))+Number(rr.success||0);
+    const remaining=rr.unresolved.length;
+    const nextStage=rr.pending>0?'closed_retry':'instagram_start';
+    const finalReason=rr.exhausted>0?'CLOSED_RETRY_EXHAUSTED':'';
+    await env.DB.prepare(`
+      UPDATE kbn_daily_precision_state
+      SET closed_retry_json=?,closed_retry_success_count=?,closed_error_count=?,closed_skip_reason=?,stage=?,updated_at=CURRENT_TIMESTAMP
+      WHERE id=1
+    `).bind(JSON.stringify(rr.unresolved),totalSuccess,remaining,finalReason,nextStage).run();
+
+    await logKbnMaintenanceHistoryV414(env,{
+      q:{run_date:`${today} daily_precision`},phase:0,task:'closed_retry_daily',
+      result:{ok:remaining===0,checked:Number(rr.attempted||0),updated_count:0,errors:Array.from({length:remaining},()=>1)},
+      status:remaining>0?'failed':'success',duration_ms:durationMs,
+      note:`日次精度 / 閉業確認の失敗店舗だけ再試行 / 今回${rr.attempted}店 / 成功${rr.success}店 / 残り${remaining}店${rr.exhausted?` / 再試行上限${rr.exhausted}店`:''}`
+    });
+    return {ok:true,processed:true,stage:nextStage==='closed_retry'?'closed_retry':'closed_retry_complete',attempted:rr.attempted,success:rr.success,remaining,exhausted:rr.exhausted};
   }
 
   if(stage==='instagram_start'){
@@ -9534,6 +9605,72 @@ async function kbnProcessQueuedMaintenanceV242(env){
 
   return {ok:true,processed:true,phase,task,result};
 }
+function kbnParseClosedRetryQueueV482(raw){
+  try{
+    const x=JSON.parse(String(raw||'[]'));
+    return Array.isArray(x)?x.filter(v=>Number(v?.id||0)>0).map(v=>({id:Number(v.id),name:String(v.name||''),attempts:Math.max(0,Number(v.attempts||0)),last_reason:String(v.last_reason||''),exhausted:!!v.exhausted})):[];
+  }catch{return []}
+}
+function kbnMergeClosedRetryQueueV482(raw,failed=[]){
+  const q=kbnParseClosedRetryQueueV482(raw);
+  const byId=new Map(q.map(v=>[Number(v.id),v]));
+  for(const f of (Array.isArray(failed)?failed:[])){
+    const id=Number(f?.id||0); if(!id)continue;
+    const old=byId.get(id);
+    if(old){old.last_reason=String(f?.reason||old.last_reason||''); old.name=String(f?.name||old.name||'');}
+    else byId.set(id,{id,name:String(f?.name||''),attempts:0,last_reason:String(f?.reason||''),exhausted:false});
+  }
+  return [...byId.values()];
+}
+async function kbnCheckClosedShopV482(env,shop){
+  try{
+    let found=await findGooglePlaceForShop(env,{name:String(shop.name||'').replace(/^【KBN独自掲載】/,"").trim(),area:shop.area||'熊本'});
+    // 通信/API失敗だけ、その場で1回だけ即時再試行。
+    if(!found?.ok){try{found=await findGooglePlaceForShop(env,{name:String(shop.name||'').replace(/^【KBN独自掲載】/,"").trim(),area:shop.area||'熊本'});}catch{}}
+    if(!found?.ok)return {kind:'failed',item:{id:shop.id,name:shop.name,reason:found?.error||'GOOGLE_LOOKUP_ERROR'}};
+    if(!found.matched)return {kind:'unverified',item:{id:shop.id,name:shop.name,reason:'GOOGLE_MATCH_NOT_FOUND'}};
+    const details=await googlePlaceDetails(env,found.place?.id);
+    const gp=details.ok&&details.place?details.place:found.place;
+    const status=String(gp?.businessStatus||'').toUpperCase();
+    const item={id:shop.id,name:shop.name,business_status:status||'UNKNOWN'};
+    let closedItem=null;
+    if(status==='CLOSED_PERMANENTLY'||status==='CLOSED_TEMPORARILY'){
+      const already=await env.DB.prepare(`SELECT id FROM kbn_admin_alerts WHERE alert_type='closed_shop' AND shop_id=? AND is_read=0 LIMIT 1`).bind(shop.id).first();
+      if(!already){
+        await createKbnAlert(env,{type:'closed_shop',title:status==='CLOSED_PERMANENTLY'?'閉業の可能性':'一時休業の可能性',message:`Google Placesで「${shop.name}」が${status==='CLOSED_PERMANENTLY'?'閉業':'一時休業'}として確認されました。掲載状態を確認してください。`,shopId:shop.id});
+      }
+      closedItem=item;
+    }
+    return {kind:'checked',item,closed:closedItem};
+  }catch(e){return {kind:'failed',item:{id:shop.id,name:shop.name,reason:String(e?.message||e||'UNKNOWN').slice(0,300)}};}
+}
+async function kbnRetryClosedFailuresV482(env,queue,{limit=3}={}){
+  await ensureKbnAlertsTable(env); await ensureShopMaintenanceStatusColumn(env);
+  const q=(Array.isArray(queue)?queue:[]).map(v=>({...v}));
+  let attempted=0,success=0; const retryResults=[];
+  for(const item of q){
+    if(attempted>=Math.max(1,Math.min(Number(limit)||3,5)))break;
+    if(item.exhausted)continue;
+    attempted++;
+    const shop=await env.DB.prepare(`SELECT id,name,area,address,listing_status,is_published FROM shops WHERE id=? AND is_published=1 LIMIT 1`).bind(Number(item.id)).first();
+    if(!shop){item.exhausted=true; item.last_reason='SHOP_NOT_FOUND_OR_UNPUBLISHED'; retryResults.push({id:item.id,ok:false,reason:item.last_reason}); continue;}
+    const r=await kbnCheckClosedShopV482(env,shop);
+    if(r.kind==='failed'){
+      item.attempts=Math.max(0,Number(item.attempts||0))+1;
+      item.last_reason=String(r.item?.reason||'RETRY_FAILED');
+      if(item.attempts>=2)item.exhausted=true;
+      retryResults.push({id:item.id,name:item.name,ok:false,reason:item.last_reason,attempts:item.attempts,exhausted:item.exhausted});
+    }else{
+      item._resolved=true; success++;
+      retryResults.push({id:item.id,name:item.name,ok:true,kind:r.kind});
+    }
+  }
+  const unresolved=q.filter(v=>!v._resolved).map(({_resolved,...v})=>v);
+  const pending=unresolved.filter(v=>!v.exhausted).length;
+  const exhausted=unresolved.filter(v=>v.exhausted).length;
+  return {attempted,success,unresolved,pending,exhausted,retryResults};
+}
+
 async function checkClosedShops(env,{limit=20,afterId=0}={}){
   await ensureKbnAlertsTable(env);
   await ensureShopMaintenanceStatusColumn(env);
@@ -9549,54 +9686,10 @@ async function checkClosedShops(env,{limit=20,afterId=0}={}){
 
   const checked=[],closed=[],unverified=[],failed=[];
   for(const shop of (r.results||[])){
-    try{
-      let found=await findGooglePlaceForShop(env,{
-        name:String(shop.name||"").replace(/^【KBN独自掲載】/,"").trim(),
-        area:shop.area||"熊本"
-      });
-
-      // v4.37: 通信/API失敗だけ1回自動再試行。
-      if(!found?.ok){
-        try{
-          found=await findGooglePlaceForShop(env,{
-            name:String(shop.name||"").replace(/^【KBN独自掲載】/,"").trim(),
-            area:shop.area||"熊本"
-          });
-        }catch{}
-      }
-
-      if(!found?.ok){
-        failed.push({id:shop.id,name:shop.name,reason:found?.error||"GOOGLE_LOOKUP_ERROR"});
-        continue;
-      }
-      if(!found.matched){
-        // 店舗一致候補が見つからないだけならシステムエラーではない。
-        unverified.push({id:shop.id,name:shop.name,reason:"GOOGLE_MATCH_NOT_FOUND"});
-        continue;
-      }
-      const details=await googlePlaceDetails(env,found.place?.id);
-      const gp=details.ok&&details.place?details.place:found.place;
-      const status=String(gp?.businessStatus||"").toUpperCase();
-      checked.push({id:shop.id,name:shop.name,business_status:status||"UNKNOWN"});
-      if(status==="CLOSED_PERMANENTLY"||status==="CLOSED_TEMPORARILY"){
-        const already=await env.DB.prepare(`
-          SELECT id FROM kbn_admin_alerts
-          WHERE alert_type='closed_shop' AND shop_id=? AND is_read=0
-          LIMIT 1
-        `).bind(shop.id).first();
-        if(!already){
-          await createKbnAlert(env,{
-            type:"closed_shop",
-            title:status==="CLOSED_PERMANENTLY"?"閉業の可能性":"一時休業の可能性",
-            message:`Google Placesで「${shop.name}」が${status==="CLOSED_PERMANENTLY"?"閉業":"一時休業"}として確認されました。掲載状態を確認してください。`,
-            shopId:shop.id
-          });
-        }
-        closed.push({id:shop.id,name:shop.name,business_status:status});
-      }
-    }catch(e){
-      failed.push({id:shop.id,name:shop.name,reason:String(e?.message||e||"UNKNOWN").slice(0,300)});
-    }
+    const one=await kbnCheckClosedShopV482(env,shop);
+    if(one.kind==='failed')failed.push(one.item);
+    else if(one.kind==='unverified')unverified.push(one.item);
+    else {checked.push(one.item); if(one.closed)closed.push(one.closed);}
   }
 
   const nextAfterId=(r.results||[]).length?Number(r.results[r.results.length-1].id||0):cursor;
