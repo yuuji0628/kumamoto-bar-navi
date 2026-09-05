@@ -11562,7 +11562,7 @@ async function loadDailyPrecisionStatusV433(){
       Number(d.closed_error_count||0)===0;
     el.textContent=noDailyTargets
       ?`日次精度メンテ：本日分完了 / 対象0件・更新対象なし。エラーではありません。`
-      :`日次精度メンテ：${labels[stage]||stage} / 閉業確認 ${Number(d.checked_closed||0)}店舗${skip?`（本日保留:${skip}）`:""} / 閉業APIエラー ${Number(d.closed_error_count||0)}件 / Instagram再検査 ${Number(d.checked_instagram||0)}/${igTarget}店舗 / 対象外候補 ${Number(d.exclusion_count||0)}件。Instagramは1日50店舗だけ、10店舗ずつ小分けして前日の続きから確認します。`;
+      :`日次精度メンテ：${labels[stage]||stage} / 閉業確認 ${Number(d.checked_closed||0)}店舗${skip?`（本日保留:${skip}）`:""} / 閉業APIエラー ${Number(d.closed_error_count||0)}件${Number(d.closed_retry_success_count||0)>0?`（再試行成功${Number(d.closed_retry_success_count||0)}件）`:''} / Instagram再検査 ${Number(d.checked_instagram||0)}/${igTarget}店舗 / 対象外候補 ${Number(d.exclusion_count||0)}件。Instagramは1日50店舗だけ、10店舗ずつ小分けして前日の続きから確認します。`;
   }catch(e){
     el.textContent=`日次精度メンテ：状態取得失敗 ${e?.message||e}`;
   }
