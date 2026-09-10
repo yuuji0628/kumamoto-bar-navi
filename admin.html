@@ -1707,6 +1707,17 @@
 </style>
 
 
+
+<style id="kbn-site-daily-v485">
+.site-daily-wrap-v485,.analytics-daily-wrap{margin:22px 0 18px;padding:16px;border:1px solid #35414e;border-radius:18px;background:#0d141c}
+.analytics-daily-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
+.analytics-daily-head h3{margin:2px 0 0;color:#f5f7f9;font-size:1.05rem}.site-days-select-v485,.analytics-daily-controls select{min-height:40px;border:1px solid #44515f;border-radius:10px;background:#101923;color:#eef1f4;padding:0 10px}
+.site-daily-note-v485{margin:0 0 13px;color:#8f99a6;font-size:.7rem;line-height:1.55}.site-daily-summary-v485,.daily-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:10px 0 14px}.site-daily-kpi-v485,.daily-summary>div{padding:11px;border:1px solid #2e3944;border-radius:12px;background:#111a24}.site-daily-kpi-v485 small,.daily-summary small{display:block;color:#8f99a6;font-size:.62rem}.site-daily-kpi-v485 strong,.daily-summary strong{display:block;margin-top:3px;color:#f0c552;font-size:1.15rem}.site-daily-kpi-v485 em{display:block;margin-top:3px;font-style:normal;font-size:.6rem;color:#9ca6b1}.site-daily-kpi-v485 em.up{color:#79d7a0}.site-daily-kpi-v485 em.down{color:#ff9898}
+.site-daily-chart-v485{display:grid;gap:7px}.site-day-row-v485{display:grid;grid-template-columns:54px minmax(0,1fr) 68px;gap:8px;align-items:center}.site-day-date-v485{color:#cbd1d8;font-size:.68rem;font-weight:800}.site-day-bar-v485{height:10px;border-radius:999px;background:#18222d;overflow:hidden}.site-day-bar-v485 i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#ad7d21,#f0c552);min-width:2px}.site-day-value-v485{text-align:right;color:#f3f5f7;font-weight:900;font-size:.72rem}.site-day-sub-v485{grid-column:2/4;color:#7f8a96;font-size:.58rem;margin-top:-4px}.site-daily-foot-v485{margin-top:10px;color:#7f8a96;font-size:.62rem;line-height:1.55}
+.daily-analytics-list{display:grid;gap:7px}.daily-row{display:grid;grid-template-columns:58px 72px 72px minmax(0,1fr);gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid #202a34}.daily-date small{display:block;color:#7f8a96}.daily-row small{color:#8f99a6;font-size:.6rem}.daily-row strong{display:block;color:#eef1f4}.daily-breakdown{min-width:0}
+@media(max-width:640px){.site-daily-summary-v485,.daily-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.analytics-daily-head{align-items:stretch;flex-direction:column}.site-days-select-v485,.analytics-daily-controls select{width:100%}.analytics-daily-controls{display:grid;grid-template-columns:1fr 1fr;gap:7px}.daily-row{grid-template-columns:52px 1fr 1fr}.daily-breakdown{grid-column:1/-1}.site-day-row-v485{grid-template-columns:48px minmax(0,1fr) 62px}}
+</style>
+
 <style id="kbn-deploy-monitor-v123">
 .deploy-monitor{margin:14px 0 18px;border:1px solid #3a4652;border-radius:16px;background:linear-gradient(180deg,#101821,#0b1219);overflow:hidden}
 .deploy-monitor-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 15px;border-bottom:1px solid #2e3944}
@@ -4994,11 +5005,23 @@ html,body{max-width:100%;overflow-x:hidden}
 <div id="analyticsSummary" class="analytics-summary"></div>
 <div id="analyticsList" class="admin-shop-list"></div>
 
+<div class="site-daily-wrap-v485">
+  <div class="analytics-daily-head">
+    <div><p class="eyebrow">SITE DAILY</p><h3>サイト全体の日別アクセス</h3></div>
+    <select id="siteDailyDaysFilter" class="site-days-select-v485">
+      <option value="7">7日</option><option value="14">14日</option><option value="30" selected>30日</option>
+    </select>
+  </div>
+  <p class="site-daily-note-v485">ホームなどの公開ページ＋店舗ページの閲覧を日別で集計します。</p>
+  <div id="siteDailySummary" class="site-daily-summary-v485"></div>
+  <div id="siteDailyChart" class="site-daily-chart-v485"><p>サイト全体のアクセスを読み込んでいます...</p></div>
+</div>
+
 <div class="analytics-daily-wrap">
   <div class="analytics-daily-head">
     <div>
       <p class="eyebrow">DAILY</p>
-      <h3>日別アクセス</h3>
+      <h3>店舗別の日別アクセス</h3>
     </div>
     <div class="analytics-daily-controls">
       <select id="dailyShopFilter">
@@ -5279,7 +5302,7 @@ document.querySelectorAll(".admin-tabs button").forEach(b=>b.onclick=async()=>{
     else if(b.dataset.tab==="ownerreq" && typeof window.loadOwnerReq==="function")await window.loadOwnerReq();
     else if(b.dataset.tab==="leads")window.renderLeadList?.();
     else if(b.dataset.tab==="siteupdate" && typeof window.loadKbnGithubStatus==="function")await window.loadKbnGithubStatus();
-    else if(b.dataset.tab==="analytics" && typeof window.loadAnalytics==="function")await window.loadAnalytics();
+    else if(b.dataset.tab==="analytics" && typeof window.loadAnalytics==="function"){await window.loadAnalytics(); await window.loadSiteDailyAnalytics?.();}
     else if(b.dataset.tab==="members" && typeof window.loadMembers==="function")await window.loadMembers();
   }catch(e){console.error(e)}
 });
@@ -8658,6 +8681,48 @@ window.rejectSub=async id=>{
   }
 };
 
+
+window.loadSiteDailyAnalytics=async function(){
+  const box=$("siteDailyChart");
+  const summary=$("siteDailySummary");
+  if(!box||!summary)return;
+  const days=$("siteDailyDaysFilter")?.value||"30";
+  box.innerHTML="<p>サイト全体のアクセスを読み込んでいます...</p>";
+  summary.innerHTML="";
+  try{
+    const d=await api("/api/admin/analytics/site-daily?days="+encodeURIComponent(days));
+    const rows=(d.daily||[]).slice().sort((a,b)=>String(a.day).localeCompare(String(b.day)));
+    const byDay=new Map(rows.map(r=>[String(r.day),r]));
+    const now=new Date();
+    const jst=new Date(now.toLocaleString("en-US",{timeZone:"Asia/Tokyo"}));
+    const fmtDay=dt=>`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
+    const daysRows=[];
+    for(let i=Number(days)-1;i>=0;i--){const dt=new Date(jst);dt.setDate(jst.getDate()-i);const key=fmtDay(dt);daysRows.push(byDay.get(key)||{day:key,views:0,shop_views:0,non_shop_views:0});}
+    const total=daysRows.reduce((n,r)=>n+Number(r.views||0),0);
+    const today=daysRows.at(-1)||{views:0};
+    const yesterday=daysRows.at(-2)||{views:0};
+    const last7=daysRows.slice(-7).reduce((n,r)=>n+Number(r.views||0),0);
+    const prev=Number(yesterday.views||0), cur=Number(today.views||0);
+    const diff=prev?Math.round((cur-prev)/prev*100):null;
+    const diffHtml=diff===null?'<em>前日比 -</em>':`<em class="${diff>=0?'up':'down'}">前日比 ${diff>=0?'+':''}${diff}%</em>`;
+    summary.innerHTML=`
+      <div class="site-daily-kpi-v485"><small>今日</small><strong>${cur.toLocaleString()}</strong>${diffHtml}</div>
+      <div class="site-daily-kpi-v485"><small>昨日</small><strong>${prev.toLocaleString()}</strong><em>閲覧</em></div>
+      <div class="site-daily-kpi-v485"><small>直近7日</small><strong>${last7.toLocaleString()}</strong><em>閲覧</em></div>
+      <div class="site-daily-kpi-v485"><small>${days}日合計</small><strong>${total.toLocaleString()}</strong><em>閲覧</em></div>`;
+    const max=Math.max(1,...daysRows.map(r=>Number(r.views||0)));
+    box.innerHTML=daysRows.slice().reverse().map(r=>{
+      const dt=new Date(r.day+"T00:00:00+09:00");
+      const label=`${dt.getMonth()+1}/${dt.getDate()}`;
+      const views=Number(r.views||0), shopViews=Number(r.shop_views||0), otherViews=Number(r.non_shop_views||0);
+      return `<div class="site-day-row-v485"><div class="site-day-date-v485">${label}</div><div class="site-day-bar-v485"><i style="width:${Math.max(1,Math.round(views/max*100))}%"></i></div><div class="site-day-value-v485">${views.toLocaleString()} PV</div><div class="site-day-sub-v485">店舗 ${shopViews.toLocaleString()} / その他公開ページ ${otherViews.toLocaleString()}</div></div>`;
+    }).join("")+`<div class="site-daily-foot-v485">${esc(d.note||"")}</div>`;
+  }catch(e){
+    console.error("site daily analytics load failed",e);
+    box.innerHTML='<div class="analytics-error-box"><b>サイト全体の日別アクセスを読み込めませんでした。</b></div>';
+  }
+};
+
 window.loadDailyAnalytics=async function(){
   const list=$("dailyAnalyticsList");
   const summary=$("dailySummary");
@@ -10953,7 +11018,7 @@ loadNoCodeSiteSettings();
 
 const KBN_ZIP_ALLOWED_FILES_V467=new Set([
   "worker.js","admin.html","index.html","shop.html","listing-form.html","admin-login.html",
-  "sitemap.xml","robots.txt","manifest.json","sw.js"
+  "wrangler.jsonc","sitemap.xml","robots.txt","manifest.json","sw.js"
 ]);
 
 function kbnReadU16V467(v,o){return v.getUint16(o,true)}
