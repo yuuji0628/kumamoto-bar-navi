@@ -134,6 +134,8 @@
 
 .kbn-cron-diag-v226{margin-top:12px;padding:14px;border:1px solid #384552;border-radius:14px;background:#0d151d}.kbn-cron-diag-v226 h4{margin:0 0 10px;color:#f1c75b}.kbn-cron-diag-grid-v226{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.kbn-cron-diag-card-v226{padding:11px;border:1px solid #303d49;border-radius:10px;background:#111a23}.kbn-cron-diag-card-v226 small{display:block;color:#8794a1;margin-bottom:4px}.kbn-cron-diag-card-v226 strong{display:block;color:#f1f4f7;line-height:1.45}.kbn-cron-reasons-v226{margin-top:10px;color:#d3d9df;font-size:.88rem;line-height:1.6}@media(max-width:640px){.kbn-cron-diag-grid-v226{grid-template-columns:1fr 1fr}}
 
+
+.analytics-top3-note-v486{margin-top:12px;padding:11px 13px;border:1px solid #283744;border-radius:12px;color:#8f99a6;font-size:.72rem;background:#0f1820}
 </style>
 
 <style id="owner-url-modal-v281">
@@ -5003,7 +5005,6 @@ html,body{max-width:100%;overflow-x:hidden}
 <p style="color:#aeb4bd">店舗ページの閲覧数と、地図・Instagram・電話などのクリック数を確認できます。</p>
 
 <div id="analyticsSummary" class="analytics-summary"></div>
-<div id="analyticsList" class="admin-shop-list"></div>
 
 <div class="site-daily-wrap-v485">
   <div class="analytics-daily-head">
@@ -5016,6 +5017,8 @@ html,body{max-width:100%;overflow-x:hidden}
   <div id="siteDailySummary" class="site-daily-summary-v485"></div>
   <div id="siteDailyChart" class="site-daily-chart-v485"><p>サイト全体のアクセスを読み込んでいます...</p></div>
 </div>
+
+<div id="analyticsList" class="admin-shop-list"></div>
 
 <div class="analytics-daily-wrap">
   <div class="analytics-daily-head">
@@ -8878,9 +8881,10 @@ window.loadAnalytics=async function(){
       list.innerHTML='<div class="analytics-empty-v2">アクセスデータはまだありません。</div>';
     }else{
       const sorted=[...rows].sort((a,b)=>Number(b.views_30d||0)-Number(a.views_30d||0)||Number(b.clicks_30d||0)-Number(a.clicks_30d||0));
-      const maxViews30=Math.max(1,...sorted.map(x=>Number(x.views_30d||0)));
+      const visible=sorted.slice(0,3);
+      const maxViews30=Math.max(1,...visible.map(x=>Number(x.views_30d||0)));
       list.innerHTML=`<div class="analytics-toolbar-v2"><h3>店舗別ランキング <small style="color:#8f99a6;font-weight:500">（30日閲覧順）</small></h3></div>`+
-        sorted.map((x,index)=>{
+        visible.map((x,index)=>{
           const v30=Number(x.views_30d||0), c30=Number(x.clicks_30d||0);
           const rate=v30>0?(c30/v30*100):0;
           const width=Math.max(2,Math.round(v30/maxViews30*100));
@@ -8906,7 +8910,7 @@ window.loadAnalytics=async function(){
               </div>
             </div>
           </article>`;
-        }).join("");
+        }).join("")+`<div class="analytics-top3-note-v486">上位3店舗のみ表示しています。全店舗データは集計に保持されています。</div>`;
     }
     await loadDailyAnalytics();
   }catch(e){
@@ -12186,23 +12190,29 @@ async function loadAutoGoogleBudgetV461(){
     }
     const mst=$("maintenanceGoogleStateV445");
     if(mst){
-      mst.textContent=a.blocked?"次枠へ継続":"利用可能";
+      mst.textContent=a.blocked?(String(a.blocked_reason||"").startsWith("KBN_SKU_")?"月次枠待ち":"次枠へ継続"):"利用可能";
       mst.style.color=a.blocked?"#efc45a":"#7ee2a8";
       mst.style.borderColor=a.blocked?"#7a5b24":"#315b45";
       mst.style.background=a.blocked?"#241d0e":"#102219";
     }
     const state=$("autoGoogleBudgetStateV461");
     if(state){
-      state.textContent=a.blocked?"次枠へ継続":"利用可能";
+      state.textContent=a.blocked?(String(a.blocked_reason||"").startsWith("KBN_SKU_")?"月次枠待ち":"次枠へ継続"):"利用可能";
       state.style.color=a.blocked?"#efc45a":"#7ee2a8";
       state.style.background=a.blocked?"#241d0e":"#102219";
     }
     if($("autoGoogleBudgetNoteV461")){
-      $("autoGoogleBudgetNoteV461").textContent=a.blocked
-        ?`現在の自動配分枠に到達したため工程を保持中。次の3時間枠で同じ工程・前回の続きから自動再開します。`
-        :q.active
-          ?`前回のキューを保持して処理中。1枠15回・1日120回で停止し、必ず続きから再開します。`
-          :`1枠15回・1日120回まで。残り30回は手動操作と予備用に温存します。`;
+      const reason=String(a.blocked_reason||"");
+      const skuBlocked=reason==="KBN_SKU_TEXT_SEARCH_LIMIT"||reason==="KBN_SKU_DETAILS_LIMIT";
+      $("autoGoogleBudgetNoteV461").textContent=skuBlocked
+        ?(reason==="KBN_SKU_TEXT_SEARCH_LIMIT"
+          ?`Text Search Pro の月間安全枠に到達したため、Googleを使うBAR開拓・店舗照合を停止しています。工程は保存済みで、月次リセット後に続きから再開します。`
+          :`Place Details Pro の月間安全枠に到達したため、Google店舗詳細の自動取得を停止しています。工程は保存済みで、月次リセット後に続きから再開します。`)
+        :a.blocked
+          ?`現在の自動配分枠に到達したため工程を保持中。次の利用可能枠で同じ工程・前回の続きから自動再開します。`
+          :q.active
+            ?`前回のキューを保持して処理中。現在は1枠最大${Number(a.slot_limit||0)}回・1日最大${Number(a.day_limit||0)}回で自動調整し、必ず続きから再開します。`
+            :`現在は1枠最大${Number(a.slot_limit||0)}回・1日最大${Number(a.day_limit||0)}回。SKU残量に合わせて自動調整しています。`;
     }
   }catch(e){}
 }
