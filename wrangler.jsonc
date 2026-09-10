@@ -6,7 +6,7 @@
   "vars": {
     "CLOUDFLARE_ACCOUNT_ID": "5f2c9effa39dd7b9001b18cf64d65836",
     "CLOUDFLARE_WORKER_NAME": "kumamoto-bar-navi",
-    "KBN_CONFIG_VERSION": "2.86",
+    "KBN_CONFIG_VERSION": "4.84",
     "KBN_FULL_MAINTENANCE_CRONS": "0 3 * * *",
     "KBN_FULL_MAINTENANCE_TIME_JST": "12:00",
     "KBN_AUTO_ONLY_CRONS": "0 18 * * *|0 23 * * *|0 7 * * *|0 10 * * *|29 14 * * *",
@@ -19,19 +19,47 @@
     "run_worker_first": [
       "/api/*",
       "/media/*",
+      "/area/*",
+      "/genre/*",
+      "/about.html",
       "/kumamoto-bar.html",
+      "/kumamoto-bar",
       "/shimotori-bar.html",
+      "/shimotori-bar",
       "/karaoke-bar-kumamoto.html",
+      "/karaoke-bar-kumamoto",
       "/darts-bar-kumamoto.html",
+      "/darts-bar-kumamoto",
       "/snack-kumamoto.html",
+      "/snack-kumamoto",
       "/kumamoto-station-bar.html",
+      "/kumamoto-station-bar",
       "/suizenji-bar.html",
+      "/suizenji-bar",
       "/kengun-bar.html",
+      "/kengun-bar",
       "/hikarinomori-bar.html",
+      "/hikarinomori-bar",
       "/yatsushiro-bar.html",
+      "/yatsushiro-bar",
       "/hitoyoshi-bar.html",
+      "/hitoyoshi-bar",
       "/tamana-bar.html",
-      "/amakusa-bar.html"
+      "/tamana-bar",
+      "/amakusa-bar.html",
+      "/amakusa-bar",
+      "/area-amakusa.html",
+      "/area-amakusa",
+      "/area-aso.html",
+      "/area-aso",
+      "/area-hitoyoshi.html",
+      "/area-hitoyoshi",
+      "/area-kumamoto.html",
+      "/area-kumamoto",
+      "/area-yatsushiro.html",
+      "/area-yatsushiro",
+      "/index.html",
+      "/index"
     ]
   },
   "d1_databases": [
@@ -47,9 +75,5 @@
       "bucket_name": "kumamoto-bar-navi-images"
     }
   ],
-  "triggers": {
-    "crons": [
-      "* * * * *"
-    ]
-  }
+  "triggers": {"crons": ["* * * * *"]}
 }
