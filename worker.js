@@ -1223,7 +1223,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.85";
+      config.vars.KBN_CONFIG_VERSION="4.86";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -4698,8 +4698,8 @@ async function kbnAutoGoogleBudgetStatusV461(env){
     WHERE period_type='slot' AND period_key=?
   `).bind(k.slot).first();
 
-  const du=Number(day?.used_count||0),dl=Number(day?.limit_count||KBN_AUTO_GOOGLE_DAILY_LIMIT_V461);
-  const su=Number(slot?.used_count||0),sl=Number(slot?.limit_count||KBN_AUTO_GOOGLE_SLOT_LIMIT_V461);
+  const du=Number(day?.used_count ?? 0),dl=Number(day?.limit_count ?? KBN_AUTO_GOOGLE_DAILY_LIMIT_V461);
+  const su=Number(slot?.used_count ?? 0),sl=Number(slot?.limit_count ?? KBN_AUTO_GOOGLE_SLOT_LIMIT_V461);
 
   return {
     day_key:k.day,slot_key:k.slot,
@@ -4714,7 +4714,9 @@ async function kbnAutoGoogleBudgetStatusV461(env){
     photo_remaining:Number(adaptive.photos_remaining||0),
     reviews_remaining:Number(adaptive.reviews_remaining||0),
     blocked:dl<=0||sl<=0||du>=dl||su>=sl,
-    blocked_reason:dl<=0?"KBN_AUTO_MONTHLY_ALLOCATION":(sl<=0?"KBN_AUTO_SLOT_ALLOCATION":(du>=dl?"KBN_AUTO_DAILY_BUDGET":(su>=sl?"KBN_AUTO_SLOT_BUDGET":"")))
+    blocked_reason:dl<=0
+      ?(Number(adaptive.search_remaining||0)<=0?"KBN_SKU_TEXT_SEARCH_LIMIT":Number(adaptive.details_remaining||0)<=0?"KBN_SKU_DETAILS_LIMIT":"KBN_AUTO_MONTHLY_ALLOCATION")
+      :(sl<=0?"KBN_AUTO_SLOT_ALLOCATION":(du>=dl?"KBN_AUTO_DAILY_BUDGET":(su>=sl?"KBN_AUTO_SLOT_BUDGET":"")))
   };
 }
 
