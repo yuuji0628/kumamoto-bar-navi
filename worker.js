@@ -1223,7 +1223,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.83";
+      config.vars.KBN_CONFIG_VERSION="4.85";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -10663,7 +10663,13 @@ export default {
 
       // v4.19: duplicate home URL found by Search Console.
       "/index.html":"/",
-      "/index":"/"
+      "/index":"/",
+
+      // v4.84: Cloudflare Static Assets canonicalizes .html pages to extensionless URLs.
+      // Search Console reported /about.html as a redirect error because the older
+      // direct-200 workaround could bounce between /about.html and /about.
+      // Make the canonical direction explicit and one-way.
+      "/about.html":"/about"
     };
     if((request.method==="GET" || request.method==="HEAD") && kbnLegacySeoRedirectsV417[url.pathname]){
       const target=new URL(kbnLegacySeoRedirectsV417[url.pathname],url.origin);
@@ -10673,7 +10679,7 @@ export default {
         headers:{
           "location":target.toString(),
           "cache-control":"public, max-age=86400",
-          "x-kbn-legacy-redirect":"direct-301-v470"
+          "x-kbn-legacy-redirect":"direct-301-v484"
         }
       });
     }
@@ -10684,7 +10690,6 @@ export default {
     // extensionless asset internally and serve its body at the original .html URL.
     // This removes an unnecessary redirect while keeping one canonical URL format.
     const kbnCurrentIndexTargetsV419=new Set([
-      "/about.html",
       "/areas.html",
       "/bars.html",
       "/column.html",
@@ -10888,7 +10893,7 @@ export default {
         {loc:`${base}/all-shops`,priority:"0.9",freq:"daily"},
         {loc:`${base}/official-shops`,priority:"0.9",freq:"daily"},
         {loc:`${base}/listing-form.html`,priority:"0.6",freq:"monthly"},
-        {loc:`${base}/about.html`,priority:"0.6",freq:"monthly"},
+        {loc:`${base}/about`,priority:"0.6",freq:"monthly"},
         {loc:`${base}/faq.html`,priority:"0.5",freq:"monthly"},
         {loc:`${base}/contact.html`,priority:"0.4",freq:"monthly"},
         // v4.18: current editorial pages found in Search Console are explicit sitemap targets.
@@ -11124,6 +11129,40 @@ export default {
       return json({ok:true,shops:(r.results||[]).map(publicShopRow)});
     }
 
+
+    // v4.85: site-wide public page view analytics (non-shop pages).
+    // Shop detail views stay in shop_analytics so they are not double-counted.
+    if(url.pathname==="/api/analytics/site" && request.method==="POST"){
+      try{
+        let x={}; try{x=await request.json()}catch{}
+        let path=String(x.path||"/").trim()||"/";
+        if(!path.startsWith("/"))path="/"+path;
+        path=path.split("?")[0].slice(0,160);
+        if(path.startsWith("/admin") || path.startsWith("/api/") || path.startsWith("/shop")){
+          return json({ok:true,ignored:true},{status:202});
+        }
+        await env.DB.prepare(`
+          CREATE TABLE IF NOT EXISTS site_daily_analytics (
+            day TEXT NOT NULL,
+            path TEXT NOT NULL,
+            views INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY(day,path)
+          )
+        `).run();
+        await env.DB.prepare(`
+          INSERT INTO site_daily_analytics(day,path,views,updated_at)
+          VALUES(date(datetime('now','+9 hours')),?,1,CURRENT_TIMESTAMP)
+          ON CONFLICT(day,path) DO UPDATE SET
+            views=views+1,
+            updated_at=CURRENT_TIMESTAMP
+        `).bind(path).run();
+        return json({ok:true},{status:201});
+      }catch(e){
+        console.error("site analytics write failed",e);
+        return json({ok:false,error:"SITE_ANALYTICS_WRITE_FAILED"},{status:500});
+      }
+    }
 
     // 店舗ページの閲覧・導線クリックを集計
     const analyticsMatch=url.pathname.match(/^\/api\/analytics\/([^/]+)$/);
@@ -12296,6 +12335,50 @@ export default {
       }
 
 
+
+      if(url.pathname==="/api/admin/analytics/site-daily" && request.method==="GET"){
+        try{
+          const daysRaw=Number(url.searchParams.get("days")||30);
+          const days=Math.max(1,Math.min(90,Number.isFinite(daysRaw)?daysRaw:30));
+          await env.DB.prepare(`
+            CREATE TABLE IF NOT EXISTS site_daily_analytics (
+              day TEXT NOT NULL,
+              path TEXT NOT NULL,
+              views INTEGER NOT NULL DEFAULT 0,
+              updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+              PRIMARY KEY(day,path)
+            )
+          `).run();
+          const nonShop=await env.DB.prepare(`
+            SELECT day,SUM(views) AS views
+            FROM site_daily_analytics
+            WHERE day >= date(datetime('now','+9 hours'),?)
+            GROUP BY day
+          `).bind(`-${days-1} days`).all();
+          const shop=await env.DB.prepare(`
+            SELECT date(datetime(created_at,'+9 hours')) AS day, COUNT(*) AS views
+            FROM shop_analytics
+            WHERE action='view'
+              AND datetime(created_at,'+9 hours') >= datetime('now','+9 hours',?)
+            GROUP BY day
+          `).bind(`-${days-1} days`).all();
+          const byDay=new Map();
+          for(const r of (nonShop.results||[])){
+            byDay.set(String(r.day),{day:String(r.day),non_shop_views:Number(r.views||0),shop_views:0});
+          }
+          for(const r of (shop.results||[])){
+            const key=String(r.day);
+            const cur=byDay.get(key)||{day:key,non_shop_views:0,shop_views:0};
+            cur.shop_views=Number(r.views||0);
+            byDay.set(key,cur);
+          }
+          const daily=[...byDay.values()].map(r=>({...r,views:r.non_shop_views+r.shop_views})).sort((a,b)=>b.day.localeCompare(a.day));
+          return json({ok:true,days,daily,note:"第85段階反映前の過去日は、保存済みの店舗ページ閲覧のみ含まれる場合があります。"});
+        }catch(e){
+          console.error("admin site analytics daily failed",e);
+          return json({ok:false,error:"ADMIN_SITE_ANALYTICS_DAILY_FAILED",message:String(e?.message||e)},{status:500});
+        }
+      }
 
       if(url.pathname==="/api/admin/analytics/daily" && request.method==="GET"){
         try{
