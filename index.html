@@ -1181,5 +1181,21 @@
 })();
 </script>
 
+
+<script id="kbn-site-analytics-v485">
+(()=>{
+  try{
+    const path=location.pathname||"/";
+    const key="kbn-site-view:"+path+":"+new Date().toISOString().slice(0,10);
+    if(sessionStorage.getItem(key))return;
+    sessionStorage.setItem(key,"1");
+    fetch("/api/analytics/site",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({path}),keepalive:true,credentials:"same-origin"
+    }).catch(()=>{});
+  }catch{}
+})();
+</script>
+
 </body>
 </html>
