@@ -1223,7 +1223,7 @@ async function kbnEnsureMinuteCronPermanentV230(env){
       config.triggers=config.triggers&&typeof config.triggers==="object"?config.triggers:{};
       config.triggers.crons=fixed;
       config.vars=config.vars&&typeof config.vars==="object"?config.vars:{};
-      config.vars.KBN_CONFIG_VERSION="4.86";
+      config.vars.KBN_CONFIG_VERSION="4.87";
       const content=JSON.stringify(config,null,2)+"\n";
       const result=await kbnGithubApi(env,`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/contents/wrangler.jsonc`,{
         method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({
@@ -4579,8 +4579,8 @@ async function kbnGoogleSkuCanUseV462(env,key){
   return row?{ok:!row.blocked,...row,month_key:s.month_key}:{ok:true,key};
 }
 
-const KBN_AUTO_GOOGLE_SLOT_LIMIT_V461=15;
-const KBN_AUTO_GOOGLE_DAILY_LIMIT_V461=120;
+const KBN_AUTO_GOOGLE_SLOT_LIMIT_V461=10;
+const KBN_AUTO_GOOGLE_DAILY_LIMIT_V461=40;
 const KBN_AUTO_GOOGLE_RESERVE_V461=30;
 
 function kbnAutoGoogleSlotKeyV461(){
@@ -4588,7 +4588,7 @@ function kbnAutoGoogleSlotKeyV461(){
   const y=d.getUTCFullYear();
   const m=String(d.getUTCMonth()+1).padStart(2,"0");
   const day=String(d.getUTCDate()).padStart(2,"0");
-  const h=Math.floor(d.getUTCHours()/3)*3;
+  const h=Math.floor(d.getUTCHours()/6)*6;
   return {
     day:`${y}-${m}-${day}`,
     slot:`${y}-${m}-${day} ${String(h).padStart(2,"0")}:00 JST`
@@ -4628,8 +4628,8 @@ async function kbnMaintenanceQueueActiveV461(env){
 function kbnRemainingJstSlotsV463(){
   const d=new Date(Date.now()+9*60*60*1000);
   const h=d.getUTCHours();
-  const currentSlot=Math.floor(h/3);
-  return Math.max(1,8-currentSlot);
+  const currentSlot=Math.floor(h/6);
+  return Math.max(1,4-currentSlot);
 }
 
 async function kbnAdaptiveAutoGooglePlanV463(env){
@@ -8600,7 +8600,7 @@ async function kbnQueueHourlyMaintenanceV413(env,runKey=''){
     ON CONFLICT(id) DO UPDATE SET
       phase=11,run_date=excluded.run_date,created_total=0,
       discovery_searched=0,discovery_mode='normal',discovery_retry_count=0,discovery_retry_after=NULL,updated_at=CURRENT_TIMESTAMP
-  `).bind(String(runKey||'3hour-bar-discovery-maintenance')).run();
+  `).bind(String(runKey||'6hour-longterm-maintenance')).run();
   return {queued:true,phase:11};
 }
 
@@ -8614,7 +8614,7 @@ function kbnHourlyMaintenanceSlotV421(event){
   const m=String(d.getUTCMonth()+1).padStart(2,'0');
   const day=String(d.getUTCDate()).padStart(2,'0');
   const rawHour=d.getUTCHours();
-  const slotHour=Math.floor(rawHour/3)*3;
+  const slotHour=Math.floor(rawHour/6)*6;
   const h=String(slotHour).padStart(2,'0');
   return {
     time:`${h}:00`,
@@ -8896,7 +8896,7 @@ async function ensureKbnDailyPrecisionV433(env){
       checked_closed INTEGER NOT NULL DEFAULT 0,
       checked_instagram INTEGER NOT NULL DEFAULT 0,
       instagram_cursor INTEGER NOT NULL DEFAULT 0,
-      instagram_target INTEGER NOT NULL DEFAULT 50,
+      instagram_target INTEGER NOT NULL DEFAULT 15,
       exclusion_count INTEGER NOT NULL DEFAULT 0,
       closed_error_count INTEGER NOT NULL DEFAULT 0,
       closed_skip_reason TEXT NOT NULL DEFAULT '',
@@ -8912,7 +8912,7 @@ async function ensureKbnDailyPrecisionV433(env){
     if(!names.has("closed_error_count"))await env.DB.prepare("ALTER TABLE kbn_daily_precision_state ADD COLUMN closed_error_count INTEGER NOT NULL DEFAULT 0").run();
     if(!names.has("closed_skip_reason"))await env.DB.prepare("ALTER TABLE kbn_daily_precision_state ADD COLUMN closed_skip_reason TEXT NOT NULL DEFAULT ''").run();
     if(!names.has("instagram_cursor"))await env.DB.prepare("ALTER TABLE kbn_daily_precision_state ADD COLUMN instagram_cursor INTEGER NOT NULL DEFAULT 0").run();
-    if(!names.has("instagram_target"))await env.DB.prepare("ALTER TABLE kbn_daily_precision_state ADD COLUMN instagram_target INTEGER NOT NULL DEFAULT 50").run();
+    if(!names.has("instagram_target"))await env.DB.prepare("ALTER TABLE kbn_daily_precision_state ADD COLUMN instagram_target INTEGER NOT NULL DEFAULT 15").run();
     if(!names.has("closed_retry_json"))await env.DB.prepare("ALTER TABLE kbn_daily_precision_state ADD COLUMN closed_retry_json TEXT NOT NULL DEFAULT '[]'").run();
     if(!names.has("closed_retry_success_count"))await env.DB.prepare("ALTER TABLE kbn_daily_precision_state ADD COLUMN closed_retry_success_count INTEGER NOT NULL DEFAULT 0").run();
   }catch(e){
@@ -9057,11 +9057,11 @@ async function kbnProcessDailyPrecisionV433(env){
     await env.DB.prepare(`
       UPDATE kbn_daily_precision_state
       SET run_date=?,stage='closed',checked_closed=0,checked_instagram=0,
-          instagram_target=50,
+          instagram_target=15,
           exclusion_count=0,closed_error_count=0,closed_skip_reason='',closed_retry_json='[]',closed_retry_success_count=0,updated_at=CURRENT_TIMESTAMP
       WHERE id=1
     `).bind(today).run();
-    st={...(st||{}),run_date:today,stage:'closed',checked_closed:0,checked_instagram:0,instagram_target:50,exclusion_count:0,closed_error_count:0,closed_skip_reason:'',closed_retry_json:'[]',closed_retry_success_count:0};
+    st={...(st||{}),run_date:today,stage:'closed',checked_closed:0,checked_instagram:0,instagram_target:15,exclusion_count:0,closed_error_count:0,closed_skip_reason:'',closed_retry_json:'[]',closed_retry_success_count:0};
   }
 
   const stage=String(st?.stage||'idle');
@@ -9090,7 +9090,12 @@ async function kbnProcessDailyPrecisionV433(env){
     }
 
     const batchStartedAt=Date.now();
-    const r=await runMaintenanceBatchV242(env,'closed',{limit:5});
+    const dailyClosedRemaining=Math.max(0,30-Number(st?.checked_closed||0));
+    if(dailyClosedRemaining<=0){
+      await env.DB.prepare(`UPDATE kbn_daily_precision_state SET stage='closed_retry',updated_at=CURRENT_TIMESTAMP WHERE id=1`).run();
+      return {ok:true,processed:true,stage:'closed_daily_limit',checked_closed:Number(st?.checked_closed||0),daily_limit:30};
+    }
+    const r=await runMaintenanceBatchV242(env,'closed',{limit:Math.min(3,dailyClosedRemaining)});
     const batchDurationMs=Math.max(0,Date.now()-batchStartedAt);
     const checkedCount=Array.isArray(r?.checked)?r.checked.length:Number(r?.checked||0);
     const unverifiedCount=Array.isArray(r?.unverified)?r.unverified.length:0;
@@ -9187,23 +9192,23 @@ async function kbnProcessDailyPrecisionV433(env){
 
     await env.DB.prepare(`
       UPDATE kbn_daily_precision_state
-      SET stage='instagram_wait',instagram_target=50,updated_at=CURRENT_TIMESTAMP
+      SET stage='instagram_wait',instagram_target=15,updated_at=CURRENT_TIMESTAMP
       WHERE id=1
     `).run();
 
     await logKbnMaintenanceHistoryV414(env,{
       q:{run_date:`${today} daily_precision`},phase:0,task:'instagram_daily',
       result:{ok:true,checked:0},status:'success',
-      note:'日次精度 / Instagram再検査 50店舗/日 開始'
+      note:'長期運用 / Instagram再検査 15店舗/日 開始'
     });
 
-    return {ok:true,processed:true,stage:'instagram_start',target:50};
+    return {ok:true,processed:true,stage:'instagram_start',target:15};
   }
 
   if(stage==='instagram_wait'){
     const fresh=await env.DB.prepare(`SELECT * FROM kbn_daily_precision_state WHERE id=1`).first();
     const checkedToday=Math.max(0,Number(fresh?.checked_instagram||0));
-    const target=Math.max(1,Number(fresh?.instagram_target||50));
+    const target=Math.max(1,Number(fresh?.instagram_target||15));
 
     if(checkedToday>=target){
       await env.DB.prepare(`
@@ -9320,7 +9325,7 @@ async function kbnProcessQueuedMaintenanceV242(env){
     // その後は情報補完→精密補完→SEOへ進む。
     // v4.44: Google総枠150回/日を開拓＋全メンテで共有するため、
     // 1時間の掲載目標を最低3 / 最大10へ抑える。
-    const minTarget=3,target=10,normalMaxSearches=40,hardMaxSearches=60;
+    const minTarget=1,target=1,normalMaxSearches=8,hardMaxSearches=12;
     const runAgeMinutes=kbnHourlyRunAgeMinutesV437(q?.run_date);
     const timeLimitReached=/\bJST\b/i.test(String(q?.run_date||'')) && runAgeMinutes>=30;
     let googleHealthAtStart=null;
@@ -9528,14 +9533,14 @@ async function kbnProcessQueuedMaintenanceV242(env){
     if(task==="exclusion"){
       result=await kbnScanExclusionCandidatesV267(env);
     }else if(task==="coordinates"){
-      result=await fillMissingShopCoordinatesV457(env,{limit:3});
+      result=await fillMissingShopCoordinatesV457(env,{limit:1});
     }else if(task==="verified_info" || task==="verified_auto"){
       // v4.42: heavy enrichment is limited to 5 shops per Worker invocation.
-      result=await enrichPriorityPublishedInfoV401(env,{targetUpdated:5,maxChecked:5});
+      result=await enrichPriorityPublishedInfoV401(env,{targetUpdated:3,maxChecked:3});
       await logInfoEnrichRunV404(env,result,task==="verified_auto"?'auto_recheck':'maintenance');
     }else{
       // missing=5, seo=10. Never process 20 automatically in one free-plan invocation.
-      const cpuSafeLimit=task==="seo"?10:5;
+      const cpuSafeLimit=task==="seo"?5:3;
       result=await runMaintenanceBatchV242(env,task,{limit:cpuSafeLimit});
     }
   }catch(e){
@@ -13889,22 +13894,22 @@ if(url.pathname==="/api/admin/leads/search-config" && request.method==="GET"){
         try{
           await kbnPreemptOldHourlyForCurrentSlotV437(env,hourly);
         }catch(e){
-          console.error('3-hour slot preemption failed',e);
+          console.error('6-hour slot preemption failed',e);
         }
 
-        const claimed=await kbnClaimRuntimeSlotV231(env,hourly.minute_key,'3hour_maintenance');
+        const claimed=await kbnClaimRuntimeSlotV231(env,hourly.minute_key,'6hour_longterm_maintenance');
         if(claimed){
           try{
             const q=await kbnQueueHourlyMaintenanceV413(env,hourly.run_key);
             if(q?.queued){
               await createKbnAlert(env,{
-                type:'3hour_maintenance_started',
-                title:'3時間ごとの自動メンテナンス開始',
-                message:`${hourly.time} JST枠：BAR開拓（最低3・最大10）→ 情報補完 → 精密補完 → SEO。Google共通節約枠内で実行します。`
+                type:'6hour_longterm_maintenance_started',
+                title:'長期運用メンテナンス開始',
+                message:`${hourly.time} JST枠：長期運用モード。BAR開拓 最大1店 → 情報補完 → 精密補完 → SEOを低頻度で実行します。`
               });
             }
           }catch(e){
-            console.error('3-hour automatic maintenance queue failed',e);
+            console.error('6-hour automatic maintenance queue failed',e);
           }
           return;
         }
